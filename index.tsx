@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, FormEvent, FC, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createPortal } from 'react-dom';
 import { GoogleGenAI, Content, Part, GroundingChunk } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -134,7 +135,55 @@ const CodeBlock: FC<{ children?: ReactNode, className?: string }> = ({ children,
   );
 };
 
+const WorkModal: FC<{ title: string; content: string; onClose: () => void }> = ({ title, content, onClose }) => {
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handleEsc);
+      document.body.style.overflow = 'unset';
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div className="work-modal-overlay" onClick={onClose}>
+      <div className="work-modal" onClick={e => e.stopPropagation()}>
+        <div className="work-modal-header">
+          <h3>{title}</h3>
+          <button className="close-modal-button" onClick={onClose} aria-label="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+            </svg>
+          </button>
+        </div>
+        <div className="work-modal-body">
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                code(props) {
+                    const {children, className} = props;
+                    return <CodeBlock className={className}>{String(children)}</CodeBlock>;
+                },
+                table({node, ...props}) {
+                    return <div className="table-wrapper"><table {...props} /></div>;
+                }
+                }}
+            >
+                {content}
+            </ReactMarkdown>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = false }) => {
+  const [modalData, setModalData] = useState<{title: string, content: string} | null>(null);
+
   const renderContent = (content: string | null) => {
     if (!content) return <div className="pending-work">Waiting for agent output...</div>;
     return (
@@ -156,6 +205,7 @@ const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = false }
   };
 
   return (
+    <>
     <details className="show-work-container">
       <summary className={`show-work-button ${!isLive ? 'completed' : ''}`}>
         <span>{isLive ? 'Show Agent Work (Live)' : 'View Full Agent Swarm Process'}</span>
@@ -170,8 +220,25 @@ const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = false }
             {work.initialResponses.map((resp, i) => (
               <div key={`initial-${i}`} className="work-card">
                 <div className="work-card-header">
-                    <div className="work-card-icon">{i + 1}</div>
-                    Agent {i + 1}
+                    <div className="work-card-title-group" style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+                        <div className="work-card-icon">{i + 1}</div>
+                        Agent {i + 1}
+                    </div>
+                    {resp && (
+                        <button 
+                            className="expand-work-button"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                setModalData({ title: `Agent ${i + 1} - Initial Draft`, content: resp });
+                            }}
+                            title="Expand Response"
+                            aria-label="Expand Response"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                            </svg>
+                        </button>
+                    )}
                 </div>
                 <div className="work-card-body">
                     {renderContent(resp)}
@@ -186,8 +253,25 @@ const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = false }
             {work.refinedResponses.map((resp, i) => (
               <div key={`refined-${i}`} className="work-card refined">
                  <div className="work-card-header">
-                    <div className="work-card-icon">{i + 1}</div>
-                    Agent {i + 1}
+                    <div className="work-card-title-group" style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+                        <div className="work-card-icon">{i + 1}</div>
+                        Agent {i + 1}
+                    </div>
+                    {resp && (
+                        <button 
+                            className="expand-work-button"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                setModalData({ title: `Agent ${i + 1} - Refined Response`, content: resp });
+                            }}
+                             title="Expand Response"
+                             aria-label="Expand Response"
+                        >
+                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                            </svg>
+                        </button>
+                    )}
                  </div>
                  <div className="work-card-body">
                     {renderContent(resp)}
@@ -198,6 +282,8 @@ const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = false }
         </div>
       </div>
     </details>
+    {modalData && <WorkModal title={modalData.title} content={modalData.content} onClose={() => setModalData(null)} />}
+    </>
   );
 };
 
@@ -282,7 +368,7 @@ const App: FC = () => {
   }, [messages, isLoading, agentStates, currentWork]);
   
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (isLoading) {
       startTimeRef.current = Date.now();
       interval = setInterval(() => {
