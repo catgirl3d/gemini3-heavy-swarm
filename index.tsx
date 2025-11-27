@@ -134,7 +134,7 @@ const CodeBlock: FC<{ children?: ReactNode, className?: string }> = ({ children,
   );
 };
 
-const ShowWork: FC<{ work: Work }> = ({ work }) => {
+const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = false }) => {
   const renderContent = (content: string | null) => {
     if (!content) return <div className="pending-work">Waiting for agent output...</div>;
     return (
@@ -157,8 +157,8 @@ const ShowWork: FC<{ work: Work }> = ({ work }) => {
 
   return (
     <details className="show-work-container">
-      <summary className="show-work-button">
-        Show Agent Work (Live)
+      <summary className={`show-work-button ${!isLive ? 'completed' : ''}`}>
+        <span>{isLive ? 'Show Agent Work (Live)' : 'View Full Agent Swarm Process'}</span>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="work-arrow">
           <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
         </svg>
@@ -237,7 +237,7 @@ const LoadingIndicator: FC<{ status: string; time: number; agentStates: AgentSta
         </div>
         {currentWork && (
             <div style={{ marginTop: '1rem' }}>
-                <ShowWork work={currentWork} />
+                <ShowWork work={currentWork} isLive={true} />
             </div>
         )}
     </div>
@@ -344,7 +344,7 @@ const App: FC = () => {
     handleRemoveImage();
     setAgentStates([]);
     
-    // Initialize current work for live viewing
+    // Initialize work tracking (local for persistence, state for UI)
     const liveWork: Work = {
         initialResponses: Array(NUM_AGENTS).fill(null),
         refinedResponses: Array(NUM_AGENTS).fill(null)
@@ -396,18 +396,15 @@ const App: FC = () => {
           },
         }).then(res => {
             setAgentStates(prev => prev.map((a, idx) => idx === i ? { ...a, status: 'done', label: 'Drafted' } : a));
-            // Update live work state
-            setCurrentWork(prev => {
-                if (!prev) return prev;
-                const newInitials = [...prev.initialResponses];
-                newInitials[i] = res.text;
-                return { ...prev, initialResponses: newInitials };
-            });
+            
+            // Capture response in local variable and update state
+            liveWork.initialResponses[i] = res.text;
+            setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
+            
             return res;
         })
       );
       
-      // Wait for all initial responses, but UI updates live via the .then() blocks
       const initialResponses = await Promise.all(initialAgentPromises);
       const initialAnswers = initialResponses.map(res => res.text);
 
@@ -434,13 +431,11 @@ const App: FC = () => {
           },
         }).then(res => {
             setAgentStates(prev => prev.map((a, idx) => idx === index ? { ...a, status: 'done', label: 'Refined' } : a));
-            // Update live work state
-            setCurrentWork(prev => {
-                if (!prev) return prev;
-                const newRefined = [...prev.refinedResponses];
-                newRefined[index] = res.text;
-                return { ...prev, refinedResponses: newRefined };
-            });
+            
+            // Capture response in local variable and update state
+            liveWork.refinedResponses[index] = res.text;
+            setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
+            
             return res;
         });
       });
@@ -484,8 +479,8 @@ const App: FC = () => {
         if (isFirstChunk) {
             isFirstChunk = false;
             setIsLoading(false);
-            setMessages(prev => [...prev, { role: 'model', parts: [{ text: finalResponseText }] }]);
-            // Keep currentWork in state until we attach it to the final message at the end
+            // Attach liveWork here immediately so it is visible during streaming
+            setMessages(prev => [...prev, { role: 'model', parts: [{ text: finalResponseText }], work: { ...liveWork } }]);
         } else {
             setMessages(prev => {
                 const newMessages = [...prev];
@@ -504,8 +499,8 @@ const App: FC = () => {
         const newMessages = [...prev];
         const lastMessage = newMessages[newMessages.length - 1];
         lastMessage.sources = sources.length > 0 ? sources : undefined;
-        // Attach the final completed work to the message so it stays there
-        lastMessage.work = currentWork;
+        // Ensure work is definitely synced at the end
+        lastMessage.work = { ...liveWork };
         return newMessages;
       });
 
