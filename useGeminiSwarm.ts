@@ -7,6 +7,8 @@ export interface AppSettings {
   initialInstruction: string;
   refinementInstruction: string;
   synthesizerInstruction: string;
+  devMode: boolean;
+  pauseAfterInitial: boolean;
 }
 
 export interface Source {
@@ -37,6 +39,8 @@ export interface AgentState {
 export const DEFAULT_SETTINGS: AppSettings = {
   numAgents: 4,
   model: 'gemini-3-pro-preview',
+  devMode: false,
+  pauseAfterInitial: false,
   initialInstruction: `You are one of several cooperative expert agents.
 
 Your job:
@@ -105,6 +109,7 @@ Prohibitions:
 export const useGeminiSwarm = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isPaused, setIsPaused] = useState<boolean>(false);
   const [loadingStatus, setLoadingStatus] = useState<string>('');
   const [agentStates, setAgentStates] = useState<AgentState[]>([]);
   const [currentWork, setCurrentWork] = useState<Work | undefined>(undefined);
@@ -115,6 +120,7 @@ export const useGeminiSwarm = () => {
   
   const startTimeRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const pauseResolverRef = useRef<((value: void | PromiseLike<void>) => void) | null>(null);
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -136,16 +142,24 @@ export const useGeminiSwarm = () => {
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
-    if (isLoading) {
-      startTimeRef.current = Date.now();
+    if (isLoading && !isPaused) {
+      startTimeRef.current = Date.now() - timer; // Resume timer
       interval = setInterval(() => {
         setTimer(Date.now() - startTimeRef.current);
       }, 100);
-    } else {
+    } else if (!isLoading && !isPaused) {
       setTimer(0);
     }
     return () => clearInterval(interval);
-  }, [isLoading]);
+  }, [isLoading, isPaused]);
+
+  const continueGeneration = () => {
+    if (pauseResolverRef.current) {
+        pauseResolverRef.current();
+        pauseResolverRef.current = null;
+        setIsPaused(false);
+    }
+  };
 
   const sendMessage = async (userInput: string, image: string | null, imageFile: File | null, isRetry: boolean = false) => {
     if (!userInput.trim() && !image) return;
@@ -163,6 +177,7 @@ export const useGeminiSwarm = () => {
     }
 
     setIsLoading(true);
+    setIsPaused(false);
     setAgentStates([]);
     
     // Initialize work tracking (local for persistence, state for UI)
@@ -181,175 +196,296 @@ export const useGeminiSwarm = () => {
     const signal = abortController.signal;
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-      
-      const mainChatHistory: Content[] = currentMessages.slice(0, -1).map(msg => ({
-        role: msg.role,
-        parts: msg.parts,
-      }));
-
-      const baseApiParts: Part[] = [];
-      if (image && imageFile) {
-        baseApiParts.push({
-          inlineData: {
-            mimeType: imageFile.type,
-            data: image.split(',')[1],
-          },
-        });
-      }
-      if (userInput.trim()) {
-        baseApiParts.push({ text: userInput });
-      }
-
-      const currentUserTurn: Content = { role: 'user', parts: baseApiParts };
-
-      // STEP 1: Initial Responses
-      setLoadingStatus('Initializing agents...');
-      setAgentStates(Array.from({ length: settings.numAgents }, (_, i) => ({
-        id: `agent-${i}`,
-        name: `Agent ${i + 1}`,
-        status: 'working',
-        label: 'Drafting initial response...'
-      })));
-
-      const initialAgentPromises = Array(settings.numAgents).fill(0).map(async (_, i) => {
-        // Indicate thinking immediately
-        liveWork.initialResponses[i] = '';
-        setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
-
-        const stream = await ai.models.generateContentStream({
-          model: settings.model,
-          contents: [...mainChatHistory, currentUserTurn],
-          config: {
-            systemInstruction: settings.initialInstruction,
-            temperature: 0.7,
-            tools: [{googleSearch: {}}],
-            thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
-            maxOutputTokens: 65536,
-          },
-        });
-
-        let fullText = '';
-        for await (const chunk of stream) {
-            if (signal.aborted) throw new Error('Aborted');
-            const text = chunk.text || '';
-            fullText += text;
-            liveWork.initialResponses[i] = fullText;
-            setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
-        }
-
-        setAgentStates(prev => prev.map((a, idx) => idx === i ? { ...a, status: 'done', label: 'Drafted' } : a));
-        return fullText;
-      });
-      
-      const initialAnswers = await Promise.all(initialAgentPromises);
-
-      // STEP 2: Refined Responses
-      setLoadingStatus('Refining answers...');
-      setAgentStates(prev => prev.map(a => ({ ...a, status: 'working', label: 'Critiquing & Refining...' })));
-
-      const refinementAgentPromises = initialAnswers.map(async (initialAnswer, index) => {
-        const otherAnswers = initialAnswers.filter((_, i) => i !== index);
-        const otherAnswersText = otherAnswers.map((answer, i) => `${i + 1}. "${answer}"`).join('\n');
-        const refinementContext = `My initial response was: "${initialAnswer}". The other agents responded with:\n${otherAnswersText}\n\nBased on this context, critically re-evaluate and provide a new, improved response to the original query.`;
+      if (settings.devMode) {
+        // --- DEVELOPMENT MODE SIMULATION ---
         
-        const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
-        
-        // Indicate thinking immediately
-        liveWork.refinedResponses[index] = '';
-        setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
+        // STEP 1: Initial Responses
+        setLoadingStatus('Initializing agents (DEV MODE)...');
+        setAgentStates(Array.from({ length: settings.numAgents }, (_, i) => ({
+          id: `agent-${i}`,
+          name: `Agent ${i + 1}`,
+          status: 'working',
+          label: 'Drafting initial response...'
+        })));
 
-        const stream = await ai.models.generateContentStream({
-          model: settings.model,
-          contents: [...mainChatHistory, refinementTurn],
-          config: {
-            systemInstruction: settings.refinementInstruction,
-            temperature: 0.7,
-            tools: [{googleSearch: {}}],
-            thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
-            maxOutputTokens: 65536,
-          },
+        const initialAgentPromises = Array(settings.numAgents).fill(0).map(async (_, i) => {
+          liveWork.initialResponses[i] = '';
+          setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
+
+          // Simulate delay and streaming
+          const dummyText = `[DEV MODE] Initial draft from Agent ${i + 1}. This is a simulated response to demonstrate the UI flow without consuming API credits.`;
+          const words = dummyText.split(' ');
+          let currentText = '';
+          
+          for (const word of words) {
+            if (signal.aborted) throw new Error('Aborted');
+            await new Promise(resolve => setTimeout(resolve, 100)); // Simulate token generation delay
+            currentText += word + ' ';
+            liveWork.initialResponses[i] = currentText;
+            setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
+          }
+
+          setAgentStates(prev => prev.map((a, idx) => idx === i ? { ...a, status: 'done', label: 'Drafted' } : a));
+          return currentText;
         });
 
-        let fullText = '';
-        for await (const chunk of stream) {
-            if (signal.aborted) throw new Error('Aborted');
-            const text = chunk.text || '';
-            fullText += text;
-            liveWork.refinedResponses[index] = fullText;
-            setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
-        }
+        const initialAnswers = await Promise.all(initialAgentPromises);
 
-        setAgentStates(prev => prev.map((a, idx) => idx === index ? { ...a, status: 'done', label: 'Refined' } : a));
-        return fullText;
-      });
-      
-      const refinedAnswers = await Promise.all(refinementAgentPromises);
-
-      // STEP 3: Final Synthesis (Streaming)
-      setLoadingStatus('Synthesizing massive final response...');
-      setAgentStates(prev => [
-        ...prev,
-        { id: 'synthesizer', name: 'Synthesizer', status: 'working', label: 'Synthesizing...' }
-      ]);
-      
-      const synthesizerContext = `Here are the ${settings.numAgents} refined responses to the user's query. Your task is to synthesize them into the best single, final answer. REMEMBER: 2000+ LINES OF CODE IF APPLICABLE. DO NOT SHORTCUT.\n\n${refinedAnswers.map((answer, i) => `Refined Response ${i + 1}:\n"${answer}"`).join('\n\n')}`;
-      const synthesizerTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}`}] };
-      
-      const stream = await ai.models.generateContentStream({
-        model: settings.model,
-        contents: [...mainChatHistory, synthesizerTurn],
-        config: {
-          systemInstruction: settings.synthesizerInstruction,
-          temperature: 0.7,
-          tools: [{googleSearch: {}}],
-          thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
-          maxOutputTokens: 65536, // Ensure max tokens for massive response
-        },
-      });
-
-      let finalResponseText = '';
-      const allGroundingChunks: GroundingChunk[] = [];
-      let isFirstChunk = true;
-
-      for await (const chunk of stream) {
-        if (signal.aborted) throw new Error('Aborted');
-        finalResponseText += chunk.text;
-        const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
-        if (groundingChunks) {
-            allGroundingChunks.push(...groundingChunks);
-        }
-
-        if (isFirstChunk) {
-            isFirstChunk = false;
-            setIsLoading(false);
-            // Attach liveWork here immediately so it is visible during streaming
-            setMessages(prev => [...prev, { role: 'model', parts: [{ text: finalResponseText }] }]);
-        } else {
-            setMessages(prev => {
-                const newMessages = [...prev];
-                newMessages[newMessages.length - 1].parts[0].text = finalResponseText;
-                return newMessages;
+        if (settings.pauseAfterInitial) {
+            setLoadingStatus('Paused. Waiting for user confirmation...');
+            setIsPaused(true);
+            await new Promise<void>(resolve => {
+                pauseResolverRef.current = resolve;
             });
+            setLoadingStatus('Resuming...');
         }
+
+        // STEP 2: Refined Responses
+        setLoadingStatus('Refining answers (DEV MODE)...');
+        setAgentStates(prev => prev.map(a => ({ ...a, status: 'working', label: 'Critiquing & Refining...' })));
+
+        const refinementAgentPromises = initialAnswers.map(async (initialAnswer, index) => {
+          liveWork.refinedResponses[index] = '';
+          setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
+
+          const dummyText = `[DEV MODE] Refined response from Agent ${index + 1}. Critiquing the initial draft and improving it based on other agents' input.`;
+          const words = dummyText.split(' ');
+          let currentText = '';
+
+          for (const word of words) {
+             if (signal.aborted) throw new Error('Aborted');
+             await new Promise(resolve => setTimeout(resolve, 100));
+             currentText += word + ' ';
+             liveWork.refinedResponses[index] = currentText;
+             setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
+          }
+
+          setAgentStates(prev => prev.map((a, idx) => idx === index ? { ...a, status: 'done', label: 'Refined' } : a));
+          return currentText;
+        });
+
+        const refinedAnswers = await Promise.all(refinementAgentPromises);
+
+        // STEP 3: Final Synthesis
+        setLoadingStatus('Synthesizing final response (DEV MODE)...');
+        setAgentStates(prev => [
+          ...prev,
+          { id: 'synthesizer', name: 'Synthesizer', status: 'working', label: 'Synthesizing...' }
+        ]);
+
+        const dummyFinalText = `[DEV MODE] Final Synthesized Answer.\n\nThis is the final output generated by the synthesizer agent in development mode. It combines insights from all ${settings.numAgents} agents into a cohesive response.\n\n1. **Key Insight 1**: Simulation allows for rapid UI testing.\n2. **Key Insight 2**: No API costs are incurred.\n\nConclusion: The system is functioning as expected in development mode.`;
+        const words = dummyFinalText.split(' ');
+        let finalResponseText = '';
+        let isFirstChunk = true;
+
+        for (const word of words) {
+            if (signal.aborted) throw new Error('Aborted');
+            await new Promise(resolve => setTimeout(resolve, 50));
+            finalResponseText += word + ' ';
+            
+            if (isFirstChunk) {
+                isFirstChunk = false;
+                setIsLoading(false);
+                setMessages(prev => [...prev, { role: 'model', parts: [{ text: finalResponseText }] }]);
+            } else {
+                setMessages(prev => {
+                    const newMessages = [...prev];
+                    newMessages[newMessages.length - 1].parts[0].text = finalResponseText;
+                    return newMessages;
+                });
+            }
+        }
+
+        setMessages(prev => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            lastMessage.work = { ...liveWork };
+            return newMessages;
+        });
+        
+        setCurrentWork(undefined);
+
+      } else {
+        // --- PRODUCTION MODE (REAL API CALLS) ---
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+        
+        const mainChatHistory: Content[] = currentMessages.slice(0, -1).map(msg => ({
+          role: msg.role,
+          parts: msg.parts,
+        }));
+
+        const baseApiParts: Part[] = [];
+        if (image && imageFile) {
+          baseApiParts.push({
+            inlineData: {
+              mimeType: imageFile.type,
+              data: image.split(',')[1],
+            },
+          });
+        }
+        if (userInput.trim()) {
+          baseApiParts.push({ text: userInput });
+        }
+
+        const currentUserTurn: Content = { role: 'user', parts: baseApiParts };
+
+        // STEP 1: Initial Responses
+        setLoadingStatus('Initializing agents...');
+        setAgentStates(Array.from({ length: settings.numAgents }, (_, i) => ({
+          id: `agent-${i}`,
+          name: `Agent ${i + 1}`,
+          status: 'working',
+          label: 'Drafting initial response...'
+        })));
+
+        const initialAgentPromises = Array(settings.numAgents).fill(0).map(async (_, i) => {
+          // Indicate thinking immediately
+          liveWork.initialResponses[i] = '';
+          setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
+
+          const stream = await ai.models.generateContentStream({
+            model: settings.model,
+            contents: [...mainChatHistory, currentUserTurn],
+            config: {
+              systemInstruction: settings.initialInstruction,
+              temperature: 0.7,
+              tools: [{googleSearch: {}}],
+              thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
+              maxOutputTokens: 65536,
+            },
+          });
+
+          let fullText = '';
+          for await (const chunk of stream) {
+              if (signal.aborted) throw new Error('Aborted');
+              const text = chunk.text || '';
+              fullText += text;
+              liveWork.initialResponses[i] = fullText;
+              setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
+          }
+
+          setAgentStates(prev => prev.map((a, idx) => idx === i ? { ...a, status: 'done', label: 'Drafted' } : a));
+          return fullText;
+        });
+        
+        const initialAnswers = await Promise.all(initialAgentPromises);
+
+        if (settings.pauseAfterInitial) {
+            setLoadingStatus('Paused. Waiting for user confirmation...');
+            setIsPaused(true);
+            await new Promise<void>(resolve => {
+                pauseResolverRef.current = resolve;
+            });
+            setLoadingStatus('Resuming...');
+        }
+
+        // STEP 2: Refined Responses
+        setLoadingStatus('Refining answers...');
+        setAgentStates(prev => prev.map(a => ({ ...a, status: 'working', label: 'Critiquing & Refining...' })));
+
+        const refinementAgentPromises = initialAnswers.map(async (initialAnswer, index) => {
+          const otherAnswers = initialAnswers.filter((_, i) => i !== index);
+          const otherAnswersText = otherAnswers.map((answer, i) => `${i + 1}. "${answer}"`).join('\n');
+          const refinementContext = `My initial response was: "${initialAnswer}". The other agents responded with:\n${otherAnswersText}\n\nBased on this context, critically re-evaluate and provide a new, improved response to the original query.`;
+          
+          const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
+          
+          // Indicate thinking immediately
+          liveWork.refinedResponses[index] = '';
+          setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
+
+          const stream = await ai.models.generateContentStream({
+            model: settings.model,
+            contents: [...mainChatHistory, refinementTurn],
+            config: {
+              systemInstruction: settings.refinementInstruction,
+              temperature: 0.7,
+              tools: [{googleSearch: {}}],
+              thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
+              maxOutputTokens: 65536,
+            },
+          });
+
+          let fullText = '';
+          for await (const chunk of stream) {
+              if (signal.aborted) throw new Error('Aborted');
+              const text = chunk.text || '';
+              fullText += text;
+              liveWork.refinedResponses[index] = fullText;
+              setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
+          }
+
+          setAgentStates(prev => prev.map((a, idx) => idx === index ? { ...a, status: 'done', label: 'Refined' } : a));
+          return fullText;
+        });
+        
+        const refinedAnswers = await Promise.all(refinementAgentPromises);
+
+        // STEP 3: Final Synthesis (Streaming)
+        setLoadingStatus('Synthesizing massive final response...');
+        setAgentStates(prev => [
+          ...prev,
+          { id: 'synthesizer', name: 'Synthesizer', status: 'working', label: 'Synthesizing...' }
+        ]);
+        
+        const synthesizerContext = `Here are the ${settings.numAgents} refined responses to the user's query. Your task is to synthesize them into the best single, final answer. REMEMBER: 2000+ LINES OF CODE IF APPLICABLE. DO NOT SHORTCUT.\n\n${refinedAnswers.map((answer, i) => `Refined Response ${i + 1}:\n"${answer}"`).join('\n\n')}`;
+        const synthesizerTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}`}] };
+        
+        const stream = await ai.models.generateContentStream({
+          model: settings.model,
+          contents: [...mainChatHistory, synthesizerTurn],
+          config: {
+            systemInstruction: settings.synthesizerInstruction,
+            temperature: 0.7,
+            tools: [{googleSearch: {}}],
+            thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
+            maxOutputTokens: 65536, // Ensure max tokens for massive response
+          },
+        });
+
+        let finalResponseText = '';
+        const allGroundingChunks: GroundingChunk[] = [];
+        let isFirstChunk = true;
+
+        for await (const chunk of stream) {
+          if (signal.aborted) throw new Error('Aborted');
+          finalResponseText += chunk.text;
+          const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+          if (groundingChunks) {
+              allGroundingChunks.push(...groundingChunks);
+          }
+
+          if (isFirstChunk) {
+              isFirstChunk = false;
+              setIsLoading(false);
+              // Attach liveWork here immediately so it is visible during streaming
+              setMessages(prev => [...prev, { role: 'model', parts: [{ text: finalResponseText }] }]);
+          } else {
+              setMessages(prev => {
+                  const newMessages = [...prev];
+                  newMessages[newMessages.length - 1].parts[0].text = finalResponseText;
+                  return newMessages;
+              });
+          }
+        }
+
+        const sources = allGroundingChunks
+          .map((chunk) => chunk.web)
+          .filter((web): web is { uri: string; title: string; } => !!web && !!web.uri)
+          .filter((web, index, self) => index === self.findIndex(w => w.uri === web.uri));
+
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          lastMessage.sources = sources.length > 0 ? sources : undefined;
+          // Ensure work is definitely synced at the end
+          lastMessage.work = { ...liveWork };
+          return newMessages;
+        });
+
+        // Clear temporary live state
+        setCurrentWork(undefined);
       }
-
-      const sources = allGroundingChunks
-        .map((chunk) => chunk.web)
-        .filter((web): web is { uri: string; title: string; } => !!web && !!web.uri)
-        .filter((web, index, self) => index === self.findIndex(w => w.uri === web.uri));
-
-      setMessages(prev => {
-        const newMessages = [...prev];
-        const lastMessage = newMessages[newMessages.length - 1];
-        lastMessage.sources = sources.length > 0 ? sources : undefined;
-        // Ensure work is definitely synced at the end
-        lastMessage.work = { ...liveWork };
-        return newMessages;
-      });
-
-      // Clear temporary live state
-      setCurrentWork(undefined);
 
     } catch (error) {
       if (error instanceof Error && error.message === 'Aborted') {
@@ -386,6 +522,7 @@ export const useGeminiSwarm = () => {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
       setIsLoading(false);
+      setIsPaused(false);
       setLoadingStatus('Stopped');
     }
   };
@@ -399,6 +536,7 @@ export const useGeminiSwarm = () => {
   return {
     messages,
     isLoading,
+    isPaused,
     loadingStatus,
     agentStates,
     currentWork,
@@ -408,6 +546,7 @@ export const useGeminiSwarm = () => {
     setSettings,
     sendMessage,
     stopGeneration,
-    retry
+    retry,
+    continueGeneration
   };
 };

@@ -113,10 +113,12 @@ const SettingsModal: FC<{
   if (!isOpen) return null;
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+    
     setLocalSettings(prev => ({
       ...prev,
-      [name]: name === 'numAgents' ? parseInt(value) || 1 : value
+      [name]: type === 'checkbox' ? checked : (name === 'numAgents' ? parseInt(value) || 1 : value)
     }));
   };
 
@@ -137,6 +139,34 @@ const SettingsModal: FC<{
         </div>
         
         <div className="settings-modal-body">
+            <div className="settings-form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                <input
+                    type="checkbox"
+                    name="devMode"
+                    id="devMode"
+                    checked={localSettings.devMode || false}
+                    onChange={handleChange}
+                    style={{ width: 'auto', margin: 0 }}
+                />
+                <label htmlFor="devMode" className="settings-label" style={{ margin: 0, cursor: 'pointer' }}>
+                    Development Mode (Simulation)
+                </label>
+            </div>
+
+            <div className="settings-form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                <input
+                    type="checkbox"
+                    name="pauseAfterInitial"
+                    id="pauseAfterInitial"
+                    checked={localSettings.pauseAfterInitial || false}
+                    onChange={handleChange}
+                    style={{ width: 'auto', margin: 0 }}
+                />
+                <label htmlFor="pauseAfterInitial" className="settings-label" style={{ margin: 0, cursor: 'pointer' }}>
+                    Pause after Initial Drafts
+                </label>
+            </div>
+
             <div className="settings-form-group">
                 <label className="settings-label">Model</label>
                 <select
@@ -258,6 +288,7 @@ const WorkModal: FC<{ title: string; content: string; onClose: () => void }> = (
 
 const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = false }) => {
   const [modalData, setModalData] = useState<{title: string, content: string} | null>(null);
+  const detailsRef = useRef<HTMLDetailsElement>(null);
 
   const renderContent = (content: string | null) => {
     if (content === null) return <div className="pending-work">Waiting for agent output...</div>;
@@ -267,7 +298,7 @@ const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = false }
 
   return (
     <>
-    <details className="show-work-container">
+    <details className="show-work-container" ref={detailsRef}>
       <summary className={`show-work-button ${!isLive ? 'completed' : ''}`}>
         <span>{isLive ? 'Show Agent Work (Live)' : 'View Full Agent Swarm Process'}</span>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="work-arrow">
@@ -341,6 +372,20 @@ const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = false }
             ))}
           </div>
         </div>
+        <button
+          className={`show-work-button ${!isLive ? 'completed' : ''}`}
+          onClick={() => {
+            if (detailsRef.current) {
+              detailsRef.current.open = false;
+            }
+          }}
+          style={{ marginTop: '1rem' }}
+        >
+          <span>Collapse Agent Work</span>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="work-arrow" style={{ transform: 'rotate(180deg)' }}>
+            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+        </button>
       </div>
     </details>
     {modalData && <WorkModal title={modalData.title} content={modalData.content} onClose={() => setModalData(null)} />}
@@ -348,14 +393,29 @@ const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = false }
   );
 };
 
-const LoadingIndicator: FC<{ status: string; time: number; agentStates: AgentState[]; currentWork?: Work }> = ({ status, time, agentStates, currentWork }) => (
+const LoadingIndicator: FC<{ status: string; time: number; agentStates: AgentState[]; currentWork?: Work; isPaused?: boolean; onContinue?: () => void }> = ({ status, time, agentStates, currentWork, isPaused, onContinue }) => (
   <div className="message-wrapper model loading-state">
     <AgentAvatar type="model" />
     <div className="loading-container-wrapper" style={{ width: '100%', maxWidth: '800px' }}>
         <div className="loading-animation">
         <div className="loading-header">
             <span className="loading-status">{status}</span>
-            <span className="timer-display">{(time / 1000).toFixed(1)}s</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                {isPaused && onContinue && (
+                    <button className="continue-button" onClick={onContinue} style={{
+                        padding: '0.25rem 0.75rem',
+                        fontSize: '0.8rem',
+                        backgroundColor: '#4caf50',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                    }}>
+                        Continue
+                    </button>
+                )}
+                <span className="timer-display">{(time / 1000).toFixed(1)}s</span>
+            </div>
         </div>
         <div className="agent-progress-list">
             {agentStates.map((agent) => (
@@ -417,6 +477,7 @@ const App: FC = () => {
   const {
     messages,
     isLoading,
+    isPaused,
     loadingStatus,
     agentStates,
     currentWork,
@@ -426,13 +487,15 @@ const App: FC = () => {
     setSettings,
     sendMessage,
     stopGeneration,
-    retry
+    retry,
+    continueGeneration
   } = useGeminiSwarm();
 
   const [image, setImage] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   const messageListRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -448,6 +511,7 @@ const App: FC = () => {
       // Check if user is near the bottom (within 100px)
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
       setShouldAutoScroll(isNearBottom);
+      setShowScrollButton(!isNearBottom);
     };
 
     element.addEventListener('scroll', handleScroll);
@@ -507,6 +571,12 @@ const App: FC = () => {
     handleRemoveImage();
   };
 
+  const scrollToBottom = () => {
+    if (messageListRef.current) {
+      messageListRef.current.scrollTo({ top: messageListRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="chat-container">
       <header>
@@ -548,7 +618,7 @@ const App: FC = () => {
             </div>
           ))
         )}
-        {isLoading && <LoadingIndicator status={loadingStatus} time={timer} agentStates={agentStates} currentWork={currentWork} />}
+        {isLoading && <LoadingIndicator status={loadingStatus} time={timer} agentStates={agentStates} currentWork={currentWork} isPaused={isPaused} onContinue={continueGeneration} />}
         {error && (
           <div className="error-container">
             <div className="error-message">
@@ -606,8 +676,19 @@ const App: FC = () => {
           )}
         </form>
       </div>
-      <SettingsModal 
-        isOpen={isSettingsOpen} 
+      {showScrollButton && (
+        <button
+          className="scroll-to-bottom-btn"
+          onClick={scrollToBottom}
+          aria-label="Scroll to bottom"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+          </svg>
+        </button>
+      )}
+      <SettingsModal
+        isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)} 
         settings={settings}
         onSave={setSettings}
