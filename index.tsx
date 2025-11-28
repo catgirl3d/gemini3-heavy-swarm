@@ -112,7 +112,7 @@ const SettingsModal: FC<{
 
   if (!isOpen) return null;
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setLocalSettings(prev => ({
       ...prev,
@@ -135,7 +135,21 @@ const SettingsModal: FC<{
             </svg>
           </button>
         </div>
+        
         <div className="settings-modal-body">
+            <div className="settings-form-group">
+                <label className="settings-label">Model</label>
+                <select
+                    name="model"
+                    value={localSettings.model || 'gemini-3-pro-preview'}
+                    onChange={handleChange}
+                    className="settings-input"
+                >
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="gemini-3-pro-preview">Gemini 3 Pro (Preview)</option>
+                </select>
+            </div>
+
             <div className="settings-form-group">
                 <label className="settings-label">Number of Agents (1-8)</label>
                 <input 
@@ -148,7 +162,7 @@ const SettingsModal: FC<{
                     className="settings-input"
                 />
             </div>
-            
+
             <div className="settings-form-group">
                 <label className="settings-label">Initial Agent Instruction</label>
                 <textarea 

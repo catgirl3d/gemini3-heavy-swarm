@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Content, Part, GroundingChunk } from '@google/genai';
 
-const MODEL_NAME = 'gemini-3-pro-preview';
-
 export interface AppSettings {
   numAgents: number;
+  model: string;
   initialInstruction: string;
   refinementInstruction: string;
   synthesizerInstruction: string;
@@ -37,6 +36,7 @@ export interface AgentState {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   numAgents: 4,
+  model: 'gemini-3-pro-preview',
   initialInstruction: `You are one of several cooperative expert agents.
 
 Your job:
@@ -198,13 +198,13 @@ export const useGeminiSwarm = () => {
         setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
 
         const stream = await ai.models.generateContentStream({
-          model: MODEL_NAME,
+          model: settings.model,
           contents: [...mainChatHistory, currentUserTurn],
           config: {
             systemInstruction: settings.initialInstruction,
             temperature: 0.7,
             tools: [{googleSearch: {}}],
-            thinkingConfig: { thinkingBudget: 32768 },
+            thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
             maxOutputTokens: 65536,
           },
         });
@@ -239,13 +239,13 @@ export const useGeminiSwarm = () => {
         setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
 
         const stream = await ai.models.generateContentStream({
-          model: MODEL_NAME,
+          model: settings.model,
           contents: [...mainChatHistory, refinementTurn],
           config: {
             systemInstruction: settings.refinementInstruction,
             temperature: 0.7,
             tools: [{googleSearch: {}}],
-            thinkingConfig: { thinkingBudget: 32768 },
+            thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
             maxOutputTokens: 65536,
           },
         });
@@ -275,13 +275,13 @@ export const useGeminiSwarm = () => {
       const synthesizerTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}`}] };
       
       const stream = await ai.models.generateContentStream({
-        model: MODEL_NAME,
+        model: settings.model,
         contents: [...mainChatHistory, synthesizerTurn],
-        config: { 
+        config: {
           systemInstruction: settings.synthesizerInstruction,
           temperature: 0.7,
           tools: [{googleSearch: {}}],
-          thinkingConfig: { thinkingBudget: 32768 },
+          thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
           maxOutputTokens: 65536, // Ensure max tokens for massive response
         },
       });
