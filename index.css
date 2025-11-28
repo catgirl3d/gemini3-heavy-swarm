@@ -647,3 +647,68 @@ header h1 {
   .work-card { height: 400px; }
   .work-modal, .settings-modal { width: 100%; height: 100%; border-radius: 0; max-height: none; }
 }
+/* Error Handling */
+.error-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  color: #991b1b;
+  font-size: 0.9rem;
+  animation: fade-in 0.3s ease-out;
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.error-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.retry-button {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background-color: #fff;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.retry-button:hover {
+  background-color: #fee2e2;
+  transform: translateY(-1px);
+}
+
+.retry-button svg {
+  width: 16px;
+  height: 16px;
+}
+.stop-button {
+  background: #ef4444;
+  color: white;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+.stop-button:hover {
+  background: #dc2626;
+  transform: scale(1.05);
+  box-shadow: 0 6px 10px rgba(0,0,0,0.15);
+}
+.stop-button svg {
+  width: 22px;
+  height: 22px;
+}

@@ -110,8 +110,11 @@ export const useGeminiSwarm = () => {
   const [currentWork, setCurrentWork] = useState<Work | undefined>(undefined);
   const [timer, setTimer] = useState<number>(0);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [error, setError] = useState<string | null>(null);
+  const [lastInput, setLastInput] = useState<{text: string, image: string | null, imageFile: File | null} | null>(null);
   
   const startTimeRef = useRef<number>(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -144,12 +147,21 @@ export const useGeminiSwarm = () => {
     return () => clearInterval(interval);
   }, [isLoading]);
 
-  const sendMessage = async (userInput: string, image: string | null, imageFile: File | null) => {
+  const sendMessage = async (userInput: string, image: string | null, imageFile: File | null, isRetry: boolean = false) => {
     if (!userInput.trim() && !image) return;
 
-    const userMessage: Message = { role: 'user', parts: [{ text: userInput }], image: image || undefined };
-    const currentMessages = [...messages, userMessage];
-    setMessages(currentMessages);
+    setError(null);
+    if (!isRetry) {
+      setLastInput({ text: userInput, image, imageFile });
+    }
+
+    let currentMessages = messages;
+    if (!isRetry) {
+      const userMessage: Message = { role: 'user', parts: [{ text: userInput }], image: image || undefined };
+      currentMessages = [...messages, userMessage];
+      setMessages(currentMessages);
+    }
+
     setIsLoading(true);
     setAgentStates([]);
     
@@ -159,6 +171,14 @@ export const useGeminiSwarm = () => {
         refinedResponses: Array(settings.numAgents).fill(null)
     };
     setCurrentWork(liveWork);
+
+    // Create new AbortController
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    const signal = abortController.signal;
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
@@ -211,6 +231,7 @@ export const useGeminiSwarm = () => {
 
         let fullText = '';
         for await (const chunk of stream) {
+            if (signal.aborted) throw new Error('Aborted');
             const text = chunk.text || '';
             fullText += text;
             liveWork.initialResponses[i] = fullText;
@@ -252,6 +273,7 @@ export const useGeminiSwarm = () => {
 
         let fullText = '';
         for await (const chunk of stream) {
+            if (signal.aborted) throw new Error('Aborted');
             const text = chunk.text || '';
             fullText += text;
             liveWork.refinedResponses[index] = fullText;
@@ -291,6 +313,7 @@ export const useGeminiSwarm = () => {
       let isFirstChunk = true;
 
       for await (const chunk of stream) {
+        if (signal.aborted) throw new Error('Aborted');
         finalResponseText += chunk.text;
         const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
         if (groundingChunks) {
@@ -329,14 +352,47 @@ export const useGeminiSwarm = () => {
       setCurrentWork(undefined);
 
     } catch (error) {
+      if (error instanceof Error && error.message === 'Aborted') {
+        console.log('Generation aborted by user');
+        setIsLoading(false);
+        setLoadingStatus('Stopped by user');
+        return;
+      }
+
       console.error('Error in agentic workflow:', error);
       setIsLoading(false);
       setCurrentWork(undefined);
-      let errorMessage = 'An unexpected error occurred. Please check the console for details and try again.';
+      
+      let errorMessage = 'An unexpected error occurred.';
       if (error instanceof Error) {
-        errorMessage = `Sorry, I encountered an error: ${error.message}. Please try again.`;
+        if (error.message.includes('429')) {
+          errorMessage = 'Too many requests (429). Please wait a moment and try again.';
+        } else if (error.message.includes('503')) {
+          errorMessage = 'Service temporarily unavailable (503). Please try again later.';
+        } else if (error.message.includes('SAFETY')) {
+          errorMessage = 'Response blocked due to safety settings.';
+        } else {
+          errorMessage = `Error: ${error.message}`;
+        }
       }
-      setMessages(prev => [...prev, { role: 'model', parts: [{ text: errorMessage }] }]);
+      setError(errorMessage);
+    } finally {
+      abortControllerRef.current = null;
+    }
+  };
+
+  const stopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+      setLoadingStatus('Stopped');
+    }
+  };
+
+  const retry = () => {
+    if (lastInput) {
+      sendMessage(lastInput.text, lastInput.image, lastInput.imageFile, true);
     }
   };
 
@@ -348,7 +404,10 @@ export const useGeminiSwarm = () => {
     currentWork,
     timer,
     settings,
+    error,
     setSettings,
-    sendMessage
+    sendMessage,
+    stopGeneration,
+    retry
   };
 };
