@@ -349,7 +349,7 @@ const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = false }
 };
 
 const LoadingIndicator: FC<{ status: string; time: number; agentStates: AgentState[]; currentWork?: Work }> = ({ status, time, agentStates, currentWork }) => (
-  <div className="message-wrapper model">
+  <div className="message-wrapper model loading-state">
     <AgentAvatar type="model" />
     <div className="loading-container-wrapper" style={{ width: '100%', maxWidth: '800px' }}>
         <div className="loading-animation">

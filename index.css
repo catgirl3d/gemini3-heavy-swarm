@@ -93,15 +93,19 @@ header {
   background: #f1f5f9;
   border-radius: 8px;
   padding: 6px;
+  flex-shrink: 0;
 }
 .header-logo svg, .header-logo img { width: 100%; height: 100%; object-fit: contain; }
 
-header h1 { 
-  margin: 0; 
-  font-size: 1.25rem; 
-  font-weight: 700; 
+header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .settings-button {
@@ -115,6 +119,7 @@ header h1 {
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  flex-shrink: 0;
 }
 .settings-button:hover { background-color: #f1f5f9; color: var(--text-primary); }
 .settings-button svg { width: 24px; height: 24px; }
@@ -185,7 +190,7 @@ header h1 {
   white-space: normal; /* Override pre-wrap to fix gaps in models */
 }
 
-.agent-label-header { margin-bottom: 0.5rem; }
+.agent-label-header { margin-top: 8px; }
 .agent-label { 
   font-weight: 700; 
   font-size: 0.7rem; 
@@ -635,17 +640,78 @@ header h1 {
 @media (max-width: 768px) {
   #root { padding: 0; }
   .chat-container { height: 100vh; max-height: none; border-radius: 0; border: none; }
-  header { padding: 1rem; }
-  .message-list { padding: 1rem; }
-  .message-wrapper { max-width: 95%; }
-  .avatar { width: 32px; height: 32px; }
-  .input-container { padding: 1rem; }
-  .input-area input[type="text"] { padding: 0.85rem 1.25rem; font-size: 1rem; }
-  .input-area button { width: 44px; height: 44px; }
+  header { padding: 0.75rem 1rem; }
+  .header-logo { width: 28px; height: 28px; }
+  header h1 { font-size: 1rem; }
+  
+  .message-list { padding: 1.2rem; gap: 1.5rem; }
+  .message-wrapper { max-width: 100%; gap: 0.5rem; }
+  .avatar { width: 24px; height: 24px; margin-top: 4px; min-width: 24px; }
+  .avatar svg, .avatar img { width: 16px; height: 16px; }
+  
+  .message { font-size: 0.9rem; padding: 0rem 0.8rem; }
+  .message.user { padding: 0.6rem 0.8rem; }
+  .message pre { font-size: 0.8rem; }
+  .message ul, .message ol { padding-inline-start: 1rem; }
+  .code-block-wrapper pre { padding: 0.75rem !important; }
+  
+  .welcome-title { font-size: 1.5rem; }
+  .welcome-subtitle { font-size: 0.95rem; }
+  .empty-state-container { padding: 1rem; }
+  .empty-state-icon { width: 48px; height: 48px; margin-bottom: 1rem; }
+  
+  .input-container { padding: 0.5rem; }
+  .input-area { gap: 0.5rem; }
+  .input-area input[type="text"] { padding: 0.6rem 1rem; font-size: 0.95rem; min-width: 0; }
+  .input-area button { width: 36px; height: 36px; flex-shrink: 0; }
+  .attach-button { width: 32px; height: 32px; }
+  .attach-button svg { width: 18px; height: 18px; }
+  
+  .settings-button { padding: 4px; }
+  .settings-button svg { width: 20px; height: 20px; }
+  
   .work-grid { grid-template-columns: 1fr; }
   .example-prompts { max-width: 100%; }
   .work-card { height: 400px; }
   .work-modal, .settings-modal { width: 100%; height: 100%; border-radius: 0; max-height: none; }
+
+  /* Mobile Layout Optimization for Model Messages */
+  .message-wrapper.model {
+    display: block;
+  }
+
+  .message-wrapper.model.loading-state {
+    display: flex;
+  }
+
+  .message-wrapper.model .avatar {
+    float: left;
+    margin-right: 0.75rem;
+    margin-bottom: 0.25rem;
+    margin-top: 0;
+  }
+  
+  .message-wrapper.model .message {
+    display: block;
+    padding-left: 0;
+    padding-right: 0;
+    margin-top: -10px;
+  }
+  
+  .message.model > * {
+    margin-bottom: 0.5rem;
+  }
+  
+  .message.model > *:last-child {
+    margin-bottom: 0;
+  }
+  
+  .message-wrapper.model::after {
+    content: "";
+    display: table;
+    clear: both;
+  }
+  .markdown-content { padding-top: 10px; }
 }
 /* Error Handling */
 .error-container {
