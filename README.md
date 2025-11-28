@@ -2,7 +2,7 @@
 
 An advanced AI swarm interface powered by Google's **Gemini 3 Pro Preview** model. This application orchestrates a team of cooperative AI agents to produce high-quality, refined, and synthesized responses for complex queries.
 
-**[Live Demo](https://8d06d02e.gemini3-heavy-swarm.pages.dev)**
+**[Live Demo](https://7a49f2be.gemini3-heavy-swarm.pages.dev)**
 
 ## Features
 

@@ -18,7 +18,7 @@ const AgentAvatar: FC<{ type: 'user' | 'model' }> = ({ type }) => (
   </div>
 );
 
-const EmptyState: FC<{ onPromptClick: (prompt: string) => void }> = ({ onPromptClick }) => {
+const EmptyState: FC<{ onPromptClick: (prompt: string) => void; modelDisplayName: string }> = ({ onPromptClick, modelDisplayName }) => {
   const examplePrompts = [
     "Explain the concept of 'agentic workflows' in AI.",
     "Compare the pros and cons of Next.js and Remix.",
@@ -29,7 +29,7 @@ const EmptyState: FC<{ onPromptClick: (prompt: string) => void }> = ({ onPromptC
       <div className="empty-state-icon">
         <img src={geminiIcon} alt="Gemini Logo" />
       </div>
-      <h2 className="welcome-title">Gemini 3 Heavy</h2>
+      <h2 className="welcome-title">{modelDisplayName}</h2>
       <p className="welcome-subtitle">How can this AI swarm assist you today?</p>
       
       <a href="https://t.me/temnobogin9" target="_blank" rel="noopener noreferrer" className="creator-credit">
@@ -408,6 +408,11 @@ const Sources: FC<{ sources: Source[] }> = ({ sources }) => (
   </div>
 );
 
+const getModelDisplayName = (model: string) => {
+  if (model === 'gemini-2.5-flash') return 'Gemini 2.5 Flash Heavy';
+  return 'Gemini 3 Heavy';
+};
+
 const App: FC = () => {
   const {
     messages,
@@ -509,9 +514,9 @@ const App: FC = () => {
             <div className="header-logo">
                 <img src={geminiIcon} alt="Gemini Logo" />
             </div>
-            <h1>Gemini 3 Heavy</h1>
+            <h1>{getModelDisplayName(settings.model)}</h1>
         </div>
-        <button 
+        <button
             className="settings-button" 
             onClick={() => setIsSettingsOpen(true)}
             aria-label="Swarm Settings"
@@ -523,7 +528,7 @@ const App: FC = () => {
       </header>
       <div className="message-list" ref={messageListRef}>
         {messages.length === 0 && !isLoading ? (
-           <EmptyState onPromptClick={handlePromptClick} />
+           <EmptyState onPromptClick={handlePromptClick} modelDisplayName={getModelDisplayName(settings.model)} />
         ) : (
           messages.map((msg, index) => (
             <div key={index} className={`message-wrapper ${msg.role}`}>
