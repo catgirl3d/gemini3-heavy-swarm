@@ -77,6 +77,7 @@ header {
   background-color: #fff;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 1rem;
   color: var(--text-primary);
   z-index: 10;
@@ -93,7 +94,7 @@ header {
   border-radius: 8px;
   padding: 6px;
 }
-.header-logo svg { width: 100%; height: 100%; }
+.header-logo svg, .header-logo img { width: 100%; height: 100%; object-fit: contain; }
 
 header h1 { 
   margin: 0; 
@@ -102,6 +103,22 @@ header h1 {
   letter-spacing: -0.02em;
   color: var(--text-primary);
 }
+
+.settings-button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.settings-button:hover { background-color: #f1f5f9; color: var(--text-primary); }
+.settings-button svg { width: 24px; height: 24px; }
+
 
 /* Messages */
 .message-list {
@@ -133,7 +150,7 @@ header h1 {
   justify-content: center;
   margin-top: 4px;
 }
-.avatar svg { width: 24px; height: 24px; }
+.avatar svg, .avatar img { width: 24px; height: 24px; object-fit: contain; }
 .message-wrapper.user .avatar { background: var(--primary-color); color: white; }
 .message-wrapper.model .avatar { background-color: #f1f5f9; color: var(--text-primary); border: 1px solid #e2e8f0; }
 
@@ -197,6 +214,7 @@ header h1 {
   color: #cbd5e1;
   margin-bottom: 1.5rem;
 }
+.empty-state-icon img { width: 100%; height: 100%; object-fit: contain; }
 .welcome-title { 
   font-size: 2.25rem; 
   font-weight: 800; 
@@ -296,7 +314,7 @@ header h1 {
 .agent-details { flex-grow: 1; display: flex; flex-direction: column; gap: 8px; }
 
 .agent-header { display: flex; justify-content: space-between; align-items: center; }
-.agent-name { font-weight: 600; color: var(--text-primary); font-size: 0.9rem; }
+.agent-name { font-weight: 600; color: var(--text-primary); font-size: 0.9rem; padding-right:1rem; }
 .agent-status-text { color: var(--text-secondary); font-size: 0.8rem; }
 
 .agent-progress-track {
@@ -463,7 +481,7 @@ header h1 {
 
 .message-image { max-width: 100%; max-height: 400px; border-radius: 8px; margin-bottom: 1rem; object-fit: contain; align-self: flex-start; border: 1px solid var(--model-message-border); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
 
-/* Work Modal */
+/* Work Modal & Settings Modal */
 .work-modal-overlay {
   position: fixed;
   top: 0;
@@ -479,7 +497,7 @@ header h1 {
   animation: fade-in 0.2s ease-out;
 }
 
-.work-modal {
+.work-modal, .settings-modal {
   background-color: white;
   width: 90%;
   max-width: 900px;
@@ -490,6 +508,12 @@ header h1 {
   flex-direction: column;
   overflow: hidden;
   animation: modal-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.settings-modal {
+    max-width: 600px;
+    height: auto;
+    max-height: 90vh;
 }
 
 @keyframes modal-slide-up {
@@ -533,7 +557,7 @@ header h1 {
 
 .close-modal-button svg { width: 24px; height: 24px; }
 
-.work-modal-body {
+.work-modal-body, .settings-modal-body {
   flex-grow: 1;
   overflow-y: auto;
   padding: 2rem;
@@ -543,6 +567,46 @@ header h1 {
 .work-modal-body .markdown-content {
     white-space: normal;
 }
+
+/* Settings Form */
+.settings-form-group { margin-bottom: 1.5rem; }
+.settings-label { display: block; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary); font-size: 0.95rem; }
+.settings-help { margin: -0.25rem 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); }
+
+.settings-input, .settings-textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--model-message-border);
+    border-radius: 8px;
+    font-family: var(--font-family);
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+.settings-textarea { min-height: 100px; resize: vertical; line-height: 1.5; }
+.settings-input:focus, .settings-textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+
+.settings-modal-footer {
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid var(--model-message-border);
+    background-color: #f8fafc;
+    display: flex;
+    justify-content: space-between;
+}
+
+.settings-btn {
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.9rem;
+    border: none;
+    transition: all 0.2s;
+}
+.settings-btn.reset { background-color: transparent; color: var(--text-secondary); }
+.settings-btn.reset:hover { background-color: #e2e8f0; color: var(--text-primary); }
+.settings-btn.save { background-color: var(--primary-color); color: white; }
+.settings-btn.save:hover { background-color: #0f172a; transform: translateY(-1px); }
+
 
 /* Expand Button in Card */
 .expand-work-button {
@@ -581,5 +645,5 @@ header h1 {
   .work-grid { grid-template-columns: 1fr; }
   .example-prompts { max-width: 100%; }
   .work-card { height: 400px; }
-  .work-modal { width: 100%; height: 100%; border-radius: 0; }
+  .work-modal, .settings-modal { width: 100%; height: 100%; border-radius: 0; max-height: none; }
 }

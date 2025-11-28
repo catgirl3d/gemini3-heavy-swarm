@@ -1,57 +1,10 @@
-import React, { useState, useEffect, useRef, FormEvent, FC, ReactNode } from 'react';
+import React, { useState, useEffect, useRef, FormEvent, FC, ReactNode, ChangeEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createPortal } from 'react-dom';
-import { GoogleGenAI, Content, Part, GroundingChunk } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-
-const MODEL_NAME = 'gemini-3-pro-preview';
-const NUM_AGENTS = 4;
-
-const INITIAL_SYSTEM_INSTRUCTION = `You follow prompt that user gives and add your intelligence creatively to achieve what user wants and what user will want in future by analyzing his prompt. Provide the most creative and beautiful version of the solution possible.`;
-
-const REFINEMENT_SYSTEM_INSTRUCTION = `Your goal is to RUTHLESSLY IMPROVE the provided response.
-STRICT GUIDELINES:
-1. DEMAND Creativity: If the initial code/logic is simple, make it creative and logical.
-3. NO MERCY: Point out every flaw in the initial draft and fix it with a creative, more robust solution.
-4. Your output must be significantly larger and more detailed than the input.for example user asked for svg episode of southpark - you should first focus on each charcter extreme detailed svg then environment with lots of easter eggs and interaction and then dialogues related to series and characters with proper animation then all get into one code block `;
-
-const SYNTHESIZER_SYSTEM_INSTRUCTION = `You are a master synthesizer AI.
-
-SECTION 1: SWARM LEARNINGS
-Start your response with a section titled "## Swarm Learnings". Explicitly state what specific technical details, edge cases, strategies, or improvements you learned and adopted from the previous agent critiques and refinements.
-
-SECTION 2: MASSIVE CODE ARTIFACT (2000+ LINES) only when user asked for it.
-CRITICAL MANDATE: The user explicitly demands a MASSIVE code output (aiming for 2000+ lines).
-STRICT PROHIBITIONS:
-1. NEVER write 'Technical Note' or excuses about token limits.
-2. NO placeholders ('// ...').
-3. NO "lazy" filler.
-4. DO NOT apologize for length.
-Your goal is to hit the token limit with pure, functional, executable code. Do not stop.`;
-
-interface Source {
-  uri: string;
-  title: string;
-}
-interface Work {
-  initialResponses: (string | null)[];
-  refinedResponses: (string | null)[];
-}
-interface Message {
-  role: 'user' | 'model';
-  parts: { text: string }[];
-  image?: string;
-  sources?: Source[];
-  work?: Work;
-}
-
-interface AgentState {
-  id: string;
-  name: string;
-  status: 'waiting' | 'working' | 'done';
-  label: string;
-}
+import geminiIcon from './assets/Google-gemini-icon.png';
+import { useGeminiSwarm, AppSettings, DEFAULT_SETTINGS, Work, Message, AgentState, Source } from './useGeminiSwarm';
 
 const AgentAvatar: FC<{ type: 'user' | 'model' }> = ({ type }) => (
   <div className="avatar">
@@ -60,9 +13,7 @@ const AgentAvatar: FC<{ type: 'user' | 'model' }> = ({ type }) => (
         <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
       </svg>
     ) : (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-1.07 3.97-2.9 5.4z"/>
-      </svg>
+      <img src={geminiIcon} alt="Gemini Logo" />
     )}
   </div>
 );
@@ -76,15 +27,13 @@ const EmptyState: FC<{ onPromptClick: (prompt: string) => void }> = ({ onPromptC
   return (
     <div className="empty-state-container">
       <div className="empty-state-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-1.07 3.97-2.9 5.4z"/>
-        </svg>
+        <img src={geminiIcon} alt="Gemini Logo" />
       </div>
       <h2 className="welcome-title">Gemini 3 Heavy</h2>
       <p className="welcome-subtitle">How can this AI swarm assist you today?</p>
       
-      <a href="https://x.com/chetaslua" target="_blank" rel="noopener noreferrer" className="creator-credit">
-        by chetaslua
+      <a href="https://t.me/temnobogin9" target="_blank" rel="noopener noreferrer" className="creator-credit">
+        by Lisova
       </a>
 
       <div className="example-prompts">
@@ -135,6 +84,131 @@ const CodeBlock: FC<{ children?: ReactNode, className?: string }> = ({ children,
   );
 };
 
+const SettingsModal: FC<{ 
+  isOpen: boolean; 
+  onClose: () => void; 
+  settings: AppSettings; 
+  onSave: (newSettings: AppSettings) => void;
+}> = ({ isOpen, onClose, settings, onSave }) => {
+  const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
+
+  useEffect(() => {
+    setLocalSettings(settings);
+  }, [settings, isOpen]);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+        window.addEventListener('keydown', handleEsc);
+        document.body.style.overflow = 'hidden';
+    }
+    return () => {
+        window.removeEventListener('keydown', handleEsc);
+        document.body.style.overflow = 'unset';
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setLocalSettings(prev => ({
+      ...prev,
+      [name]: name === 'numAgents' ? parseInt(value) || 1 : value
+    }));
+  };
+
+  const handleReset = () => {
+      setLocalSettings(DEFAULT_SETTINGS);
+  };
+
+  return createPortal(
+    <div className="work-modal-overlay" onClick={onClose}>
+      <div className="settings-modal" onClick={e => e.stopPropagation()}>
+        <div className="work-modal-header">
+          <h3>Swarm Configuration</h3>
+          <button className="close-modal-button" onClick={onClose} aria-label="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+            </svg>
+          </button>
+        </div>
+        <div className="settings-modal-body">
+            <div className="settings-form-group">
+                <label className="settings-label">Number of Agents (1-8)</label>
+                <input 
+                    type="number" 
+                    name="numAgents" 
+                    min="1" 
+                    max="8" 
+                    value={localSettings.numAgents} 
+                    onChange={handleChange}
+                    className="settings-input"
+                />
+            </div>
+            
+            <div className="settings-form-group">
+                <label className="settings-label">Initial Agent Instruction</label>
+                <textarea 
+                    name="initialInstruction" 
+                    value={localSettings.initialInstruction} 
+                    onChange={handleChange}
+                    className="settings-textarea"
+                />
+            </div>
+
+            <div className="settings-form-group">
+                <label className="settings-label">Refinement Instruction</label>
+                <p className="settings-help">Instructions for agents critiquing the initial drafts.</p>
+                <textarea 
+                    name="refinementInstruction" 
+                    value={localSettings.refinementInstruction} 
+                    onChange={handleChange}
+                    className="settings-textarea"
+                />
+            </div>
+
+            <div className="settings-form-group">
+                <label className="settings-label">Synthesizer Instruction</label>
+                 <p className="settings-help">Instructions for the final agent merging all refined responses.</p>
+                <textarea 
+                    name="synthesizerInstruction" 
+                    value={localSettings.synthesizerInstruction} 
+                    onChange={handleChange}
+                    className="settings-textarea"
+                />
+            </div>
+        </div>
+        <div className="settings-modal-footer">
+            <button className="settings-btn reset" onClick={handleReset}>Reset to Defaults</button>
+            <button className="settings-btn save" onClick={() => { onSave(localSettings); onClose(); }}>Save Changes</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+
+const MarkdownRenderer: FC<{ content: string }> = ({ content }) => (
+  <ReactMarkdown
+    remarkPlugins={[remarkGfm]}
+    components={{
+      code(props) {
+        const {children, className} = props;
+        return <CodeBlock className={className}>{String(children)}</CodeBlock>;
+      },
+      table({node, ...props}) {
+        return <div className="table-wrapper"><table {...props} /></div>;
+      }
+    }}
+  >
+    {content}
+  </ReactMarkdown>
+);
+
 const WorkModal: FC<{ title: string; content: string; onClose: () => void }> = ({ title, content, onClose }) => {
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -160,20 +234,7 @@ const WorkModal: FC<{ title: string; content: string; onClose: () => void }> = (
           </button>
         </div>
         <div className="work-modal-body">
-            <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                code(props) {
-                    const {children, className} = props;
-                    return <CodeBlock className={className}>{String(children)}</CodeBlock>;
-                },
-                table({node, ...props}) {
-                    return <div className="table-wrapper"><table {...props} /></div>;
-                }
-                }}
-            >
-                {content}
-            </ReactMarkdown>
+            <MarkdownRenderer content={content} />
         </div>
       </div>
     </div>,
@@ -185,23 +246,9 @@ const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = false }
   const [modalData, setModalData] = useState<{title: string, content: string} | null>(null);
 
   const renderContent = (content: string | null) => {
-    if (!content) return <div className="pending-work">Waiting for agent output...</div>;
-    return (
-        <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-            code(props) {
-                const {children, className} = props;
-                return <CodeBlock className={className}>{String(children)}</CodeBlock>;
-            },
-            table({node, ...props}) {
-                return <div className="table-wrapper"><table {...props} /></div>;
-            }
-            }}
-        >
-            {content}
-        </ReactMarkdown>
-    );
+    if (content === null) return <div className="pending-work">Waiting for agent output...</div>;
+    if (content === '') return <div className="pending-work">Thinking...</div>;
+    return <MarkdownRenderer content={content} />;
   };
 
   return (
@@ -348,37 +395,31 @@ const Sources: FC<{ sources: Source[] }> = ({ sources }) => (
 );
 
 const App: FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [loadingStatus, setLoadingStatus] = useState<string>('');
-  const [agentStates, setAgentStates] = useState<AgentState[]>([]);
-  const [currentWork, setCurrentWork] = useState<Work | undefined>(undefined);
-  const [timer, setTimer] = useState<number>(0);
+  const {
+    messages,
+    isLoading,
+    loadingStatus,
+    agentStates,
+    currentWork,
+    timer,
+    settings,
+    setSettings,
+    sendMessage
+  } = useGeminiSwarm();
+
   const [image, setImage] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
   const messageListRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  const startTimeRef = useRef<number>(0);
-  
+
   useEffect(() => {
     if (messageListRef.current) {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
   }, [messages, isLoading, agentStates, currentWork]);
-  
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (isLoading) {
-      startTimeRef.current = Date.now();
-      interval = setInterval(() => {
-        setTimer(Date.now() - startTimeRef.current);
-      }, 100);
-    } else {
-      setTimer(0);
-    }
-    return () => clearInterval(interval);
-  }, [isLoading]);
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -422,198 +463,29 @@ const App: FC = () => {
     if (!userInput.trim() && !image) return;
 
     event.currentTarget.reset();
-
-    const userMessage: Message = { role: 'user', parts: [{ text: userInput }], image: image || undefined };
-    const currentMessages = [...messages, userMessage];
-    setMessages(currentMessages);
-    setIsLoading(true);
-    handleRemoveImage();
-    setAgentStates([]);
     
-    // Initialize work tracking (local for persistence, state for UI)
-    const liveWork: Work = {
-        initialResponses: Array(NUM_AGENTS).fill(null),
-        refinedResponses: Array(NUM_AGENTS).fill(null)
-    };
-    setCurrentWork(liveWork);
-
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-      
-      const mainChatHistory: Content[] = currentMessages.slice(0, -1).map(msg => ({
-        role: msg.role,
-        parts: msg.parts,
-      }));
-
-      const baseApiParts: Part[] = [];
-      if (image && imageFile) {
-        baseApiParts.push({
-          inlineData: {
-            mimeType: imageFile.type,
-            data: image.split(',')[1],
-          },
-        });
-      }
-      if (userInput.trim()) {
-        baseApiParts.push({ text: userInput });
-      }
-
-      const currentUserTurn: Content = { role: 'user', parts: baseApiParts };
-
-      // STEP 1: Initial Responses
-      setLoadingStatus('Initializing agents...');
-      setAgentStates(Array.from({ length: NUM_AGENTS }, (_, i) => ({
-        id: `agent-${i}`,
-        name: `Agent ${i + 1}`,
-        status: 'working',
-        label: 'Drafting initial response...'
-      })));
-
-      const initialAgentPromises = Array(NUM_AGENTS).fill(0).map((_, i) => 
-        ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: [...mainChatHistory, currentUserTurn],
-          config: { 
-            systemInstruction: INITIAL_SYSTEM_INSTRUCTION,
-            temperature: 0.7,
-            tools: [{googleSearch: {}}],
-            thinkingConfig: { thinkingBudget: 32768 },
-            maxOutputTokens: 65536, 
-          },
-        }).then(res => {
-            setAgentStates(prev => prev.map((a, idx) => idx === i ? { ...a, status: 'done', label: 'Drafted' } : a));
-            
-            // Capture response in local variable and update state
-            liveWork.initialResponses[i] = res.text;
-            setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
-            
-            return res;
-        })
-      );
-      
-      const initialResponses = await Promise.all(initialAgentPromises);
-      const initialAnswers = initialResponses.map(res => res.text);
-
-      // STEP 2: Refined Responses
-      setLoadingStatus('Refining answers...');
-      setAgentStates(prev => prev.map(a => ({ ...a, status: 'working', label: 'Critiquing & Refining...' })));
-
-      const refinementAgentPromises = initialAnswers.map((initialAnswer, index) => {
-        const otherAnswers = initialAnswers.filter((_, i) => i !== index);
-        const otherAnswersText = otherAnswers.map((answer, i) => `${i + 1}. "${answer}"`).join('\n');
-        const refinementContext = `My initial response was: "${initialAnswer}". The other agents responded with:\n${otherAnswersText}\n\nBased on this context, critically re-evaluate and provide a new, improved response to the original query.`;
-        
-        const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
-        
-        return ai.models.generateContent({ 
-          model: MODEL_NAME, 
-          contents: [...mainChatHistory, refinementTurn],
-          config: { 
-            systemInstruction: REFINEMENT_SYSTEM_INSTRUCTION,
-            temperature: 0.7,
-            tools: [{googleSearch: {}}],
-            thinkingConfig: { thinkingBudget: 32768 },
-            maxOutputTokens: 65536,
-          },
-        }).then(res => {
-            setAgentStates(prev => prev.map((a, idx) => idx === index ? { ...a, status: 'done', label: 'Refined' } : a));
-            
-            // Capture response in local variable and update state
-            liveWork.refinedResponses[index] = res.text;
-            setCurrentWork({ initialResponses: [...liveWork.initialResponses], refinedResponses: [...liveWork.refinedResponses] });
-            
-            return res;
-        });
-      });
-      
-      const refinedResponses = await Promise.all(refinementAgentPromises);
-      const refinedAnswers = refinedResponses.map(res => res.text);
-
-      // STEP 3: Final Synthesis (Streaming)
-      setLoadingStatus('Synthesizing massive final response...');
-      setAgentStates(prev => [
-        ...prev,
-        { id: 'synthesizer', name: 'Synthesizer', status: 'working', label: 'Synthesizing...' }
-      ]);
-      
-      const synthesizerContext = `Here are the ${NUM_AGENTS} refined responses to the user's query. Your task is to synthesize them into the best single, final answer. REMEMBER: 2000+ LINES OF CODE IF APPLICABLE. DO NOT SHORTCUT.\n\n${refinedAnswers.map((answer, i) => `Refined Response ${i + 1}:\n"${answer}"`).join('\n\n')}`;
-      const synthesizerTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}`}] };
-      
-      const stream = await ai.models.generateContentStream({
-        model: MODEL_NAME,
-        contents: [...mainChatHistory, synthesizerTurn],
-        config: { 
-          systemInstruction: SYNTHESIZER_SYSTEM_INSTRUCTION,
-          temperature: 0.7,
-          tools: [{googleSearch: {}}],
-          thinkingConfig: { thinkingBudget: 32768 },
-          maxOutputTokens: 65536, // Ensure max tokens for massive response
-        },
-      });
-
-      let finalResponseText = '';
-      const allGroundingChunks: GroundingChunk[] = [];
-      let isFirstChunk = true;
-
-      for await (const chunk of stream) {
-        finalResponseText += chunk.text;
-        const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
-        if (groundingChunks) {
-            allGroundingChunks.push(...groundingChunks);
-        }
-
-        if (isFirstChunk) {
-            isFirstChunk = false;
-            setIsLoading(false);
-            // Attach liveWork here immediately so it is visible during streaming
-            setMessages(prev => [...prev, { role: 'model', parts: [{ text: finalResponseText }], work: { ...liveWork } }]);
-        } else {
-            setMessages(prev => {
-                const newMessages = [...prev];
-                newMessages[newMessages.length - 1].parts[0].text = finalResponseText;
-                return newMessages;
-            });
-        }
-      }
-
-      const sources = allGroundingChunks
-        .map((chunk) => chunk.web)
-        .filter((web): web is { uri: string; title: string; } => !!web && !!web.uri)
-        .filter((web, index, self) => index === self.findIndex(w => w.uri === web.uri));
-
-      setMessages(prev => {
-        const newMessages = [...prev];
-        const lastMessage = newMessages[newMessages.length - 1];
-        lastMessage.sources = sources.length > 0 ? sources : undefined;
-        // Ensure work is definitely synced at the end
-        lastMessage.work = { ...liveWork };
-        return newMessages;
-      });
-
-      // Clear temporary live state
-      setCurrentWork(undefined);
-
-    } catch (error) {
-      console.error('Error in agentic workflow:', error);
-      setIsLoading(false);
-      setCurrentWork(undefined);
-      let errorMessage = 'An unexpected error occurred. Please check the console for details and try again.';
-      if (error instanceof Error) {
-        errorMessage = `Sorry, I encountered an error: ${error.message}. Please try again.`;
-      }
-      setMessages(prev => [...prev, { role: 'model', parts: [{ text: errorMessage }] }]);
-    }
+    await sendMessage(userInput, image, imageFile);
+    handleRemoveImage();
   };
 
   return (
     <div className="chat-container">
       <header>
-        <div className="header-logo">
-           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-1.07 3.97-2.9 5.4z"/>
-           </svg>
+        <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
+            <div className="header-logo">
+                <img src={geminiIcon} alt="Gemini Logo" />
+            </div>
+            <h1>Gemini 3 Heavy</h1>
         </div>
-        <h1>Gemini 3 Heavy</h1>
+        <button 
+            className="settings-button" 
+            onClick={() => setIsSettingsOpen(true)}
+            aria-label="Swarm Settings"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L3.15 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+            </svg>
+        </button>
       </header>
       <div className="message-list" ref={messageListRef}>
         {messages.length === 0 && !isLoading ? (
@@ -627,20 +499,7 @@ const App: FC = () => {
                 {msg.image && <img src={msg.image} alt="User upload" className="message-image" />}
                 {msg.parts[0].text && (
                   <div className="markdown-content">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        code(props) {
-                          const {children, className} = props;
-                          return <CodeBlock className={className}>{String(children)}</CodeBlock>;
-                        },
-                        table({node, ...props}) {
-                            return <div className="table-wrapper"><table {...props} /></div>;
-                        }
-                      }}
-                    >
-                      {msg.parts[0].text}
-                    </ReactMarkdown>
+                    <MarkdownRenderer content={msg.parts[0].text} />
                   </div>
                 )}
                 {/* Ensure Work is displayed if it exists on the message */}
@@ -684,6 +543,12 @@ const App: FC = () => {
           </button>
         </form>
       </div>
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+        settings={settings}
+        onSave={setSettings}
+      />
     </div>
   );
 };
