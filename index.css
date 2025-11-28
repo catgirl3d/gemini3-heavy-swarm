@@ -806,7 +806,7 @@ header h1 {
 /* Scroll to Bottom Button */
 .scroll-to-bottom-btn {
   position: absolute;
-  bottom: 100px; /* Above the input area */
+  bottom: 150px; /* Above the input area */
   right: 2rem;
   width: 40px;
   height: 40px;
