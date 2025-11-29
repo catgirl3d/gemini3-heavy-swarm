@@ -15,7 +15,7 @@ export interface StepContext {
   work: Work;
   
   // Callbacks for side effects
-  onProgress: (status: string, agents: AgentState[], work: Work) => void;
+  onProgress: (status: string, agents: AgentState[], work: Work, isPaused?: boolean) => void;
   onMessageUpdate: (text: string, isFinal: boolean) => void;
   
   // Signal to abort execution
