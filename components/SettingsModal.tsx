@@ -12,6 +12,7 @@ export const SettingsModal: FC<{
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [activeTab, setActiveTab] = useState<'general' | 'prompts' | 'roles'>('general');
   const [isEditingRoleName, setIsEditingRoleName] = useState(false);
+  const [isEditingProfileName, setIsEditingProfileName] = useState(false);
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -343,18 +344,45 @@ export const SettingsModal: FC<{
                 </div>
             ) : activeTab === 'prompts' ? (
                 <div className="settings-section fade-in">
-                    <div className="profile-header with-inputs">
-                        <div className="settings-form-group profile-select-group">
-                            <label className="settings-label">Active Profile</label>
-                            <select
-                                value={localSettings.activeProfileId}
-                                onChange={handleProfileChange}
-                                className="settings-input"
-                            >
-                                {localSettings.profiles.map(p => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                ))}
-                            </select>
+                    <div className="profile-header-compact">
+                        <div className="profile-select-wrapper">
+                            <span className="profile-select-label">Active Profile</span>
+                            {isEditingProfileName ? (
+                                <div className="profile-name-edit">
+                                    <input
+                                        type="text"
+                                        value={activeProfile.name}
+                                        onChange={(e) => handleRenameProfile(e.target.value)}
+                                        onBlur={() => setIsEditingProfileName(false)}
+                                        onKeyDown={(e) => e.key === 'Enter' && setIsEditingProfileName(false)}
+                                        className="edit-name-input"
+                                        autoFocus
+                                    />
+                                </div>
+                            ) : (
+                                <div className="profile-name-edit">
+                                    <select
+                                        value={localSettings.activeProfileId}
+                                        onChange={handleProfileChange}
+                                        className="settings-input"
+                                        style={{ fontWeight: 600 }}
+                                    >
+                                        {localSettings.profiles.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        className="edit-name-btn"
+                                        onClick={() => setIsEditingProfileName(true)}
+                                        title="Rename Profile"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            )}
                         </div>
                         <div className="profile-actions">
                             <button className="settings-btn outline" onClick={handleCreateProfile}>+ New</button>
@@ -364,52 +392,49 @@ export const SettingsModal: FC<{
                         </div>
                     </div>
 
-                    <div className="settings-form-group">
-                        <label className="settings-label">Profile Name</label>
-                        <input
-                            type="text"
-                            value={activeProfile.name}
-                            onChange={(e) => handleRenameProfile(e.target.value)}
-                            className="settings-input"
-                        />
-                    </div>
-
-                    <div className="profile-edit-card">
-                        <div className="settings-form-group" style={{ marginBottom: 0 }}>
-                            <label className="settings-label">Initial Agent Instruction</label>
-                            <p className="settings-help">Instructions for the agents drafting the first response.</p>
-                            <textarea
-                                name="initialInstruction"
-                                value={activeProfile.initialInstruction}
-                                onChange={handleInstructionChange}
-                                className="settings-textarea"
-                            />
+                    <div className="roles-section-wrapper">
+                        <div className="roles-toolbar">
+                            <h4 className="roles-toolbar-title">System Instructions</h4>
                         </div>
-                    </div>
+                        <div className="roles-list-container">
+                            <div className="profile-edit-card" style={{ border: 'none', padding: 0, background: 'transparent', marginBottom: '1.5rem' }}>
+                                <div className="settings-form-group" style={{ marginBottom: 0 }}>
+                                    <label className="settings-label">Initial Agent Instruction</label>
+                                    <p className="settings-help">Instructions for the agents drafting the first response.</p>
+                                    <textarea
+                                        name="initialInstruction"
+                                        value={activeProfile.initialInstruction}
+                                        onChange={handleInstructionChange}
+                                        className="settings-textarea"
+                                    />
+                                </div>
+                            </div>
 
-                    <div className="profile-edit-card">
-                        <div className="settings-form-group" style={{ marginBottom: 0 }}>
-                            <label className="settings-label">Refinement Instruction</label>
-                            <p className="settings-help">Instructions for agents critiquing the initial drafts.</p>
-                            <textarea
-                                name="refinementInstruction"
-                                value={activeProfile.refinementInstruction}
-                                onChange={handleInstructionChange}
-                                className="settings-textarea"
-                            />
-                        </div>
-                    </div>
+                            <div className="profile-edit-card" style={{ border: 'none', padding: 0, background: 'transparent', marginBottom: '1.5rem' }}>
+                                <div className="settings-form-group" style={{ marginBottom: 0 }}>
+                                    <label className="settings-label">Refinement Instruction</label>
+                                    <p className="settings-help">Instructions for agents critiquing the initial drafts.</p>
+                                    <textarea
+                                        name="refinementInstruction"
+                                        value={activeProfile.refinementInstruction}
+                                        onChange={handleInstructionChange}
+                                        className="settings-textarea"
+                                    />
+                                </div>
+                            </div>
 
-                    <div className="profile-edit-card">
-                        <div className="settings-form-group" style={{ marginBottom: 0 }}>
-                            <label className="settings-label">Synthesizer Instruction</label>
-                             <p className="settings-help">Instructions for the final agent merging all refined responses.</p>
-                            <textarea
-                                name="synthesizerInstruction"
-                                value={activeProfile.synthesizerInstruction}
-                                onChange={handleInstructionChange}
-                                className="settings-textarea"
-                            />
+                            <div className="profile-edit-card" style={{ border: 'none', padding: 0, background: 'transparent', marginBottom: 0 }}>
+                                <div className="settings-form-group" style={{ marginBottom: 0 }}>
+                                    <label className="settings-label">Synthesizer Instruction</label>
+                                     <p className="settings-help">Instructions for the final agent merging all refined responses.</p>
+                                    <textarea
+                                        name="synthesizerInstruction"
+                                        value={activeProfile.synthesizerInstruction}
+                                        onChange={handleInstructionChange}
+                                        className="settings-textarea"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
