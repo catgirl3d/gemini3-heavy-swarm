@@ -9,6 +9,13 @@ const debug = (settings: AppSettings, ...args: any[]) => {
   }
 };
 
+const getAgentPerspective = (index: number, settings: AppSettings): { name: string, instruction: string } => {
+  const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0];
+  const perspectives = activeRoleProfile?.roles || [];
+  if (perspectives.length === 0) return { name: `Agent ${index + 1}`, instruction: '' };
+  return perspectives[index % perspectives.length];
+};
+
 export class GeminiService {
   private ai: GoogleGenAI | null = null;
 
@@ -32,7 +39,11 @@ export class GeminiService {
     
     const liveWork: Work = {
       initialResponses: Array(settings.numAgents).fill(null),
-      refinedResponses: Array(settings.numAgents).fill(null)
+      refinedResponses: Array(settings.numAgents).fill(null),
+      agentNames: Array.from({ length: settings.numAgents }, (_, i) => {
+        const role = settings.dynamicAgentRoles ? getAgentPerspective(i, settings).name : null;
+        return role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`;
+      })
     };
 
     debug(settings, 'runSwarm start', {
@@ -47,21 +58,27 @@ export class GeminiService {
       debug(settings, 'mode = DEV');
       // STEP 1: Initial Responses
       debug(settings, 'DEV: step=initial');
-      onProgress('Initializing agents (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, i) => ({
-        id: `agent-${i}`,
-        name: `Agent ${i + 1}`,
-        status: 'working',
-        label: 'Drafting initial response...'
-      })), liveWork);
+      onProgress('Initializing agents (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, i) => {
+        const role = settings.dynamicAgentRoles ? getAgentPerspective(i, settings).name : null;
+        return {
+            id: `agent-${i}`,
+            name: role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`,
+            status: 'working',
+            label: 'Drafting initial response...'
+        };
+      }), liveWork);
 
       const initialAgentPromises = Array(settings.numAgents).fill(0).map(async (_, i) => {
         liveWork.initialResponses[i] = '';
-        onProgress('Initializing agents (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, idx) => ({
-            id: `agent-${idx}`,
-            name: `Agent ${idx + 1}`,
-            status: idx === i ? 'working' : 'working', // Simplified status update
-            label: 'Drafting initial response...'
-        })), liveWork);
+        onProgress('Initializing agents (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, idx) => {
+            const role = settings.dynamicAgentRoles ? getAgentPerspective(idx, settings).name : null;
+            return {
+                id: `agent-${idx}`,
+                name: role ? `Agent ${idx + 1} (${role})` : `Agent ${idx + 1}`,
+                status: idx === i ? 'working' : 'working', // Simplified status update
+                label: 'Drafting initial response...'
+            };
+        }), liveWork);
 
         const dummyText = `[DEV MODE] Initial draft from Agent ${i + 1}. This is a simulated response to demonstrate the UI flow without consuming API credits.`;
         const words = dummyText.split(' ');
@@ -73,12 +90,15 @@ export class GeminiService {
           currentText += word + ' ';
           liveWork.initialResponses[i] = currentText;
           // We need to trigger a re-render in the UI, so we call onProgress with updated work
-           onProgress('Initializing agents (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, idx) => ({
-            id: `agent-${idx}`,
-            name: `Agent ${idx + 1}`,
-            status: 'working',
-            label: 'Drafting initial response...'
-          })), { ...liveWork });
+           onProgress('Initializing agents (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, idx) => {
+            const role = settings.dynamicAgentRoles ? getAgentPerspective(idx, settings).name : null;
+            return {
+                id: `agent-${idx}`,
+                name: role ? `Agent ${idx + 1} (${role})` : `Agent ${idx + 1}`,
+                status: 'working',
+                label: 'Drafting initial response...'
+            };
+          }), { ...liveWork });
         }
         return currentText;
       });
@@ -86,22 +106,28 @@ export class GeminiService {
       const initialAnswers = await Promise.all(initialAgentPromises);
       
       // Update states to done
-      onProgress('Initializing agents (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, i) => ({
-        id: `agent-${i}`,
-        name: `Agent ${i + 1}`,
-        status: 'done',
-        label: 'Drafted'
-      })), liveWork);
+      onProgress('Initializing agents (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, i) => {
+        const role = settings.dynamicAgentRoles ? getAgentPerspective(i, settings).name : null;
+        return {
+            id: `agent-${i}`,
+            name: role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`,
+            status: 'done',
+            label: 'Drafted'
+        };
+      }), liveWork);
 
 
       if (settings.pauseAfterInitial) {
         debug(settings, 'DEV: pauseAfterInitial BEFORE wait');
-        onProgress('Paused. Waiting for user confirmation...', Array.from({ length: settings.numAgents }, (_, i) => ({
-            id: `agent-${i}`,
-            name: `Agent ${i + 1}`,
-            status: 'done',
-            label: 'Drafted'
-          })), liveWork, true);
+        onProgress('Paused. Waiting for user confirmation...', Array.from({ length: settings.numAgents }, (_, i) => {
+            const role = settings.dynamicAgentRoles ? getAgentPerspective(i, settings).name : null;
+            return {
+                id: `agent-${i}`,
+                name: role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`,
+                status: 'done',
+                label: 'Drafted'
+            };
+          }), liveWork, true);
             
         await new Promise<void>(resolve => {
             pauseResolverRef.current = resolve;
@@ -111,12 +137,15 @@ export class GeminiService {
 
       // STEP 2: Refined Responses
       debug(settings, 'DEV: step=refinement');
-      onProgress('Refining answers (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, i) => ({
-        id: `agent-${i}`,
-        name: `Agent ${i + 1}`,
-        status: 'working',
-        label: 'Critiquing & Refining...'
-      })), liveWork);
+      onProgress('Refining answers (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, i) => {
+        const role = settings.dynamicAgentRoles ? getAgentPerspective(i, settings).name : null;
+        return {
+            id: `agent-${i}`,
+            name: role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`,
+            status: 'working',
+            label: 'Critiquing & Refining...'
+        };
+      }), liveWork);
 
       const refinementAgentPromises = initialAnswers.map(async (initialAnswer, index) => {
         liveWork.refinedResponses[index] = '';
@@ -130,12 +159,15 @@ export class GeminiService {
            await new Promise(resolve => setTimeout(resolve, 100));
            currentText += word + ' ';
            liveWork.refinedResponses[index] = currentText;
-           onProgress('Refining answers (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, i) => ({
-            id: `agent-${i}`,
-            name: `Agent ${i + 1}`,
-            status: 'working',
-            label: 'Critiquing & Refining...'
-          })), { ...liveWork });
+           onProgress('Refining answers (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, i) => {
+            const role = settings.dynamicAgentRoles ? getAgentPerspective(i, settings).name : null;
+            return {
+                id: `agent-${i}`,
+                name: role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`,
+                status: 'working',
+                label: 'Critiquing & Refining...'
+            };
+          }), { ...liveWork });
         }
         return currentText;
       });
@@ -143,21 +175,27 @@ export class GeminiService {
       await Promise.all(refinementAgentPromises);
       
        // Update states to done
-       onProgress('Refining answers (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, i) => ({
-        id: `agent-${i}`,
-        name: `Agent ${i + 1}`,
-        status: 'done',
-        label: 'Refined'
-      })), liveWork);
+       onProgress('Refining answers (DEV MODE)...', Array.from({ length: settings.numAgents }, (_, i) => {
+        const role = settings.dynamicAgentRoles ? getAgentPerspective(i, settings).name : null;
+        return {
+            id: `agent-${i}`,
+            name: role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`,
+            status: 'done',
+            label: 'Refined'
+        };
+      }), liveWork);
 
       // STEP 3: Final Synthesis
       debug(settings, 'DEV: step=synthesizer');
-      const agentStates: AgentState[] = Array.from({ length: settings.numAgents }, (_, i) => ({
-        id: `agent-${i}`,
-        name: `Agent ${i + 1}`,
-        status: 'done',
-        label: 'Refined'
-      }));
+      const agentStates: AgentState[] = Array.from({ length: settings.numAgents }, (_, i) => {
+        const role = settings.dynamicAgentRoles ? getAgentPerspective(i, settings).name : null;
+        return {
+            id: `agent-${i}`,
+            name: role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`,
+            status: 'done',
+            label: 'Refined'
+        };
+      });
       agentStates.push({ id: 'synthesizer', name: 'Synthesizer', status: 'working', label: 'Synthesizing...' });
       
       onProgress('Synthesizing final response (DEV MODE)...', agentStates, liveWork);
@@ -208,24 +246,46 @@ export class GeminiService {
 
       // STEP 1: Initial Responses
       debug(settings, 'PROD: step=initial');
-      let currentAgentStates = Array.from({ length: settings.numAgents }, (_, i) => ({
-          id: `agent-${i}`,
-          name: `Agent ${i + 1}`,
-          status: 'working' as const,
-          label: 'Drafting initial response...'
-      }));
+      let currentAgentStates: AgentState[] = Array.from({ length: settings.numAgents }, (_, i) => {
+          const role = settings.dynamicAgentRoles ? getAgentPerspective(i, settings).name : null;
+          return {
+              id: `agent-${i}`,
+              name: role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`,
+              status: 'working',
+              label: 'Drafting initial response...'
+          };
+      });
       onProgress('Initializing agents...', currentAgentStates, liveWork);
 
       const initialAgentPromises = Array(settings.numAgents).fill(0).map(async (_, i) => {
         liveWork.initialResponses[i] = '';
         
-        debug(settings, 'INITIAL systemInstruction', settings.initialInstruction.slice(0, 200));
+        const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
+        
+        let systemInstruction = activeProfile.initialInstruction;
+        let userTurn = currentUserTurn;
+
+        if (settings.dynamicAgentRoles) {
+            const perspective = getAgentPerspective(i, settings);
+            systemInstruction += "\n\n" + perspective.instruction;
+            
+            // Also inject into the user turn to reinforce the role
+            const roleReminder = `\n\n[SYSTEM NOTE: Remember your assigned role: ${perspective.name}]`;
+            
+            // Clone the user turn to avoid mutating the original for other agents
+            userTurn = {
+                role: 'user',
+                parts: [...currentUserTurn.parts, { text: roleReminder }]
+            };
+        }
+
+        debug(settings, 'INITIAL systemInstruction', systemInstruction.slice(0, 200));
         const stream = await this.ai!.models.generateContentStream({
           model: settings.model,
-          contents: [...mainChatHistory, currentUserTurn],
+          contents: [...mainChatHistory, userTurn],
           config: {
-            systemInstruction: settings.initialInstruction,
-            temperature: 0.7,
+            systemInstruction: systemInstruction,
+            temperature: settings.temperature ?? 0.7,
             tools: [{googleSearch: {}}],
             thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
             maxOutputTokens: 65536,
@@ -273,13 +333,14 @@ export class GeminiService {
         
         liveWork.refinedResponses[index] = '';
 
-        debug(settings, 'REFINEMENT systemInstruction', settings.refinementInstruction.slice(0, 200));
+        const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
+        debug(settings, 'REFINEMENT systemInstruction', activeProfile.refinementInstruction.slice(0, 200));
         const stream = await this.ai!.models.generateContentStream({
           model: settings.model,
           contents: [...mainChatHistory, refinementTurn],
           config: {
-            systemInstruction: settings.refinementInstruction,
-            temperature: 0.7,
+            systemInstruction: activeProfile.refinementInstruction,
+            temperature: settings.temperature ?? 0.7,
             tools: [{googleSearch: {}}],
             thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
             maxOutputTokens: 65536,
@@ -311,13 +372,14 @@ export class GeminiService {
       const synthesizerContext = `Here are the ${settings.numAgents} refined responses to the user's query. Your task is to synthesize them into the best single, final answer. \n\n${refinedAnswers.map((answer, i) => `Refined Response ${i + 1}:\n"${answer}"`).join('\n\n')}`;
       const synthesizerTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}`}] };
       
-      debug(settings, 'SYNTHESIZER systemInstruction', settings.synthesizerInstruction.slice(0, 200));
+      const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
+      debug(settings, 'SYNTHESIZER systemInstruction', activeProfile.synthesizerInstruction.slice(0, 200));
       const stream = await this.ai!.models.generateContentStream({
         model: settings.model,
         contents: [...mainChatHistory, synthesizerTurn],
         config: {
-          systemInstruction: settings.synthesizerInstruction,
-          temperature: 0.7,
+          systemInstruction: activeProfile.synthesizerInstruction,
+          temperature: settings.temperature ?? 0.7,
           tools: [{googleSearch: {}}],
           thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
           maxOutputTokens: 65536,

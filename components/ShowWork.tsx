@@ -64,7 +64,7 @@ export const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = 
                 <div className="work-card-header">
                     <div className="work-card-title-group" style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
                         <div className="work-card-icon">{i + 1}</div>
-                        Agent {i + 1}
+                        {work.agentNames ? work.agentNames[i] : `Agent ${i + 1}`}
                     </div>
                     {resp && (
                         <button 
@@ -97,7 +97,7 @@ export const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = 
                  <div className="work-card-header">
                     <div className="work-card-title-group" style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
                         <div className="work-card-icon">{i + 1}</div>
-                        Agent {i + 1}
+                        {work.agentNames ? work.agentNames[i] : `Agent ${i + 1}`}
                     </div>
                     {resp && (
                         <button 

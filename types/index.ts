@@ -1,12 +1,34 @@
-export interface AppSettings {
-  numAgents: number;
-  model: string;
+export interface PromptProfile {
+  id: string;
+  name: string;
   initialInstruction: string;
   refinementInstruction: string;
   synthesizerInstruction: string;
+}
+
+export interface AgentRole {
+  name: string;
+  instruction: string;
+}
+
+export interface RoleProfile {
+    id: string;
+    name: string;
+    roles: AgentRole[];
+}
+
+export interface AppSettings {
+  numAgents: number;
+  model: string;
+  activeProfileId: string;
+  profiles: PromptProfile[];
   devMode: boolean;
   debugMode: boolean;
   pauseAfterInitial: boolean;
+  temperature: number;
+  dynamicAgentRoles: boolean;
+  activeRoleProfileId: string;
+  roleProfiles: RoleProfile[];
 }
 
 export interface Source {
@@ -17,6 +39,7 @@ export interface Source {
 export interface Work {
   initialResponses: (string | null)[];
   refinedResponses: (string | null)[];
+  agentNames?: string[];
 }
 
 export interface Message {

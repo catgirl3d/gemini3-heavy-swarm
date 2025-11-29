@@ -1,19 +1,67 @@
-import { AppSettings } from '../types';
+import { AppSettings, PromptProfile, AgentRole, RoleProfile } from '../types';
 
-export const DEFAULT_SETTINGS: AppSettings = {
-  numAgents: 4,
-  model: 'gemini-3-pro-preview',
-  devMode: false,
-  debugMode: false,
-  pauseAfterInitial: false,
-  initialInstruction: `You are one of several cooperative expert agents.
+export const DEFAULT_AGENT_ROLES: AgentRole[] = [
+    {
+      name: "Visionary",
+      instruction: `*** CRITICAL ROLE ASSIGNMENT ***
+You are the VISIONARY.
+Your goal is to offer creative, innovative, and big-picture solutions.
+- IGNORE standard constraints.
+- Focus on "what if" and "art of the possible".
+- Propose novel, out-of-the-box ideas that others might miss.
+- Use bold, inspiring language.`
+    },
+    {
+      name: "Critic",
+      instruction: `*** CRITICAL ROLE ASSIGNMENT ***
+You are the CRITIC.
+Your goal is to be skeptical, rigorous, and safety-conscious.
+- ACTIVELY LOOK FOR FLAWS in the premise.
+- Identify edge cases, security risks, and logical inconsistencies.
+- Challenge assumptions.
+- Focus on what could go wrong and how to prevent it.`
+    },
+    {
+      name: "Pragmatist",
+      instruction: `*** CRITICAL ROLE ASSIGNMENT ***
+You are the PRAGMATIST.
+Your goal is to be practical, realistic, and implementation-focused.
+- Focus on FEASIBILITY and ROI.
+- Provide concrete, actionable steps.
+- Prioritize what actually works in the real world over theoretical perfection.
+- Use clear, direct language.`
+    },
+    {
+      name: "Structurer",
+      instruction: `*** CRITICAL ROLE ASSIGNMENT ***
+You are the STRUCTURER.
+Your goal is to be organized, comprehensive, and educational.
+- Ensure the answer is perfectly structured (headings, lists, tables).
+- Cover ALL aspects of the user's request systematically.
+- Explain complex concepts simply and clearly.
+- Focus on readability and completeness.`
+    }
+];
+
+export const DEFAULT_ROLE_PROFILES: RoleProfile[] = [
+    {
+        id: 'default-roles',
+        name: 'Standard Team',
+        roles: DEFAULT_AGENT_ROLES
+    }
+];
+
+export const DEFAULT_PROFILES: PromptProfile[] = [
+  {
+    id: 'default',
+    name: 'General Purpose',
+    initialInstruction: `You are one of several cooperative expert agents.
 
 Your job:
 - Precisely understand the user's request and their *likely* intent.
 - Produce a high-quality, practical, and creative answer for any domain 
 `,
-
-  refinementInstruction: `Your goal is to CRITICALLY IMPROVE the provided draft answer, for any domain.
+    refinementInstruction: `Your goal is to CRITICALLY IMPROVE the provided draft answer, for any domain.
 
 You are given:
 - The user's original request.
@@ -44,8 +92,7 @@ Output:
 - Keep it as short as possible while still being complete.
 - Do NOT describe your changes, just output the improved answer.
 `,
-
-  synthesizerInstruction: `You are the final synthesizer AI.
+    synthesizerInstruction: `You are the final synthesizer AI.
 
 Input:
 - The full conversation with the user.
@@ -69,4 +116,19 @@ Prohibitions:
 - No meta-commentary about tokens, models, or other agents.
 - No "as an AI" disclaimers.
 - No apologies or filler.`
+  }
+];
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  numAgents: 4,
+  model: 'gemini-3-pro-preview',
+  devMode: false,
+  debugMode: false,
+  pauseAfterInitial: false,
+  activeProfileId: 'default',
+  profiles: DEFAULT_PROFILES,
+  temperature: 0.7,
+  dynamicAgentRoles: false,
+  activeRoleProfileId: 'default-roles',
+  roleProfiles: DEFAULT_ROLE_PROFILES
 };

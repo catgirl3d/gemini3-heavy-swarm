@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { AppSettings, Message, AgentState, Work } from '../types';
-import { DEFAULT_SETTINGS } from '../constants';
+import { DEFAULT_SETTINGS, DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES } from '../constants';
 import { GeminiService } from '../services/gemini';
 
 export const useGeminiSwarm = () => {
@@ -26,6 +26,45 @@ export const useGeminiSwarm = () => {
     if (savedSettings) {
       try {
         const parsedSettings = JSON.parse(savedSettings);
+        // Migration: Ensure profiles exist
+        if (!parsedSettings.profiles) {
+          parsedSettings.profiles = DEFAULT_PROFILES;
+          parsedSettings.activeProfileId = 'default';
+          // Migrate old instructions to a custom profile if they differ from default
+          if (
+            parsedSettings.initialInstruction !== DEFAULT_PROFILES[0].initialInstruction ||
+            parsedSettings.refinementInstruction !== DEFAULT_PROFILES[0].refinementInstruction ||
+            parsedSettings.synthesizerInstruction !== DEFAULT_PROFILES[0].synthesizerInstruction
+          ) {
+             const customProfile = {
+                id: 'custom-migrated',
+                name: 'Custom (Migrated)',
+                initialInstruction: parsedSettings.initialInstruction || DEFAULT_PROFILES[0].initialInstruction,
+                refinementInstruction: parsedSettings.refinementInstruction || DEFAULT_PROFILES[0].refinementInstruction,
+                synthesizerInstruction: parsedSettings.synthesizerInstruction || DEFAULT_PROFILES[0].synthesizerInstruction
+             };
+             parsedSettings.profiles.push(customProfile);
+             parsedSettings.activeProfileId = 'custom-migrated';
+          }
+        }
+        // Migration: Ensure roleProfiles exist
+        if (!parsedSettings.roleProfiles) {
+            parsedSettings.roleProfiles = DEFAULT_ROLE_PROFILES;
+            parsedSettings.activeRoleProfileId = 'default-roles';
+            
+            // Migrate old agentRoles to a custom profile if they exist
+            if (parsedSettings.agentRoles && parsedSettings.agentRoles.length > 0) {
+                 const customRoleProfile = {
+                    id: 'custom-roles-migrated',
+                    name: 'Custom Roles (Migrated)',
+                    roles: parsedSettings.agentRoles
+                 };
+                 parsedSettings.roleProfiles.push(customRoleProfile);
+                 parsedSettings.activeRoleProfileId = 'custom-roles-migrated';
+            }
+            // Clean up old property
+            delete parsedSettings.agentRoles;
+        }
         setSettings(parsedSettings);
       } catch (error) {
         console.error('Failed to parse saved settings:', error);

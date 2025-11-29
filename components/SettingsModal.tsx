@@ -1,15 +1,17 @@
 import React, { FC, useState, useEffect, ChangeEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { AppSettings } from '../types';
+import { AppSettings, PromptProfile, RoleProfile } from '../types';
 import { DEFAULT_SETTINGS } from '../constants';
 
-export const SettingsModal: FC<{ 
+export const SettingsModal: FC<{
   isOpen: boolean; 
   onClose: () => void; 
   settings: AppSettings; 
   onSave: (newSettings: AppSettings) => void;
 }> = ({ isOpen, onClose, settings, onSave }) => {
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
+  const [activeTab, setActiveTab] = useState<'general' | 'prompts' | 'roles'>('general');
+  const [isEditingRoleName, setIsEditingRoleName] = useState(false);
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -37,12 +39,158 @@ export const SettingsModal: FC<{
     
     setLocalSettings(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : (name === 'numAgents' ? parseInt(value) || 1 : value)
+      [name]: type === 'checkbox' ? checked : (name === 'numAgents' ? parseInt(value) || 1 : name === 'temperature' ? parseFloat(value) : value)
     }));
   };
 
   const handleReset = () => {
       setLocalSettings(DEFAULT_SETTINGS);
+  };
+
+  const activeProfile = localSettings.profiles?.find(p => p.id === localSettings.activeProfileId) || localSettings.profiles?.[0] || DEFAULT_SETTINGS.profiles[0];
+  const activeRoleProfile = localSettings.roleProfiles?.find(p => p.id === localSettings.activeRoleProfileId) || localSettings.roleProfiles?.[0] || DEFAULT_SETTINGS.roleProfiles[0];
+
+  const handleProfileChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    setLocalSettings(prev => ({
+      ...prev,
+      activeProfileId: e.target.value
+    }));
+  };
+
+  const handleRoleProfileChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    setLocalSettings(prev => ({
+      ...prev,
+      activeRoleProfileId: e.target.value
+    }));
+  };
+
+  const handleInstructionChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setLocalSettings(prev => {
+      const newProfiles = prev.profiles.map(p => {
+        if (p.id === prev.activeProfileId) {
+          return { ...p, [name]: value };
+        }
+        return p;
+      });
+      return { ...prev, profiles: newProfiles };
+    });
+  };
+
+  const handleCreateProfile = () => {
+    const newProfile: PromptProfile = {
+      id: `custom-${Date.now()}`,
+      name: 'New Custom Profile',
+      initialInstruction: activeProfile.initialInstruction,
+      refinementInstruction: activeProfile.refinementInstruction,
+      synthesizerInstruction: activeProfile.synthesizerInstruction
+    };
+    setLocalSettings(prev => ({
+      ...prev,
+      profiles: [...prev.profiles, newProfile],
+      activeProfileId: newProfile.id
+    }));
+  };
+
+  const handleCreateRoleProfile = () => {
+    const newRoleProfile: RoleProfile = {
+        id: `custom-roles-${Date.now()}`,
+        name: 'New Role Set',
+        roles: [...activeRoleProfile.roles]
+    };
+    setLocalSettings(prev => ({
+        ...prev,
+        roleProfiles: [...(prev.roleProfiles || []), newRoleProfile],
+        activeRoleProfileId: newRoleProfile.id
+    }));
+  };
+
+  const handleDeleteProfile = () => {
+    if (localSettings.profiles.length <= 1) return;
+    setLocalSettings(prev => {
+      const newProfiles = prev.profiles.filter(p => p.id !== prev.activeProfileId);
+      return {
+        ...prev,
+        profiles: newProfiles,
+        activeProfileId: newProfiles[0].id
+      };
+    });
+  };
+
+  const handleDeleteRoleProfile = () => {
+    if ((localSettings.roleProfiles || []).length <= 1) return;
+    setLocalSettings(prev => {
+        const newProfiles = (prev.roleProfiles || []).filter(p => p.id !== prev.activeRoleProfileId);
+        return {
+            ...prev,
+            roleProfiles: newProfiles,
+            activeRoleProfileId: newProfiles[0].id
+        };
+    });
+  };
+
+  const handleRenameProfile = (newName: string) => {
+    setLocalSettings(prev => {
+      const newProfiles = prev.profiles.map(p => {
+        if (p.id === prev.activeProfileId) {
+          return { ...p, name: newName };
+        }
+        return p;
+      });
+      return { ...prev, profiles: newProfiles };
+    });
+  };
+
+  const handleRenameRoleProfile = (newName: string) => {
+    setLocalSettings(prev => {
+        const newProfiles = (prev.roleProfiles || []).map(p => {
+            if (p.id === prev.activeRoleProfileId) {
+                return { ...p, name: newName };
+            }
+            return p;
+        });
+        return { ...prev, roleProfiles: newProfiles };
+    });
+  };
+
+  const handleRoleChange = (index: number, field: 'name' | 'instruction', value: string) => {
+    setLocalSettings(prev => {
+      const newProfiles = (prev.roleProfiles || []).map(p => {
+        if (p.id === prev.activeRoleProfileId) {
+            const newRoles = [...p.roles];
+            newRoles[index] = { ...newRoles[index], [field]: value };
+            return { ...p, roles: newRoles };
+        }
+        return p;
+      });
+      return { ...prev, roleProfiles: newProfiles };
+    });
+  };
+
+  const handleAddRole = () => {
+    setLocalSettings(prev => {
+        const newProfiles = (prev.roleProfiles || []).map(p => {
+            if (p.id === prev.activeRoleProfileId) {
+                return { ...p, roles: [...p.roles, { name: 'New Role', instruction: '' }] };
+            }
+            return p;
+        });
+        return { ...prev, roleProfiles: newProfiles };
+    });
+  };
+
+  const handleDeleteRole = (index: number) => {
+    setLocalSettings(prev => {
+        const newProfiles = (prev.roleProfiles || []).map(p => {
+            if (p.id === prev.activeRoleProfileId) {
+                const newRoles = [...p.roles];
+                newRoles.splice(index, 1);
+                return { ...p, roles: newRoles };
+            }
+            return p;
+        });
+        return { ...prev, roleProfiles: newProfiles };
+    });
   };
 
   return createPortal(
@@ -57,107 +205,317 @@ export const SettingsModal: FC<{
           </button>
         </div>
         
+        <div className="settings-tabs">
+            <button 
+                className={`settings-tab ${activeTab === 'general' ? 'active' : ''}`}
+                onClick={() => setActiveTab('general')}
+            >
+                General
+            </button>
+            <button 
+                className={`settings-tab ${activeTab === 'prompts' ? 'active' : ''}`}
+                onClick={() => setActiveTab('prompts')}
+            >
+                Prompt Profiles
+            </button>
+            <button
+                className={`settings-tab ${activeTab === 'roles' ? 'active' : ''}`}
+                onClick={() => setActiveTab('roles')}
+            >
+                Agent Roles
+            </button>
+        </div>
+
         <div className="settings-modal-body">
-            <div className="settings-form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                <input
-                    type="checkbox"
-                    name="devMode"
-                    id="devMode"
-                    checked={localSettings.devMode || false}
-                    onChange={handleChange}
-                    style={{ width: 'auto', margin: 0 }}
-                />
-                <label htmlFor="devMode" className="settings-label" style={{ margin: 0, cursor: 'pointer' }}>
-                    Development Mode (Simulation)
-                </label>
-            </div>
+            {activeTab === 'general' ? (
+                <div className="settings-section fade-in">
+                    <div className="settings-card">
+                        <span className="settings-card-title">Core Configuration</span>
+                        <div className="settings-form-group">
+                            <label className="settings-label">Model</label>
+                            <select
+                                name="model"
+                                value={localSettings.model || 'gemini-3-pro-preview'}
+                                onChange={handleChange}
+                                className="settings-input"
+                            >
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                <option value="gemini-3-pro-preview">Gemini 3 Pro (Preview)</option>
+                            </select>
+                        </div>
 
-            <div className="settings-form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                <input
-                    type="checkbox"
-                    name="debugMode"
-                    id="debugMode"
-                    checked={localSettings.debugMode || false}
-                    onChange={handleChange}
-                    style={{ width: 'auto', margin: 0 }}
-                />
-                <label htmlFor="debugMode" className="settings-label" style={{ margin: 0, cursor: 'pointer' }}>
-                    Debug Logging (Console)
-                </label>
-            </div>
+                        <div className="settings-row">
+                            <div className="settings-form-group">
+                                <label className="settings-label">Number of Agents</label>
+                                <div className="stepper-control">
+                                    <button
+                                        className="stepper-btn"
+                                        onClick={() => setLocalSettings(prev => ({ ...prev, numAgents: Math.max(1, prev.numAgents - 1) }))}
+                                        disabled={localSettings.numAgents <= 1}
+                                    >
+                                        −
+                                    </button>
+                                    <div className="stepper-value">{localSettings.numAgents}</div>
+                                    <button
+                                        className="stepper-btn"
+                                        onClick={() => setLocalSettings(prev => ({ ...prev, numAgents: Math.min(8, prev.numAgents + 1) }))}
+                                        disabled={localSettings.numAgents >= 8}
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                            </div>
 
-            <div className="settings-form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                <input
-                    type="checkbox"
-                    name="pauseAfterInitial"
-                    id="pauseAfterInitial"
-                    checked={localSettings.pauseAfterInitial || false}
-                    onChange={handleChange}
-                    style={{ width: 'auto', margin: 0 }}
-                />
-                <label htmlFor="pauseAfterInitial" className="settings-label" style={{ margin: 0, cursor: 'pointer' }}>
-                    Pause after Initial Drafts
-                </label>
-            </div>
+                            <div className="settings-form-group">
+                                <label className="settings-label">Temperature ({localSettings.temperature ?? 0.7})</label>
+                                <input
+                                    type="range"
+                                    name="temperature"
+                                    min="0"
+                                    max="2"
+                                    step="0.1"
+                                    value={localSettings.temperature ?? 0.7}
+                                    onChange={handleChange}
+                                    className="settings-input"
+                                />
+                            </div>
+                        </div>
+                    </div>
 
-            <div className="settings-form-group">
-                <label className="settings-label">Model</label>
-                <select
-                    name="model"
-                    value={localSettings.model || 'gemini-3-pro-preview'}
-                    onChange={handleChange}
-                    className="settings-input"
-                >
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                    <option value="gemini-3-pro-preview">Gemini 3 Pro (Preview)</option>
-                </select>
-            </div>
+                    <div className="settings-card">
+                        <span className="settings-card-title">Workflow</span>
+                        <div className="settings-form-group checkbox-group">
+                            <input
+                                type="checkbox"
+                                name="dynamicAgentRoles"
+                                id="dynamicAgentRoles"
+                                checked={localSettings.dynamicAgentRoles || false}
+                                onChange={handleChange}
+                            />
+                            <label htmlFor="dynamicAgentRoles" className="settings-label checkbox-label">
+                                Dynamic Agent Roles (Visionary, Critic, etc.)
+                            </label>
+                        </div>
 
-            <div className="settings-form-group">
-                <label className="settings-label">Number of Agents (1-8)</label>
-                <input 
-                    type="number" 
-                    name="numAgents" 
-                    min="1" 
-                    max="8" 
-                    value={localSettings.numAgents} 
-                    onChange={handleChange}
-                    className="settings-input"
-                />
-            </div>
+                        <div className="settings-form-group checkbox-group">
+                            <input
+                                type="checkbox"
+                                name="pauseAfterInitial"
+                                id="pauseAfterInitial"
+                                checked={localSettings.pauseAfterInitial || false}
+                                onChange={handleChange}
+                            />
+                            <label htmlFor="pauseAfterInitial" className="settings-label checkbox-label">
+                                Pause after Initial Drafts
+                            </label>
+                        </div>
+                    </div>
 
-            <div className="settings-form-group">
-                <label className="settings-label">Initial Agent Instruction</label>
-                <textarea 
-                    name="initialInstruction" 
-                    value={localSettings.initialInstruction} 
-                    onChange={handleChange}
-                    className="settings-textarea"
-                />
-            </div>
+                    <div className="settings-card">
+                        <span className="settings-card-title">System</span>
+                        <div className="settings-form-group checkbox-group">
+                            <input
+                                type="checkbox"
+                                name="devMode"
+                                id="devMode"
+                                checked={localSettings.devMode || false}
+                                onChange={handleChange}
+                            />
+                            <label htmlFor="devMode" className="settings-label checkbox-label">
+                                Development Mode (Simulation)
+                            </label>
+                        </div>
 
-            <div className="settings-form-group">
-                <label className="settings-label">Refinement Instruction</label>
-                <p className="settings-help">Instructions for agents critiquing the initial drafts.</p>
-                <textarea 
-                    name="refinementInstruction" 
-                    value={localSettings.refinementInstruction} 
-                    onChange={handleChange}
-                    className="settings-textarea"
-                />
-            </div>
+                        <div className="settings-form-group checkbox-group">
+                            <input
+                                type="checkbox"
+                                name="debugMode"
+                                id="debugMode"
+                                checked={localSettings.debugMode || false}
+                                onChange={handleChange}
+                            />
+                            <label htmlFor="debugMode" className="settings-label checkbox-label">
+                                Debug Logging (Console)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            ) : activeTab === 'prompts' ? (
+                <div className="settings-section fade-in">
+                    <div className="profile-header with-inputs">
+                        <div className="settings-form-group profile-select-group">
+                            <label className="settings-label">Active Profile</label>
+                            <select
+                                value={localSettings.activeProfileId}
+                                onChange={handleProfileChange}
+                                className="settings-input"
+                            >
+                                {localSettings.profiles.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="profile-actions">
+                            <button className="settings-btn outline" onClick={handleCreateProfile}>+ New</button>
+                            {localSettings.profiles.length > 1 && (
+                                <button className="settings-btn danger" onClick={handleDeleteProfile}>Delete</button>
+                            )}
+                        </div>
+                    </div>
 
-            <div className="settings-form-group">
-                <label className="settings-label">Synthesizer Instruction</label>
-                 <p className="settings-help">Instructions for the final agent merging all refined responses.</p>
-                <textarea 
-                    name="synthesizerInstruction" 
-                    value={localSettings.synthesizerInstruction} 
-                    onChange={handleChange}
-                    className="settings-textarea"
-                />
-            </div>
+                    <div className="settings-form-group">
+                        <label className="settings-label">Profile Name</label>
+                        <input
+                            type="text"
+                            value={activeProfile.name}
+                            onChange={(e) => handleRenameProfile(e.target.value)}
+                            className="settings-input"
+                        />
+                    </div>
+
+                    <div className="profile-edit-card">
+                        <div className="settings-form-group" style={{ marginBottom: 0 }}>
+                            <label className="settings-label">Initial Agent Instruction</label>
+                            <p className="settings-help">Instructions for the agents drafting the first response.</p>
+                            <textarea
+                                name="initialInstruction"
+                                value={activeProfile.initialInstruction}
+                                onChange={handleInstructionChange}
+                                className="settings-textarea"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="profile-edit-card">
+                        <div className="settings-form-group" style={{ marginBottom: 0 }}>
+                            <label className="settings-label">Refinement Instruction</label>
+                            <p className="settings-help">Instructions for agents critiquing the initial drafts.</p>
+                            <textarea
+                                name="refinementInstruction"
+                                value={activeProfile.refinementInstruction}
+                                onChange={handleInstructionChange}
+                                className="settings-textarea"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="profile-edit-card">
+                        <div className="settings-form-group" style={{ marginBottom: 0 }}>
+                            <label className="settings-label">Synthesizer Instruction</label>
+                             <p className="settings-help">Instructions for the final agent merging all refined responses.</p>
+                            <textarea
+                                name="synthesizerInstruction"
+                                value={activeProfile.synthesizerInstruction}
+                                onChange={handleInstructionChange}
+                                className="settings-textarea"
+                            />
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="settings-section fade-in">
+                    <div className="profile-header-compact">
+                        <div className="profile-select-wrapper">
+                            <span className="profile-select-label">Active Role Set</span>
+                            {isEditingRoleName ? (
+                                <div className="profile-name-edit">
+                                    <input
+                                        type="text"
+                                        value={activeRoleProfile.name}
+                                        onChange={(e) => handleRenameRoleProfile(e.target.value)}
+                                        onBlur={() => setIsEditingRoleName(false)}
+                                        onKeyDown={(e) => e.key === 'Enter' && setIsEditingRoleName(false)}
+                                        className="edit-name-input"
+                                        autoFocus
+                                    />
+                                </div>
+                            ) : (
+                                <div className="profile-name-edit">
+                                    <select
+                                        value={localSettings.activeRoleProfileId}
+                                        onChange={handleRoleProfileChange}
+                                        className="settings-input"
+                                        style={{ fontWeight: 600 }}
+                                    >
+                                        {(localSettings.roleProfiles || []).map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        className="edit-name-btn"
+                                        onClick={() => setIsEditingRoleName(true)}
+                                        title="Rename Role Set"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        <div className="profile-actions">
+                            <button className="settings-btn outline" onClick={handleCreateRoleProfile}>+ New</button>
+                            {(localSettings.roleProfiles || []).length > 1 && (
+                                <button className="settings-btn danger" onClick={handleDeleteRoleProfile}>Delete</button>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="roles-section-wrapper">
+                        <div className="roles-toolbar">
+                            <div style={{ display: 'flex', alignItems: 'baseline' }}>
+                                <h4 className="roles-toolbar-title">Agent Roles</h4>
+                                <span className="roles-toolbar-subtitle">(Round-robin assignment)</span>
+                            </div>
+                            <button className="add-role-btn-small" onClick={handleAddRole}>+ Add Role</button>
+                        </div>
+                        
+                        <div className="roles-list-container">
+                            <div className="roles-list">
+                                {(activeRoleProfile.roles || []).map((role, index) => (
+                                    <div key={index} className="role-item">
+                                        <div className="role-header">
+                                            <div className="settings-form-group role-name-group">
+                                                <label className="settings-label">Role Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={role.name}
+                                                    onChange={(e) => handleRoleChange(index, 'name', e.target.value)}
+                                                    className="settings-input"
+                                                    placeholder="e.g. Critic, Visionary"
+                                                />
+                                            </div>
+                                            <button
+                                                className="settings-btn danger role-delete-btn"
+                                                onClick={() => handleDeleteRole(index)}
+                                                aria-label="Delete role"
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                        <div className="settings-form-group role-instruction-group">
+                                            <label className="settings-label">Role Instruction</label>
+                                            <textarea
+                                                value={role.instruction}
+                                                onChange={(e) => handleRoleChange(index, 'instruction', e.target.value)}
+                                                className="settings-textarea role-instruction-textarea"
+                                                placeholder="Instructions for this specific role..."
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                                {(activeRoleProfile.roles || []).length === 0 && (
+                                    <div className="no-roles-message">
+                                        No roles defined. Add a role to get started.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
         <div className="settings-modal-footer">
             <button className="settings-btn reset" onClick={handleReset}>Reset to Defaults</button>
