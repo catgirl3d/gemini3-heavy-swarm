@@ -122,6 +122,9 @@ export const useGeminiSwarm = () => {
         refinedResponses: Array(settings.numAgents).fill(null)
     });
 
+    // This will always hold the latest snapshot of agent states
+    let latestAgents: AgentState[] = [];
+
     // Create new AbortController
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -138,6 +141,8 @@ export const useGeminiSwarm = () => {
         imageFile,
         currentMessages,
         (status, agents, work, isPaused) => {
+          // keep an up-to-date copy for attaching to the final message
+          latestAgents = agents;
           setLoadingStatus(status);
           setAgentStates(agents);
           setCurrentWork({ ...work, agentStates: agents });
@@ -169,7 +174,8 @@ export const useGeminiSwarm = () => {
         const newMessages = [...prev];
         const lastMessage = newMessages[newMessages.length - 1];
         lastMessage.sources = result.sources;
-        lastMessage.work = { ...result.work, agentStates: agentStates };
+        // Attach the final, real agent states snapshot to the message work
+        lastMessage.work = { ...result.work, agentStates: latestAgents };
         return newMessages;
       });
 

@@ -311,6 +311,7 @@ header h1 {
   font-size: 0.8rem;
   flex-shrink: 0;
   transition: all 0.3s;
+  min-width: 32px;
 }
 .agent-icon.working { background: var(--text-primary); color: white; }
 .agent-icon.done { background: #16a34a; color: white; }
@@ -435,7 +436,7 @@ header h1 {
 .work-card-header { font-weight: 600; padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--model-message-border); color: var(--text-primary); background-color: #f8fafc; font-size: 0.9rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
 .work-card.refined .work-card-header { background-color: #eff6ff; color: #1e3a8a; border-bottom-color: #bfdbfe; }
 
-.work-card-icon { width: 24px; height: 24px; background: #cbd5e1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; transition: all 0.3s; }
+.work-card-icon { width: 24px; height: 24px; background: #cbd5e1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; transition: all 0.3s; flex-shrink: 0; }
 .work-card-icon.working { background: var(--text-primary); }
 .work-card-icon.done { background: #16a34a; }
 .work-card.refined .work-card-icon { background: #3b82f6; }
