@@ -1223,3 +1223,10 @@ header h1 {
     background: #f8fafc;
     margin-bottom: 0rem;
 }
+
+.roles-section-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}

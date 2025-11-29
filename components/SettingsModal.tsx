@@ -156,41 +156,47 @@ export const SettingsModal: FC<{
 
   const handleRoleChange = (index: number, field: 'name' | 'instruction', value: string) => {
     setLocalSettings(prev => {
+      // Use the ID of the currently displayed profile to ensure we update what the user sees
+      const targetId = activeRoleProfile.id;
       const newProfiles = (prev.roleProfiles || []).map(p => {
-        if (p.id === prev.activeRoleProfileId) {
-            const newRoles = [...p.roles];
-            newRoles[index] = { ...newRoles[index], [field]: value };
+        if (p.id === targetId) {
+            const newRoles = [...(p.roles || [])];
+            if (newRoles[index]) {
+                newRoles[index] = { ...newRoles[index], [field]: value };
+            }
             return { ...p, roles: newRoles };
         }
         return p;
       });
-      return { ...prev, roleProfiles: newProfiles };
+      return { ...prev, roleProfiles: newProfiles, activeRoleProfileId: targetId };
     });
   };
 
   const handleAddRole = () => {
     setLocalSettings(prev => {
+        const targetId = activeRoleProfile.id;
         const newProfiles = (prev.roleProfiles || []).map(p => {
-            if (p.id === prev.activeRoleProfileId) {
-                return { ...p, roles: [...p.roles, { name: 'New Role', instruction: '' }] };
+            if (p.id === targetId) {
+                return { ...p, roles: [...(p.roles || []), { name: 'New Role', instruction: '' }] };
             }
             return p;
         });
-        return { ...prev, roleProfiles: newProfiles };
+        return { ...prev, roleProfiles: newProfiles, activeRoleProfileId: targetId };
     });
   };
 
   const handleDeleteRole = (index: number) => {
     setLocalSettings(prev => {
+        const targetId = activeRoleProfile.id;
         const newProfiles = (prev.roleProfiles || []).map(p => {
-            if (p.id === prev.activeRoleProfileId) {
-                const newRoles = [...p.roles];
+            if (p.id === targetId) {
+                const newRoles = [...(p.roles || [])];
                 newRoles.splice(index, 1);
                 return { ...p, roles: newRoles };
             }
             return p;
         });
-        return { ...prev, roleProfiles: newProfiles };
+        return { ...prev, roleProfiles: newProfiles, activeRoleProfileId: targetId };
     });
   };
 
@@ -496,6 +502,45 @@ export const SettingsModal: FC<{
                             </div>
                             <button className="add-role-btn-small" onClick={handleAddRole}>+ Add Role</button>
                         </div>
+                        {!localSettings.dynamicAgentRoles && (
+                            <div className="warning-banner" style={{
+                                background: '#fff7ed',
+                                border: '1px solid #fdba74',
+                                color: '#c2410c',
+                                padding: '0.75rem',
+                                borderRadius: '6px',
+                                margin: '1rem 1rem 0 1rem',
+                                fontSize: '0.85rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem'
+                            }}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                </svg>
+                                <span>
+                                    <strong>Dynamic Agent Roles</strong> are currently disabled. These roles will not be used until you enable them in the <strong>General</strong> tab.
+                                </span>
+                                <button
+                                    onClick={() => setLocalSettings(prev => ({ ...prev, dynamicAgentRoles: true }))}
+                                    style={{
+                                        marginLeft: 'auto',
+                                        background: '#c2410c',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        padding: '0.25rem 0.75rem',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 600,
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Enable
+                                </button>
+                            </div>
+                        )}
                         
                         <div className="roles-list-container">
                             <div className="roles-list">
@@ -506,7 +551,7 @@ export const SettingsModal: FC<{
                                                 <label className="settings-label">Role Name</label>
                                                 <input
                                                     type="text"
-                                                    value={role.name}
+                                                    value={role.name || ''}
                                                     onChange={(e) => handleRoleChange(index, 'name', e.target.value)}
                                                     className="settings-input"
                                                     placeholder="e.g. Critic, Visionary"
@@ -523,7 +568,7 @@ export const SettingsModal: FC<{
                                         <div className="settings-form-group role-instruction-group">
                                             <label className="settings-label">Role Instruction</label>
                                             <textarea
-                                                value={role.instruction}
+                                                value={role.instruction || ''}
                                                 onChange={(e) => handleRoleChange(index, 'instruction', e.target.value)}
                                                 className="settings-textarea role-instruction-textarea"
                                                 placeholder="Instructions for this specific role..."
