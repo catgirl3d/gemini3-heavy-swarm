@@ -40,6 +40,7 @@ export interface Work {
   initialResponses: (string | null)[];
   refinedResponses: (string | null)[];
   agentNames?: string[];
+  agentStates?: AgentState[];
 }
 
 export interface Message {

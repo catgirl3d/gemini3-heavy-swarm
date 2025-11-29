@@ -1,6 +1,6 @@
 import React, { FC, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Work } from '../types';
+import { Work, AgentState } from '../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
 const WorkModal: FC<{ title: string; content: string; onClose: () => void }> = ({ title, content, onClose }) => {
@@ -36,9 +36,18 @@ const WorkModal: FC<{ title: string; content: string; onClose: () => void }> = (
   );
 };
 
-export const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = false }) => {
+export const ShowWork: FC<{
+  work: Work,
+  isLive?: boolean,
+  liveAgentStates?: AgentState[],
+  onRegenerate?: (phase: 'initial' | 'refined', agentIndex: number) => void
+}> = ({ work, isLive = false, liveAgentStates, onRegenerate }) => {
   const [modalData, setModalData] = useState<{title: string, content: string} | null>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
+
+  // Determine if refinement has started by checking if any refined response is not null
+  const isRefinementStarted = work.refinedResponses.some(r => r !== null);
+  const effectiveAgentStates = (isLive && liveAgentStates ? liveAgentStates : work.agentStates);
 
   const renderContent = (content: string | null) => {
     if (content === null) return <div className="pending-work">Waiting for agent output...</div>;
@@ -63,23 +72,53 @@ export const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = 
               <div key={`initial-${i}`} className="work-card">
                 <div className="work-card-header">
                     <div className="work-card-title-group" style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
-                        <div className="work-card-icon">{i + 1}</div>
+                        <div className={`work-card-icon ${(effectiveAgentStates?.[i]?.status === 'working') ? 'working' : (isRefinementStarted || effectiveAgentStates?.[i]?.status === 'done') ? 'done' : ''}`}>
+                            {(effectiveAgentStates?.[i]?.status === 'working') ? (
+                                <svg className="spinner" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            ) : (isRefinementStarted || work.agentStates?.[i]?.status === 'done') ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                    <path fillRule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clipRule="evenodd" />
+                                </svg>
+                            ) : (
+                                i + 1
+                            )}
+                        </div>
                         {work.agentNames ? work.agentNames[i] : `Agent ${i + 1}`}
                     </div>
                     {resp && (
-                        <button 
-                            className="expand-work-button"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                setModalData({ title: `Agent ${i + 1} - Initial Draft`, content: resp });
-                            }}
-                            title="Expand Response"
-                            aria-label="Expand Response"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-                            </svg>
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                            {onRegenerate && (
+                                <button
+                                    className="expand-work-button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        onRegenerate('initial', i);
+                                    }}
+                                    title="Regenerate Response"
+                                    aria-label="Regenerate Response"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                                    </svg>
+                                </button>
+                            )}
+                            <button
+                                className="expand-work-button"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    setModalData({ title: `Agent ${i + 1} - Initial Draft`, content: resp });
+                                }}
+                                title="Expand Response"
+                                aria-label="Expand Response"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                                </svg>
+                            </button>
+                        </div>
                     )}
                 </div>
                 <div className="work-card-body">
@@ -96,23 +135,53 @@ export const ShowWork: FC<{ work: Work, isLive?: boolean }> = ({ work, isLive = 
               <div key={`refined-${i}`} className="work-card refined">
                  <div className="work-card-header">
                     <div className="work-card-title-group" style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
-                        <div className="work-card-icon">{i + 1}</div>
-                        {work.agentNames ? work.agentNames[i] : `Agent ${i + 1}`}
+                        <div className={`work-card-icon ${(isRefinementStarted && effectiveAgentStates?.[i]?.status === 'working') ? 'working' : (isRefinementStarted && effectiveAgentStates?.[i]?.status === 'done') ? 'done' : ''}`}>
+                             {(isRefinementStarted && effectiveAgentStates?.[i]?.status === 'working') ? (
+                                <svg className="spinner" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            ) : (isRefinementStarted && work.agentStates?.[i]?.status === 'done') ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                    <path fillRule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clipRule="evenodd" />
+                                </svg>
+                            ) : (
+                                i + 1
+                            )}
+                        </div>
+                        {`Agent ${i + 1}`}
                     </div>
                     {resp && (
-                        <button 
-                            className="expand-work-button"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                setModalData({ title: `Agent ${i + 1} - Refined Response`, content: resp });
-                            }}
-                             title="Expand Response"
-                             aria-label="Expand Response"
-                        >
-                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-                            </svg>
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                            {onRegenerate && (
+                                <button
+                                    className="expand-work-button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        onRegenerate('refined', i);
+                                    }}
+                                    title="Regenerate Response"
+                                    aria-label="Regenerate Response"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                                    </svg>
+                                </button>
+                            )}
+                            <button
+                                className="expand-work-button"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    setModalData({ title: `Agent ${i + 1} - Refined Response`, content: resp });
+                                }}
+                                title="Expand Response"
+                                aria-label="Expand Response"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                                </svg>
+                            </button>
+                        </div>
                     )}
                  </div>
                  <div className="work-card-body">

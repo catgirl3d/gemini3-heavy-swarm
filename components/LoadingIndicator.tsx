@@ -3,7 +3,15 @@ import { AgentState, Work } from '../types';
 import { AgentAvatar } from './AgentAvatar';
 import { ShowWork } from './ShowWork';
 
-export const LoadingIndicator: FC<{ status: string; time: number; agentStates: AgentState[]; currentWork?: Work; isPaused?: boolean; onContinue?: () => void }> = ({ status, time, agentStates, currentWork, isPaused, onContinue }) => (
+export const LoadingIndicator: FC<{
+    status: string;
+    time: number;
+    agentStates: AgentState[];
+    currentWork?: Work;
+    isPaused?: boolean;
+    onContinue?: () => void;
+    onRegenerate?: (phase: 'initial' | 'refined', agentIndex: number) => void;
+}> = ({ status, time, agentStates, currentWork, isPaused, onContinue, onRegenerate }) => (
   <div className="message-wrapper model loading-state">
     <AgentAvatar type="model" />
     <div className="loading-container-wrapper" style={{ width: '100%', maxWidth: '800px' }}>
@@ -54,7 +62,11 @@ export const LoadingIndicator: FC<{ status: string; time: number; agentStates: A
         </div>
         {currentWork && (
             <div style={{ marginTop: '1rem' }}>
-                <ShowWork work={currentWork} isLive={true} />
+                <ShowWork
+                    work={currentWork}
+                    isLive={true}
+                    onRegenerate={isPaused ? onRegenerate : undefined}
+                />
             </div>
         )}
     </div>

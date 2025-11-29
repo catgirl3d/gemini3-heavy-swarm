@@ -230,10 +230,19 @@ export class GeminiService {
       }));
 
       const baseApiParts: Part[] = [];
-      if (image && imageFile) {
+      if (image) {
+        // Extract mime type if file not provided
+        let mimeType = 'image/jpeg';
+        if (imageFile) {
+            mimeType = imageFile.type;
+        } else {
+            const match = image.match(/^data:([^;]+);base64,/);
+            if (match) mimeType = match[1];
+        }
+
         baseApiParts.push({
           inlineData: {
-            mimeType: imageFile.type,
+            mimeType: mimeType,
             data: image.split(',')[1],
           },
         });
@@ -411,6 +420,119 @@ export class GeminiService {
         .filter((web, index, self) => index === self.findIndex(w => w.uri === web.uri));
 
       return { text: finalResponseText, sources, work: liveWork };
+    }
+  }
+
+  async regenerateResponse(
+    settings: AppSettings,
+    userInput: string,
+    image: string | null,
+    imageFile: File | null,
+    history: Message[],
+    agentIndex: number,
+    phase: 'initial' | 'refined',
+    workContext: Work,
+    onUpdate: (text: string) => void,
+    signal: AbortSignal
+  ): Promise<string> {
+    if (!this.ai) throw new Error("API Key not found");
+
+    const mainChatHistory: Content[] = history.map(msg => ({
+      role: msg.role,
+      parts: msg.parts,
+    }));
+
+    const baseApiParts: Part[] = [];
+    if (image) {
+        // Extract mime type if file not provided
+        let mimeType = 'image/jpeg';
+        if (imageFile) {
+            mimeType = imageFile.type;
+        } else {
+            const match = image.match(/^data:([^;]+);base64,/);
+            if (match) mimeType = match[1];
+        }
+        
+        baseApiParts.push({
+          inlineData: {
+            mimeType: mimeType,
+            data: image.split(',')[1],
+          },
+        });
+    }
+    if (userInput.trim()) {
+      baseApiParts.push({ text: userInput });
+    }
+
+    // Construct the turn based on phase
+    if (phase === 'initial') {
+        const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
+        let systemInstruction = activeProfile.initialInstruction;
+        let userTurn: Content = { role: 'user', parts: baseApiParts };
+
+        if (settings.dynamicAgentRoles) {
+            const perspective = getAgentPerspective(agentIndex, settings);
+            systemInstruction += "\n\n" + perspective.instruction;
+            const roleReminder = `\n\n[SYSTEM NOTE: Remember your assigned role: ${perspective.name}]`;
+            userTurn = {
+                role: 'user',
+                parts: [...baseApiParts, { text: roleReminder }]
+            };
+        }
+
+        const stream = await this.ai.models.generateContentStream({
+          model: settings.model,
+          contents: [...mainChatHistory, userTurn],
+          config: {
+            systemInstruction: systemInstruction,
+            temperature: settings.temperature ?? 0.7,
+            tools: [{googleSearch: {}}],
+            thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
+            maxOutputTokens: 65536,
+          },
+        });
+
+        let fullText = '';
+        for await (const chunk of stream) {
+            if (signal.aborted) throw new Error('Aborted');
+            const text = chunk.text || '';
+            fullText += text;
+            onUpdate(fullText);
+        }
+        return fullText;
+
+    } else {
+        // Refined
+        const initialAnswer = workContext.initialResponses[agentIndex];
+        
+        const otherAnswers = workContext.initialResponses.filter((_, i) => i !== agentIndex);
+        const otherAnswersText = otherAnswers.map((answer, i) => `${i + 1}. "${answer}"`).join('\n');
+        const refinementContext = `My initial response was: "${initialAnswer}". The other agents responded with:\n${otherAnswersText}\n\nBased on this context, critically re-evaluate and provide a new, improved response to the original query.`;
+        
+        const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
+
+        const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
+        
+        const stream = await this.ai.models.generateContentStream({
+          model: settings.model,
+          contents: [...mainChatHistory, refinementTurn],
+          config: {
+            systemInstruction: activeProfile.refinementInstruction,
+            temperature: settings.temperature ?? 0.7,
+            tools: [{googleSearch: {}}],
+            thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
+            maxOutputTokens: 65536,
+          },
+        });
+
+        let fullText = '';
+        for await (const chunk of stream) {
+            if (signal.aborted) throw new Error('Aborted');
+            const text = chunk.text || '';
+            fullText += text;
+            onUpdate(fullText);
+        }
+        return fullText;
     }
   }
 }

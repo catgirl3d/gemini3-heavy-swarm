@@ -17,6 +17,7 @@ export const useGeminiSwarm = () => {
   
   const startTimeRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const regenerateAbortControllerRef = useRef<AbortController | null>(null);
   const pauseResolverRef = useRef<((value: void | PromiseLike<void>) => void) | null>(null);
   const geminiServiceRef = useRef<GeminiService>(new GeminiService());
 
@@ -139,7 +140,7 @@ export const useGeminiSwarm = () => {
         (status, agents, work, isPaused) => {
           setLoadingStatus(status);
           setAgentStates(agents);
-          setCurrentWork(work);
+          setCurrentWork({ ...work, agentStates: agents });
           if (isPaused !== undefined) {
             setIsPaused(isPaused);
           }
@@ -168,7 +169,7 @@ export const useGeminiSwarm = () => {
         const newMessages = [...prev];
         const lastMessage = newMessages[newMessages.length - 1];
         lastMessage.sources = result.sources;
-        lastMessage.work = result.work;
+        lastMessage.work = { ...result.work, agentStates: agentStates };
         return newMessages;
       });
 
@@ -221,6 +222,124 @@ export const useGeminiSwarm = () => {
     }
   };
 
+  const regenerateAgentResponse = async (messageIndex: number, phase: 'initial' | 'refined', agentIndex: number) => {
+    if (!lastInput) return;
+    
+    // Find the message to update or use currentWork if it's the active generation
+    const targetMessage = messages[messageIndex];
+    let workContext = targetMessage?.work;
+    
+    if (!workContext && currentWork) {
+        workContext = currentWork;
+    }
+
+    if (!workContext) return;
+
+    // Helper to keep agent status in sync across: live state, current work, and stored message work
+    const updateAgentStatus = (status: AgentState['status'], label: string) => {
+        // Update top-level agentStates used by the loader
+        setAgentStates(prev => {
+            const newStates = [...prev];
+            if (newStates[agentIndex]) {
+                newStates[agentIndex] = { ...newStates[agentIndex], status, label };
+            }
+            return newStates;
+        });
+
+        // Update the stored work attached to the specific message (for history view)
+        setMessages(prev => {
+            const newMessages = [...prev];
+            const msg = newMessages[messageIndex];
+            if (msg && msg.work && msg.work.agentStates) {
+                const agentStatesCopy = [...msg.work.agentStates];
+                if (agentStatesCopy[agentIndex]) {
+                    agentStatesCopy[agentIndex] = { ...agentStatesCopy[agentIndex], status, label };
+                    msg.work = { ...msg.work, agentStates: agentStatesCopy };
+                }
+            }
+            return newMessages;
+        });
+
+        // Update the live currentWork used in the "Show Agent Work (Live)" section
+        setCurrentWork(prev => {
+            if (!prev || !prev.agentStates) return prev;
+            const agentStatesCopy = [...prev.agentStates];
+            if (agentStatesCopy[agentIndex]) {
+                agentStatesCopy[agentIndex] = { ...agentStatesCopy[agentIndex], status, label };
+                return { ...prev, agentStates: agentStatesCopy };
+            }
+            return prev;
+        });
+    };
+
+    // Create new AbortController for this specific operation
+    if (regenerateAbortControllerRef.current) {
+        regenerateAbortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    regenerateAbortControllerRef.current = abortController;
+
+    try {
+        // Set status to working while regeneration is in progress
+        updateAgentStatus('working', 'Regenerating...');
+
+        // We need the history up to this point
+        const history = messages.slice(0, messageIndex);
+
+        await geminiServiceRef.current.regenerateResponse(
+            settings,
+            lastInput.text,
+            lastInput.image,
+            lastInput.imageFile,
+            history,
+            agentIndex,
+            phase,
+            workContext,
+            (text) => {
+                // Update Messages if work is attached
+                setMessages(prev => {
+                    const newMessages = [...prev];
+                    const msg = newMessages[messageIndex];
+                    if (msg && msg.work) {
+                        const newWork = { ...msg.work };
+                        if (phase === 'initial') {
+                            newWork.initialResponses = [...newWork.initialResponses];
+                            newWork.initialResponses[agentIndex] = text;
+                        } else {
+                            newWork.refinedResponses = [...newWork.refinedResponses];
+                            newWork.refinedResponses[agentIndex] = text;
+                        }
+                        msg.work = newWork;
+                    }
+                    return newMessages;
+                });
+
+                // Update Current Work (for live view)
+                setCurrentWork(prev => {
+                    if (!prev) return prev;
+                    const newWork = { ...prev };
+                    if (phase === 'initial') {
+                        newWork.initialResponses = [...newWork.initialResponses];
+                        newWork.initialResponses[agentIndex] = text;
+                    } else {
+                        newWork.refinedResponses = [...newWork.refinedResponses];
+                        newWork.refinedResponses[agentIndex] = text;
+                    }
+                    return newWork;
+                });
+            },
+            abortController.signal
+        );
+
+    } catch (error) {
+        console.error("Regeneration failed:", error);
+    } finally {
+        regenerateAbortControllerRef.current = null;
+        // Mark agent as done once regeneration finishes
+        updateAgentStatus('done', 'Regenerated');
+    }
+  };
+
   return {
     messages,
     isLoading,
@@ -235,6 +354,7 @@ export const useGeminiSwarm = () => {
     sendMessage,
     stopGeneration,
     retry,
-    continueGeneration
+    continueGeneration,
+    regenerateAgentResponse
   };
 };

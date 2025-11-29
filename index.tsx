@@ -31,7 +31,8 @@ const App: FC = () => {
     sendMessage,
     stopGeneration,
     retry,
-    continueGeneration
+    continueGeneration,
+    regenerateAgentResponse
   } = useGeminiSwarm();
 
   const [image, setImage] = useState<string | null>(null);
@@ -155,13 +156,37 @@ const App: FC = () => {
                   </div>
                 )}
                 {/* Ensure Work is displayed if it exists on the message */}
-                {msg.work && <ShowWork work={msg.work} />}
+                {msg.work && (
+                    <ShowWork
+                        work={msg.work}
+                        onRegenerate={(phase, agentIndex) => regenerateAgentResponse(index, phase, agentIndex)}
+                    />
+                )}
                 {msg.sources && <Sources sources={msg.sources} />}
               </div>
             </div>
           ))
         )}
-        {isLoading && <LoadingIndicator status={loadingStatus} time={timer} agentStates={agentStates} currentWork={currentWork} isPaused={isPaused} onContinue={continueGeneration} />}
+        {isLoading && (
+            <LoadingIndicator
+                status={loadingStatus}
+                time={timer}
+                agentStates={agentStates}
+                currentWork={currentWork}
+                isPaused={isPaused}
+                onContinue={continueGeneration}
+                onRegenerate={(phase, agentIndex) => {
+                    // When paused, the current message is the last one in the messages array
+                    // because we push the user message, then start loading.
+                    // Wait, if we are paused, we haven't pushed the final model message yet?
+                    // Let's check useGeminiSwarm.
+                    // In useGeminiSwarm, we push the user message, then start loading.
+                    // The model message is streamed into messages array via onMessageUpdate.
+                    // So the last message in 'messages' should be the one we are working on.
+                    regenerateAgentResponse(messages.length - 1, phase, agentIndex);
+                }}
+            />
+        )}
         {error && (
           <div className="error-container">
             <div className="error-message">
