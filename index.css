@@ -279,7 +279,7 @@ header h1 {
   border-radius: 12px; 
   background-color: #f8fafc; 
   width: 100%; 
-  max-width: 400px;
+  max-width: 430px;
 }
 .loading-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .loading-status { font-size: 0.95rem; color: var(--text-primary); font-weight: 600; }
@@ -586,6 +586,10 @@ header h1 {
 
 .work-modal-body li {
 	padding-bottom: 0.90rem;
+}
+
+.work-modal-body ol li p{
+margin: 0px;
 }
 
 .work-modal-body .markdown-content {

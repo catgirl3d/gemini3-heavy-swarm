@@ -65,6 +65,12 @@ export const useGeminiSwarm = () => {
             }
             // Clean up old property
             delete parsedSettings.agentRoles;
+        } else {
+            // Ensure new default profiles are available even if settings exist
+            const madScientistProfile = DEFAULT_ROLE_PROFILES.find(p => p.id === 'mad-scientists');
+            if (madScientistProfile && !parsedSettings.roleProfiles.some((p: any) => p.id === 'mad-scientists')) {
+                parsedSettings.roleProfiles.push(madScientistProfile);
+            }
         }
         setSettings(parsedSettings);
       } catch (error) {
