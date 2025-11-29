@@ -40,7 +40,7 @@ export const ShowWork: FC<{
   work: Work,
   isLive?: boolean,
   liveAgentStates?: AgentState[],
-  onRegenerate?: (phase: 'initial' | 'refined', agentIndex: number) => void
+  onRegenerate?: (stepId: string, agentIndex: number) => void
 }> = ({ work, isLive = false, liveAgentStates, onRegenerate }) => {
   const [modalData, setModalData] = useState<{title: string, content: string} | null>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
@@ -50,8 +50,8 @@ export const ShowWork: FC<{
   const effectiveAgentStates = (isLive && liveAgentStates ? liveAgentStates : work.agentStates);
 
   const renderContent = (content: string | null) => {
-    if (content === null) return <div className="pending-work">Waiting for agent output...</div>;
-    if (content === '') return <div className="pending-work">Thinking...</div>;
+    if (content === null) return <div className="pending-work"><p>Waiting for agent output...</p></div>;
+    if (content === '') return <div className="pending-work"><p>Thinking...</p></div>;
     return <MarkdownRenderer content={content} />;
   };
 

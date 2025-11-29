@@ -10,7 +10,7 @@ export const LoadingIndicator: FC<{
     currentWork?: Work;
     isPaused?: boolean;
     onContinue?: () => void;
-    onRegenerate?: (phase: 'initial' | 'refined', agentIndex: number) => void;
+    onRegenerate?: (stepId: string, agentIndex: number) => void;
 }> = ({ status, time, agentStates, currentWork, isPaused, onContinue, onRegenerate }) => (
   <div className="message-wrapper model loading-state">
     <AgentAvatar type="model" />

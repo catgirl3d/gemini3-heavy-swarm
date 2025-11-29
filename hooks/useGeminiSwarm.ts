@@ -234,7 +234,7 @@ export const useGeminiSwarm = () => {
     }
   };
 
-  const regenerateAgentResponse = async (messageIndex: number, phase: 'initial' | 'refined', agentIndex: number) => {
+  const regenerateAgentResponse = async (messageIndex: number, stepId: string, agentIndex: number) => {
     if (!lastInput) return;
     
     // Find the message to update or use currentWork if it's the active generation
@@ -305,7 +305,7 @@ export const useGeminiSwarm = () => {
             lastInput.imageFile,
             history,
             agentIndex,
-            phase,
+            stepId,
             workContext,
             (text) => {
                 // Update Messages if work is attached
@@ -314,13 +314,25 @@ export const useGeminiSwarm = () => {
                     const msg = newMessages[messageIndex];
                     if (msg && msg.work) {
                         const newWork = { ...msg.work };
-                        if (phase === 'initial') {
+                        
+                        // Update generic results
+                        if (!newWork.results) newWork.results = {};
+                        if (!newWork.results[stepId]) newWork.results[stepId] = [];
+                        
+                        // Ensure array exists and update it
+                        const currentResults = [...(newWork.results[stepId] as string[])];
+                        currentResults[agentIndex] = text;
+                        newWork.results[stepId] = currentResults;
+
+                        // Update legacy fields for compatibility
+                        if (stepId === 'initial') {
                             newWork.initialResponses = [...newWork.initialResponses];
                             newWork.initialResponses[agentIndex] = text;
-                        } else {
+                        } else if (stepId === 'refined') {
                             newWork.refinedResponses = [...newWork.refinedResponses];
                             newWork.refinedResponses[agentIndex] = text;
                         }
+                        
                         msg.work = newWork;
                     }
                     return newMessages;
@@ -330,10 +342,20 @@ export const useGeminiSwarm = () => {
                 setCurrentWork(prev => {
                     if (!prev) return prev;
                     const newWork = { ...prev };
-                    if (phase === 'initial') {
+                    
+                    // Update generic results
+                    if (!newWork.results) newWork.results = {};
+                    if (!newWork.results[stepId]) newWork.results[stepId] = [];
+                    
+                    const currentResults = [...(newWork.results[stepId] as string[])];
+                    currentResults[agentIndex] = text;
+                    newWork.results[stepId] = currentResults;
+
+                    // Update legacy fields for compatibility
+                    if (stepId === 'initial') {
                         newWork.initialResponses = [...newWork.initialResponses];
                         newWork.initialResponses[agentIndex] = text;
-                    } else {
+                    } else if (stepId === 'refined') {
                         newWork.refinedResponses = [...newWork.refinedResponses];
                         newWork.refinedResponses[agentIndex] = text;
                     }

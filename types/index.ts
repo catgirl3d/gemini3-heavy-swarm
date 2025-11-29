@@ -39,6 +39,17 @@ export interface Source {
 export interface Work {
   initialResponses: (string | null)[];
   refinedResponses: (string | null)[];
+  
+  // Generic storage for step results
+  results?: Record<string, any>;
+  
+  // Metadata about the steps that ran
+  stepMetadata?: {
+    id: string;
+    status: 'pending' | 'working' | 'done';
+    label?: string;
+  }[];
+
   agentNames?: string[];
   agentStates?: AgentState[];
 }
