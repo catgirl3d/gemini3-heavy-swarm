@@ -200,6 +200,25 @@ export const SettingsModal: FC<{
     });
   };
 
+  const handleMoveRole = (index: number, direction: 'up' | 'down') => {
+    setLocalSettings(prev => {
+        const targetId = activeRoleProfile.id;
+        const newProfiles = (prev.roleProfiles || []).map(p => {
+            if (p.id === targetId) {
+                const newRoles = [...(p.roles || [])];
+                if (direction === 'up' && index > 0) {
+                    [newRoles[index], newRoles[index - 1]] = [newRoles[index - 1], newRoles[index]];
+                } else if (direction === 'down' && index < newRoles.length - 1) {
+                    [newRoles[index], newRoles[index + 1]] = [newRoles[index + 1], newRoles[index]];
+                }
+                return { ...p, roles: newRoles };
+            }
+            return p;
+        });
+        return { ...prev, roleProfiles: newProfiles, activeRoleProfileId: targetId };
+    });
+  };
+
   return createPortal(
     <div className="work-modal-overlay" onClick={onClose}>
       <div className="settings-modal" onClick={e => e.stopPropagation()}>
@@ -557,13 +576,37 @@ export const SettingsModal: FC<{
                                                     placeholder="e.g. Critic, Visionary"
                                                 />
                                             </div>
-                                            <button
-                                                className="settings-btn danger role-delete-btn"
-                                                onClick={() => handleDeleteRole(index)}
-                                                aria-label="Delete role"
-                                            >
-                                                Delete
-                                            </button>
+                                            <div className="role-actions">
+                                                <div className="role-move-buttons">
+                                                    <button
+                                                        className="move-role-btn up"
+                                                        onClick={() => handleMoveRole(index, 'up')}
+                                                        disabled={index === 0}
+                                                        title="Move Up"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                            <path d="M18 15l-6-6-6 6"/>
+                                                        </svg>
+                                                    </button>
+                                                    <button
+                                                        className="move-role-btn down"
+                                                        onClick={() => handleMoveRole(index, 'down')}
+                                                        disabled={index === (activeRoleProfile.roles || []).length - 1}
+                                                        title="Move Down"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                            <path d="M6 9l6 6 6-6"/>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                <button
+                                                    className="settings-btn danger role-delete-btn"
+                                                    onClick={() => handleDeleteRole(index)}
+                                                    aria-label="Delete role"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="settings-form-group role-instruction-group">
                                             <label className="settings-label">Role Instruction</label>
