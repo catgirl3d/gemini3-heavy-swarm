@@ -107,6 +107,7 @@ export class RefinementStep implements StepDescriptor {
         const peerDrafts = initialResponses
           .map((text: string, i: number) => ({ text, id: i + 1 }))
           .filter((_: any, i: number) => i !== index)
+          .filter((a: any) => !a.text.trim().startsWith('[System:')) // Filter out failed agents
           .map((a: any) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
           .join('\n\n');
 
@@ -128,8 +129,9 @@ ${peerDrafts}
 
 # YOUR TASK
 <instruction>
-As defined in <mission> critically re-evaluate <my_draft> considering insights from <peer_drafts>.
-Provide a new, improved response to <original_query>.
+1. As defined in <mission> critically re-evaluate <my_draft> considering insights from <peer_drafts>.
+2. Provide a new, improved response to <original_query>.
+3. [CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!
 </instruction>`;
         
         const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
@@ -242,6 +244,7 @@ Provide a new, improved response to <original_query>.
     const peerDrafts = initialResponses
       .map((text: string, i: number) => ({ text, id: i + 1 }))
       .filter((_: any, i: number) => i !== agentIndex)
+      .filter((a: any) => !a.text.trim().startsWith('[System:')) // Filter out failed agents
       .map((a: any) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
       .join('\n\n');
 
@@ -265,6 +268,7 @@ ${peerDrafts}
 <instruction>
 Critically re-evaluate <my_draft> considering insights from <peer_drafts>.
 Provide a new, improved response to <original_query>.
+ALWAYS use the googleSearch tool to verify facts and find additional information if needed.
 </instruction>`;
     
     const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };

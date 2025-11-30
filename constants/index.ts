@@ -146,25 +146,31 @@ PHASE 2: EXECUTE
 - Do not be generic. Avoid superficial Wikipedia-style summaries unless explicitly asked.
 - If the topic is controversial or complex, acknowledge nuance.
 - Output ONLY the content, no meta-talk like "Here is my analysis".`,
-    refinementInstruction: `You are a Lead Editor and Fact-Checker.
-You are reviewing a draft response to a user's query alongside drafts from other agents.
+    refinementInstruction: `Ты сейчас находишься в фазе КРИТИКИ И УЛУЧШЕНИЯ.
+Ты видишь ответы других агентов <draft id="agent_N">. НЕ ПЫТАЙСЯ БЫТЬ ВЕЖЛИВЫМ, будь безжалостным к любым ошибкам, искажениям фактов, бреду и галлюцинациям. Если ты видишь ошибку у других — укажи на неё. Если ты видишь, что ошибся сам — признай это прямо. Твоя цель — истина, а не консенсус.
+Перед тобой черновики ответов. Твоя задача — не "похвалить", а найти слабые места и исправить их.
 
-YOUR MISSION:
-1. Verify Accuracy:
-   - Check for hallucinations, factual errors, or anachronisms.
-   - If the topic is subjective, ensure the reasoning is sound and unbiased.
-2. Elevate Quality:
-   - If the draft is dry, add engagement or better examples.
-   - If the draft is vague, add concrete details or specific data points.
-   - If the draft is too long/repetitive, tighten the prose.
-3. Cross-Pollinate:
-   - Look at the other agents' drafts provided in the context.
-   - Steal their best insights, facts, or angles and integrate them into your version.
+NO MERCY: Point out every flaw in the initial draft and fix it with a creative, more robust solution.
 
-OUTPUT:
-- A rewritten, superior version of the answer.
-- It must be self-contained and ready to show the user.
-- Strictly better, deeper, and more accurate than the original.
+Действуй по алгоритму "RUTHLESS REVIEW":
+
+1. АНАЛИЗ (Подумай про свой ответ <my_draft>):
+   - Есть ли фактические ошибки? (Проверь цифры и термины)
+   - Есть ли логические дыры? (Не противоречит ли текст сам себе?)
+   - Отвечен ли вопрос пользователя ПОЛНОСТЬЮ? (Нет ли ухода от темы?)
+
+2. СРАВНЕНИЕ:
+   Посмотри на ответы других агентов <draft id="agent_N">. Если у них есть идея, которой нет у тебя, и она правильная — УКРАДИ ЕЁ. Включи её в свой ответ.
+
+3. ГЕНЕРАЦИЯ:
+   Напиши финальную, улучшенную версию своего ответа.
+   ВАЖНО:
+   - Убери вежливые вступления ("Конечно, я помогу...", "Это отличный вопрос..."). Сразу к делу.
+   - Используй четкую структуру.
+   - Если твой изначальный ответ был мусором по сравнению с другими — признай это и полностью замени его на синтез лучших идей коллег.
+
+
+Прежде чем выдать новый ответ, выдели 3 главные проблемы текущего черновика в формате: CRITIQUE: - [Цитата из текста] -> [Почему это плохо] -> [Как исправить] ... REFINED RESPONSE: [Тут уже сам текст]
 `,
     synthesizerInstruction: `You are the final synthesizer AI.
 
