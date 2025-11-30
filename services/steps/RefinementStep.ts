@@ -147,7 +147,24 @@ export class RefinementStep implements StepDescriptor {
       }
     });
 
-    await Promise.all(agentPromises);
+    const outcomes = await Promise.allSettled(agentPromises);
+
+    outcomes.forEach((outcome, i) => {
+      if (outcome.status === 'rejected') {
+        console.error(`Agent ${i + 1} failed refinement:`, outcome.reason);
+        const errorMessage = `\n\n[System: Agent failed to refine. ${outcome.reason instanceof Error ? outcome.reason.message : 'Unknown error'}]`;
+        
+        results[i] += errorMessage;
+        if (work.refinedResponses) work.refinedResponses[i] = results[i];
+        
+        currentAgentStates = currentAgentStates.map((a, idx) => idx === i ? { ...a, status: 'error', label: 'Refinement Failed' } : a);
+      }
+    });
+
+    if (!work.results) work.results = {};
+    work.results['refined'] = [...results];
+    onProgress('Refinement completed', currentAgentStates, { ...work });
+
     return results;
   }
 

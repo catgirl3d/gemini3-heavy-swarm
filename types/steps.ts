@@ -52,7 +52,7 @@ export interface StepDescriptor {
    * If omitted, this step cannot be regenerated individually.
    */
   regenerate?: (
-    context: StepContext, 
+    context: StepContext,
     agentIndex: number
-  ) => Promise<string>;
+  ) => Promise<any>;
 }

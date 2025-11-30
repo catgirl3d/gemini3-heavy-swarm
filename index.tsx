@@ -151,9 +151,7 @@ const App: FC = () => {
                 {msg.role === 'model' && <div className="agent-label-header"><span className="agent-label">Synthesizer Agent</span></div>}
                 {msg.image && <img src={msg.image} alt="User upload" className="message-image" />}
                 {msg.parts[0].text && (
-                  <div className="markdown-content">
-                    <MarkdownRenderer content={msg.parts[0].text} />
-                  </div>
+                  <MarkdownRenderer content={msg.parts[0].text} />
                 )}
                 {/* Ensure Work is displayed if it exists on the message */}
                 {msg.work && (

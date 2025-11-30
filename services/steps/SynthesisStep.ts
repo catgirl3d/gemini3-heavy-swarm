@@ -64,6 +64,14 @@ export class SynthesisStep implements StepDescriptor {
       if (!work.results) work.results = {};
       work.results['synthesis'] = { text: finalResponseText };
 
+      // Mark synthesizer as completed in agent states
+      currentAgentStates = currentAgentStates.map(a =>
+        a.id === 'synthesizer'
+          ? { ...a, status: 'done', label: 'Synthesized' }
+          : a
+      );
+      onProgress('Synthesis completed', currentAgentStates, work);
+
       return { text: finalResponseText };
 
     } else {
@@ -100,47 +108,66 @@ export class SynthesisStep implements StepDescriptor {
       
       const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
       
-      const stream = await ai.models.generateContentStream({
-        model: settings.model,
-        contents: [...mainChatHistory, synthesizerTurn],
-        config: {
-          systemInstruction: activeProfile.synthesizerInstruction,
-          temperature: settings.temperature ?? 0.7,
-          tools: [{googleSearch: {}}],
-          thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
-          maxOutputTokens: 65536,
-        },
-      });
+      try {
+        const stream = await ai.models.generateContentStream({
+          model: settings.model,
+          contents: [...mainChatHistory, synthesizerTurn],
+          config: {
+            systemInstruction: activeProfile.synthesizerInstruction,
+            temperature: settings.temperature ?? 0.7,
+            tools: [{googleSearch: {}}],
+            thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
+            maxOutputTokens: 65536,
+          },
+        });
 
-      let finalResponseText = '';
-      const allGroundingChunks: GroundingChunk[] = [];
-      let isFirstChunk = true;
- 
-      for await (const chunk of stream) {
-        if (signal.aborted) throw new Error('Aborted');
-        finalResponseText += chunk.text;
-        const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
-        if (groundingChunks) {
-            allGroundingChunks.push(...groundingChunks);
+        let finalResponseText = '';
+        const allGroundingChunks: GroundingChunk[] = [];
+        let isFirstChunk = true;
+  
+        for await (const chunk of stream) {
+          if (signal.aborted) throw new Error('Aborted');
+          finalResponseText += chunk.text;
+          const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+          if (groundingChunks) {
+              allGroundingChunks.push(...groundingChunks);
+          }
+          if (isFirstChunk) {
+            onMessageUpdate(finalResponseText, true);
+            isFirstChunk = false;
+          } else {
+            onMessageUpdate(finalResponseText, false);
+          }
         }
-        if (isFirstChunk) {
-          onMessageUpdate(finalResponseText, true);
-          isFirstChunk = false;
-        } else {
-          onMessageUpdate(finalResponseText, false);
-        }
+
+        const sources = allGroundingChunks
+          .map((chunk) => chunk.web)
+          .filter((web): web is { uri: string; title: string; } => !!web && !!web.uri)
+          .filter((web, index, self) => index === self.findIndex(w => w.uri === web.uri));
+
+        // Update generic results map
+        if (!work.results) work.results = {};
+        work.results['synthesis'] = { text: finalResponseText, sources };
+
+        // Mark synthesizer as completed in agent states
+        currentAgentStates = currentAgentStates.map(a =>
+          a.id === 'synthesizer'
+            ? { ...a, status: 'done', label: 'Synthesized' }
+            : a
+        );
+        onProgress('Synthesis completed', currentAgentStates, work);
+
+        return { text: finalResponseText, sources };
+      } catch (error) {
+        console.error('Synthesis failed:', error);
+        currentAgentStates = currentAgentStates.map(a => a.id === 'synthesizer' ? { ...a, status: 'error', label: 'Synthesis Failed' } : a);
+        onProgress('Synthesis failed', currentAgentStates, work);
+        throw error;
       }
-
-      const sources = allGroundingChunks
-        .map((chunk) => chunk.web)
-        .filter((web): web is { uri: string; title: string; } => !!web && !!web.uri)
-        .filter((web, index, self) => index === self.findIndex(w => w.uri === web.uri));
-
-      // Update generic results map
-      if (!work.results) work.results = {};
-      work.results['synthesis'] = { text: finalResponseText, sources };
-
-      return { text: finalResponseText, sources };
     }
+  }
+
+  async regenerate(context: StepContext): Promise<{ text: string; sources?: any[] }> {
+    return this.execute(context);
   }
 }

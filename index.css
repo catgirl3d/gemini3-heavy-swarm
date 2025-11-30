@@ -358,18 +358,21 @@ header h1 {
 .markdown-content { color: var(--model-message-text); overflow-wrap: break-word; white-space: normal; }
 .markdown-content > *:first-child { margin-top: 0; }
 .markdown-content > *:last-child { margin-bottom: 0; }
-.message p { margin: 0 0 0.8rem 0; }
-.message ul, .message ol { padding-inline-start: 1.5rem; margin-block: 1rem; }
-.message li { margin-bottom: 0.5rem; }
-.message code { font-family: var(--code-font-family); background-color: rgba(0,0,0,0.06); padding: 0.2em 0.4em; border-radius: 4px; font-size: 0.9em; color: var(--text-primary); border: 1px solid rgba(0,0,0,0.05); }
-.message.user code { background-color: rgba(255, 255, 255, 0.2); color: white; border-color: transparent; }
-.message pre { margin: 1.25rem 0; background-color: #1e293b; color: #f8fafc; border-radius: 8px; overflow-x: auto; white-space: pre; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-.message.user pre { background-color: rgba(0, 0, 0, 0.3); border-color: rgba(255,255,255,0.1); }
-.message blockquote { border-left: 4px solid var(--primary-color); padding-left: 1.25rem; margin: 1rem 0; color: var(--text-primary); font-style: italic; background: #f8fafc; padding: 0.5rem 1rem; border-radius: 0 4px 4px 0; }
-.message.user blockquote { border-left-color: rgba(255,255,255,0.5); color: rgba(255,255,255,0.9); background: rgba(0,0,0,0.1); }
-.message a { color: var(--accent-color); text-decoration: none; font-weight: 500; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
-.message a:hover { border-bottom-color: currentColor; }
-.message.user a { color: #fff; text-decoration: underline; }
+.markdown-content { line-height: 1.6; }
+.markdown-content p { margin: 0 0 0.8rem 0; }
+.markdown-content ul, .markdown-content ol { padding-inline-start: 1.25rem; margin-block: 0.5rem; }
+.markdown-content li { margin-bottom: 0.25rem; }
+.markdown-content li > p { margin-bottom: 0.25rem; }
+.markdown-content li > ul, .markdown-content li > ol { margin-block: 0.25rem; }
+.markdown-content code { font-family: var(--code-font-family); background-color: rgba(0,0,0,0.06); padding: 0.2em 0.4em; border-radius: 4px; font-size: 0.9em; color: var(--text-primary); border: 1px solid rgba(0,0,0,0.05); }
+.message.user .markdown-content code { background-color: rgba(255, 255, 255, 0.2); color: white; border-color: transparent; }
+.markdown-content pre { margin: 1.25rem 0; background-color: #1e293b; color: #f8fafc; border-radius: 8px; overflow-x: auto; white-space: pre; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+.message.user .markdown-content pre { background-color: rgba(0, 0, 0, 0.3); border-color: rgba(255,255,255,0.1); }
+.markdown-content blockquote { border-left: 4px solid var(--primary-color); padding-left: 1.25rem; margin: 1rem 0; color: var(--text-primary); font-style: italic; background: #f8fafc; padding: 0.5rem 1rem; border-radius: 0 4px 4px 0; }
+.message.user .markdown-content blockquote { border-left-color: rgba(255,255,255,0.5); color: rgba(255,255,255,0.9); background: rgba(0,0,0,0.1); }
+.markdown-content a { color: var(--accent-color); text-decoration: none; font-weight: 500; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
+.markdown-content a:hover { border-bottom-color: currentColor; }
+.message.user .markdown-content a { color: #fff; text-decoration: underline; }
 
 /* Table */
 .table-wrapper { overflow-x: auto; margin: 1.5rem 0; border: 1px solid var(--model-message-border); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
@@ -380,6 +383,7 @@ header h1 {
 .markdown-content tr:hover { background-color: #f1f5f9; }
 
 /* Code Block */
+.code {	color: white;}
 .code-block-wrapper { position: relative; margin: 1.25rem 0; background-color: #1e293b; border-radius: 8px; overflow: hidden; border: 1px solid #334155; }
 .code-block-header { display: flex; justify-content: space-between; align-items: center; background-color: #0f172a; padding: 0.5rem 1rem; color: #cbd5e1; font-size: 0.8rem; border-bottom: 1px solid #334155; }
 .code-block-header span { font-family: var(--code-font-family); font-weight: 500; text-transform: lowercase; }
@@ -417,6 +421,12 @@ header h1 {
 .work-category-title::after { content: ''; flex: 1; height: 1px; background: var(--model-message-border); }
 
 .work-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+.work-grid.single-column { grid-template-columns: 1fr; }
+.work-grid.single-column .work-card { max-height: none; }
+
+.work-grid > .work-card:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
 .work-card { 
   background-color: #fff; 
   border: 1px solid var(--model-message-border); 
@@ -432,16 +442,69 @@ header h1 {
 }
 .work-card:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
 .work-card.refined { border-color: #bfdbfe; }
+.work-card.synthesizer { border-color: #bbf7d0; }
+.work-card.error { border-color: #fecaca; }
 
 .work-card-header { font-weight: 600; padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--model-message-border); color: var(--text-primary); background-color: #f8fafc; font-size: 0.9rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
 .work-card.refined .work-card-header { background-color: #eff6ff; color: #1e3a8a; border-bottom-color: #bfdbfe; }
+.work-card.synthesizer .work-card-header { background-color: #f0fdf4; color: #14532d; border-bottom-color: #bbf7d0; }
+.work-card.error .work-card-header { background-color: #fef2f2; color: #991b1b; border-bottom-color: #fecaca; }
+
+.work-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.work-card-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.work-card-status {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+  margin-top: 0.2rem;
+}
+
+.work-card-status.error {
+  color: #991b1b;
+}
+
+.work-card-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.work-card-retry-btn.error {
+  color: #ef4444;
+}
+
+.synthesis-error-msg {
+  color: #991b1b;
+}
+
+.collapse-work-button {
+  margin-top: 1rem;
+}
+
+.collapse-arrow {
+  transform: rotate(180deg);
+}
 
 .work-card-icon { width: 24px; height: 24px; background: #cbd5e1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; transition: all 0.3s; flex-shrink: 0; }
 .work-card-icon.working { background: var(--text-primary); }
 .work-card-icon.done { background: #16a34a; }
+.work-card-icon.error { background: #ef4444; }
 .work-card.refined .work-card-icon { background: #3b82f6; }
 .work-card.refined .work-card-icon.working { background: var(--text-primary); }
 .work-card.refined .work-card-icon.done { background: #16a34a; }
+.work-card.refined .work-card-icon.error { background: #ef4444; }
+.work-card.synthesizer .work-card-icon { background: #22c55e; }
+.work-card.synthesizer .work-card-icon.working { background: var(--text-primary); }
+.work-card.synthesizer .work-card-icon.done { background: #16a34a; }
+.work-card.synthesizer .work-card-icon.error { background: #ef4444; }
 
 .work-card-icon svg { width: 14px; height: 14px; }
 .work-card-icon .spinner { animation: spin 1s linear infinite; }
@@ -453,8 +516,7 @@ header h1 {
   to { transform: rotate(360deg); }
 }
 
-.work-card-body { padding: 0rem 1.25rem; font-size: 0.9rem; color: var(--text-primary); line-height: 1.6; overflow-y: auto; background-color: #fff; }
-.work-card-body p { margin-bottom: 0.8em; }
+.work-card-body { padding: 1rem 1.25rem; font-size: 0.9rem; color: var(--text-primary); overflow-y: auto; background-color: #fff; }
 
 /* Sources */
 .sources-container { margin-top: 2rem; border-top: 1px solid var(--model-message-border); padding-top: 1.25rem; }
@@ -945,6 +1007,8 @@ margin: 0px;
 }
 .refined .expand-work-button { color: #93c5fd; }
 .refined .expand-work-button:hover { background-color: rgba(59, 130, 246, 0.1); color: #1e40af; }
+.synthesizer .expand-work-button { color: #86efac; }
+.synthesizer .expand-work-button:hover { background-color: rgba(34, 197, 94, 0.1); color: #15803d; }
 
 .expand-work-button svg { width: 18px; height: 18px; }
 

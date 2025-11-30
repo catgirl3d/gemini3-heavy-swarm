@@ -65,6 +65,6 @@ export interface Message {
 export interface AgentState {
   id: string;
   name: string;
-  status: 'waiting' | 'working' | 'done';
+  status: 'waiting' | 'working' | 'done' | 'error';
   label: string;
 }

@@ -148,7 +148,24 @@ export class InitialStep implements StepDescriptor {
       }
     });
 
-    await Promise.all(agentPromises);
+    const outcomes = await Promise.allSettled(agentPromises);
+
+    outcomes.forEach((outcome, i) => {
+      if (outcome.status === 'rejected') {
+        console.error(`Agent ${i + 1} failed:`, outcome.reason);
+        const errorMessage = `\n\n[System: Agent failed to complete. ${outcome.reason instanceof Error ? outcome.reason.message : 'Unknown error'}]`;
+        
+        results[i] += errorMessage;
+        if (work.initialResponses) work.initialResponses[i] = results[i];
+        
+        currentAgentStates = currentAgentStates.map((a, idx) => idx === i ? { ...a, status: 'error', label: 'Draft Failed' } : a);
+      }
+    });
+
+    if (!work.results) work.results = {};
+    work.results['initial'] = [...results];
+    onProgress('Agents completed', currentAgentStates, { ...work });
+
     return results;
   }
 

@@ -249,13 +249,28 @@ export const useGeminiSwarm = () => {
 
     // Helper to keep agent status in sync across: live state, current work, and stored message work
     const updateAgentStatus = (status: AgentState['status'], label: string) => {
+        const updateStates = (states: AgentState[] | undefined): AgentState[] | undefined => {
+            if (!states) return states;
+            const copy = [...states];
+
+            if (stepId === 'synthesis') {
+                const synthIndex = copy.findIndex(a => a.id === 'synthesizer');
+                if (synthIndex >= 0) {
+                    copy[synthIndex] = { ...copy[synthIndex], status, label };
+                }
+            } else {
+                if (copy[agentIndex]) {
+                    copy[agentIndex] = { ...copy[agentIndex], status, label };
+                }
+            }
+
+            return copy;
+        };
+
         // Update top-level agentStates used by the loader
         setAgentStates(prev => {
-            const newStates = [...prev];
-            if (newStates[agentIndex]) {
-                newStates[agentIndex] = { ...newStates[agentIndex], status, label };
-            }
-            return newStates;
+            const updated = updateStates(prev);
+            return updated ?? prev;
         });
 
         // Update the stored work attached to the specific message (for history view)
@@ -263,10 +278,9 @@ export const useGeminiSwarm = () => {
             const newMessages = [...prev];
             const msg = newMessages[messageIndex];
             if (msg && msg.work && msg.work.agentStates) {
-                const agentStatesCopy = [...msg.work.agentStates];
-                if (agentStatesCopy[agentIndex]) {
-                    agentStatesCopy[agentIndex] = { ...agentStatesCopy[agentIndex], status, label };
-                    msg.work = { ...msg.work, agentStates: agentStatesCopy };
+                const updated = updateStates(msg.work.agentStates);
+                if (updated) {
+                    msg.work = { ...msg.work, agentStates: updated };
                 }
             }
             return newMessages;
@@ -275,12 +289,8 @@ export const useGeminiSwarm = () => {
         // Update the live currentWork used in the "Show Agent Work (Live)" section
         setCurrentWork(prev => {
             if (!prev || !prev.agentStates) return prev;
-            const agentStatesCopy = [...prev.agentStates];
-            if (agentStatesCopy[agentIndex]) {
-                agentStatesCopy[agentIndex] = { ...agentStatesCopy[agentIndex], status, label };
-                return { ...prev, agentStates: agentStatesCopy };
-            }
-            return prev;
+            const updated = updateStates(prev.agentStates);
+            return updated ? { ...prev, agentStates: updated } : prev;
         });
     };
 
@@ -293,7 +303,10 @@ export const useGeminiSwarm = () => {
 
     try {
         // Set status to working while regeneration is in progress
-        updateAgentStatus('working', 'Regenerating...');
+        const regenLabel = stepId === 'initial' ? 'Regenerating Draft...' :
+                          stepId === 'refined' ? 'Regenerating Critique...' :
+                          stepId === 'synthesis' ? 'Regenerating Synthesis...' : 'Regenerating...';
+        updateAgentStatus('working', regenLabel);
 
         // We need the history up to this point
         const history = messages.slice(0, messageIndex);
@@ -308,18 +321,80 @@ export const useGeminiSwarm = () => {
             stepId,
             workContext,
             (text) => {
-                // Update Messages if work is attached
+                // Update Messages (both visible text and attached work, if present)
                 setMessages(prev => {
                     const newMessages = [...prev];
                     const msg = newMessages[messageIndex];
-                    if (msg && msg.work) {
-                        const newWork = { ...msg.work };
-                        
-                        // Update generic results
-                        if (!newWork.results) newWork.results = {};
+
+                    if (msg) {
+                        // For synthesis: update the final answer in the message card itself
+                        if (stepId === 'synthesis') {
+                            if (msg.role === 'model') {
+                                if (msg.parts && msg.parts.length > 0) {
+                                    msg.parts[0] = { ...msg.parts[0], text };
+                                } else {
+                                    msg.parts = [{ text }];
+                                }
+                            }
+                        }
+
+                        if (msg.work) {
+                            const newWork = { ...msg.work };
+                            
+                            // Update generic results
+                            if (!newWork.results) newWork.results = {};
+
+                            if (stepId === 'synthesis') {
+                                // Single synthesized result (object with text/sources), not per-agent array
+                                const existing = newWork.results[stepId];
+                                const base =
+                                    existing && typeof existing === 'object'
+                                        ? existing
+                                        : {};
+                                newWork.results[stepId] = { ...base, text };
+                            } else {
+                                if (!newWork.results[stepId]) newWork.results[stepId] = [];
+                                
+                                // Ensure array exists and update it
+                                const currentResults = [...(newWork.results[stepId] as string[])];
+                                currentResults[agentIndex] = text;
+                                newWork.results[stepId] = currentResults;
+
+                                // Update legacy fields for compatibility
+                                if (stepId === 'initial') {
+                                    newWork.initialResponses = [...newWork.initialResponses];
+                                    newWork.initialResponses[agentIndex] = text;
+                                } else if (stepId === 'refined') {
+                                    newWork.refinedResponses = [...newWork.refinedResponses];
+                                    newWork.refinedResponses[agentIndex] = text;
+                                }
+                            }
+                            
+                            msg.work = newWork;
+                        }
+                    }
+
+                    return newMessages;
+                });
+
+                // Update Current Work (for live view)
+                setCurrentWork(prev => {
+                    if (!prev) return prev;
+                    const newWork = { ...prev };
+                    
+                    // Update generic results
+                    if (!newWork.results) newWork.results = {};
+
+                    if (stepId === 'synthesis') {
+                        const existing = newWork.results[stepId];
+                        const base =
+                            existing && typeof existing === 'object'
+                                ? existing
+                                : {};
+                        newWork.results[stepId] = { ...base, text };
+                    } else {
                         if (!newWork.results[stepId]) newWork.results[stepId] = [];
                         
-                        // Ensure array exists and update it
                         const currentResults = [...(newWork.results[stepId] as string[])];
                         currentResults[agentIndex] = text;
                         newWork.results[stepId] = currentResults;
@@ -332,32 +407,6 @@ export const useGeminiSwarm = () => {
                             newWork.refinedResponses = [...newWork.refinedResponses];
                             newWork.refinedResponses[agentIndex] = text;
                         }
-                        
-                        msg.work = newWork;
-                    }
-                    return newMessages;
-                });
-
-                // Update Current Work (for live view)
-                setCurrentWork(prev => {
-                    if (!prev) return prev;
-                    const newWork = { ...prev };
-                    
-                    // Update generic results
-                    if (!newWork.results) newWork.results = {};
-                    if (!newWork.results[stepId]) newWork.results[stepId] = [];
-                    
-                    const currentResults = [...(newWork.results[stepId] as string[])];
-                    currentResults[agentIndex] = text;
-                    newWork.results[stepId] = currentResults;
-
-                    // Update legacy fields for compatibility
-                    if (stepId === 'initial') {
-                        newWork.initialResponses = [...newWork.initialResponses];
-                        newWork.initialResponses[agentIndex] = text;
-                    } else if (stepId === 'refined') {
-                        newWork.refinedResponses = [...newWork.refinedResponses];
-                        newWork.refinedResponses[agentIndex] = text;
                     }
                     return newWork;
                 });
@@ -370,7 +419,10 @@ export const useGeminiSwarm = () => {
     } finally {
         regenerateAbortControllerRef.current = null;
         // Mark agent as done once regeneration finishes
-        updateAgentStatus('done', 'Regenerated');
+        const doneLabel = stepId === 'initial' ? 'Draft Regenerated' :
+                         stepId === 'refined' ? 'Critique Regenerated' :
+                         stepId === 'synthesis' ? 'Synthesis Regenerated' : 'Regenerated';
+        updateAgentStatus('done', doneLabel);
     }
   };
 
