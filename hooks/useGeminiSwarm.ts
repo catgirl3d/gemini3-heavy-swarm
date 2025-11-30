@@ -130,7 +130,9 @@ export const useGeminiSwarm = () => {
 
     // This will always hold the latest snapshot of agent states
     let latestAgents: AgentState[] = [];
-
+    // This will always hold the latest snapshot of work (including results/debugInfo/etc.)
+    let latestWork: Work | undefined;
+    
     // Create new AbortController
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -147,11 +149,12 @@ export const useGeminiSwarm = () => {
         imageFile,
         currentMessages,
         (status, agents, work, isPaused) => {
-          // keep an up-to-date copy for attaching to the final message
+          // keep an up-to-date copy for attaching to the final message or error state
           latestAgents = agents;
+          latestWork = { ...work, agentStates: agents };
           setLoadingStatus(status);
           setAgentStates(agents);
-          setCurrentWork({ ...work, agentStates: agents });
+          setCurrentWork(latestWork);
           if (isPaused !== undefined) {
             setIsPaused(isPaused);
           }
@@ -198,6 +201,17 @@ export const useGeminiSwarm = () => {
 
       console.error('Error in agentic workflow:', error);
       setIsLoading(false);
+      
+      // Preserve the latest work snapshot on error so user can see partial results and retry
+      if (latestWork) {
+          setMessages(prev => {
+              const newMessages = [...prev];
+              const lastMessage = newMessages[newMessages.length - 1];
+              lastMessage.work = latestWork;
+              return newMessages;
+          });
+      }
+      
       setCurrentWork(undefined);
       
       let errorMessage = 'An unexpected error occurred.';

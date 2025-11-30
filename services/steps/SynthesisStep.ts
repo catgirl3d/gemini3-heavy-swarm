@@ -101,7 +101,7 @@ ${agentDrafts}
 <instruction>
 As defined in <mission> synthesize the best single, final answer from <agent_drafts> to address <original_query>.
 1. Resolve any contradictions.
-2. Combine the best insights.
+2. [CRITICAL] Combine the best insights.
 3. Structure the response clearly.
 4. [CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!
 </instruction>`;
