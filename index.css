@@ -364,7 +364,7 @@ header h1 {
 .markdown-content li { margin-bottom: 0.25rem; }
 .markdown-content li > p { margin-bottom: 0.25rem; }
 .markdown-content li > ul, .markdown-content li > ol { margin-block: 0.25rem; }
-.markdown-content code { font-family: var(--code-font-family); background-color: rgba(0,0,0,0.06); padding: 0.2em 0.4em; border-radius: 4px; font-size: 0.9em; color: var(--text-primary); border: 1px solid rgba(0,0,0,0.05); }
+.markdown-content code { font-family: var(--code-font-family); background-color: rgba(0,0,0,0.06); padding: 0.2em 0.4em; border-radius: 4px; font-size: 0.9em; color: white; border: 1px solid rgba(0,0,0,0.05); }
 .message.user .markdown-content code { background-color: rgba(255, 255, 255, 0.2); color: white; border-color: transparent; }
 .markdown-content pre { margin: 1.25rem 0; background-color: #1e293b; color: #f8fafc; border-radius: 8px; overflow-x: auto; white-space: pre; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
 .message.user .markdown-content pre { background-color: rgba(0, 0, 0, 0.3); border-color: rgba(255,255,255,0.1); }
@@ -638,6 +638,77 @@ header h1 {
 }
 
 .close-modal-button svg { width: 24px; height: 24px; }
+.debug-view-toggle {
+    display: flex;
+    background: #e2e8f0;
+    padding: 2px;
+    border-radius: 6px;
+    gap: 2px;
+}
+
+.debug-view-toggle .toggle-btn {
+    background: transparent;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.debug-view-toggle .toggle-btn.active {
+    background: white;
+    color: var(--text-primary);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.raw-debug-container {
+    position: relative;
+}
+
+.copy-raw-button {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #e2e8f0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s;
+    font-weight: 500;
+    z-index: 5;
+}
+
+.copy-raw-button:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.copy-raw-button svg {
+    width: 14px;
+    height: 14px;
+}
+
+.raw-debug-view {
+    background-color: #1e293b;
+    color: #e2e8f0;
+    padding: 1rem;
+    padding-top: 2.5rem; /* Space for copy button */
+    border-radius: 8px;
+    font-family: var(--code-font-family);
+    font-size: 0.85rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
 
 .work-modal-body, .settings-modal-body {
   flex-grow: 1;

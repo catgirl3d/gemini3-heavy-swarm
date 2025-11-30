@@ -104,19 +104,53 @@ export class RefinementStep implements StepDescriptor {
         // PROD MODE
         if (!ai) throw new Error("API Key not found");
 
-        const otherAnswers = initialResponses.filter((_: string, i: number) => i !== index);
-        const otherAnswersText = otherAnswers.map((answer: string, i: number) => `${i + 1}. "${answer}"`).join('\n');
-        const refinementContext = `My initial response was: "${initialAnswer}". The other agents responded with:\n${otherAnswersText}\n\nBased on this context, critically re-evaluate and provide a new, improved response to the original query.`;
+        const peerDrafts = initialResponses
+          .map((text: string, i: number) => ({ text, id: i + 1 }))
+          .filter((_: any, i: number) => i !== index)
+          .map((a: any) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
+          .join('\n\n');
+
+        const refinementContext = `
+# INPUT DATA
+<context_data>
+<original_query>
+${userInput || "(See attached image/content)"}
+</original_query>
+
+<my_draft>
+${initialAnswer}
+</my_draft>
+
+<peer_drafts>
+${peerDrafts}
+</peer_drafts>
+</context_data>
+
+# YOUR TASK
+<instruction>
+As defined in <mission> critically re-evaluate <my_draft> considering insights from <peer_drafts>.
+Provide a new, improved response to <original_query>.
+</instruction>`;
         
         const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
         
         const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
+        const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.refinementInstruction}</mission>\n</system_instruction>`;
+
+        // Capture debug info
+        if (!work.debugInfo) work.debugInfo = {};
+        if (!work.debugInfo['refined']) work.debugInfo['refined'] = [];
+        work.debugInfo['refined'][index] = {
+            systemInstruction,
+            history: mainChatHistory,
+            userTurn: refinementTurn
+        };
 
         const stream = await ai.models.generateContentStream({
           model: settings.model,
           contents: [...mainChatHistory, refinementTurn],
           config: {
-            systemInstruction: activeProfile.refinementInstruction,
+            systemInstruction,
             temperature: settings.temperature ?? 0.7,
             tools: [{googleSearch: {}}],
             thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
@@ -205,19 +239,53 @@ export class RefinementStep implements StepDescriptor {
     }
 
     const initialAnswer = initialResponses[agentIndex];
-    const otherAnswers = initialResponses.filter((_: string, i: number) => i !== agentIndex);
-    const otherAnswersText = otherAnswers.map((answer: string, i: number) => `${i + 1}. "${answer}"`).join('\n');
-    const refinementContext = `My initial response was: "${initialAnswer}". The other agents responded with:\n${otherAnswersText}\n\nBased on this context, critically re-evaluate and provide a new, improved response to the original query.`;
+    const peerDrafts = initialResponses
+      .map((text: string, i: number) => ({ text, id: i + 1 }))
+      .filter((_: any, i: number) => i !== agentIndex)
+      .map((a: any) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
+      .join('\n\n');
+
+    const refinementContext = `
+# INPUT DATA
+<context_data>
+<original_query>
+${userInput || "(See attached image/content)"}
+</original_query>
+
+<my_draft>
+${initialAnswer}
+</my_draft>
+
+<peer_drafts>
+${peerDrafts}
+</peer_drafts>
+</context_data>
+
+# YOUR TASK
+<instruction>
+Critically re-evaluate <my_draft> considering insights from <peer_drafts>.
+Provide a new, improved response to <original_query>.
+</instruction>`;
     
     const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
     
     const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
+    const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.refinementInstruction}</mission>\n</system_instruction>`;
+
+    // Capture debug info for regeneration
+    if (context.work.debugInfo && context.work.debugInfo['refined']) {
+        context.work.debugInfo['refined'][agentIndex] = {
+            systemInstruction: activeProfile.refinementInstruction,
+            history: mainChatHistory,
+            userTurn: refinementTurn
+        };
+    }
 
     const stream = await ai.models.generateContentStream({
       model: settings.model,
       contents: [...mainChatHistory, refinementTurn],
       config: {
-        systemInstruction: activeProfile.refinementInstruction,
+        systemInstruction,
         temperature: settings.temperature ?? 0.7,
         tools: [{googleSearch: {}}],
         thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },

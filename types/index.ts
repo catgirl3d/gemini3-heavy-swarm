@@ -52,6 +52,7 @@ export interface Work {
 
   agentNames?: string[];
   agentStates?: AgentState[];
+  debugInfo?: Record<string, any>;
 }
 
 export interface Message {

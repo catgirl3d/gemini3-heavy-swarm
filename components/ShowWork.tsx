@@ -36,6 +36,113 @@ const WorkModal: FC<{ title: string; content: string; onClose: () => void }> = (
   );
 };
 
+const DebugModal: FC<{ title: string; debugInfo: any; onClose: () => void }> = ({ title, debugInfo, onClose }) => {
+    const [viewMode, setViewMode] = useState<'formatted' | 'raw'>('formatted');
+
+    useEffect(() => {
+        const handleEsc = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleEsc);
+        document.body.style.overflow = 'hidden';
+        return () => {
+            window.removeEventListener('keydown', handleEsc);
+            document.body.style.overflow = 'unset';
+        };
+    }, [onClose]);
+
+    const formatDebugInfo = (info: any) => {
+        if (!info) return "No debug info available.";
+        
+        let output = "";
+        
+        if (info.systemInstruction) {
+            output += `### System Instruction\n\n\`\`\`xml\n${info.systemInstruction.trim()}\n\`\`\`\n\n`;
+        }
+
+        if (info.history && Array.isArray(info.history)) {
+            output += `### Chat History\n\n`;
+            info.history.forEach((msg: any, i: number) => {
+                output += `#### ${msg.role}\n`;
+                if (msg.parts) {
+                    msg.parts.forEach((part: any) => {
+                        if (part.text) output += `\`\`\`\n${part.text.trim()}\n\`\`\`\n\n`;
+                        if (part.inlineData) output += `*[Image Data]*\n\n`;
+                    });
+                }
+            });
+        }
+
+        if (info.userTurn) {
+            output += `### Current Turn\n\n`;
+            output += `#### ${info.userTurn.role}\n`;
+             if (info.userTurn.parts) {
+                info.userTurn.parts.forEach((part: any) => {
+                    if (part.text) output += `\`\`\`xml\n${part.text.trim()}\n\`\`\`\n\n`;
+                    if (part.inlineData) output += `*[Image Data]*\n\n`;
+                });
+            }
+        }
+
+        return output;
+    };
+
+    return createPortal(
+        <div className="work-modal-overlay" onClick={onClose}>
+            <div className="work-modal" onClick={e => e.stopPropagation()}>
+                <div className="work-modal-header">
+                    <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
+                        <h3>{title}</h3>
+                        <div className="debug-view-toggle">
+                            <button
+                                className={`toggle-btn ${viewMode === 'formatted' ? 'active' : ''}`}
+                                onClick={() => setViewMode('formatted')}
+                            >
+                                Formatted
+                            </button>
+                            <button
+                                className={`toggle-btn ${viewMode === 'raw' ? 'active' : ''}`}
+                                onClick={() => setViewMode('raw')}
+                            >
+                                Raw JSON
+                            </button>
+                        </div>
+                    </div>
+                    <button className="close-modal-button" onClick={onClose} aria-label="Close">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div className="work-modal-body">
+                    {viewMode === 'formatted' ? (
+                        <MarkdownRenderer content={formatDebugInfo(debugInfo)} />
+                    ) : (
+                        <div className="raw-debug-container">
+                            <button
+                                className="copy-raw-button"
+                                onClick={() => {
+                                    navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2));
+                                }}
+                                title="Copy Raw JSON"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                                </svg>
+                                Copy
+                            </button>
+                            <pre className="raw-debug-view">
+                                {JSON.stringify(debugInfo, null, 2)}
+                            </pre>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
 export const ShowWork: FC<{
   work: Work,
   isLive?: boolean,
@@ -43,7 +150,18 @@ export const ShowWork: FC<{
   onRegenerate?: (stepId: string, agentIndex: number) => void
 }> = ({ work, isLive = false, liveAgentStates, onRegenerate }) => {
   const [modalData, setModalData] = useState<{title: string, content: string} | null>(null);
+  const [debugModalData, setDebugModalData] = useState<{title: string, debugInfo: any} | null>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
+
+  const downloadContent = (filename: string, content: string) => {
+    const element = document.createElement('a');
+    const file = new Blob([content], {type: 'text/markdown'});
+    element.href = URL.createObjectURL(file);
+    element.download = filename;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
 
   // Determine if refinement has started by checking if any refined response is not null
   const isRefinementStarted = work.refinedResponses.some(r => r !== null);
@@ -134,6 +252,21 @@ export const ShowWork: FC<{
                     </div>
                     {resp && (
                         <div className="work-card-actions">
+                            {work.debugInfo?.['initial']?.[i] && (
+                                <button
+                                    className="expand-work-button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setDebugModalData({ title: `Agent ${i + 1} - Initial Draft Debug Info`, debugInfo: work.debugInfo?.['initial']?.[i] });
+                                    }}
+                                    title="Debug Info"
+                                    aria-label="Debug Info"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/>
+                                    </svg>
+                                </button>
+                            )}
                             {onRegenerate && (
                                 <button
                                     className="expand-work-button"
@@ -149,6 +282,19 @@ export const ShowWork: FC<{
                                     </svg>
                                 </button>
                             )}
+                            <button
+                                className="expand-work-button"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    downloadContent(`Agent-${i + 1}-Initial_Draft.md`, resp);
+                                }}
+                                title="Download Response"
+                                aria-label="Download Response"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
+                                </svg>
+                            </button>
                             <button
                                 className="expand-work-button"
                                 onClick={(e) => {
@@ -235,6 +381,21 @@ export const ShowWork: FC<{
                     </div>
                     {resp && (
                         <div className="work-card-actions">
+                            {work.debugInfo?.['refined']?.[i] && (
+                                <button
+                                    className="expand-work-button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setDebugModalData({ title: `Agent ${i + 1} - Refinement Debug Info`, debugInfo: work.debugInfo?.['refined']?.[i] });
+                                    }}
+                                    title="Debug Info"
+                                    aria-label="Debug Info"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/>
+                                    </svg>
+                                </button>
+                            )}
                             {onRegenerate && (
                                 <button
                                     className="expand-work-button"
@@ -250,6 +411,19 @@ export const ShowWork: FC<{
                                     </svg>
                                 </button>
                             )}
+                            <button
+                                className="expand-work-button"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    downloadContent(`Agent-${i + 1}-Refined_Response.md`, resp);
+                                }}
+                                title="Download Response"
+                                aria-label="Download Response"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
+                                </svg>
+                            </button>
                             <button
                                 className="expand-work-button"
                                 onClick={(e) => {
@@ -302,21 +476,53 @@ export const ShowWork: FC<{
                                 </span>
                             </div>
                         </div>
-                        {onRegenerate && (
-                            <button
-                                className={`expand-work-button work-card-retry-btn ${synthesizerState.status === 'error' ? 'error' : ''}`}
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    onRegenerate('synthesis', 0);
-                                }}
-                                title={synthesizerState.status === 'error' ? 'Retry Synthesis' : 'Regenerate Synthesis'}
-                                aria-label={synthesizerState.status === 'error' ? 'Retry Synthesis' : 'Regenerate Synthesis'}
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                                </svg>
-                            </button>
-                        )}
+                        <div className="work-card-actions">
+                            {work.debugInfo?.['synthesis'] && (
+                                <button
+                                    className="expand-work-button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setDebugModalData({ title: `Synthesizer - Debug Info`, debugInfo: work.debugInfo?.['synthesis'] });
+                                    }}
+                                    title="Debug Info"
+                                    aria-label="Debug Info"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/>
+                                    </svg>
+                                </button>
+                            )}
+                            {onRegenerate && (
+                                <button
+                                    className={`expand-work-button work-card-retry-btn ${synthesizerState.status === 'error' ? 'error' : ''}`}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        onRegenerate('synthesis', 0);
+                                    }}
+                                    title={synthesizerState.status === 'error' ? 'Retry Synthesis' : 'Regenerate Synthesis'}
+                                    aria-label={synthesizerState.status === 'error' ? 'Retry Synthesis' : 'Regenerate Synthesis'}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                                    </svg>
+                                </button>
+                            )}
+                            {synthesisText && (
+                                <button
+                                    className="expand-work-button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        downloadContent('Synthesis_Report.md', synthesisText);
+                                    }}
+                                    title="Download Synthesis"
+                                    aria-label="Download Synthesis"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
+                                    </svg>
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <div className="work-card-body">
                         {synthesizerState.status === 'error' ? (
@@ -347,6 +553,7 @@ export const ShowWork: FC<{
       </div>
     </details>
     {modalData && <WorkModal title={modalData.title} content={modalData.content} onClose={() => setModalData(null)} />}
+    {debugModalData && <DebugModal title={debugModalData.title} debugInfo={debugModalData.debugInfo} onClose={() => setDebugModalData(null)} />}
     </>
   );
 };

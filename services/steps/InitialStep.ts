@@ -100,18 +100,28 @@ export class InitialStep implements StepDescriptor {
         if (!ai) throw new Error("API Key not found");
 
         const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
-        let systemInstruction = activeProfile.initialInstruction;
+        let systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.initialInstruction}</mission>`;
         let userTurn = currentUserTurn;
 
         if (settings.dynamicAgentRoles) {
           const perspective = getAgentPerspective(i, settings);
-          systemInstruction += "\n\n" + perspective.instruction;
-          const roleReminder = `\n\n[SYSTEM NOTE: Remember your assigned role: ${perspective.name}]`;
+          systemInstruction += `\n<role>${perspective.name}</role>\n<role_instruction>${perspective.instruction}</role_instruction>`;
+          const roleReminder = `\n\n<system_note>\nRemember your assigned role: ${perspective.name}\n</system_note>`;
           userTurn = {
             role: 'user',
             parts: [...currentUserTurn.parts, { text: roleReminder }]
           };
         }
+        systemInstruction += `\n</system_instruction>`;
+
+        // Capture debug info
+        if (!work.debugInfo) work.debugInfo = {};
+        if (!work.debugInfo['initial']) work.debugInfo['initial'] = [];
+        work.debugInfo['initial'][i] = {
+            systemInstruction,
+            history: mainChatHistory,
+            userTurn
+        };
 
         const stream = await ai.models.generateContentStream({
           model: settings.model,
@@ -200,17 +210,27 @@ export class InitialStep implements StepDescriptor {
     }
 
     const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
-    let systemInstruction = activeProfile.initialInstruction;
+    let systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.initialInstruction}</mission>`;
     let userTurn: Content = { role: 'user', parts: baseApiParts };
 
     if (settings.dynamicAgentRoles) {
       const perspective = getAgentPerspective(agentIndex, settings);
-      systemInstruction += "\n\n" + perspective.instruction;
-      const roleReminder = `\n\n[SYSTEM NOTE: Remember your assigned role: ${perspective.name}]`;
+      systemInstruction += `\n<role>${perspective.name}</role>\n<role_instruction>${perspective.instruction}</role_instruction>`;
+      const roleReminder = `\n\n<system_note>\nRemember your assigned role: ${perspective.name}\n</system_note>`;
       userTurn = {
         role: 'user',
         parts: [...baseApiParts, { text: roleReminder }]
       };
+    }
+    systemInstruction += `\n</system_instruction>`;
+
+    // Capture debug info for regeneration
+    if (context.work.debugInfo && context.work.debugInfo['initial']) {
+        context.work.debugInfo['initial'][agentIndex] = {
+            systemInstruction,
+            history: mainChatHistory,
+            userTurn
+        };
     }
 
     const stream = await ai.models.generateContentStream({

@@ -103,17 +103,50 @@ export class SynthesisStep implements StepDescriptor {
         baseApiParts.push({ text: userInput });
       }
 
-      const synthesizerContext = `Here are the ${settings.numAgents} refined responses to the user's query. Your task is to synthesize them into the best single, final answer. \n\n${refinedResponses.map((answer: string, i: number) => `Refined Response ${i + 1}:\n"${answer}"`).join('\n\n')}`;
+      const agentDrafts = refinedResponses
+        .map((answer: string, i: number) => `    <draft id="agent_${i + 1}">\n${answer}\n    </draft>`)
+        .join('\n\n');
+
+      const synthesizerContext = `
+# INPUT DATA
+<context_data>
+<original_query>
+${userInput || "(See attached image/content)"}
+</original_query>
+
+<agent_drafts>
+${agentDrafts}
+</agent_drafts>
+</context_data>
+
+# YOUR TASK
+<instruction>
+As defined in <mission> synthesize the best single, final answer from <agent_drafts> to address <original_query>.
+1. Resolve any contradictions.
+2. Combine the best insights.
+3. Structure the response clearly.
+4. [CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!
+</instruction>`;
+
       const synthesizerTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}`}] };
       
       const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
+      const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.synthesizerInstruction}</mission>\n</system_instruction>`;
       
       try {
+        // Capture debug info
+        if (!work.debugInfo) work.debugInfo = {};
+        work.debugInfo['synthesis'] = {
+            systemInstruction,
+            history: mainChatHistory,
+            userTurn: synthesizerTurn
+        };
+
         const stream = await ai.models.generateContentStream({
           model: settings.model,
           contents: [...mainChatHistory, synthesizerTurn],
           config: {
-            systemInstruction: activeProfile.synthesizerInstruction,
+            systemInstruction,
             temperature: settings.temperature ?? 0.7,
             tools: [{googleSearch: {}}],
             thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
