@@ -1,6 +1,7 @@
 import { GoogleGenAI, Content, Part, GroundingChunk } from '@google/genai';
 import { StepDescriptor, StepContext } from '../../types/steps';
 import { AppSettings, AgentState } from '../../types';
+import { prepareGeminiContent } from '../contentUtils';
 
 const getAgentPerspective = (index: number, settings: AppSettings): { name: string, instruction: string } => {
   const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0];
@@ -78,30 +79,7 @@ export class SynthesisStep implements StepDescriptor {
       // PROD MODE
       if (!ai) throw new Error("API Key not found");
 
-      const mainChatHistory: Content[] = history.map(msg => ({
-        role: msg.role,
-        parts: msg.parts,
-      }));
-
-      const baseApiParts: Part[] = [];
-      if (image) {
-        let mimeType = 'image/jpeg';
-        if (imageFile) {
-          mimeType = imageFile.type;
-        } else {
-          const match = image.match(/^data:([^;]+);base64,/);
-          if (match) mimeType = match[1];
-        }
-        baseApiParts.push({
-          inlineData: {
-            mimeType: mimeType,
-            data: image.split(',')[1],
-          },
-        });
-      }
-      if (userInput.trim()) {
-        baseApiParts.push({ text: userInput });
-      }
+      const { history: mainChatHistory, baseApiParts } = prepareGeminiContent(history, userInput, image, imageFile);
 
       const agentDrafts = refinedResponses
         .map((answer: string, i: number) => `    <draft id="agent_${i + 1}">\n${answer}\n    </draft>`)
