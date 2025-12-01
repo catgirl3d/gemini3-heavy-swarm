@@ -25,9 +25,12 @@ export class InitialStep implements StepDescriptor {
 
     // Initialize results array
     const results: string[] = Array(settings.numAgents).fill('');
+    const thoughts: string[] = Array(settings.numAgents).fill('');
     
     // Initialize legacy field if needed
     if (!work.initialResponses) work.initialResponses = Array(settings.numAgents).fill(null);
+    if (!work.initialThoughts) work.initialThoughts = Array(settings.numAgents).fill(null);
+    if (!work.initialTokenUsage) work.initialTokenUsage = Array(settings.numAgents).fill(null);
 
     // Initialize agent states
     let currentAgentStates: AgentState[] = Array.from({ length: settings.numAgents }, (_, i) => {
@@ -117,14 +120,38 @@ export class InitialStep implements StepDescriptor {
         });
 
         let fullText = '';
+        let fullThought = '';
         for await (const chunk of stream) {
           if (signal.aborted) throw new Error('Aborted');
-          const text = chunk.text || '';
-          fullText += text;
+          
+          if (chunk.candidates?.[0]?.content?.parts) {
+            for (const part of chunk.candidates[0].content.parts) {
+              const p = part as any;
+              // If it's a thought, capture it and DO NOT add to fullText
+              if (p.thought) {
+                if (part.text) {
+                  fullThought += part.text;
+                }
+              } else if (part.text) {
+                // Only add to fullText if it's NOT a thought
+                fullText += part.text;
+              }
+            }
+          }
           
           // Update both new and legacy storage
           results[i] = fullText;
+          thoughts[i] = fullThought;
           work.initialResponses[i] = fullText;
+          if (work.initialThoughts) work.initialThoughts[i] = fullThought;
+
+          if (chunk.usageMetadata && work.initialTokenUsage) {
+            work.initialTokenUsage[i] = {
+              promptTokens: chunk.usageMetadata.promptTokenCount || 0,
+              candidatesTokens: chunk.usageMetadata.candidatesTokenCount || 0,
+              totalTokens: chunk.usageMetadata.totalTokenCount || 0
+            };
+          }
           
           // Update generic results map
           if (!work.results) work.results = {};
@@ -202,10 +229,38 @@ export class InitialStep implements StepDescriptor {
     });
 
     let fullText = '';
+    let fullThought = '';
+    
     for await (const chunk of stream) {
       if (signal.aborted) throw new Error('Aborted');
-      const text = chunk.text || '';
-      fullText += text;
+      
+      if (chunk.candidates?.[0]?.content?.parts) {
+        for (const part of chunk.candidates[0].content.parts) {
+          const p = part as any;
+          // If it's a thought, capture it and DO NOT add to fullText
+          if (p.thought) {
+            if (part.text) {
+              fullThought += part.text;
+            }
+          } else if (part.text) {
+            // Only add to fullText if it's NOT a thought
+            fullText += part.text;
+          }
+        }
+      }
+
+      if (context.work.initialThoughts) {
+        context.work.initialThoughts[agentIndex] = fullThought;
+      }
+
+      if (chunk.usageMetadata && context.work.initialTokenUsage) {
+        context.work.initialTokenUsage[agentIndex] = {
+          promptTokens: chunk.usageMetadata.promptTokenCount || 0,
+          candidatesTokens: chunk.usageMetadata.candidatesTokenCount || 0,
+          totalTokens: chunk.usageMetadata.totalTokenCount || 0
+        };
+      }
+
       context.onMessageUpdate(fullText, false);
     }
     return fullText;

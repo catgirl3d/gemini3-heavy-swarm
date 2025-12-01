@@ -151,6 +151,7 @@ export const ShowWork: FC<{
 }> = ({ work, isLive = false, liveAgentStates, onRegenerate }) => {
   const [modalData, setModalData] = useState<{title: string, content: string} | null>(null);
   const [debugModalData, setDebugModalData] = useState<{title: string, debugInfo: any} | null>(null);
+  const [thoughtModalData, setThoughtModalData] = useState<{title: string, content: string} | null>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
   const downloadContent = (filename: string, content: string) => {
@@ -177,6 +178,15 @@ export const ShowWork: FC<{
     if (content === null) return <div className="pending-work">Waiting for agent output...</div>;
     if (content === '') return <div className="pending-work">Thinking...</div>;
     return <MarkdownRenderer content={content} />;
+  };
+
+  const renderTokenUsage = (usage: any) => {
+    if (!usage) return null;
+    return (
+      <div className="token-usage" title={`Prompt: ${usage.promptTokens}, Output: ${usage.candidatesTokens}`}>
+        <span className="token-count">{usage.totalTokens} tokens</span>
+      </div>
+    );
   };
 
   return (
@@ -252,6 +262,21 @@ export const ShowWork: FC<{
                     </div>
                     {resp && (
                         <div className="work-card-actions">
+                            {work.initialThoughts?.[i] && (
+                                <button
+                                    className="expand-work-button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setThoughtModalData({ title: `Agent ${i + 1} - Initial Thought Process`, content: work.initialThoughts![i]! });
+                                    }}
+                                    title="Show Thought Process"
+                                    aria-label="Show Thought Process"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/>
+                                    </svg>
+                                </button>
+                            )}
                             {work.debugInfo?.['initial']?.[i] && (
                                 <button
                                     className="expand-work-button"
@@ -314,6 +339,11 @@ export const ShowWork: FC<{
                 <div className="work-card-body">
                     {renderContent(resp)}
                 </div>
+                {work.initialTokenUsage?.[i] && (
+                    <div className="work-card-footer">
+                        {renderTokenUsage(work.initialTokenUsage[i])}
+                    </div>
+                )}
               </div>
             ))}
           </div>
@@ -370,7 +400,7 @@ export const ShowWork: FC<{
                                     )}
                                 </div>
                                 <div className="work-card-info">
-                                    <span>{`Agent ${i + 1}`}</span>
+                                    <span>{work.agentNames ? work.agentNames[i] : `Agent ${i + 1}`}</span>
                                     <span className={`work-card-status ${displayStatus === 'error' ? 'error' : ''}`}>
                                         {displayLabel}
                                     </span>
@@ -381,6 +411,21 @@ export const ShowWork: FC<{
                     </div>
                     {resp && (
                         <div className="work-card-actions">
+                            {work.refinedThoughts?.[i] && (
+                                <button
+                                    className="expand-work-button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setThoughtModalData({ title: `Agent ${i + 1} - Refinement Thought Process`, content: work.refinedThoughts![i]! });
+                                    }}
+                                    title="Show Thought Process"
+                                    aria-label="Show Thought Process"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/>
+                                    </svg>
+                                </button>
+                            )}
                             {work.debugInfo?.['refined']?.[i] && (
                                 <button
                                     className="expand-work-button"
@@ -443,6 +488,11 @@ export const ShowWork: FC<{
                  <div className="work-card-body">
                     {renderContent(resp)}
                  </div>
+                 {work.refinedTokenUsage?.[i] && (
+                    <div className="work-card-footer">
+                        {renderTokenUsage(work.refinedTokenUsage[i])}
+                    </div>
+                )}
               </div>
             ))}
           </div>
@@ -477,6 +527,21 @@ export const ShowWork: FC<{
                             </div>
                         </div>
                         <div className="work-card-actions">
+                            {work.synthesisThought && (
+                                <button
+                                    className="expand-work-button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setThoughtModalData({ title: `Synthesizer - Thought Process`, content: work.synthesisThought! });
+                                    }}
+                                    title="Show Thought Process"
+                                    aria-label="Show Thought Process"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/>
+                                    </svg>
+                                </button>
+                            )}
                             {work.debugInfo?.['synthesis'] && (
                                 <button
                                     className="expand-work-button"
@@ -533,6 +598,11 @@ export const ShowWork: FC<{
                             <p>Synthesizing final response...</p>
                         )}
                     </div>
+                    {work.synthesisTokenUsage && (
+                        <div className="work-card-footer">
+                            {renderTokenUsage(work.synthesisTokenUsage)}
+                        </div>
+                    )}
                 </div>
             </div>
         )}
@@ -554,6 +624,7 @@ export const ShowWork: FC<{
     </details>
     {modalData && <WorkModal title={modalData.title} content={modalData.content} onClose={() => setModalData(null)} />}
     {debugModalData && <DebugModal title={debugModalData.title} debugInfo={debugModalData.debugInfo} onClose={() => setDebugModalData(null)} />}
+    {thoughtModalData && <WorkModal title={thoughtModalData.title} content={thoughtModalData.content} onClose={() => setThoughtModalData(null)} />}
     </>
   );
 };

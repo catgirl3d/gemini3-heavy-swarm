@@ -132,12 +132,39 @@ As defined in <mission> synthesize the best single, final answer from <agent_dra
         });
 
         let finalResponseText = '';
+        let finalThought = '';
         const allGroundingChunks: GroundingChunk[] = [];
         let isFirstChunk = true;
   
         for await (const chunk of stream) {
           if (signal.aborted) throw new Error('Aborted');
-          finalResponseText += chunk.text;
+          
+          if (chunk.candidates?.[0]?.content?.parts) {
+            for (const part of chunk.candidates[0].content.parts) {
+              const p = part as any;
+              // If it's a thought, capture it and DO NOT add to finalResponseText
+              if (p.thought) {
+                if (part.text) {
+                  finalThought += part.text;
+                }
+              } else if (part.text) {
+                // Only add to finalResponseText if it's NOT a thought
+                finalResponseText += part.text;
+              }
+            }
+          }
+          
+          // Update work object with thought
+          work.synthesisThought = finalThought;
+
+          if (chunk.usageMetadata) {
+            work.synthesisTokenUsage = {
+              promptTokens: chunk.usageMetadata.promptTokenCount || 0,
+              candidatesTokens: chunk.usageMetadata.candidatesTokenCount || 0,
+              totalTokens: chunk.usageMetadata.totalTokenCount || 0
+            };
+          }
+
           const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
           if (groundingChunks) {
               allGroundingChunks.push(...groundingChunks);
@@ -178,6 +205,7 @@ As defined in <mission> synthesize the best single, final answer from <agent_dra
   }
 
   async regenerate(context: StepContext): Promise<{ text: string; sources?: any[] }> {
+    // execute already handles token usage update
     return this.execute(context);
   }
 }

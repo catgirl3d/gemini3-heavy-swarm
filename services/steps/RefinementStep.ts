@@ -32,9 +32,12 @@ export class RefinementStep implements StepDescriptor {
 
     // Initialize results array
     const results: string[] = Array(settings.numAgents).fill('');
+    const thoughts: string[] = Array(settings.numAgents).fill('');
     
     // Initialize legacy field if needed
     if (!work.refinedResponses) work.refinedResponses = Array(settings.numAgents).fill(null);
+    if (!work.refinedThoughts) work.refinedThoughts = Array(settings.numAgents).fill(null);
+    if (!work.refinedTokenUsage) work.refinedTokenUsage = Array(settings.numAgents).fill(null);
 
     // Initialize agent states
     let currentAgentStates: AgentState[] = Array.from({ length: settings.numAgents }, (_, i) => {
@@ -149,14 +152,38 @@ ${peerDrafts}
         });
 
         let fullText = '';
+        let fullThought = '';
         for await (const chunk of stream) {
           if (signal.aborted) throw new Error('Aborted');
-          const text = chunk.text || '';
-          fullText += text;
+          
+          if (chunk.candidates?.[0]?.content?.parts) {
+            for (const part of chunk.candidates[0].content.parts) {
+              const p = part as any;
+              // If it's a thought, capture it and DO NOT add to fullText
+              if (p.thought) {
+                if (part.text) {
+                  fullThought += part.text;
+                }
+              } else if (part.text) {
+                // Only add to fullText if it's NOT a thought
+                fullText += part.text;
+              }
+            }
+          }
           
           // Update both new and legacy storage
           results[index] = fullText;
+          thoughts[index] = fullThought;
           work.refinedResponses[index] = fullText;
+          if (work.refinedThoughts) work.refinedThoughts[index] = fullThought;
+
+          if (chunk.usageMetadata && work.refinedTokenUsage) {
+            work.refinedTokenUsage[index] = {
+              promptTokens: chunk.usageMetadata.promptTokenCount || 0,
+              candidatesTokens: chunk.usageMetadata.candidatesTokenCount || 0,
+              totalTokens: chunk.usageMetadata.totalTokenCount || 0
+            };
+          }
           
           // Update generic results map
           if (!work.results) work.results = {};
@@ -271,10 +298,37 @@ ALWAYS use the googleSearch tool to verify facts and find additional information
     });
 
     let fullText = '';
+    let fullThought = '';
     for await (const chunk of stream) {
       if (signal.aborted) throw new Error('Aborted');
-      const text = chunk.text || '';
-      fullText += text;
+      
+      if (chunk.candidates?.[0]?.content?.parts) {
+        for (const part of chunk.candidates[0].content.parts) {
+          const p = part as any;
+          // If it's a thought, capture it and DO NOT add to fullText
+          if (p.thought) {
+            if (part.text) {
+              fullThought += part.text;
+            }
+          } else if (part.text) {
+            // Only add to fullText if it's NOT a thought
+            fullText += part.text;
+          }
+        }
+      }
+
+      if (context.work.refinedThoughts) {
+        context.work.refinedThoughts[agentIndex] = fullThought;
+      }
+
+      if (chunk.usageMetadata && context.work.refinedTokenUsage) {
+        context.work.refinedTokenUsage[agentIndex] = {
+          promptTokens: chunk.usageMetadata.promptTokenCount || 0,
+          candidatesTokens: chunk.usageMetadata.candidatesTokenCount || 0,
+          totalTokens: chunk.usageMetadata.totalTokenCount || 0
+        };
+      }
+
       context.onMessageUpdate(fullText, false);
     }
     return fullText;

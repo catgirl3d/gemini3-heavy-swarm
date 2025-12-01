@@ -717,7 +717,7 @@ header h1 {
 }
 
 .work-modal-body li {
-	padding-bottom: 0.90rem;
+	/*padding-bottom: 0.90rem;*/
 }
 
 .work-modal-body ol li p{
@@ -1622,4 +1622,27 @@ margin: 0px;
 
 .show-work-wrapper {
   margin-top: 1rem;
+.token-usage {
+  display: flex;
+  align-items: center;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  background-color: #f1f5f9;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  margin-left: auto;
+  border: 1px solid #e2e8f0;
+}
+
+.token-count {
+  font-family: var(--code-font-family);
+  font-weight: 600;
+.work-card-footer {
+  padding: 0.5rem 1.25rem;
+  background-color: #f8fafc;
+  border-top: 1px solid var(--model-message-border);
+  display: flex;
+  justify-content: flex-end;
+}
+}
 }

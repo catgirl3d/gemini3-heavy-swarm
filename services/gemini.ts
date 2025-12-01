@@ -52,6 +52,12 @@ export class GeminiService {
     const liveWork: Work = {
       initialResponses: Array(settings.numAgents).fill(null),
       refinedResponses: Array(settings.numAgents).fill(null),
+      initialThoughts: Array(settings.numAgents).fill(null),
+      refinedThoughts: Array(settings.numAgents).fill(null),
+      synthesisThought: null,
+      initialTokenUsage: Array(settings.numAgents).fill(null),
+      refinedTokenUsage: Array(settings.numAgents).fill(null),
+      synthesisTokenUsage: null,
       results: {},
       stepMetadata: [],
       agentNames: Array.from({ length: settings.numAgents }, (_, i) => {

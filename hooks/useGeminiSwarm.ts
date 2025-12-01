@@ -277,6 +277,24 @@ export const useGeminiSwarm = () => {
 
     if (!workContext) return;
 
+    // Helper to get updated agent name based on current settings
+    const getUpdatedAgentName = (index: number, stepId: string) => {
+        const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0];
+        
+        if (stepId === 'initial') {
+            const perspectives = activeRoleProfile?.roles || [];
+            if (perspectives.length === 0) return `Agent ${index + 1}`;
+            const role = perspectives[index % perspectives.length];
+            return settings.dynamicAgentRoles ? `Agent ${index + 1} (${role.name})` : `Agent ${index + 1}`;
+        } else if (stepId === 'refined') {
+            const perspectives = activeRoleProfile?.criticRoles || [];
+            if (perspectives.length === 0) return `Critic ${index + 1}`;
+            const role = perspectives[index % perspectives.length];
+            return settings.dynamicAgentRoles ? `Agent ${index + 1} (${role.name})` : `Critic ${index + 1}`;
+        }
+        return `Agent ${index + 1}`;
+    };
+
     // Helper to keep agent status in sync across: live state, current work, and stored message work
     const updateAgentStatus = (status: AgentState['status'], label: string) => {
         const updateStates = (states: AgentState[] | undefined): AgentState[] | undefined => {
@@ -290,7 +308,9 @@ export const useGeminiSwarm = () => {
                 }
             } else {
                 if (copy[agentIndex]) {
-                    copy[agentIndex] = { ...copy[agentIndex], status, label };
+                    // Update name if settings changed
+                    const newName = getUpdatedAgentName(agentIndex, stepId);
+                    copy[agentIndex] = { ...copy[agentIndex], status, label, name: newName };
                 }
             }
 
@@ -371,6 +391,14 @@ export const useGeminiSwarm = () => {
                         if (msg.work) {
                             const newWork = { ...msg.work };
                             
+                            // Update agent names in work object
+                            if (stepId !== 'synthesis' && newWork.agentNames) {
+                                const newName = getUpdatedAgentName(agentIndex, stepId);
+                                const newAgentNames = [...newWork.agentNames];
+                                newAgentNames[agentIndex] = newName;
+                                newWork.agentNames = newAgentNames;
+                            }
+
                             // Update generic results
                             if (!newWork.results) newWork.results = {};
 
@@ -412,6 +440,14 @@ export const useGeminiSwarm = () => {
                     if (!prev) return prev;
                     const newWork = { ...prev };
                     
+                    // Update agent names in work object
+                    if (stepId !== 'synthesis' && newWork.agentNames) {
+                        const newName = getUpdatedAgentName(agentIndex, stepId);
+                        const newAgentNames = [...newWork.agentNames];
+                        newAgentNames[agentIndex] = newName;
+                        newWork.agentNames = newAgentNames;
+                    }
+
                     // Update generic results
                     if (!newWork.results) newWork.results = {};
 

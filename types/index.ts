@@ -38,10 +38,24 @@ export interface Source {
   title: string;
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  candidatesTokens: number;
+  totalTokens: number;
+}
+
 export interface Work {
   initialResponses: (string | null)[];
   refinedResponses: (string | null)[];
   
+  initialThoughts?: (string | null)[];
+  refinedThoughts?: (string | null)[];
+  synthesisThought?: string | null;
+
+  initialTokenUsage?: (TokenUsage | null)[];
+  refinedTokenUsage?: (TokenUsage | null)[];
+  synthesisTokenUsage?: TokenUsage | null;
+
   // Generic storage for step results
   results?: Record<string, any>;
   
