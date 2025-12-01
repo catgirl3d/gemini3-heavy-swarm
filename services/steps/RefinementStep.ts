@@ -2,6 +2,7 @@ import { GoogleGenAI, Content, Part } from '@google/genai';
 import { StepDescriptor, StepContext } from '../../types/steps';
 import { AppSettings, AgentState } from '../../types';
 import { prepareGeminiContent } from '../contentUtils';
+import { getGenerationConfig } from '../geminiConfig';
 
 const getAgentPerspective = (index: number, settings: AppSettings): { name: string, instruction: string } => {
   const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0];
@@ -130,11 +131,9 @@ ${peerDrafts}
           model: settings.model,
           contents: [...mainChatHistory, refinementTurn],
           config: {
+            ...getGenerationConfig(settings.model, settings.temperature, settings.unsafeTemperature),
             systemInstruction,
-            temperature: settings.temperature ?? 0.7,
             tools: [{googleSearch: {}}],
-            thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
-            maxOutputTokens: 65536,
           },
         });
 
@@ -244,11 +243,9 @@ ALWAYS use the googleSearch tool to verify facts and find additional information
       model: settings.model,
       contents: [...mainChatHistory, refinementTurn],
       config: {
+        ...getGenerationConfig(settings.model, settings.temperature, settings.unsafeTemperature),
         systemInstruction,
-        temperature: settings.temperature ?? 0.7,
         tools: [{googleSearch: {}}],
-        thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
-        maxOutputTokens: 65536,
       },
     });
 

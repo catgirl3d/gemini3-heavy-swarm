@@ -2,6 +2,7 @@ import { GoogleGenAI, Content, Part } from '@google/genai';
 import { StepDescriptor, StepContext } from '../../types/steps';
 import { AppSettings, AgentState } from '../../types';
 import { prepareGeminiContent } from '../contentUtils';
+import { getGenerationConfig } from '../geminiConfig';
 
 const getAgentPerspective = (index: number, settings: AppSettings): { name: string, instruction: string } => {
   const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0];
@@ -49,13 +50,17 @@ export class InitialStep implements StepDescriptor {
     const agentPromises = Array(settings.numAgents).fill(0).map(async (_, i) => {
       if (settings.devMode) {
         // DEV MODE SIMULATION
-        const dummyText = `[DEV MODE] Initial draft from Agent ${i + 1}. This is a simulated response.`;
+        const dummyText = `[DEV MODE] Initial draft from Agent ${i + 1}. This is a simulated response designed to take exactly 10 seconds. We are testing the timer functionality to ensure that the UI handles long-running processes correctly. This text is being streamed word by word to mimic the behavior of a real LLM generation. 1... 2... 3... 4... 5...`;
         const words = dummyText.split(' ');
         let currentText = '';
         
+        // Calculate delay to match exactly 10 seconds (10000ms)
+        const totalDuration = 10000;
+        const delayPerWord = totalDuration / words.length;
+
         for (const word of words) {
           if (signal.aborted) throw new Error('Aborted');
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, delayPerWord));
           currentText += word + ' ';
           
           // Update both new and legacy storage
@@ -105,11 +110,9 @@ export class InitialStep implements StepDescriptor {
           model: settings.model,
           contents: [...mainChatHistory, userTurn],
           config: {
+            ...getGenerationConfig(settings.model, settings.temperature, settings.unsafeTemperature),
             systemInstruction: systemInstruction,
-            temperature: settings.temperature ?? 0.7,
             tools: [{googleSearch: {}}],
-            thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
-            maxOutputTokens: 65536,
           },
         });
 
@@ -192,11 +195,9 @@ export class InitialStep implements StepDescriptor {
       model: settings.model,
       contents: [...mainChatHistory, userTurn],
       config: {
+        ...getGenerationConfig(settings.model, settings.temperature, settings.unsafeTemperature),
         systemInstruction: systemInstruction,
-        temperature: settings.temperature ?? 0.7,
         tools: [{googleSearch: {}}],
-        thinkingConfig: { thinkingBudget: settings.model.includes('flash') ? 24576 : 32768 },
-        maxOutputTokens: 65536,
       },
     });
 

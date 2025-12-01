@@ -294,19 +294,47 @@ export const SettingsModal: FC<{
                             </div>
 
                             <div className="settings-form-group">
-                                <label className="settings-label">Temperature ({localSettings.temperature ?? 0.7})</label>
+                                <label className="settings-label">
+                                    Temperature ({localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? '1.0 (Fixed)' : (localSettings.temperature ?? 0.7)})
+                                </label>
                                 <input
                                     type="range"
                                     name="temperature"
                                     min="0"
                                     max="2"
                                     step="0.1"
-                                    value={localSettings.temperature ?? 0.7}
+                                    value={localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? 1.0 : (localSettings.temperature ?? 0.7)}
                                     onChange={handleChange}
+                                    disabled={localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature}
                                     className="settings-input"
+                                    style={localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
                                 />
                             </div>
                         </div>
+                        
+                        {localSettings.model.includes('gemini-3') && (
+                            <div className="advanced-temperature-banner">
+                                <div className="advanced-temperature-header">
+                                    <div className="advanced-temperature-title">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                        </svg>
+                                        <span>Force Temperature (Advanced)</span>
+                                    </div>
+                                    <button
+                                        className={`advanced-temperature-toggle ${localSettings.unsafeTemperature ? 'active' : ''}`}
+                                        onClick={() => setLocalSettings(prev => ({ ...prev, unsafeTemperature: !prev.unsafeTemperature }))}
+                                    >
+                                        {localSettings.unsafeTemperature ? 'Disable' : 'Enable'}
+                                    </button>
+                                </div>
+                                <p className="advanced-temperature-description">
+                                    Gemini 3.0 works best with its default temperature (1.0). Forcing a custom temperature may cause the model to get stuck or degrade quality. Use with caution.
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     <div className="settings-card">

@@ -278,8 +278,7 @@ header h1 {
   border: 1px solid var(--model-message-border); 
   border-radius: 12px; 
   background-color: #f8fafc; 
-  width: 100%; 
-  max-width: 430px;
+  width: 445px;
 }
 .loading-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .loading-status { font-size: 0.95rem; color: var(--text-primary); font-weight: 600; }
@@ -1018,6 +1017,16 @@ margin: 0px;
     font-weight: 500;
 }
 
+.checkbox-label.warning {
+    color: #c2410c;
+}
+
+.settings-help.warning {
+    margin-left: 1.75rem;
+    margin-top: 0.25rem;
+    color: #9a3412;
+}
+
 .profile-header {
     display: flex;
     align-items: center;
@@ -1334,6 +1343,66 @@ margin: 0px;
 	   height: 18px;
 	   flex-shrink: 0;
 }
+
+.advanced-temperature-banner {
+	   background: #fff7ed;
+	   border: 1px solid #fdba74;
+	   color: #c2410c;
+	   padding: 0.75rem;
+	   border-radius: 6px;
+	   margin-top: 1rem;
+	   font-size: 0.85rem;
+	   display: flex;
+	   flex-direction: column;
+	   gap: 0.5rem;
+}
+
+.advanced-temperature-header {
+	   display: flex;
+	   align-items: center;
+	   justify-content: space-between;
+	   gap: 0.5rem;
+}
+
+.advanced-temperature-title {
+	   display: flex;
+	   align-items: center;
+	   gap: 0.5rem;
+	   font-weight: 600;
+}
+
+.advanced-temperature-toggle {
+	   background: #c2410c;
+	   color: white;
+	   border: none;
+	   border-radius: 4px;
+	   padding: 0.25rem 0.75rem;
+	   font-size: 0.75rem;
+	   font-weight: 600;
+	   cursor: pointer;
+	   transition: background-color 0.2s;
+}
+
+.advanced-temperature-toggle:hover {
+	   background: #9a3412;
+}
+
+.advanced-temperature-toggle.active {
+	   background: #fff;
+	   color: #c2410c;
+	   border: 1px solid #c2410c;
+}
+
+.advanced-temperature-toggle.active:hover {
+	   background: #fff7ed;
+}
+
+.advanced-temperature-description {
+	   margin: 0;
+	   line-height: 1.4;
+	   opacity: 0.9;
+}
+
 /* --- Responsive (max-width: 768px) --- */
 
 @media (max-width: 768px) {

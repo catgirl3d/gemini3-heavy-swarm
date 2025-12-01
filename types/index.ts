@@ -26,6 +26,7 @@ export interface AppSettings {
   debugMode: boolean;
   pauseAfterInitial: boolean;
   temperature: number;
+  unsafeTemperature?: boolean;
   dynamicAgentRoles: boolean;
   activeRoleProfileId: string;
   roleProfiles: RoleProfile[];
