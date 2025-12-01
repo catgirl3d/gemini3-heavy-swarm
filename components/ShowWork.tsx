@@ -189,6 +189,16 @@ export const ShowWork: FC<{
     );
   };
 
+  const calculateTotalTokens = () => {
+    let total = 0;
+    work.initialTokenUsage?.forEach(u => total += u?.totalTokens || 0);
+    work.refinedTokenUsage?.forEach(u => total += u?.totalTokens || 0);
+    if (work.synthesisTokenUsage) total += work.synthesisTokenUsage.totalTokens;
+    return total;
+  };
+
+  const totalTokens = calculateTotalTokens();
+
   return (
     <>
     <details className="show-work-container" ref={detailsRef}>
@@ -607,19 +617,31 @@ export const ShowWork: FC<{
             </div>
         )}
 
-        <button
-          className={`show-work-button collapse-work-button ${!isLive ? 'completed' : ''}`}
-          onClick={() => {
-            if (detailsRef.current) {
-              detailsRef.current.open = false;
-            }
-          }}
-        >
-          <span>Collapse Agent Work</span>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="work-arrow collapse-arrow">
-            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-          </svg>
-        </button>
+        <div className="show-work-footer">
+            <button
+            className={`show-work-button collapse-work-button ${!isLive ? 'completed' : ''}`}
+            onClick={() => {
+                if (detailsRef.current) {
+                detailsRef.current.open = false;
+                }
+            }}
+            >
+            <span>Collapse Agent Work</span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="work-arrow collapse-arrow">
+                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+            </button>
+            
+            {totalTokens > 0 && (
+                <div className="total-token-usage" title="Total tokens used across all agents">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="token-icon">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-1.07 3.97-2.1 5.39z"/>
+                    </svg>
+                    <span className="token-count">{totalTokens.toLocaleString()}</span>
+                    <span className="token-label">tokens</span>
+                </div>
+            )}
+        </div>
       </div>
     </details>
     {modalData && <WorkModal title={modalData.title} content={modalData.content} onClose={() => setModalData(null)} />}

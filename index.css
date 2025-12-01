@@ -484,8 +484,17 @@ header h1 {
   color: #991b1b;
 }
 
+.show-work-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1.5rem;
+  gap: 1rem;
+}
+
 .collapse-work-button {
-  margin-top: 1rem;
+  margin-top: 0;
+  flex: 1;
 }
 
 .collapse-arrow {
@@ -1622,6 +1631,8 @@ margin: 0px;
 
 .show-work-wrapper {
   margin-top: 1rem;
+}
+
 .token-usage {
   display: flex;
   align-items: center;
@@ -1644,5 +1655,36 @@ margin: 0px;
   display: flex;
   justify-content: flex-end;
 }
+}
+.total-token-usage {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background-color: #f2f2f2;
+  border: 1px solid var(--model-message-border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.total-token-usage .token-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+}
+
+.total-token-usage .token-count {
+  font-family: var(--code-font-family);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.total-token-usage .token-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 }
