@@ -14,6 +14,7 @@ export const SettingsModal: FC<{
   const [isEditingRoleName, setIsEditingRoleName] = useState(false);
   const [isEditingProfileName, setIsEditingProfileName] = useState(false);
   const [activeRoleType, setActiveRoleType] = useState<'drafter' | 'critic'>('drafter');
+  const [activePresetMenu, setActivePresetMenu] = useState<number | null>(null);
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -23,15 +24,23 @@ export const SettingsModal: FC<{
     const handleEsc = (e: KeyboardEvent) => {
         if (e.key === 'Escape') onClose();
     };
+    const handleClickOutside = (e: MouseEvent) => {
+        if (activePresetMenu !== null && !(e.target as Element).closest('.preset-menu-container')) {
+            setActivePresetMenu(null);
+        }
+    };
+
     if (isOpen) {
         window.addEventListener('keydown', handleEsc);
+        window.addEventListener('click', handleClickOutside);
         document.body.style.overflow = 'hidden';
     }
     return () => {
         window.removeEventListener('keydown', handleEsc);
+        window.removeEventListener('click', handleClickOutside);
         document.body.style.overflow = 'unset';
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, activePresetMenu]);
 
   if (!isOpen) return null;
 
@@ -174,6 +183,35 @@ export const SettingsModal: FC<{
       });
       return { ...prev, roleProfiles: newProfiles, activeRoleProfileId: targetId };
     });
+  };
+
+  const handleApplyRole = (index: number, role: { name: string, instruction: string }) => {
+    setLocalSettings(prev => {
+      const targetId = activeRoleProfile.id;
+      const newProfiles = (prev.roleProfiles || []).map(p => {
+        if (p.id === targetId) {
+            const roleKey = activeRoleType === 'drafter' ? 'roles' : 'criticRoles';
+            const currentRoles = p[roleKey] || [];
+            const newRoles = [...currentRoles];
+            if (newRoles[index]) {
+                newRoles[index] = { ...newRoles[index], name: role.name, instruction: role.instruction };
+            }
+            return { ...p, [roleKey]: newRoles };
+        }
+        return p;
+      });
+      return { ...prev, roleProfiles: newProfiles, activeRoleProfileId: targetId };
+    });
+  };
+
+  const getRolePresets = (profileId: string, type: 'drafter' | 'critic') => {
+      // Find the default profile definition to get the canonical list of roles
+      // We strip any "custom-" prefix if it was derived from a default, but currently IDs are unique.
+      // If the user is editing a custom profile, we might want to show presets from the *original* default profile it was based on?
+      // For now, we only show presets if the ID matches a default profile ID.
+      const defaultProfile = DEFAULT_SETTINGS.roleProfiles.find(p => p.id === profileId);
+      if (!defaultProfile) return [];
+      return type === 'drafter' ? defaultProfile.roles : (defaultProfile.criticRoles || []);
   };
 
   const handleAddRole = () => {
@@ -601,11 +639,54 @@ export const SettingsModal: FC<{
                                 </span>
                             </div>
                             <div className="roles-list">
-                                {((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || []).map((role, index) => (
+                                {((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || []).map((role, index) => {
+                                    const presets = getRolePresets(activeRoleProfile.id, activeRoleType);
+                                    return (
                                     <div key={index} className="role-item">
                                         <div className="role-header">
                                             <div className="settings-form-group role-name-group">
-                                                <label className="settings-label">Role Name</label>
+                                                <div className="role-name-header">
+                                                    <label className="settings-label">Role Name</label>
+                                                    {presets.length > 0 && (
+                                                        <div className="preset-menu-container">
+                                                            <button
+                                                                className={`preset-menu-trigger ${activePresetMenu === index ? 'active' : ''}`}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setActivePresetMenu(activePresetMenu === index ? null : index);
+                                                                }}
+                                                                title="Load a preset role"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                                                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                                                                </svg>
+                                                                <span>Presets</span>
+                                                                <svg className="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                                                </svg>
+                                                            </button>
+                                                            {activePresetMenu === index && (
+                                                                <div className="preset-menu-dropdown">
+                                                                    <div className="preset-menu-header">Select a Role</div>
+                                                                    {presets.map((p, i) => (
+                                                                        <button
+                                                                            key={i}
+                                                                            className="preset-menu-item"
+                                                                            onClick={() => {
+                                                                                handleApplyRole(index, p);
+                                                                                setActivePresetMenu(null);
+                                                                            }}
+                                                                        >
+                                                                            <span className="preset-name">{p.name}</span>
+                                                                            <span className="preset-preview">{p.instruction.substring(0, 50)}...</span>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <input
                                                     type="text"
                                                     value={role.name || ''}
@@ -656,7 +737,8 @@ export const SettingsModal: FC<{
                                             />
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                                 {((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || []).length === 0 && (
                                     <div className="no-roles-message">
                                         No roles defined. Add a role to get started.
