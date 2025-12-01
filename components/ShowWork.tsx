@@ -36,6 +36,71 @@ const WorkModal: FC<{ title: string; content: string; onClose: () => void }> = (
   );
 };
 
+const ActionMenu: FC<{
+  actions: {
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+    danger?: boolean;
+  }[]
+}> = ({ actions }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  return (
+    <div className="action-menu-container" ref={menuRef}>
+      <button
+        className="action-menu-trigger"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        title="More actions"
+        aria-label="More actions"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+        </svg>
+      </button>
+      {isOpen && (
+        <div className="action-menu-dropdown">
+          {actions.map((action, index) => (
+            <button
+              key={index}
+              className={`action-menu-item ${action.danger ? 'danger' : ''}`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                action.onClick();
+                setIsOpen(false);
+              }}
+            >
+              <span className="action-icon">{action.icon}</span>
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const DebugModal: FC<{ title: string; debugInfo: any; onClose: () => void }> = ({ title, debugInfo, onClose }) => {
     const [viewMode, setViewMode] = useState<'formatted' | 'raw'>('formatted');
 
@@ -272,64 +337,6 @@ export const ShowWork: FC<{
                     </div>
                     {resp && (
                         <div className="work-card-actions">
-                            {work.initialThoughts?.[i] && (
-                                <button
-                                    className="expand-work-button"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        setThoughtModalData({ title: `Agent ${i + 1} - Initial Thought Process`, content: work.initialThoughts![i]! });
-                                    }}
-                                    title="Show Thought Process"
-                                    aria-label="Show Thought Process"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/>
-                                    </svg>
-                                </button>
-                            )}
-                            {work.debugInfo?.['initial']?.[i] && (
-                                <button
-                                    className="expand-work-button"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        setDebugModalData({ title: `Agent ${i + 1} - Initial Draft Debug Info`, debugInfo: work.debugInfo?.['initial']?.[i] });
-                                    }}
-                                    title="Debug Info"
-                                    aria-label="Debug Info"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/>
-                                    </svg>
-                                </button>
-                            )}
-                            {onRegenerate && (
-                                <button
-                                    className="expand-work-button"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        onRegenerate('initial', i);
-                                    }}
-                                    title="Regenerate Response"
-                                    aria-label="Regenerate Response"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                                    </svg>
-                                </button>
-                            )}
-                            <button
-                                className="expand-work-button"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    downloadContent(`Agent-${i + 1}-Initial_Draft.md`, resp);
-                                }}
-                                title="Download Response"
-                                aria-label="Download Response"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
-                                </svg>
-                            </button>
                             <button
                                 className="expand-work-button"
                                 onClick={(e) => {
@@ -343,6 +350,28 @@ export const ShowWork: FC<{
                                     <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
                                 </svg>
                             </button>
+                            <ActionMenu actions={[
+                                ...(work.initialThoughts?.[i] ? [{
+                                    label: 'Show Thought Process',
+                                    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg>,
+                                    onClick: () => setThoughtModalData({ title: `Agent ${i + 1} - Initial Thought Process`, content: work.initialThoughts![i]! })
+                                }] : []),
+                                ...(work.debugInfo?.['initial']?.[i] ? [{
+                                    label: 'Debug Info',
+                                    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>,
+                                    onClick: () => setDebugModalData({ title: `Agent ${i + 1} - Initial Draft Debug Info`, debugInfo: work.debugInfo?.['initial']?.[i] })
+                                }] : []),
+                                {
+                                    label: 'Download Response',
+                                    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>,
+                                    onClick: () => downloadContent(`Agent-${i + 1}-Initial_Draft.md`, resp)
+                                },
+                                ...(onRegenerate ? [{
+                                    label: 'Regenerate Response',
+                                    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>,
+                                    onClick: () => onRegenerate('initial', i)
+                                }] : [])
+                            ]} />
                         </div>
                     )}
                 </div>
@@ -421,64 +450,6 @@ export const ShowWork: FC<{
                     </div>
                     {resp && (
                         <div className="work-card-actions">
-                            {work.refinedThoughts?.[i] && (
-                                <button
-                                    className="expand-work-button"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        setThoughtModalData({ title: `Agent ${i + 1} - Refinement Thought Process`, content: work.refinedThoughts![i]! });
-                                    }}
-                                    title="Show Thought Process"
-                                    aria-label="Show Thought Process"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/>
-                                    </svg>
-                                </button>
-                            )}
-                            {work.debugInfo?.['refined']?.[i] && (
-                                <button
-                                    className="expand-work-button"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        setDebugModalData({ title: `Agent ${i + 1} - Refinement Debug Info`, debugInfo: work.debugInfo?.['refined']?.[i] });
-                                    }}
-                                    title="Debug Info"
-                                    aria-label="Debug Info"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/>
-                                    </svg>
-                                </button>
-                            )}
-                            {onRegenerate && (
-                                <button
-                                    className="expand-work-button"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        onRegenerate('refined', i);
-                                    }}
-                                    title="Regenerate Response"
-                                    aria-label="Regenerate Response"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                                    </svg>
-                                </button>
-                            )}
-                            <button
-                                className="expand-work-button"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    downloadContent(`Agent-${i + 1}-Refined_Response.md`, resp);
-                                }}
-                                title="Download Response"
-                                aria-label="Download Response"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
-                                </svg>
-                            </button>
                             <button
                                 className="expand-work-button"
                                 onClick={(e) => {
@@ -492,6 +463,28 @@ export const ShowWork: FC<{
                                     <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
                                 </svg>
                             </button>
+                            <ActionMenu actions={[
+                                ...(work.refinedThoughts?.[i] ? [{
+                                    label: 'Show Thought Process',
+                                    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg>,
+                                    onClick: () => setThoughtModalData({ title: `Agent ${i + 1} - Refinement Thought Process`, content: work.refinedThoughts![i]! })
+                                }] : []),
+                                ...(work.debugInfo?.['refined']?.[i] ? [{
+                                    label: 'Debug Info',
+                                    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>,
+                                    onClick: () => setDebugModalData({ title: `Agent ${i + 1} - Refinement Debug Info`, debugInfo: work.debugInfo?.['refined']?.[i] })
+                                }] : []),
+                                {
+                                    label: 'Download Response',
+                                    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>,
+                                    onClick: () => downloadContent(`Agent-${i + 1}-Refined_Response.md`, resp)
+                                },
+                                ...(onRegenerate ? [{
+                                    label: 'Regenerate Response',
+                                    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>,
+                                    onClick: () => onRegenerate('refined', i)
+                                }] : [])
+                            ]} />
                         </div>
                     )}
                  </div>
@@ -537,66 +530,44 @@ export const ShowWork: FC<{
                             </div>
                         </div>
                         <div className="work-card-actions">
-                            {work.synthesisThought && (
-                                <button
-                                    className="expand-work-button"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        setThoughtModalData({ title: `Synthesizer - Thought Process`, content: work.synthesisThought! });
-                                    }}
-                                    title="Show Thought Process"
-                                    aria-label="Show Thought Process"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/>
-                                    </svg>
-                                </button>
-                            )}
-                            {work.debugInfo?.['synthesis'] && (
-                                <button
-                                    className="expand-work-button"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        setDebugModalData({ title: `Synthesizer - Debug Info`, debugInfo: work.debugInfo?.['synthesis'] });
-                                    }}
-                                    title="Debug Info"
-                                    aria-label="Debug Info"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/>
-                                    </svg>
-                                </button>
-                            )}
-                            {onRegenerate && (
-                                <button
-                                    className={`expand-work-button work-card-retry-btn ${synthesizerState.status === 'error' ? 'error' : ''}`}
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        onRegenerate('synthesis', 0);
-                                    }}
-                                    title={synthesizerState.status === 'error' ? 'Retry Synthesis' : 'Regenerate Synthesis'}
-                                    aria-label={synthesizerState.status === 'error' ? 'Retry Synthesis' : 'Regenerate Synthesis'}
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                                    </svg>
-                                </button>
-                            )}
                             {synthesisText && (
                                 <button
                                     className="expand-work-button"
                                     onClick={(e) => {
                                         e.preventDefault();
-                                        downloadContent('Synthesis_Report.md', synthesisText);
+                                        setModalData({ title: `Synthesizer - Final Response`, content: synthesisText });
                                     }}
-                                    title="Download Synthesis"
-                                    aria-label="Download Synthesis"
+                                    title="Expand Response"
+                                    aria-label="Expand Response"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
+                                        <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
                                     </svg>
                                 </button>
                             )}
+                            <ActionMenu actions={[
+                                ...(work.synthesisThought ? [{
+                                    label: 'Show Thought Process',
+                                    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg>,
+                                    onClick: () => setThoughtModalData({ title: `Synthesizer - Thought Process`, content: work.synthesisThought! })
+                                }] : []),
+                                ...(work.debugInfo?.['synthesis'] ? [{
+                                    label: 'Debug Info',
+                                    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>,
+                                    onClick: () => setDebugModalData({ title: `Synthesizer - Debug Info`, debugInfo: work.debugInfo?.['synthesis'] })
+                                }] : []),
+                                ...(synthesisText ? [{
+                                    label: 'Download Synthesis',
+                                    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>,
+                                    onClick: () => downloadContent('Synthesis_Report.md', synthesisText)
+                                }] : []),
+                                ...(onRegenerate ? [{
+                                    label: synthesizerState.status === 'error' ? 'Retry Synthesis' : 'Regenerate Synthesis',
+                                    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>,
+                                    onClick: () => onRegenerate('synthesis', 0),
+                                    danger: synthesizerState.status === 'error'
+                                }] : [])
+                            ]} />
                         </div>
                     </div>
                     <div className="work-card-body">
