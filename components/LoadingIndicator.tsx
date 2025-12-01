@@ -14,21 +14,13 @@ export const LoadingIndicator: FC<{
 }> = ({ status, time, agentStates, currentWork, isPaused, onContinue, onRegenerate }) => (
   <div className="message-wrapper model loading-state">
     <AgentAvatar type="model" />
-    <div className="loading-container-wrapper" style={{ width: '100%', maxWidth: '800px' }}>
+    <div className="loading-container-wrapper">
         <div className="loading-animation">
         <div className="loading-header">
             <span className="loading-status">{status}</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div className="loading-header-content">
                 {isPaused && onContinue && (
-                    <button className="continue-button" onClick={onContinue} style={{
-                        padding: '0.25rem 0.75rem',
-                        fontSize: '0.8rem',
-                        backgroundColor: '#4caf50',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                    }}>
+                    <button className="continue-button" onClick={onContinue}>
                         Continue
                     </button>
                 )}
@@ -61,7 +53,7 @@ export const LoadingIndicator: FC<{
         </div>
         </div>
         {currentWork && (
-            <div style={{ marginTop: '1rem' }}>
+            <div className="show-work-wrapper">
                 <ShowWork
                     work={currentWork}
                     isLive={true}

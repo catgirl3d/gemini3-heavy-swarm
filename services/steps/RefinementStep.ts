@@ -6,8 +6,9 @@ import { getGenerationConfig } from '../geminiConfig';
 
 const getAgentPerspective = (index: number, settings: AppSettings): { name: string, instruction: string } => {
   const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0];
-  const perspectives = activeRoleProfile?.roles || [];
-  if (perspectives.length === 0) return { name: `Agent ${index + 1}`, instruction: '' };
+  // Use criticRoles for refinement step if available, otherwise fallback to standard roles or generic
+  const perspectives = activeRoleProfile?.criticRoles || [];
+  if (perspectives.length === 0) return { name: `Critic ${index + 1}`, instruction: '' };
   return perspectives[index % perspectives.length];
 };
 
@@ -40,7 +41,7 @@ export class RefinementStep implements StepDescriptor {
       const role = settings.dynamicAgentRoles ? getAgentPerspective(i, settings).name : null;
       return {
         id: `agent-${i}`,
-        name: role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`,
+        name: role ? `Agent ${i + 1} (${role})` : `Critic ${i + 1}`,
         status: 'working',
         label: 'Critiquing & Refining...'
       };
@@ -116,7 +117,17 @@ ${peerDrafts}
         const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
         
         const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
-        const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.refinementInstruction}</mission>\n</system_instruction>`;
+        
+        // Add role-specific instruction if dynamic roles are enabled
+        let roleInstruction = '';
+        if (settings.dynamicAgentRoles) {
+            const role = getAgentPerspective(index, settings);
+            if (role.instruction) {
+                roleInstruction = `\n\n<role_assignment>\n${role.instruction}\n</role_assignment>`;
+            }
+        }
+
+        const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.refinementInstruction}</mission>${roleInstruction}\n</system_instruction>`;
 
         // Capture debug info
         if (!work.debugInfo) work.debugInfo = {};
@@ -228,7 +239,17 @@ ALWAYS use the googleSearch tool to verify facts and find additional information
     const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
     
     const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
-    const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.refinementInstruction}</mission>\n</system_instruction>`;
+    
+    // Add role-specific instruction if dynamic roles are enabled
+    let roleInstruction = '';
+    if (settings.dynamicAgentRoles) {
+        const role = getAgentPerspective(agentIndex, settings);
+        if (role.instruction) {
+            roleInstruction = `\n\n<role_assignment>\n${role.instruction}\n</role_assignment>`;
+        }
+    }
+
+    const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.refinementInstruction}</mission>${roleInstruction}\n</system_instruction>`;
 
     // Capture debug info for regeneration
     if (context.work.debugInfo && context.work.debugInfo['refined']) {

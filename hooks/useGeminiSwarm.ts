@@ -72,6 +72,22 @@ export const useGeminiSwarm = () => {
                 parsedSettings.roleProfiles.push(madScientistProfile);
             }
         }
+
+        // Migration: Ensure criticRoles exist in roleProfiles
+        if (parsedSettings.roleProfiles) {
+            parsedSettings.roleProfiles = parsedSettings.roleProfiles.map((profile: any) => {
+                if (!profile.criticRoles) {
+                    // Find matching default profile to copy critic roles from
+                    const defaultProfile = DEFAULT_ROLE_PROFILES.find(p => p.id === profile.id);
+                    return {
+                        ...profile,
+                        criticRoles: defaultProfile?.criticRoles || []
+                    };
+                }
+                return profile;
+            });
+        }
+
         setSettings(parsedSettings);
       } catch (error) {
         console.error('Failed to parse saved settings:', error);

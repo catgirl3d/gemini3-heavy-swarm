@@ -91,7 +91,7 @@ const DebugModal: FC<{ title: string; debugInfo: any; onClose: () => void }> = (
         <div className="work-modal-overlay" onClick={onClose}>
             <div className="work-modal" onClick={e => e.stopPropagation()}>
                 <div className="work-modal-header">
-                    <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
+                    <div className="header-content">
                         <h3>{title}</h3>
                         <div className="debug-view-toggle">
                             <button

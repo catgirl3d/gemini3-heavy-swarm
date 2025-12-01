@@ -15,6 +15,7 @@ export interface RoleProfile {
     id: string;
     name: string;
     roles: AgentRole[];
+    criticRoles?: AgentRole[];
 }
 
 export interface AppSettings {

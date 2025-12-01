@@ -13,6 +13,7 @@ export const SettingsModal: FC<{
   const [activeTab, setActiveTab] = useState<'general' | 'prompts' | 'roles'>('general');
   const [isEditingRoleName, setIsEditingRoleName] = useState(false);
   const [isEditingProfileName, setIsEditingProfileName] = useState(false);
+  const [activeRoleType, setActiveRoleType] = useState<'drafter' | 'critic'>('drafter');
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -97,7 +98,8 @@ export const SettingsModal: FC<{
     const newRoleProfile: RoleProfile = {
         id: `custom-roles-${Date.now()}`,
         name: 'New Role Set',
-        roles: [...activeRoleProfile.roles]
+        roles: [...activeRoleProfile.roles],
+        criticRoles: activeRoleProfile.criticRoles ? [...activeRoleProfile.criticRoles] : []
     };
     setLocalSettings(prev => ({
         ...prev,
@@ -160,11 +162,13 @@ export const SettingsModal: FC<{
       const targetId = activeRoleProfile.id;
       const newProfiles = (prev.roleProfiles || []).map(p => {
         if (p.id === targetId) {
-            const newRoles = [...(p.roles || [])];
+            const roleKey = activeRoleType === 'drafter' ? 'roles' : 'criticRoles';
+            const currentRoles = p[roleKey] || [];
+            const newRoles = [...currentRoles];
             if (newRoles[index]) {
                 newRoles[index] = { ...newRoles[index], [field]: value };
             }
-            return { ...p, roles: newRoles };
+            return { ...p, [roleKey]: newRoles };
         }
         return p;
       });
@@ -177,7 +181,9 @@ export const SettingsModal: FC<{
         const targetId = activeRoleProfile.id;
         const newProfiles = (prev.roleProfiles || []).map(p => {
             if (p.id === targetId) {
-                return { ...p, roles: [...(p.roles || []), { name: 'New Role', instruction: '' }] };
+                const roleKey = activeRoleType === 'drafter' ? 'roles' : 'criticRoles';
+                const currentRoles = p[roleKey] || [];
+                return { ...p, [roleKey]: [...currentRoles, { name: 'New Role', instruction: '' }] };
             }
             return p;
         });
@@ -190,9 +196,11 @@ export const SettingsModal: FC<{
         const targetId = activeRoleProfile.id;
         const newProfiles = (prev.roleProfiles || []).map(p => {
             if (p.id === targetId) {
-                const newRoles = [...(p.roles || [])];
+                const roleKey = activeRoleType === 'drafter' ? 'roles' : 'criticRoles';
+                const currentRoles = p[roleKey] || [];
+                const newRoles = [...currentRoles];
                 newRoles.splice(index, 1);
-                return { ...p, roles: newRoles };
+                return { ...p, [roleKey]: newRoles };
             }
             return p;
         });
@@ -205,13 +213,15 @@ export const SettingsModal: FC<{
         const targetId = activeRoleProfile.id;
         const newProfiles = (prev.roleProfiles || []).map(p => {
             if (p.id === targetId) {
-                const newRoles = [...(p.roles || [])];
+                const roleKey = activeRoleType === 'drafter' ? 'roles' : 'criticRoles';
+                const currentRoles = p[roleKey] || [];
+                const newRoles = [...currentRoles];
                 if (direction === 'up' && index > 0) {
                     [newRoles[index], newRoles[index - 1]] = [newRoles[index - 1], newRoles[index]];
                 } else if (direction === 'down' && index < newRoles.length - 1) {
                     [newRoles[index], newRoles[index + 1]] = [newRoles[index + 1], newRoles[index]];
                 }
-                return { ...p, roles: newRoles };
+                return { ...p, [roleKey]: newRoles };
             }
             return p;
         });
@@ -295,7 +305,7 @@ export const SettingsModal: FC<{
 
                             <div className="settings-form-group">
                                 <label className="settings-label">
-                                    Temperature ({localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? '1.0 (Fixed)' : (localSettings.temperature ?? 0.7)})
+                                    Temperature ({localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? '1.0' : (localSettings.temperature ?? 0.7)})
                                 </label>
                                 <input
                                     type="range"
@@ -306,8 +316,7 @@ export const SettingsModal: FC<{
                                     value={localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? 1.0 : (localSettings.temperature ?? 0.7)}
                                     onChange={handleChange}
                                     disabled={localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature}
-                                    className="settings-input"
-                                    style={localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
+                                    className={`settings-input ${localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? 'settings-input-disabled' : ''}`}
                                 />
                             </div>
                         </div>
@@ -417,8 +426,7 @@ export const SettingsModal: FC<{
                                     <select
                                         value={localSettings.activeProfileId}
                                         onChange={handleProfileChange}
-                                        className="settings-input"
-                                        style={{ fontWeight: 600 }}
+                                        className="settings-input font-semibold"
                                     >
                                         {localSettings.profiles.map(p => (
                                             <option key={p.id} value={p.id}>{p.name}</option>
@@ -450,8 +458,8 @@ export const SettingsModal: FC<{
                             <h4 className="roles-toolbar-title">System Instructions</h4>
                         </div>
                         <div className="roles-list-container">
-                            <div className="profile-edit-card" style={{ border: 'none', padding: 0, background: 'transparent', marginBottom: '1.5rem' }}>
-                                <div className="settings-form-group" style={{ marginBottom: 0 }}>
+                            <div className="profile-edit-card transparent">
+                                <div className="settings-form-group no-margin">
                                     <label className="settings-label">Initial Agent Instruction</label>
                                     <p className="settings-help">Instructions for the agents drafting the first response.</p>
                                     <textarea
@@ -463,8 +471,8 @@ export const SettingsModal: FC<{
                                 </div>
                             </div>
 
-                            <div className="profile-edit-card" style={{ border: 'none', padding: 0, background: 'transparent', marginBottom: '1.5rem' }}>
-                                <div className="settings-form-group" style={{ marginBottom: 0 }}>
+                            <div className="profile-edit-card transparent">
+                                <div className="settings-form-group no-margin">
                                     <label className="settings-label">Refinement Instruction</label>
                                     <p className="settings-help">Instructions for agents critiquing the initial drafts.</p>
                                     <textarea
@@ -476,8 +484,8 @@ export const SettingsModal: FC<{
                                 </div>
                             </div>
 
-                            <div className="profile-edit-card" style={{ border: 'none', padding: 0, background: 'transparent', marginBottom: 0 }}>
-                                <div className="settings-form-group" style={{ marginBottom: 0 }}>
+                            <div className="profile-edit-card transparent last">
+                                <div className="settings-form-group no-margin">
                                     <label className="settings-label">Synthesizer Instruction</label>
                                      <p className="settings-help">Instructions for the final agent merging all refined responses.</p>
                                     <textarea
@@ -513,8 +521,7 @@ export const SettingsModal: FC<{
                                     <select
                                         value={localSettings.activeRoleProfileId}
                                         onChange={handleRoleProfileChange}
-                                        className="settings-input"
-                                        style={{ fontWeight: 600 }}
+                                        className="settings-input font-semibold"
                                     >
                                         {(localSettings.roleProfiles || []).map(p => (
                                             <option key={p.id} value={p.id}>{p.name}</option>
@@ -543,25 +550,26 @@ export const SettingsModal: FC<{
 
                     <div className="roles-section-wrapper">
                         <div className="roles-toolbar">
-                            <div style={{ display: 'flex', alignItems: 'baseline' }}>
-                                <h4 className="roles-toolbar-title">Agent Roles</h4>
-                                <span className="roles-toolbar-subtitle">(Round-robin assignment)</span>
+                            <div className="roles-toolbar-content">
+                                <div className="role-type-toggle">
+                                    <button
+                                        className={`role-type-btn ${activeRoleType === 'drafter' ? 'active' : ''}`}
+                                        onClick={() => setActiveRoleType('drafter')}
+                                    >
+                                        Drafters
+                                    </button>
+                                    <button
+                                        className={`role-type-btn ${activeRoleType === 'critic' ? 'active' : ''}`}
+                                        onClick={() => setActiveRoleType('critic')}
+                                    >
+                                        Critics
+                                    </button>
+                                </div>
                             </div>
                             <button className="add-role-btn-small" onClick={handleAddRole}>+ Add Role</button>
                         </div>
                         {!localSettings.dynamicAgentRoles && (
-                            <div className="warning-banner" style={{
-                                background: '#fff7ed',
-                                border: '1px solid #fdba74',
-                                color: '#c2410c',
-                                padding: '0.75rem',
-                                borderRadius: '6px',
-                                margin: '1rem 1rem 0 1rem',
-                                fontSize: '0.85rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.5rem'
-                            }}>
+                            <div className="warning-banner">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
                                     <line x1="12" y1="9" x2="12" y2="13"></line>
@@ -572,17 +580,7 @@ export const SettingsModal: FC<{
                                 </span>
                                 <button
                                     onClick={() => setLocalSettings(prev => ({ ...prev, dynamicAgentRoles: true }))}
-                                    style={{
-                                        marginLeft: 'auto',
-                                        background: '#c2410c',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '4px',
-                                        padding: '0.25rem 0.75rem',
-                                        fontSize: '0.75rem',
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
-                                    }}
+                                    className="warning-banner-btn"
                                 >
                                     Enable
                                 </button>
@@ -596,10 +594,14 @@ export const SettingsModal: FC<{
                                     <line x1="12" y1="16" x2="12" y2="12"></line>
                                     <line x1="12" y1="8" x2="12.01" y2="8"></line>
                                 </svg>
-                                <span>Roles are only applied during the <strong>Initial Draft</strong> phase.</span>
+                                <span>
+                                    {activeRoleType === 'drafter'
+                                        ? "Roles are applied during the Initial Draft phase."
+                                        : "Roles are applied during the Refinement (Critique) phase."}
+                                </span>
                             </div>
                             <div className="roles-list">
-                                {(activeRoleProfile.roles || []).map((role, index) => (
+                                {((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || []).map((role, index) => (
                                     <div key={index} className="role-item">
                                         <div className="role-header">
                                             <div className="settings-form-group role-name-group">
@@ -627,7 +629,7 @@ export const SettingsModal: FC<{
                                                     <button
                                                         className="move-role-btn down"
                                                         onClick={() => handleMoveRole(index, 'down')}
-                                                        disabled={index === (activeRoleProfile.roles || []).length - 1}
+                                                        disabled={index === ((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || []).length - 1}
                                                         title="Move Down"
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -655,7 +657,7 @@ export const SettingsModal: FC<{
                                         </div>
                                     </div>
                                 ))}
-                                {(activeRoleProfile.roles || []).length === 0 && (
+                                {((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || []).length === 0 && (
                                     <div className="no-roles-message">
                                         No roles defined. Add a role to get started.
                                     </div>
