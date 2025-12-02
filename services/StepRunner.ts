@@ -83,6 +83,7 @@ export class StepRunner {
     // Map legacy settings to step IDs
     // In the future, this could be driven by a more generic configuration
     if (step.id === 'initial' && settings.pauseAfterInitial) return true;
+    if (step.id === 'refined' && settings.pauseAfterRefinement) return true;
     return false;
   }
 }

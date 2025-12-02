@@ -39,6 +39,7 @@ export interface AppSettings {
   devMode: boolean;
   debugMode: boolean;
   pauseAfterInitial: boolean;
+  pauseAfterRefinement: boolean;
   temperature: number;
   unsafeTemperature?: boolean;
   dynamicAgentRoles: boolean;

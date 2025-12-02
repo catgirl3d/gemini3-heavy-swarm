@@ -98,6 +98,16 @@ export const useGeminiSwarm = () => {
             parsedSettings.savedRoles = [];
         }
 
+        // Migration: Ensure pauseAfterRefinement exists
+        if (parsedSettings.pauseAfterRefinement === undefined) {
+            parsedSettings.pauseAfterRefinement = false;
+        }
+
+        // Migration: Ensure dynamicAgentRoles exists (default to true)
+        if (parsedSettings.dynamicAgentRoles === undefined) {
+            parsedSettings.dynamicAgentRoles = true;
+        }
+
         setSettings(parsedSettings);
       } catch (error) {
         console.error('Failed to parse saved settings:', error);

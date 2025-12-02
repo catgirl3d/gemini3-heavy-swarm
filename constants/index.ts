@@ -2,6 +2,10 @@ import { AppSettings, PromptProfile, AgentRole, RoleProfile } from '../types';
 
 export const DEFAULT_AGENT_ROLES: AgentRole[] = [
     {
+      name: "No Role",
+      instruction: ""
+    },
+    {
       name: "Visionary",
       instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the VISIONARY.
@@ -44,6 +48,10 @@ Your goal is to be organized, comprehensive, and educational.
 ];
 
 export const DEFAULT_CRITIC_ROLES: AgentRole[] = [
+    {
+        name: "No Role",
+        instruction: ""
+    },
     {
         name: "Constructive Critic",
         instruction: `*** CRITICAL ROLE ASSIGNMENT ***
@@ -449,11 +457,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   devMode: false,
   debugMode: false,
   pauseAfterInitial: false,
+  pauseAfterRefinement: false,
   activeProfileId: 'default',
   profiles: DEFAULT_PROFILES,
   temperature: 0.7,
   unsafeTemperature: false,
-  dynamicAgentRoles: false,
+  dynamicAgentRoles: true,
   activeRoleProfileId: 'default-roles',
   roleProfiles: DEFAULT_ROLE_PROFILES,
   savedInstructions: [],

@@ -237,6 +237,20 @@ export const SettingsModal: FC<{
           id: r.id
       }));
 
+      const noRolePreset = {
+          name: "No Role",
+          instruction: "",
+          isCustom: false,
+          id: "default-no-role"
+      };
+
+      // Check if "No Role" is already in profilePresets or savedPresets to avoid duplicates
+      const hasNoRole = [...savedPresets, ...profilePresets].some(p => p.name === "No Role");
+      
+      if (!hasNoRole) {
+          return [noRolePreset, ...savedPresets, ...profilePresets];
+      }
+
       return [...savedPresets, ...profilePresets];
   };
 
@@ -533,6 +547,19 @@ export const SettingsModal: FC<{
                             />
                             <label htmlFor="pauseAfterInitial" className="settings-label checkbox-label">
                                 Pause after Initial Drafts
+                            </label>
+                        </div>
+
+                        <div className="settings-form-group checkbox-group">
+                            <input
+                                type="checkbox"
+                                name="pauseAfterRefinement"
+                                id="pauseAfterRefinement"
+                                checked={localSettings.pauseAfterRefinement || false}
+                                onChange={handleChange}
+                            />
+                            <label htmlFor="pauseAfterRefinement" className="settings-label checkbox-label">
+                                Pause after Critics (Refinement)
                             </label>
                         </div>
                     </div>
