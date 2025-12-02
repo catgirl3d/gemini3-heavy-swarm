@@ -1,5 +1,6 @@
 docs/*
 
+
 # Logs
 logs
 *.log
@@ -25,6 +26,5 @@ dist-ssr
 *.sln
 *.sw?
 
-.dockerignore
 deploy.ps1
-nginx.conf
+
