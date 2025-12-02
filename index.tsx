@@ -5,6 +5,7 @@ import { useGeminiSwarm } from './hooks/useGeminiSwarm';
 import { AgentAvatar } from './components/AgentAvatar';
 import { EmptyState } from './components/EmptyState';
 import { SettingsModal } from './components/SettingsModal';
+import { InfoModal } from './components/InfoModal';
 import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { ShowWork } from './components/ShowWork';
 import { LoadingIndicator } from './components/LoadingIndicator';
@@ -14,7 +15,7 @@ const getModelDisplayName = (model: string) => {
   if (model === 'gemini-2.5-flash-lite') return 'Gemini 2.5 Flash-Lite Swarm';
   if (model === 'gemini-2.5-flash') return 'Gemini 2.5 Flash Swarm';
   if (model === 'gemini-2.5-pro') return 'Gemini 2.5 Pro Swarm';
-  return 'Gemini 3 Heavy Swar';
+  return 'Gemini 3 Heavy Swarm';
 };
 
 const App: FC = () => {
@@ -39,6 +40,7 @@ const App: FC = () => {
   const [image, setImage] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
@@ -132,6 +134,16 @@ const App: FC = () => {
             <h1>{getModelDisplayName(settings.model)}</h1>
         </div>
         <div className="header-actions">
+            <button
+                className="settings-button"
+                onClick={() => setIsInfoOpen(true)}
+                aria-label="How it Works"
+                title="How it Works"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                </svg>
+            </button>
             <button
                 className="settings-button"
                 onClick={() => window.location.reload()}
@@ -268,9 +280,13 @@ const App: FC = () => {
       )}
       <SettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)} 
+        onClose={() => setIsSettingsOpen(false)}
         settings={settings}
         onSave={setSettings}
+      />
+      <InfoModal
+        isOpen={isInfoOpen}
+        onClose={() => setIsInfoOpen(false)}
       />
     </div>
   );
