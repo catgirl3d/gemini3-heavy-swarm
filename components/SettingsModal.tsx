@@ -15,6 +15,10 @@ export const SettingsModal: FC<{
   const [isEditingProfileName, setIsEditingProfileName] = useState(false);
   const [activeRoleType, setActiveRoleType] = useState<'drafter' | 'critic'>('drafter');
   const [activePresetMenu, setActivePresetMenu] = useState<number | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number, right: number } | null>(null);
+  const [editingRoleIndex, setEditingRoleIndex] = useState<number | null>(null);
+  const [editingInstruction, setEditingInstruction] = useState<'initial' | 'refinement' | 'synthesizer' | null>(null);
+  const [activeInstructionPresetMenu, setActiveInstructionPresetMenu] = useState<'initial' | 'refinement' | 'synthesizer' | null>(null);
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -25,19 +29,28 @@ export const SettingsModal: FC<{
         if (e.key === 'Escape') onClose();
     };
     const handleClickOutside = (e: MouseEvent) => {
-        if (activePresetMenu !== null && !(e.target as Element).closest('.preset-menu-container')) {
+        if (activePresetMenu !== null &&
+            !(e.target as Element).closest('.preset-menu-container') &&
+            !(e.target as Element).closest('.preset-menu-dropdown-portal')) {
             setActivePresetMenu(null);
+            setDropdownPosition(null);
+        }
+        if (activeInstructionPresetMenu !== null &&
+            !(e.target as Element).closest('.preset-menu-container') &&
+            !(e.target as Element).closest('.preset-menu-dropdown-portal')) {
+            setActiveInstructionPresetMenu(null);
+            setDropdownPosition(null);
         }
     };
 
     if (isOpen) {
         window.addEventListener('keydown', handleEsc);
-        window.addEventListener('click', handleClickOutside);
+        window.addEventListener('click', handleClickOutside, true);
         document.body.style.overflow = 'hidden';
     }
     return () => {
         window.removeEventListener('keydown', handleEsc);
-        window.removeEventListener('click', handleClickOutside);
+        window.removeEventListener('click', handleClickOutside, true);
         document.body.style.overflow = 'unset';
     };
   }, [isOpen, onClose, activePresetMenu]);
@@ -211,6 +224,29 @@ export const SettingsModal: FC<{
       return type === 'drafter' ? defaultProfile.roles : (defaultProfile.criticRoles || []);
   };
 
+  const getInstructionPresets = (type: 'initial' | 'refinement' | 'synthesizer') => {
+      return DEFAULT_SETTINGS.profiles.filter(p => p.id !== localSettings.activeProfileId).map(p => ({
+          id: p.id,
+          name: p.name,
+          instruction: type === 'initial' ? p.initialInstruction : type === 'refinement' ? p.refinementInstruction : p.synthesizerInstruction
+      }));
+  };
+
+  const handleApplyInstructionPreset = (type: 'initial' | 'refinement' | 'synthesizer', instruction: string) => {
+      setLocalSettings(prev => {
+          const newProfiles = prev.profiles.map(p => {
+              if (p.id === prev.activeProfileId) {
+                  return {
+                      ...p,
+                      [type === 'initial' ? 'initialInstruction' : type === 'refinement' ? 'refinementInstruction' : 'synthesizerInstruction']: instruction
+                  };
+              }
+              return p;
+          });
+          return { ...prev, profiles: newProfiles };
+      });
+  };
+
   const handleAddRole = () => {
     setLocalSettings(prev => {
         const targetId = activeRoleProfile.id;
@@ -264,7 +300,7 @@ export const SettingsModal: FC<{
     });
   };
 
-  return createPortal(
+  const mainModal = createPortal(
     <div className="work-modal-overlay" onClick={onClose}>
       <div className="settings-modal" onClick={e => e.stopPropagation()}>
         <div className="work-modal-header">
@@ -494,43 +530,88 @@ export const SettingsModal: FC<{
                             <h4 className="roles-toolbar-title">System Instructions</h4>
                         </div>
                         <div className="roles-list-container">
-                            <div className="profile-edit-card transparent">
-                                <div className="settings-form-group no-margin">
-                                    <label className="settings-label">Initial Agent Instruction</label>
-                                    <p className="settings-help">Instructions for the agents drafting the first response.</p>
-                                    <textarea
-                                        name="initialInstruction"
-                                        value={activeProfile.initialInstruction}
-                                        onChange={handleInstructionChange}
-                                        className="settings-textarea"
-                                    />
-                                </div>
-                            </div>
+                            <div className="roles-list">
+                                {[
+                                    {
+                                        id: 'initial',
+                                        label: 'Initial Agent Instruction',
+                                        value: activeProfile.initialInstruction,
+                                        help: 'Instructions for the agents drafting the first response.'
+                                    },
+                                    {
+                                        id: 'refinement',
+                                        label: 'Refinement Instruction',
+                                        value: activeProfile.refinementInstruction,
+                                        help: 'Instructions for agents critiquing the initial drafts.'
+                                    },
+                                    {
+                                        id: 'synthesizer',
+                                        label: 'Synthesizer Instruction',
+                                        value: activeProfile.synthesizerInstruction,
+                                        help: 'Instructions for the final agent merging all refined responses.'
+                                    }
+                                ].map((item, index) => {
+                                    const presets = getInstructionPresets(item.id as any);
+                                    return (
+                                        <div key={item.id} className="role-item compact">
+                                            <div className="role-compact-row">
+                                                <div className="role-ordinal">#{index + 1}</div>
+                                                
+                                                <div className="role-main-content">
+                                                    <div className="role-info-group">
+                                                        <div className="role-name-display">
+                                                            {item.label}
+                                                        </div>
+                                                        <div className="role-help-text">
+                                                            {item.help}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {presets.length > 0 && (
+                                                        <div className="preset-menu-container">
+                                                            <button
+                                                                className={`preset-menu-trigger ${activeInstructionPresetMenu === item.id ? 'active' : ''}`}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (activeInstructionPresetMenu === item.id) {
+                                                                        setActiveInstructionPresetMenu(null);
+                                                                        setDropdownPosition(null);
+                                                                    } else {
+                                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                                        setDropdownPosition({
+                                                                            top: rect.bottom + window.scrollY,
+                                                                            right: window.innerWidth - rect.right - window.scrollX
+                                                                        });
+                                                                        setActiveInstructionPresetMenu(item.id as any);
+                                                                    }
+                                                                }}
+                                                                title="Load a preset instruction"
+                                                            >
+                                                                <span>Presets</span>
+                                                                <svg className="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
 
-                            <div className="profile-edit-card transparent">
-                                <div className="settings-form-group no-margin">
-                                    <label className="settings-label">Refinement Instruction</label>
-                                    <p className="settings-help">Instructions for agents critiquing the initial drafts.</p>
-                                    <textarea
-                                        name="refinementInstruction"
-                                        value={activeProfile.refinementInstruction}
-                                        onChange={handleInstructionChange}
-                                        className="settings-textarea"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="profile-edit-card transparent last">
-                                <div className="settings-form-group no-margin">
-                                    <label className="settings-label">Synthesizer Instruction</label>
-                                     <p className="settings-help">Instructions for the final agent merging all refined responses.</p>
-                                    <textarea
-                                        name="synthesizerInstruction"
-                                        value={activeProfile.synthesizerInstruction}
-                                        onChange={handleInstructionChange}
-                                        className="settings-textarea"
-                                    />
-                                </div>
+                                                <div className="role-actions-compact">
+                                                    <button
+                                                        className="icon-btn edit-role-btn"
+                                                        onClick={() => setEditingInstruction(item.id as any)}
+                                                        title="Edit Instruction"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
@@ -631,72 +712,66 @@ export const SettingsModal: FC<{
                                     <line x1="12" y1="8" x2="12.01" y2="8"></line>
                                 </svg>
                                 <span>
-                                    {activeRoleType === 'drafter'
-                                        ? "Roles are applied during the Initial Draft phase."
-                                        : "Roles are applied during the Refinement (Critique) phase."}
+                                    Roles are applied during the <strong>{activeRoleType === 'drafter' ? 'Initial Draft' : 'Refinement (Critique)'}</strong> phase.
                                 </span>
                             </div>
                             <div className="roles-list">
                                 {((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || []).map((role, index) => {
                                     const presets = getRolePresets(activeRoleProfile.id, activeRoleType);
                                     return (
-                                    <div key={index} className="role-item">
-                                        <div className="role-header">
-                                            <div className="settings-form-group role-name-group">
-                                                <div className="role-name-header">
-                                                    <label className="settings-label">Role Name</label>
-                                                    {presets.length > 0 && (
-                                                        <div className="preset-menu-container">
-                                                            <button
-                                                                className={`preset-menu-trigger ${activePresetMenu === index ? 'active' : ''}`}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setActivePresetMenu(activePresetMenu === index ? null : index);
-                                                                }}
-                                                                title="Load a preset role"
-                                                            >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                                                                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                                                                </svg>
-                                                                <span>Presets</span>
-                                                                <svg className="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                    <polyline points="6 9 12 15 18 9"></polyline>
-                                                                </svg>
-                                                            </button>
-                                                            {activePresetMenu === index && (
-                                                                <div className="preset-menu-dropdown">
-                                                                    <div className="preset-menu-header">Select a Role</div>
-                                                                    {presets.map((p, i) => (
-                                                                        <button
-                                                                            key={i}
-                                                                            className="preset-menu-item"
-                                                                            onClick={() => {
-                                                                                handleApplyRole(index, p);
-                                                                                setActivePresetMenu(null);
-                                                                            }}
-                                                                        >
-                                                                            <span className="preset-name">{p.name}</span>
-                                                                            <span className="preset-preview">{p.instruction.substring(0, 50)}...</span>
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                    <div key={index} className="role-item compact">
+                                        <div className="role-compact-row">
+                                            <div className="role-ordinal">#{index + 1}</div>
+                                            
+                                            <div className="role-main-content">
+                                                <div className="role-name-display">
+                                                    {role.name || 'Unnamed Role'}
                                                 </div>
-                                                <input
-                                                    type="text"
-                                                    value={role.name || ''}
-                                                    onChange={(e) => handleRoleChange(index, 'name', e.target.value)}
-                                                    className="settings-input"
-                                                    placeholder="e.g. Critic, Visionary"
-                                                />
+                                                
+                                                {presets.length > 0 && (
+                                                    <div className="preset-menu-container">
+                                                        <button
+                                                            className={`preset-menu-trigger ${activePresetMenu === index ? 'active' : ''}`}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (activePresetMenu === index) {
+                                                                    setActivePresetMenu(null);
+                                                                    setDropdownPosition(null);
+                                                                } else {
+                                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                                    setDropdownPosition({
+                                                                        top: rect.bottom + window.scrollY,
+                                                                        right: window.innerWidth - rect.right - window.scrollX
+                                                                    });
+                                                                    setActivePresetMenu(index);
+                                                                }
+                                                            }}
+                                                            title="Load a preset role"
+                                                        >
+                                                            <span>Presets</span>
+                                                            <svg className="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                <polyline points="6 9 12 15 18 9"></polyline>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="role-actions">
-                                                <div className="role-move-buttons">
+
+                                            <div className="role-actions-compact">
+                                                <button
+                                                    className="icon-btn edit-role-btn"
+                                                    onClick={() => setEditingRoleIndex(index)}
+                                                    title="Edit Role"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                    </svg>
+                                                </button>
+                                                
+                                                <div className="role-move-buttons horizontal">
                                                     <button
-                                                        className="move-role-btn up"
+                                                        className="move-role-btn"
                                                         onClick={() => handleMoveRole(index, 'up')}
                                                         disabled={index === 0}
                                                         title="Move Up"
@@ -706,7 +781,7 @@ export const SettingsModal: FC<{
                                                         </svg>
                                                     </button>
                                                     <button
-                                                        className="move-role-btn down"
+                                                        className="move-role-btn"
                                                         onClick={() => handleMoveRole(index, 'down')}
                                                         disabled={index === ((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || []).length - 1}
                                                         title="Move Down"
@@ -716,23 +791,18 @@ export const SettingsModal: FC<{
                                                         </svg>
                                                     </button>
                                                 </div>
+
                                                 <button
-                                                    className="settings-btn danger role-delete-btn"
+                                                    className="icon-btn delete-role-btn"
                                                     onClick={() => handleDeleteRole(index)}
-                                                    aria-label="Delete role"
+                                                    title="Delete Role"
                                                 >
-                                                    Delete
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                    </svg>
                                                 </button>
                                             </div>
-                                        </div>
-                                        <div className="settings-form-group role-instruction-group">
-                                            <label className="settings-label">Role Instruction</label>
-                                            <textarea
-                                                value={role.instruction || ''}
-                                                onChange={(e) => handleRoleChange(index, 'instruction', e.target.value)}
-                                                className="settings-textarea role-instruction-textarea"
-                                                placeholder="Instructions for this specific role..."
-                                            />
                                         </div>
                                     </div>
                                     );
@@ -755,5 +825,158 @@ export const SettingsModal: FC<{
       </div>
     </div>,
     document.body
+  );
+
+  // Render the Preset Menu Dropdown via Portal
+  const presetDropdown = activePresetMenu !== null && dropdownPosition && (
+      createPortal(
+          <div
+              className="preset-menu-dropdown preset-menu-dropdown-portal"
+              style={{
+                  position: 'fixed',
+                  top: dropdownPosition.top + 4,
+                  right: dropdownPosition.right,
+                  zIndex: 2000
+              }}
+              onClick={e => e.stopPropagation()}
+          >
+              <div className="preset-menu-header">Select a Role</div>
+              {getRolePresets(activeRoleProfile.id, activeRoleType).map((p, i) => (
+                  <button
+                      key={i}
+                      className="preset-menu-item"
+                      onClick={() => {
+                          handleApplyRole(activePresetMenu, p);
+                          setActivePresetMenu(null);
+                          setDropdownPosition(null);
+                      }}
+                  >
+                      <span className="preset-name">{p.name}</span>
+                  </button>
+              ))}
+          </div>,
+          document.body
+      )
+  );
+
+  // Render the Instruction Preset Menu Dropdown via Portal
+  const instructionPresetDropdown = activeInstructionPresetMenu !== null && dropdownPosition && (
+      createPortal(
+          <div
+              className="preset-menu-dropdown preset-menu-dropdown-portal"
+              style={{
+                  position: 'fixed',
+                  top: dropdownPosition.top + 4,
+                  right: dropdownPosition.right,
+                  zIndex: 2000
+              }}
+              onClick={e => e.stopPropagation()}
+          >
+              <div className="preset-menu-header">Select a Preset</div>
+              {getInstructionPresets(activeInstructionPresetMenu).map((p, i) => (
+                  <button
+                      key={i}
+                      className="preset-menu-item"
+                      onClick={() => {
+                          handleApplyInstructionPreset(activeInstructionPresetMenu, p.instruction);
+                          setActiveInstructionPresetMenu(null);
+                          setDropdownPosition(null);
+                      }}
+                  >
+                      <span className="preset-name">{p.name}</span>
+                  </button>
+              ))}
+          </div>,
+          document.body
+      )
+  );
+
+  // Render the Edit Role Modal
+  const editRoleModal = editingRoleIndex !== null && (
+      createPortal(
+        <div className="work-modal-overlay" onClick={() => setEditingRoleIndex(null)}>
+            <div className="settings-modal role-edit-modal" onClick={e => e.stopPropagation()}>
+                <div className="work-modal-header">
+                    <h3>Edit Role #{editingRoleIndex + 1}</h3>
+                    <button className="close-modal-button" onClick={() => setEditingRoleIndex(null)}>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div className="settings-modal-body">
+                    <div className="settings-form-group">
+                        <label className="settings-label">Role Name</label>
+                        <input
+                            type="text"
+                            value={((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.name || ''}
+                            onChange={(e) => handleRoleChange(editingRoleIndex, 'name', e.target.value)}
+                            className="settings-input"
+                            placeholder="e.g. Critic, Visionary"
+                            autoFocus
+                        />
+                    </div>
+                    <div className="settings-form-group">
+                        <label className="settings-label">Role Instruction</label>
+                        <textarea
+                            value={((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.instruction || ''}
+                            onChange={(e) => handleRoleChange(editingRoleIndex, 'instruction', e.target.value)}
+                            className="settings-textarea role-instruction-textarea-large"
+                            placeholder="Instructions for this specific role..."
+                        />
+                    </div>
+                </div>
+                <div className="settings-modal-footer justify-end">
+                    <button className="settings-btn save" onClick={() => setEditingRoleIndex(null)}>Done</button>
+                </div>
+            </div>
+        </div>,
+        document.body
+      )
+  );
+
+  // Render the Edit Instruction Modal
+  const editInstructionModal = editingInstruction !== null && (
+      createPortal(
+        <div className="work-modal-overlay" onClick={() => setEditingInstruction(null)}>
+            <div className="settings-modal role-edit-modal" onClick={e => e.stopPropagation()}>
+                <div className="work-modal-header">
+                    <h3>Edit {editingInstruction === 'initial' ? 'Initial Agent' : editingInstruction === 'refinement' ? 'Refinement' : 'Synthesizer'} Instruction</h3>
+                    <button className="close-modal-button" onClick={() => setEditingInstruction(null)}>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div className="settings-modal-body">
+                    <div className="settings-form-group">
+                        <label className="settings-label">Instruction</label>
+                        <textarea
+                            name={editingInstruction === 'initial' ? 'initialInstruction' : editingInstruction === 'refinement' ? 'refinementInstruction' : 'synthesizerInstruction'}
+                            value={editingInstruction === 'initial' ? activeProfile.initialInstruction : editingInstruction === 'refinement' ? activeProfile.refinementInstruction : activeProfile.synthesizerInstruction}
+                            onChange={handleInstructionChange}
+                            className="settings-textarea role-instruction-textarea-large"
+                            placeholder="Enter instructions..."
+                            autoFocus
+                        />
+                    </div>
+                </div>
+                <div className="settings-modal-footer justify-end">
+                    <button className="settings-btn save" onClick={() => setEditingInstruction(null)}>Done</button>
+                </div>
+            </div>
+        </div>,
+        document.body
+      )
+  );
+
+  return (
+      <>
+        {mainModal}
+        {editRoleModal}
+        {editInstructionModal}
+        {presetDropdown}
+        {instructionPresetDropdown}
+      </>
   );
 };
