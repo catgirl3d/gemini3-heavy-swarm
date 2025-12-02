@@ -88,6 +88,16 @@ export const useGeminiSwarm = () => {
             });
         }
 
+        // Migration: Ensure savedInstructions exist
+        if (!parsedSettings.savedInstructions) {
+            parsedSettings.savedInstructions = [];
+        }
+
+        // Migration: Ensure savedRoles exist
+        if (!parsedSettings.savedRoles) {
+            parsedSettings.savedRoles = [];
+        }
+
         setSettings(parsedSettings);
       } catch (error) {
         console.error('Failed to parse saved settings:', error);

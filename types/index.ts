@@ -18,6 +18,19 @@ export interface RoleProfile {
     criticRoles?: AgentRole[];
 }
 
+export interface SavedInstruction {
+    id: string;
+    name: string;
+    type: 'initial' | 'refinement' | 'synthesizer';
+    content: string;
+}
+
+export interface SavedRole {
+    id: string;
+    name: string;
+    instruction: string;
+}
+
 export interface AppSettings {
   numAgents: number;
   model: string;
@@ -31,6 +44,8 @@ export interface AppSettings {
   dynamicAgentRoles: boolean;
   activeRoleProfileId: string;
   roleProfiles: RoleProfile[];
+  savedInstructions: SavedInstruction[];
+  savedRoles: SavedRole[];
 }
 
 export interface Source {

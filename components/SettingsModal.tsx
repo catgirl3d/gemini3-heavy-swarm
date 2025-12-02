@@ -19,6 +19,8 @@ export const SettingsModal: FC<{
   const [editingRoleIndex, setEditingRoleIndex] = useState<number | null>(null);
   const [editingInstruction, setEditingInstruction] = useState<'initial' | 'refinement' | 'synthesizer' | null>(null);
   const [activeInstructionPresetMenu, setActiveInstructionPresetMenu] = useState<'initial' | 'refinement' | 'synthesizer' | null>(null);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -53,7 +55,7 @@ export const SettingsModal: FC<{
         window.removeEventListener('click', handleClickOutside, true);
         document.body.style.overflow = 'unset';
     };
-  }, [isOpen, onClose, activePresetMenu]);
+  }, [isOpen, onClose, activePresetMenu, activeInstructionPresetMenu]);
 
   if (!isOpen) return null;
 
@@ -220,15 +222,103 @@ export const SettingsModal: FC<{
   const getRolePresets = (profileId: string, type: 'drafter' | 'critic') => {
       // Find the default profile definition to get the canonical list of roles
       const defaultProfile = DEFAULT_SETTINGS.roleProfiles.find(p => p.id === profileId);
-      if (!defaultProfile) return [];
-      return type === 'drafter' ? defaultProfile.roles : (defaultProfile.criticRoles || []);
+      const defaultRoles = defaultProfile ? (type === 'drafter' ? defaultProfile.roles : (defaultProfile.criticRoles || [])) : [];
+      
+      const profilePresets = defaultRoles.map(r => ({
+          ...r,
+          isCustom: false,
+          id: `default-${r.name}` // Pseudo-ID for keying
+      }));
+
+      const savedPresets = (localSettings.savedRoles || []).map(r => ({
+          name: r.name,
+          instruction: r.instruction,
+          isCustom: true,
+          id: r.id
+      }));
+
+      return [...savedPresets, ...profilePresets];
   };
 
   const getInstructionPresets = (type: 'initial' | 'refinement' | 'synthesizer') => {
-      return DEFAULT_SETTINGS.profiles.filter(p => p.id !== localSettings.activeProfileId).map(p => ({
+      const profilePresets = DEFAULT_SETTINGS.profiles.filter(p => p.id !== localSettings.activeProfileId).map(p => ({
           id: p.id,
           name: p.name,
-          instruction: type === 'initial' ? p.initialInstruction : type === 'refinement' ? p.refinementInstruction : p.synthesizerInstruction
+          instruction: type === 'initial' ? p.initialInstruction : type === 'refinement' ? p.refinementInstruction : p.synthesizerInstruction,
+          isCustom: false
+      }));
+
+      const savedPresets = (localSettings.savedInstructions || []).filter(i => i.type === type).map(i => ({
+          id: i.id,
+          name: i.name,
+          instruction: i.content,
+          isCustom: true
+      }));
+
+      return [...savedPresets, ...profilePresets];
+  };
+
+  const handleSaveInstructionPreset = () => {
+      if (!editingInstruction || !newPresetName.trim()) return;
+      
+      const currentInstruction = editingInstruction === 'initial'
+          ? activeProfile.initialInstruction
+          : editingInstruction === 'refinement'
+              ? activeProfile.refinementInstruction
+              : activeProfile.synthesizerInstruction;
+
+      setLocalSettings(prev => ({
+          ...prev,
+          savedInstructions: [
+              ...(prev.savedInstructions || []),
+              {
+                  id: `saved-${Date.now()}`,
+                  name: newPresetName.trim(),
+                  type: editingInstruction,
+                  content: currentInstruction
+              }
+          ]
+      }));
+      
+      setNewPresetName('');
+      setIsSavingPreset(false);
+  };
+
+  const handleDeleteInstructionPreset = (id: string) => {
+      setLocalSettings(prev => ({
+          ...prev,
+          savedInstructions: (prev.savedInstructions || []).filter(i => i.id !== id)
+      }));
+  };
+
+  const handleSaveRolePreset = () => {
+      if (editingRoleIndex === null || !newPresetName.trim()) return;
+      
+      const roleList = activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles;
+      const currentRole = (roleList || [])[editingRoleIndex];
+      
+      if (!currentRole) return;
+
+      setLocalSettings(prev => ({
+          ...prev,
+          savedRoles: [
+              ...(prev.savedRoles || []),
+              {
+                  id: `saved-role-${Date.now()}`,
+                  name: newPresetName.trim(),
+                  instruction: currentRole.instruction
+              }
+          ]
+      }));
+      
+      setNewPresetName('');
+      setIsSavingPreset(false);
+  };
+
+  const handleDeleteRolePreset = (id: string) => {
+      setLocalSettings(prev => ({
+          ...prev,
+          savedRoles: (prev.savedRoles || []).filter(r => r.id !== id)
       }));
   };
 
@@ -842,17 +932,34 @@ export const SettingsModal: FC<{
           >
               <div className="preset-menu-header">Select a Role</div>
               {getRolePresets(activeRoleProfile.id, activeRoleType).map((p, i) => (
-                  <button
-                      key={i}
-                      className="preset-menu-item"
-                      onClick={() => {
-                          handleApplyRole(activePresetMenu, p);
-                          setActivePresetMenu(null);
-                          setDropdownPosition(null);
-                      }}
-                  >
-                      <span className="preset-name">{p.name}</span>
-                  </button>
+                  <div key={i} className="preset-menu-item-wrapper">
+                    <button
+                        className="preset-menu-item"
+                        onClick={() => {
+                            handleApplyRole(activePresetMenu, p);
+                            setActivePresetMenu(null);
+                            setDropdownPosition(null);
+                        }}
+                    >
+                        <span className="preset-name">{p.name}</span>
+                        {p.isCustom && <span className="preset-tag">Saved</span>}
+                    </button>
+                    {p.isCustom && (
+                        <button
+                            className="preset-delete-btn"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteRolePreset(p.id);
+                            }}
+                            title="Delete Preset"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    )}
+                  </div>
               ))}
           </div>,
           document.body
@@ -874,17 +981,34 @@ export const SettingsModal: FC<{
           >
               <div className="preset-menu-header">Select a Preset</div>
               {getInstructionPresets(activeInstructionPresetMenu).map((p, i) => (
-                  <button
-                      key={i}
-                      className="preset-menu-item"
-                      onClick={() => {
-                          handleApplyInstructionPreset(activeInstructionPresetMenu, p.instruction);
-                          setActiveInstructionPresetMenu(null);
-                          setDropdownPosition(null);
-                      }}
-                  >
-                      <span className="preset-name">{p.name}</span>
-                  </button>
+                  <div key={i} className="preset-menu-item-wrapper">
+                    <button
+                        className="preset-menu-item"
+                        onClick={() => {
+                            handleApplyInstructionPreset(activeInstructionPresetMenu, p.instruction);
+                            setActiveInstructionPresetMenu(null);
+                            setDropdownPosition(null);
+                        }}
+                    >
+                        <span className="preset-name">{p.name}</span>
+                        {p.isCustom && <span className="preset-tag">Saved</span>}
+                    </button>
+                    {p.isCustom && (
+                        <button
+                            className="preset-delete-btn"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteInstructionPreset(p.id);
+                            }}
+                            title="Delete Preset"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    )}
+                  </div>
               ))}
           </div>,
           document.body
@@ -926,7 +1050,40 @@ export const SettingsModal: FC<{
                         />
                     </div>
                 </div>
-                <div className="settings-modal-footer justify-end">
+                <div className="settings-modal-footer space-between">
+                    <div className="save-preset-container">
+                        {isSavingPreset ? (
+                            <div className="save-preset-input-group">
+                                <input
+                                    type="text"
+                                    placeholder="Preset Name"
+                                    value={newPresetName}
+                                    onChange={(e) => setNewPresetName(e.target.value)}
+                                    className="settings-input small"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleSaveRolePreset();
+                                        if (e.key === 'Escape') setIsSavingPreset(false);
+                                    }}
+                                />
+                                <button className="icon-btn save-confirm-btn" onClick={handleSaveRolePreset} disabled={!newPresetName.trim()}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </button>
+                                <button className="icon-btn save-cancel-btn" onClick={() => setIsSavingPreset(false)}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                        ) : (
+                            <button className="settings-btn outline small" onClick={() => setIsSavingPreset(true)}>
+                                Save as Preset
+                            </button>
+                        )}
+                    </div>
                     <button className="settings-btn save" onClick={() => setEditingRoleIndex(null)}>Done</button>
                 </div>
             </div>
@@ -961,7 +1118,40 @@ export const SettingsModal: FC<{
                         />
                     </div>
                 </div>
-                <div className="settings-modal-footer justify-end">
+                <div className="settings-modal-footer space-between">
+                    <div className="save-preset-container">
+                        {isSavingPreset ? (
+                            <div className="save-preset-input-group">
+                                <input
+                                    type="text"
+                                    placeholder="Preset Name"
+                                    value={newPresetName}
+                                    onChange={(e) => setNewPresetName(e.target.value)}
+                                    className="settings-input small"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleSaveInstructionPreset();
+                                        if (e.key === 'Escape') setIsSavingPreset(false);
+                                    }}
+                                />
+                                <button className="icon-btn save-confirm-btn" onClick={handleSaveInstructionPreset} disabled={!newPresetName.trim()}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </button>
+                                <button className="icon-btn save-cancel-btn" onClick={() => setIsSavingPreset(false)}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                        ) : (
+                            <button className="settings-btn outline small" onClick={() => setIsSavingPreset(true)}>
+                                Save as Preset
+                            </button>
+                        )}
+                    </div>
                     <button className="settings-btn save" onClick={() => setEditingInstruction(null)}>Done</button>
                 </div>
             </div>

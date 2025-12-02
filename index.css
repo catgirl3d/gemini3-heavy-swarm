@@ -1965,3 +1965,96 @@ margin: 0px;
   width: 18px;
   height: 18px;
 }
+/* Saved Presets Styles */
+.preset-menu-item-wrapper {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.preset-menu-item-wrapper:last-child {
+    border-bottom: none;
+}
+
+.preset-menu-item-wrapper .preset-menu-item {
+    border-bottom: none;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.preset-tag {
+    font-size: 0.65rem;
+    background-color: #e0f2fe;
+    color: #0284c7;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.preset-delete-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 0.6rem 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.preset-delete-btn:hover {
+    color: #ef4444;
+    background-color: #fef2f2;
+}
+
+.settings-modal-footer.space-between {
+    justify-content: space-between;
+}
+
+.save-preset-container {
+    display: flex;
+    align-items: center;
+}
+
+.save-preset-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.settings-input.small {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+    width: 200px;
+}
+
+.settings-btn.small {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+}
+
+.save-confirm-btn {
+    color: #16a34a;
+}
+
+.save-confirm-btn:hover {
+    background-color: #f0fdf4;
+    color: #15803d;
+}
+
+.save-cancel-btn {
+    color: #ef4444;
+}
+
+.save-cancel-btn:hover {
+    background-color: #fef2f2;
+    color: #b91c1c;
+}

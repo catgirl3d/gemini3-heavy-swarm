@@ -455,5 +455,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   unsafeTemperature: false,
   dynamicAgentRoles: false,
   activeRoleProfileId: 'default-roles',
-  roleProfiles: DEFAULT_ROLE_PROFILES
+  roleProfiles: DEFAULT_ROLE_PROFILES,
+  savedInstructions: [],
+  savedRoles: []
 };
