@@ -11,9 +11,10 @@ import { LoadingIndicator } from './components/LoadingIndicator';
 import { Sources } from './components/Sources';
 
 const getModelDisplayName = (model: string) => {
-  if (model === 'gemini-2.5-flash') return 'Gemini 2.5 Flash Heavy';
-  if (model === 'gemini-2.5-pro') return 'Gemini 2.5 Pro Heavy';
-  return 'Gemini 3 Heavy';
+  if (model === 'gemini-2.5-flash-lite') return 'Gemini 2.5 Flash-Lite Swarm';
+  if (model === 'gemini-2.5-flash') return 'Gemini 2.5 Flash Swarm';
+  if (model === 'gemini-2.5-pro') return 'Gemini 2.5 Pro Swarm';
+  return 'Gemini 3 Heavy Swar';
 };
 
 const App: FC = () => {

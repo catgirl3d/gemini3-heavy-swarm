@@ -206,9 +206,6 @@ export const SettingsModal: FC<{
 
   const getRolePresets = (profileId: string, type: 'drafter' | 'critic') => {
       // Find the default profile definition to get the canonical list of roles
-      // We strip any "custom-" prefix if it was derived from a default, but currently IDs are unique.
-      // If the user is editing a custom profile, we might want to show presets from the *original* default profile it was based on?
-      // For now, we only show presets if the ID matches a default profile ID.
       const defaultProfile = DEFAULT_SETTINGS.roleProfiles.find(p => p.id === profileId);
       if (!defaultProfile) return [];
       return type === 'drafter' ? defaultProfile.roles : (defaultProfile.criticRoles || []);
@@ -313,6 +310,7 @@ export const SettingsModal: FC<{
                                 onChange={handleChange}
                                 className="settings-input"
                             >
+                                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
                                 <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                                 <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                                 <option value="gemini-3-pro-preview">Gemini 3 Pro (Preview)</option>
