@@ -127,8 +127,18 @@ const App: FC = () => {
     }
   };
 
+  const isUsingProxy = !settings.apiKey && !process.env.API_KEY;
+
   return (
     <div className="chat-container">
+      {isUsingProxy && (
+        <div className="demo-banner">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="demo-banner-icon">
+                <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
+            </svg>
+            Using Proxy Mode. Please add your API key in settings for direct access.
+        </div>
+      )}
       <header>
         <div className="header-content">
             <div className="header-logo">
@@ -202,13 +212,6 @@ const App: FC = () => {
                 isPaused={isPaused}
                 onContinue={continueGeneration}
                 onRegenerate={(phase, agentIndex) => {
-                    // When paused, the current message is the last one in the messages array
-                    // because we push the user message, then start loading.
-                    // Wait, if we are paused, we haven't pushed the final model message yet?
-                    // Let's check useGeminiSwarm.
-                    // In useGeminiSwarm, we push the user message, then start loading.
-                    // The model message is streamed into messages array via onMessageUpdate.
-                    // So the last message in 'messages' should be the one we are working on.
                     regenerateAgentResponse(messages.length - 1, phase, agentIndex);
                 }}
             />

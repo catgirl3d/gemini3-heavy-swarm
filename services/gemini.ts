@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { ProxyGenAI } from './ProxyGenAI';
 import { AppSettings, Work, AgentState, Message } from '../types';
 import type { MutableRefObject } from 'react';
 import { StepRunner } from './StepRunner';
@@ -22,10 +23,11 @@ const getAgentPerspective = (index: number, settings: AppSettings): { name: stri
 };
 
 export class GeminiService {
-  private ai: GoogleGenAI | null = null;
+  private ai: GoogleGenAI | ProxyGenAI | null = null;
   private steps: StepDescriptor[];
 
   constructor() {
+    // Initialize with default env key if available, but this can be overridden per-run
     if (process.env.API_KEY) {
       this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     }
@@ -49,6 +51,17 @@ export class GeminiService {
     pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>
   ): Promise<{ text: string; sources?: any[]; work: Work }> {
     
+    // Initialize AI client with user key if provided, otherwise fall back to env key
+    const apiKey = settings.apiKey || process.env.API_KEY;
+    if (apiKey) {
+        console.log("Using direct API key from settings/env");
+        this.ai = new GoogleGenAI({ apiKey });
+    } else {
+        // Fallback to proxy if no key is provided
+        console.log("No API key provided, using ProxyGenAI");
+        this.ai = new ProxyGenAI();
+    }
+
     const liveWork: Work = {
       initialResponses: Array(settings.numAgents).fill(null),
       refinedResponses: Array(settings.numAgents).fill(null),
@@ -111,6 +124,16 @@ export class GeminiService {
     onUpdate: (text: string) => void,
     signal: AbortSignal
   ): Promise<string> {
+    // Ensure AI client is updated with the latest key from settings
+    const apiKey = settings.apiKey || process.env.API_KEY;
+    if (apiKey) {
+        console.log("Using direct API key from settings/env (regeneration)");
+        this.ai = new GoogleGenAI({ apiKey });
+    } else {
+        console.log("Using ProxyGenAI (regeneration)");
+        this.ai = new ProxyGenAI();
+    }
+
     // Find the step
     const step = this.steps.find(s => s.id === stepId);
     

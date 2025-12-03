@@ -1,10 +1,11 @@
 import { AppSettings, Message, AgentState, Work } from './index';
 import { GoogleGenAI } from '@google/genai';
+import { ProxyGenAI } from '../services/ProxyGenAI';
 
 export type StepId = string;
 
 export interface StepContext {
-  ai: GoogleGenAI | null;
+  ai: GoogleGenAI | ProxyGenAI | null;
   settings: AppSettings;
   history: Message[];
   userInput: string;

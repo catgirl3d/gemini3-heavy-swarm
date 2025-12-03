@@ -33,6 +33,7 @@ export interface SavedRole {
 
 export interface AppSettings {
   numAgents: number;
+  apiKey?: string;
   model: string;
   activeProfileId: string;
   profiles: PromptProfile[];

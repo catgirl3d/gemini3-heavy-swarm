@@ -443,18 +443,39 @@ export const SettingsModal: FC<{
                     <div className="settings-card">
                         <span className="settings-card-title">Core Configuration</span>
                         <div className="settings-form-group">
+                            <label className="settings-label">API Key (Optional)</label>
+                            <input
+                                type="password"
+                                name="apiKey"
+                                value={localSettings.apiKey || ''}
+                                onChange={handleChange}
+                                className="settings-input"
+                                placeholder="Enter your Gemini API Key"
+                            />
+                            <p className="settings-help-text">
+                                Leave empty to use the default key (if configured). Your key is stored locally in your browser.
+                            </p>
+                        </div>
+
+                        <div className="settings-form-group">
                             <label className="settings-label">Model</label>
                             <select
                                 name="model"
-                                value={localSettings.model || 'gemini-3-pro-preview'}
+                                value={(!localSettings.apiKey && !process.env.API_KEY) ? 'gemini-2.5-flash-lite' : (localSettings.model || 'gemini-3-pro-preview')}
                                 onChange={handleChange}
                                 className="settings-input"
+                                disabled={!localSettings.apiKey && !process.env.API_KEY}
                             >
                                 <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
                                 <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                                 <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                                 <option value="gemini-3-pro-preview">Gemini 3 Pro (Preview)</option>
                             </select>
+                            {(!localSettings.apiKey && !process.env.API_KEY) && (
+                                <p className="settings-help-text warning">
+                                    Only Gemini 2.5 Flash-Lite is available in Proxy Mode. Add an API key to unlock all models.
+                                </p>
+                            )}
                         </div>
 
                         <div className="settings-row">
@@ -945,7 +966,15 @@ export const SettingsModal: FC<{
         </div>
         <div className="settings-modal-footer">
             <button className="settings-btn reset" onClick={handleReset}>Reset to Defaults</button>
-            <button className="settings-btn save" onClick={() => { onSave(localSettings); onClose(); }}>Save Changes</button>
+            <button className="settings-btn save" onClick={() => {
+                const finalSettings = { ...localSettings };
+                // If switching to proxy mode (no API key), enforce the demo model
+                if (!finalSettings.apiKey && !process.env.API_KEY) {
+                    finalSettings.model = 'gemini-2.5-flash-lite';
+                }
+                onSave(finalSettings);
+                onClose();
+            }}>Save Changes</button>
         </div>
       </div>
     </div>,
