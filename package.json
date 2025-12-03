@@ -10,6 +10,7 @@
     "deploy": "npm run build && wrangler pages deploy dist"
   },
   "dependencies": {
+    "express": "^4.18.2",
     "@google/genai": "^1.16.0",
     "react": "^19.1.1",
     "react-dom": "^19.2.0",

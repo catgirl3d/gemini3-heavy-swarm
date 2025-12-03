@@ -10,12 +10,22 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM nginx:alpine
+FROM node:20-alpine
 
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+WORKDIR /app
+
+# Copy package files and install production dependencies (express)
+COPY package*.json ./
+RUN npm ci --only=production
+
+# Copy built assets from build stage
+COPY --from=build /app/dist ./dist
+
+# Copy server script
+COPY server.js .
 
 # Cloud Run expects the container to listen on port 8080 by default
+ENV PORT=8080
 EXPOSE 8080
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["node", "server.js"]
