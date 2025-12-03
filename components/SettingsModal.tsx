@@ -4,11 +4,12 @@ import { AppSettings, PromptProfile, RoleProfile } from '../types';
 import { DEFAULT_SETTINGS } from '../constants';
 
 export const SettingsModal: FC<{
-  isOpen: boolean; 
-  onClose: () => void; 
-  settings: AppSettings; 
+  isOpen: boolean;
+  onClose: () => void;
+  settings: AppSettings;
   onSave: (newSettings: AppSettings) => void;
-}> = ({ isOpen, onClose, settings, onSave }) => {
+  serverHasKey?: boolean;
+}> = ({ isOpen, onClose, settings, onSave, serverHasKey = false }) => {
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [activeTab, setActiveTab] = useState<'general' | 'prompts' | 'roles'>('general');
   const [isEditingRoleName, setIsEditingRoleName] = useState(false);
@@ -461,17 +462,17 @@ export const SettingsModal: FC<{
                             <label className="settings-label">Model</label>
                             <select
                                 name="model"
-                                value={(!localSettings.apiKey && !process.env.API_KEY) ? 'gemini-2.5-flash-lite' : (localSettings.model || 'gemini-3-pro-preview')}
+                                value={(!localSettings.apiKey && !process.env.API_KEY && !serverHasKey) ? 'gemini-2.5-flash-lite' : (localSettings.model || 'gemini-3-pro-preview')}
                                 onChange={handleChange}
                                 className="settings-input"
-                                disabled={!localSettings.apiKey && !process.env.API_KEY}
+                                disabled={!localSettings.apiKey && !process.env.API_KEY && !serverHasKey}
                             >
                                 <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
                                 <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                                 <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                                 <option value="gemini-3-pro-preview">Gemini 3 Pro (Preview)</option>
                             </select>
-                            {(!localSettings.apiKey && !process.env.API_KEY) && (
+                            {(!localSettings.apiKey && !process.env.API_KEY && !serverHasKey) && (
                                 <p className="settings-help-text warning">
                                     Only Gemini 2.5 Flash-Lite is available in Proxy Mode. Add an API key to unlock all models.
                                 </p>
@@ -969,7 +970,7 @@ export const SettingsModal: FC<{
             <button className="settings-btn save" onClick={() => {
                 const finalSettings = { ...localSettings };
                 // If switching to proxy mode (no API key), enforce the demo model
-                if (!finalSettings.apiKey && !process.env.API_KEY) {
+                if (!finalSettings.apiKey && !process.env.API_KEY && !serverHasKey) {
                     finalSettings.model = 'gemini-2.5-flash-lite';
                 }
                 onSave(finalSettings);

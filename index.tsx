@@ -306,6 +306,7 @@ const App: FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
         onSave={setSettings}
+        serverHasKey={serverHasKey}
       />
       <InfoModal
         isOpen={isInfoOpen}
