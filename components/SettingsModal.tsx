@@ -695,9 +695,13 @@ export const SettingsModal: FC<{
                                                                         setDropdownPosition(null);
                                                                     } else {
                                                                         const rect = e.currentTarget.getBoundingClientRect();
+                                                                        const spaceBelow = window.innerHeight - rect.bottom;
+                                                                        const spaceAbove = rect.top;
+                                                                        const dropdownHeight = 200; // Approximate max height
+                                                                        
                                                                         setDropdownPosition({
-                                                                            top: rect.bottom + window.scrollY,
-                                                                            right: window.innerWidth - rect.right - window.scrollX
+                                                                            top: spaceBelow < dropdownHeight && spaceAbove > spaceBelow ? rect.top - dropdownHeight : rect.bottom,
+                                                                            right: window.innerWidth - rect.right
                                                                         });
                                                                         setActiveInstructionPresetMenu(item.id as any);
                                                                     }
@@ -856,9 +860,13 @@ export const SettingsModal: FC<{
                                                                     setDropdownPosition(null);
                                                                 } else {
                                                                     const rect = e.currentTarget.getBoundingClientRect();
+                                                                    const spaceBelow = window.innerHeight - rect.bottom;
+                                                                    const spaceAbove = rect.top;
+                                                                    const dropdownHeight = 200; // Approximate max height
+
                                                                     setDropdownPosition({
-                                                                        top: rect.bottom + window.scrollY,
-                                                                        right: window.innerWidth - rect.right - window.scrollX
+                                                                        top: spaceBelow < dropdownHeight && spaceAbove > spaceBelow ? rect.top - dropdownHeight : rect.bottom,
+                                                                        right: window.innerWidth - rect.right
                                                                     });
                                                                     setActivePresetMenu(index);
                                                                 }
@@ -951,7 +959,7 @@ export const SettingsModal: FC<{
               className="preset-menu-dropdown preset-menu-dropdown-portal"
               style={{
                   position: 'fixed',
-                  top: dropdownPosition.top + 4,
+                  top: dropdownPosition.top,
                   right: dropdownPosition.right,
                   zIndex: 2000
               }}
@@ -1000,7 +1008,7 @@ export const SettingsModal: FC<{
               className="preset-menu-dropdown preset-menu-dropdown-portal"
               style={{
                   position: 'fixed',
-                  top: dropdownPosition.top + 4,
+                  top: dropdownPosition.top,
                   right: dropdownPosition.right,
                   zIndex: 2000
               }}

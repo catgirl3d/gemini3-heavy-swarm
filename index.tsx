@@ -58,7 +58,10 @@ const App: FC = () => {
       // Check if user is near the bottom (within 100px)
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
       setShouldAutoScroll(isNearBottom);
-      setShowScrollButton(!isNearBottom);
+      
+      // Only show scroll button if there is actually content to scroll
+      const hasScrollableContent = scrollHeight > clientHeight;
+      setShowScrollButton(!isNearBottom && hasScrollableContent);
     };
 
     element.addEventListener('scroll', handleScroll);
