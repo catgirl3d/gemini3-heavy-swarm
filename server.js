@@ -15,6 +15,13 @@ app.use(express.json());
 // Serve static files from the dist directory
 app.use(express.static(path.join(__dirname, 'dist')));
 
+// Check if server has API key configured
+app.get('/api/status', (req, res) => {
+  res.json({
+    hasServerKey: !!process.env.GEMINI_API_KEY
+  });
+});
+
 // API Proxy Endpoint
 app.post('/api/gemini', async (req, res) => {
   try {

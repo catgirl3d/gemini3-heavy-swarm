@@ -43,6 +43,7 @@ const App: FC = () => {
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [serverHasKey, setServerHasKey] = useState(false);
 
   const messageListRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,6 +67,21 @@ const App: FC = () => {
 
     element.addEventListener('scroll', handleScroll);
     return () => element.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Check if server has API key
+  useEffect(() => {
+    fetch('/api/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data && typeof data.hasServerKey === 'boolean') {
+          setServerHasKey(data.hasServerKey);
+        }
+      })
+      .catch(err => {
+        // Ignore errors (e.g. if running purely client-side without our server)
+        console.log('Could not check server status:', err);
+      });
   }, []);
 
   useEffect(() => {
@@ -127,16 +143,17 @@ const App: FC = () => {
     }
   };
 
-  const isUsingProxy = !settings.apiKey && !process.env.API_KEY;
+  // Show banner only if NO key is available anywhere (client settings, build env, or server env)
+  const isMissingKey = !settings.apiKey && !process.env.API_KEY && !serverHasKey;
 
   return (
     <div className="chat-container">
-      {isUsingProxy && (
+      {isMissingKey && (
         <div className="demo-banner">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="demo-banner-icon">
                 <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
             </svg>
-            Using Proxy Mode. Please add your API key in settings for direct access.
+            No API Key found. Please add your API key in settings or configure the server environment.
         </div>
       )}
       <header>
