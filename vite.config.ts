@@ -11,8 +11,7 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       define: {
-        // Only inject API key in development mode to prevent leaks in production builds
-        'process.env.API_KEY': JSON.stringify(mode === 'development' ? env.GEMINI_API_KEY : ''),
+        // Only inject GEMINI_API_KEY into the client bundle in development to prevent leaks in production builds
         'process.env.GEMINI_API_KEY': JSON.stringify(mode === 'development' ? env.GEMINI_API_KEY : '')
       },
       resolve: {

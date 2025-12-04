@@ -1,4 +1,4 @@
-# Gemini 3 Heavy
+# Gemini 3 Heavy Swarm
 
 An advanced AI swarm interface powered by Google's **Gemini 3 Pro Preview** model. This application orchestrates a team of cooperative AI agents to produce high-quality, refined, and synthesized responses for complex queries.
 
@@ -27,9 +27,28 @@ An advanced AI swarm interface powered by Google's **Gemini 3 Pro Preview** mode
    ```bash
    npm install
    ```
-3. Set up your GEMINI_API_KEY in .env.local to your Gemini API key
-4. Run the app: npm run dev
+3. Set up your environment variables. Create a `.env` file (or set system variables):
+   ```env
+   GEMINI_API_KEY=your_api_key_here
+   ```
 
+### Server Configuration (Proxy Mode)
+
+The application includes a proxy server (`server.js` for local, `functions/api/gemini.ts` for Cloudflare) to handle API requests securely.
+
+**Proxy Modes:**
+
+You can configure the proxy behavior using the `GEMINI_PROXY_MODE` environment variable:
+
+- **Demo Mode (Default)**:
+  - Set `GEMINI_PROXY_MODE=demo` (or leave undefined).
+  - Forces all requests to use the `gemini-2.5-flash-lite` model to prevent abuse and manage costs.
+  - Useful for public deployments.
+
+- **Private Mode**:
+  - Set `GEMINI_PROXY_MODE=private`.
+  - Allows the client to request any available model (e.g., Gemini 3 Pro).
+  - Use this for personal deployments where you want full access to all models via your server's API key.
 
 ### Development
 
@@ -55,4 +74,4 @@ npm run deploy
 
 ## Credits
 
-Created by Lisova.
+Created by [Lisova](https://t.me/temnobogin9)

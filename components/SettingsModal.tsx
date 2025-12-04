@@ -8,8 +8,8 @@ export const SettingsModal: FC<{
   onClose: () => void;
   settings: AppSettings;
   onSave: (newSettings: AppSettings) => void;
-  serverHasKey?: boolean;
-}> = ({ isOpen, onClose, settings, onSave, serverHasKey = false }) => {
+  serverStatus?: { hasServerKey: boolean; proxyMode: string };
+}> = ({ isOpen, onClose, settings, onSave, serverStatus }) => {
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [activeTab, setActiveTab] = useState<'general' | 'prompts' | 'roles'>('general');
   const [isEditingRoleName, setIsEditingRoleName] = useState(false);
@@ -76,6 +76,14 @@ export const SettingsModal: FC<{
 
   const activeProfile = localSettings.profiles?.find(p => p.id === localSettings.activeProfileId) || localSettings.profiles?.[0] || DEFAULT_SETTINGS.profiles[0];
   const activeRoleProfile = localSettings.roleProfiles?.find(p => p.id === localSettings.activeRoleProfileId) || localSettings.roleProfiles?.[0] || DEFAULT_SETTINGS.roleProfiles[0];
+
+  // Determine if model selection should be unlocked
+  // Unlocked if:
+  // 1. User has a client-side API key (localSettings.apiKey or process.env.GEMINI_API_KEY)
+  // 2. OR Server has a key AND is in 'private' mode
+  const hasClientKey = !!localSettings.apiKey || !!process.env.GEMINI_API_KEY;
+  const isPrivateServer = serverStatus?.hasServerKey && serverStatus?.proxyMode === 'private';
+  const isModelUnlocked = hasClientKey || isPrivateServer;
 
   const handleProfileChange = (e: ChangeEvent<HTMLSelectElement>) => {
     setLocalSettings(prev => ({
@@ -462,19 +470,19 @@ export const SettingsModal: FC<{
                             <label className="settings-label">Model</label>
                             <select
                                 name="model"
-                                value={(!localSettings.apiKey && !process.env.API_KEY && !serverHasKey) ? 'gemini-2.5-flash-lite' : (localSettings.model || 'gemini-3-pro-preview')}
+                                value={!isModelUnlocked ? 'gemini-2.5-flash-lite' : (localSettings.model || 'gemini-3-pro-preview')}
                                 onChange={handleChange}
                                 className="settings-input"
-                                disabled={!localSettings.apiKey && !process.env.API_KEY && !serverHasKey}
+                                disabled={!isModelUnlocked}
                             >
                                 <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
                                 <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                                 <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                                 <option value="gemini-3-pro-preview">Gemini 3 Pro (Preview)</option>
                             </select>
-                            {(!localSettings.apiKey && !process.env.API_KEY && !serverHasKey) && (
+                            {!isModelUnlocked && (
                                 <p className="settings-help-text warning">
-                                    Only Gemini 2.5 Flash-Lite is available in Proxy Mode. Add an API key to unlock all models.
+                                    Only Gemini 2.5 Flash-Lite is available in Demo Mode. Add an API key to unlock all models.
                                 </p>
                             )}
                         </div>
@@ -969,8 +977,11 @@ export const SettingsModal: FC<{
             <button className="settings-btn reset" onClick={handleReset}>Reset to Defaults</button>
             <button className="settings-btn save" onClick={() => {
                 const finalSettings = { ...localSettings };
-                // If switching to proxy mode (no API key), enforce the demo model
-                if (!finalSettings.apiKey && !process.env.API_KEY && !serverHasKey) {
+                // If switching to proxy mode (no API key) AND not in private server mode, enforce the demo model
+                const hasClientKey = !!finalSettings.apiKey || !!process.env.GEMINI_API_KEY;
+                const isPrivateServer = serverStatus?.hasServerKey && serverStatus?.proxyMode === 'private';
+                
+                if (!hasClientKey && !isPrivateServer) {
                     finalSettings.model = 'gemini-2.5-flash-lite';
                 }
                 onSave(finalSettings);

@@ -1,5 +1,6 @@
 interface Env {
   GEMINI_API_KEY: string;
+  GEMINI_PROXY_MODE?: string;
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -15,14 +16,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     const body = await request.json() as any;
-    const { contents, generationConfig, systemInstruction, tools } = body;
+    const { model, contents, generationConfig, systemInstruction, tools } = body;
 
-    // Enforce model for proxy requests to prevent abuse
-    const allowedModel = 'gemini-2.5-flash-lite';
+    // Determine model based on proxy mode
+    // If GEMINI_PROXY_MODE is 'demo' OR not set, enforce flash-lite to prevent abuse
+    // Only if GEMINI_PROXY_MODE is 'private', allow the requested model
+    const isPrivateMode = env.GEMINI_PROXY_MODE === 'private';
+    const targetModel = isPrivateMode ? (model || 'gemini-2.5-flash-lite') : 'gemini-2.5-flash-lite';
 
     // Construct the Google API URL
     // Note: Using the streamGenerateContent endpoint for streaming
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${allowedModel}:streamGenerateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?key=${apiKey}`;
 
     const response = await fetch(url, {
       method: 'POST',
@@ -52,7 +56,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return new Response(response.body, {
       headers: {
         'Content-Type': 'application/json',
-        'Transfer-Encoding': 'chunked'
       }
     });
 

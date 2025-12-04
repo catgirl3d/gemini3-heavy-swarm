@@ -43,7 +43,8 @@ const App: FC = () => {
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const [serverHasKey, setServerHasKey] = useState(false);
+  const [serverStatus, setServerStatus] = useState<{ hasServerKey: boolean; proxyMode: string }>({ hasServerKey: false, proxyMode: 'demo' });
+  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
 
   const messageListRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -69,18 +70,29 @@ const App: FC = () => {
     return () => element.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Check if server has API key
+  // Check if server has API key and proxy mode
   useEffect(() => {
     fetch('/api/status')
-      .then(res => res.json())
+      .then(res => {
+        // Check if we got a valid JSON response
+        const contentType = res.headers.get('content-type');
+        if (!res.ok || !contentType || !contentType.includes('application/json')) {
+          // If not JSON (e.g. Vite serving index.html for 404s), assume no server
+          return null;
+        }
+        return res.json();
+      })
       .then(data => {
         if (data && typeof data.hasServerKey === 'boolean') {
-          setServerHasKey(data.hasServerKey);
+          setServerStatus({
+            hasServerKey: data.hasServerKey,
+            proxyMode: data.proxyMode || 'demo'
+          });
         }
       })
       .catch(err => {
-        // Ignore errors (e.g. if running purely client-side without our server)
-        console.log('Could not check server status:', err);
+        // Ignore network errors (e.g. if running purely client-side without our server)
+        console.debug('Server status check failed (running client-only?):', err);
       });
   }, []);
 
@@ -143,17 +155,57 @@ const App: FC = () => {
     }
   };
 
-  // Show banner only if NO key is available anywhere (client settings, build env, or server env)
-  const isMissingKey = !settings.apiKey && !process.env.API_KEY && !serverHasKey;
+  // Determine key status
+  const hasClientKey = !!settings.apiKey || !!process.env.GEMINI_API_KEY;
+  const isMissingKey = !hasClientKey && !serverStatus.hasServerKey;
+  const isProxyDemo = !hasClientKey && serverStatus.hasServerKey && serverStatus.proxyMode !== 'private';
+  const isProxyPrivate = !hasClientKey && serverStatus.hasServerKey && serverStatus.proxyMode === 'private';
 
   return (
     <div className="chat-container">
-      {isMissingKey && (
+      {isMissingKey && !isBannerDismissed && (
         <div className="demo-banner">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="demo-banner-icon">
-                <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
-            </svg>
-            No API Key found. Please add your API key in settings or configure the server environment.
+            <div className="demo-banner-content">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="demo-banner-icon">
+                    <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
+                </svg>
+                No API Key found. Please add your API key in settings or configure the server environment.
+            </div>
+            <button className="banner-close-btn" onClick={() => setIsBannerDismissed(true)} aria-label="Dismiss banner">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 01-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd" />
+                </svg>
+            </button>
+        </div>
+      )}
+      {isProxyDemo && !isBannerDismissed && (
+        <div className="demo-banner info">
+            <div className="demo-banner-content">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="demo-banner-icon">
+                    <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 01.67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 11-.671-1.34l.041-.022zM12 9a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
+                </svg>
+                Demo mode. Only Gemini 2.5 Flash-Lite is available unless you add your own API key.
+            </div>
+            <button className="banner-close-btn" onClick={() => setIsBannerDismissed(true)} aria-label="Dismiss banner">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 01-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd" />
+                </svg>
+            </button>
+        </div>
+      )}
+      {isProxyPrivate && !isBannerDismissed && (
+        <div className="demo-banner success">
+            <div className="demo-banner-content">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="demo-banner-icon">
+                    <path d="M18 1.5c2.9 0 5.25 2.35 5.25 5.25v3.75a.75.75 0 01-1.5 0V6.75a3.75 3.75 0 10-7.5 0v3a3 3 0 013 3v6.75a3 3 0 01-3 3H3.75a3 3 0 01-3-3v-6.75a3 3 0 013-3h9v-3c0-2.9 2.35-5.25 5.25-5.25z" />
+                </svg>
+                Private Server Mode. All models are unlocked via the server's API key.
+            </div>
+            <button className="banner-close-btn" onClick={() => setIsBannerDismissed(true)} aria-label="Dismiss banner">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 01-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd" />
+                </svg>
+            </button>
         </div>
       )}
       <header>
@@ -306,7 +358,7 @@ const App: FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
         onSave={setSettings}
-        serverHasKey={serverHasKey}
+        serverStatus={serverStatus}
       />
       <InfoModal
         isOpen={isInfoOpen}

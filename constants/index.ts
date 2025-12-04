@@ -452,7 +452,7 @@ Prohibitions:
 ];
 
 // Determine default model based on environment (Proxy vs Direct)
-const DEFAULT_MODEL = process.env.API_KEY ? 'gemini-3-pro-preview' : 'gemini-2.5-flash-lite';
+const DEFAULT_MODEL = process.env.GEMINI_API_KEY ? 'gemini-3-pro-preview' : 'gemini-2.5-flash-lite';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   numAgents: 4,

@@ -28,8 +28,8 @@ export class GeminiService {
 
   constructor() {
     // Initialize with default env key if available, but this can be overridden per-run
-    if (process.env.API_KEY) {
-      this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    if (process.env.GEMINI_API_KEY) {
+      this.ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     }
     // Initialize the default pipeline
     this.steps = [
@@ -52,7 +52,7 @@ export class GeminiService {
   ): Promise<{ text: string; sources?: any[]; work: Work }> {
     
     // Initialize AI client with user key if provided, otherwise fall back to env key
-    const apiKey = settings.apiKey || process.env.API_KEY;
+    const apiKey = settings.apiKey || process.env.GEMINI_API_KEY;
     if (apiKey) {
         console.log("Using direct API key from settings/env");
         this.ai = new GoogleGenAI({ apiKey });
@@ -125,7 +125,7 @@ export class GeminiService {
     signal: AbortSignal
   ): Promise<string> {
     // Ensure AI client is updated with the latest key from settings
-    const apiKey = settings.apiKey || process.env.API_KEY;
+    const apiKey = settings.apiKey || process.env.GEMINI_API_KEY;
     if (apiKey) {
         console.log("Using direct API key from settings/env (regeneration)");
         this.ai = new GoogleGenAI({ apiKey });

@@ -18,7 +18,8 @@ app.use(express.static(path.join(__dirname, 'dist')));
 // Check if server has API key configured
 app.get('/api/status', (req, res) => {
   res.json({
-    hasServerKey: !!process.env.GEMINI_API_KEY
+    hasServerKey: !!process.env.GEMINI_API_KEY,
+    proxyMode: process.env.GEMINI_PROXY_MODE || 'demo'
   });
 });
 
@@ -34,8 +35,14 @@ app.post('/api/gemini', async (req, res) => {
 
     const { model, contents, generationConfig, systemInstruction, tools } = req.body;
 
+    // Determine model based on proxy mode
+    // If GEMINI_PROXY_MODE is 'demo' OR not set, enforce flash-lite to prevent abuse
+    // Only if GEMINI_PROXY_MODE is 'private', allow the requested model
+    const isPrivateMode = process.env.GEMINI_PROXY_MODE === 'private';
+    const targetModel = isPrivateMode ? (model || 'gemini-2.5-flash-lite') : 'gemini-2.5-flash-lite';
+
     // Construct the Google API URL
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?key=${apiKey}`;
 
     const response = await fetch(url, {
       method: 'POST',
@@ -58,7 +65,6 @@ app.post('/api/gemini', async (req, res) => {
 
     // Proxy the stream
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Transfer-Encoding', 'chunked');
     
     // Pipe the response body from Google directly to the client
     // Node native fetch body is a ReadableStream, express res is a WritableStream (Node stream)

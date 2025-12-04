@@ -12,8 +12,9 @@ export class ProxyGenAI {
   get models() {
     return {
       generateContentStream: async (request: any) => {
-        // In Proxy/Demo mode, we enforce a specific model to prevent abuse/costs
-        const modelName = 'gemini-2.5-flash-lite';
+        // Use the requested model, or fallback to flash-lite
+        // The server will enforce restrictions if GEMINI_PROXY_MODE is 'demo'
+        const modelName = request.model || 'gemini-2.5-flash-lite';
         
         // Separate generationConfig from top-level fields like systemInstruction and tools
         const { systemInstruction, tools, ...genConfig } = request.config || {};
