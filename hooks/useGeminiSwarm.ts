@@ -72,7 +72,7 @@ export const useGeminiSwarm = () => {
                 parsedSettings.roleProfiles.push(madScientistProfile);
             }
         }
-
+  
         // Migration: Ensure criticRoles exist in roleProfiles
         if (parsedSettings.roleProfiles) {
             parsedSettings.roleProfiles = parsedSettings.roleProfiles.map((profile: any) => {
@@ -87,27 +87,34 @@ export const useGeminiSwarm = () => {
                 return profile;
             });
         }
-
+  
         // Migration: Ensure savedInstructions exist
         if (!parsedSettings.savedInstructions) {
             parsedSettings.savedInstructions = [];
         }
-
+  
         // Migration: Ensure savedRoles exist
         if (!parsedSettings.savedRoles) {
             parsedSettings.savedRoles = [];
         }
-
+  
         // Migration: Ensure pauseAfterRefinement exists
         if (parsedSettings.pauseAfterRefinement === undefined) {
             parsedSettings.pauseAfterRefinement = false;
         }
-
+  
         // Migration: Ensure dynamicAgentRoles exists (default to true)
         if (parsedSettings.dynamicAgentRoles === undefined) {
             parsedSettings.dynamicAgentRoles = true;
         }
 
+        // Migration: Ensure model is compatible with current environment (demo vs full)
+        const hasClientKey = !!parsedSettings.apiKey || !!process.env.GEMINI_API_KEY;
+        if (!hasClientKey) {
+            // In demo/proxy mode without a direct key, always fall back to the environment default
+            parsedSettings.model = DEFAULT_SETTINGS.model;
+        }
+  
         setSettings(parsedSettings);
       } catch (error) {
         console.error('Failed to parse saved settings:', error);
