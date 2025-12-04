@@ -2195,7 +2195,7 @@ margin: 0px;
   
   /* Agents & Loading */
   .loading-status { font-size: 0.85rem; }
-  .loading-animation { padding: 1rem; }
+  .loading-animation { padding: 1rem; width:100%; }
   .timer-display { font-size: 0.75rem; }
   .agent-name { font-size: 0.85rem; }
   .show-work-button { font-size: 0.85rem; padding: 0.6rem 1rem; }
