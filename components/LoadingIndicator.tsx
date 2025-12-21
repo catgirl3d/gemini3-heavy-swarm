@@ -2,6 +2,7 @@ import React, { FC } from 'react';
 import { AgentState, Work } from '../types';
 import { AgentAvatar } from './AgentAvatar';
 import { ShowWork } from './ShowWork';
+import './LoadingIndicator.css';
 
 export const LoadingIndicator: FC<{
     status: string;

@@ -1,4 +1,5 @@
 docs/*
+temp/*
 
 # Logs
 logs
@@ -27,4 +28,3 @@ dist-ssr
 *.sw?
 
 deploy.ps1
-

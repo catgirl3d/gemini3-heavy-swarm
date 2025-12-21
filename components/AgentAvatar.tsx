@@ -1,5 +1,6 @@
 import React, { FC } from 'react';
 import geminiIcon from '../assets/Google-gemini-icon.png';
+import './AgentAvatar.css';
 
 export const AgentAvatar: FC<{ type: 'user' | 'model' }> = ({ type }) => (
   <div className="avatar">

@@ -2,6 +2,7 @@ import React, { FC, useState, useEffect, ChangeEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { AppSettings, PromptProfile, RoleProfile } from '../types';
 import { DEFAULT_SETTINGS } from '../constants';
+import './Modal.css';
 import './SettingsModal.css';
 
 export const SettingsModal: FC<{
@@ -415,9 +416,9 @@ export const SettingsModal: FC<{
     };
 
     const mainModal = createPortal(
-        <div className="work-modal-overlay" onClick={onClose}>
-            <div className="settings-modal" onClick={e => e.stopPropagation()}>
-                <div className="work-modal-header">
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-container settings-modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
                     <h3>Swarm Configuration</h3>
                     <button className="close-modal-button" onClick={onClose} aria-label="Close">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -447,33 +448,33 @@ export const SettingsModal: FC<{
                     </button>
                 </div>
 
-                <div className="settings-modal-body">
+                <div className="modal-body">
                     {activeTab === 'general' ? (
                         <div className="settings-section fade-in">
                             <div className="settings-card">
                                 <span className="settings-card-title">Core Configuration</span>
-                                <div className="settings-form-group">
-                                    <label className="settings-label">API Key (Optional)</label>
+                                <div className="modal-form-group">
+                                    <label className="modal-label">API Key (Optional)</label>
                                     <input
                                         type="password"
                                         name="apiKey"
                                         value={localSettings.apiKey || ''}
                                         onChange={handleChange}
-                                        className="settings-input"
+                                        className="modal-input"
                                         placeholder="Enter your Gemini API Key"
                                     />
-                                    <p className="settings-help-text">
+                                    <p className="modal-help-text">
                                         Leave empty to use the default key (if configured). Your key is stored locally in your browser.
                                     </p>
                                 </div>
 
-                                <div className="settings-form-group">
-                                    <label className="settings-label">Model</label>
+                                <div className="modal-form-group">
+                                    <label className="modal-label">Model</label>
                                     <select
                                         name="model"
                                         value={!isModelUnlocked ? 'gemini-2.5-flash-lite' : (localSettings.model || 'gemini-3-flash-preview')}
                                         onChange={handleChange}
-                                        className="settings-input"
+                                        className="modal-input"
                                         disabled={!isModelUnlocked}
                                     >
                                         <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
@@ -483,15 +484,15 @@ export const SettingsModal: FC<{
                                         <option value="gemini-3-pro-preview">Gemini 3 Pro (Preview)</option>
                                     </select>
                                     {!isModelUnlocked && (
-                                        <p className="settings-help-text warning">
+                                        <p className="modal-help-text warning">
                                             Only Gemini 2.5 Flash-Lite is available in Demo Mode. Add an API key to unlock all models.
                                         </p>
                                     )}
                                 </div>
 
                                 <div className="settings-row">
-                                    <div className="settings-form-group">
-                                        <label className="settings-label">Number of Agents</label>
+                                    <div className="modal-form-group">
+                                        <label className="modal-label">Number of Agents</label>
                                         <div className="stepper-control">
                                             <button
                                                 className="stepper-btn"
@@ -511,8 +512,8 @@ export const SettingsModal: FC<{
                                         </div>
                                     </div>
 
-                                    <div className="settings-form-group">
-                                        <label className="settings-label">
+                                    <div className="modal-form-group">
+                                        <label className="modal-label">
                                             Temperature ({localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? '1.0' : (localSettings.temperature ?? 0.7)})
                                         </label>
                                         <input
@@ -524,13 +525,13 @@ export const SettingsModal: FC<{
                                             value={localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? 1.0 : (localSettings.temperature ?? 0.7)}
                                             onChange={handleChange}
                                             disabled={localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature}
-                                            className={`settings-input ${localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? 'settings-input-disabled' : ''}`}
+                                            className={`modal-input ${localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? 'modal-input-disabled' : ''}`}
                                         />
                                     </div>
                                 </div>
 
                                 {localSettings.model.includes('gemini-3') && (
-                                    <div className="advanced-temperature-banner">
+                                    <div className="modal-banner warning advanced-temperature-banner">
                                         <div className="advanced-temperature-header">
                                             <div className="advanced-temperature-title">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -556,7 +557,7 @@ export const SettingsModal: FC<{
 
                             <div className="settings-card">
                                 <span className="settings-card-title">Workflow</span>
-                                <div className="settings-form-group checkbox-group">
+                                <div className="modal-form-group checkbox-group">
                                     <input
                                         type="checkbox"
                                         name="dynamicAgentRoles"
@@ -564,12 +565,12 @@ export const SettingsModal: FC<{
                                         checked={localSettings.dynamicAgentRoles || false}
                                         onChange={handleChange}
                                     />
-                                    <label htmlFor="dynamicAgentRoles" className="settings-label checkbox-label">
+                                    <label htmlFor="dynamicAgentRoles" className="modal-label checkbox-label">
                                         Dynamic Agent Roles (Visionary, Critic, etc.)
                                     </label>
                                 </div>
 
-                                <div className="settings-form-group checkbox-group">
+                                <div className="modal-form-group checkbox-group">
                                     <input
                                         type="checkbox"
                                         name="pauseAfterInitial"
@@ -577,12 +578,12 @@ export const SettingsModal: FC<{
                                         checked={localSettings.pauseAfterInitial || false}
                                         onChange={handleChange}
                                     />
-                                    <label htmlFor="pauseAfterInitial" className="settings-label checkbox-label">
+                                    <label htmlFor="pauseAfterInitial" className="modal-label checkbox-label">
                                         Pause after Initial Drafts
                                     </label>
                                 </div>
 
-                                <div className="settings-form-group checkbox-group">
+                                <div className="modal-form-group checkbox-group">
                                     <input
                                         type="checkbox"
                                         name="pauseAfterRefinement"
@@ -590,7 +591,7 @@ export const SettingsModal: FC<{
                                         checked={localSettings.pauseAfterRefinement || false}
                                         onChange={handleChange}
                                     />
-                                    <label htmlFor="pauseAfterRefinement" className="settings-label checkbox-label">
+                                    <label htmlFor="pauseAfterRefinement" className="modal-label checkbox-label">
                                         Pause after Critics (Refinement)
                                     </label>
                                 </div>
@@ -598,7 +599,7 @@ export const SettingsModal: FC<{
 
                             <div className="settings-card">
                                 <span className="settings-card-title">System</span>
-                                <div className="settings-form-group checkbox-group">
+                                <div className="modal-form-group checkbox-group">
                                     <input
                                         type="checkbox"
                                         name="devMode"
@@ -606,12 +607,12 @@ export const SettingsModal: FC<{
                                         checked={localSettings.devMode || false}
                                         onChange={handleChange}
                                     />
-                                    <label htmlFor="devMode" className="settings-label checkbox-label">
+                                    <label htmlFor="devMode" className="modal-label checkbox-label">
                                         Development Mode (Simulation)
                                     </label>
                                 </div>
 
-                                <div className="settings-form-group checkbox-group">
+                                <div className="modal-form-group checkbox-group">
                                     <input
                                         type="checkbox"
                                         name="debugMode"
@@ -619,7 +620,7 @@ export const SettingsModal: FC<{
                                         checked={localSettings.debugMode || false}
                                         onChange={handleChange}
                                     />
-                                    <label htmlFor="debugMode" className="settings-label checkbox-label">
+                                    <label htmlFor="debugMode" className="modal-label checkbox-label">
                                         Debug Logging (Console)
                                     </label>
                                 </div>
@@ -647,14 +648,14 @@ export const SettingsModal: FC<{
                                             <select
                                                 value={localSettings.activeProfileId}
                                                 onChange={handleProfileChange}
-                                                className="settings-input font-semibold"
+                                                className="modal-input font-semibold"
                                             >
                                                 {localSettings.profiles.map(p => (
                                                     <option key={p.id} value={p.id}>{p.name}</option>
                                                 ))}
                                             </select>
                                             <button
-                                                className="edit-name-btn"
+                                                className="modal-icon-btn"
                                                 onClick={() => setIsEditingProfileName(true)}
                                                 title="Rename Profile"
                                             >
@@ -667,9 +668,9 @@ export const SettingsModal: FC<{
                                     )}
                                 </div>
                                 <div className="profile-actions">
-                                    <button className="settings-btn outline" onClick={handleCreateProfile}>+ New</button>
+                                    <button className="modal-btn outline" onClick={handleCreateProfile}>+ New</button>
                                     {localSettings.profiles.length > 1 && (
-                                        <button className="settings-btn danger" onClick={handleDeleteProfile}>Delete</button>
+                                        <button className="modal-btn danger" onClick={handleDeleteProfile}>Delete</button>
                                     )}
                                 </div>
                             </div>
@@ -751,7 +752,7 @@ export const SettingsModal: FC<{
 
                                                         <div className="role-actions-compact">
                                                             <button
-                                                                className="icon-btn edit-role-btn"
+                                                                className="modal-icon-btn"
                                                                 onClick={() => setEditingInstruction(item.id as any)}
                                                                 title="Edit Instruction"
                                                             >
@@ -791,14 +792,14 @@ export const SettingsModal: FC<{
                                             <select
                                                 value={localSettings.activeRoleProfileId}
                                                 onChange={handleRoleProfileChange}
-                                                className="settings-input font-semibold"
+                                                className="modal-input font-semibold"
                                             >
                                                 {(localSettings.roleProfiles || []).map(p => (
                                                     <option key={p.id} value={p.id}>{p.name}</option>
                                                 ))}
                                             </select>
                                             <button
-                                                className="edit-name-btn"
+                                                className="modal-icon-btn"
                                                 onClick={() => setIsEditingRoleName(true)}
                                                 title="Rename Role Set"
                                             >
@@ -811,9 +812,9 @@ export const SettingsModal: FC<{
                                     )}
                                 </div>
                                 <div className="profile-actions">
-                                    <button className="settings-btn outline" onClick={handleCreateRoleProfile}>+ New</button>
+                                    <button className="modal-btn outline" onClick={handleCreateRoleProfile}>+ New</button>
                                     {(localSettings.roleProfiles || []).length > 1 && (
-                                        <button className="settings-btn danger" onClick={handleDeleteRoleProfile}>Delete</button>
+                                        <button className="modal-btn danger" onClick={handleDeleteRoleProfile}>Delete</button>
                                     )}
                                 </div>
                             </div>
@@ -839,7 +840,7 @@ export const SettingsModal: FC<{
                                     <button className="add-role-btn-small" onClick={handleAddRole}>+ Add Role</button>
                                 </div>
                                 {!localSettings.dynamicAgentRoles && (
-                                    <div className="warning-banner">
+                                    <div className="modal-banner warning">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
                                             <line x1="12" y1="9" x2="12" y2="13"></line>
@@ -858,7 +859,7 @@ export const SettingsModal: FC<{
                                 )}
 
                                 <div className="roles-list-container">
-                                    <div className="roles-info-banner">
+                                    <div className="modal-banner info">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <circle cx="12" cy="12" r="10"></circle>
                                             <line x1="12" y1="16" x2="12" y2="12"></line>
@@ -916,7 +917,7 @@ export const SettingsModal: FC<{
 
                                                         <div className="role-actions-compact">
                                                             <button
-                                                                className="icon-btn edit-role-btn"
+                                                                className="modal-icon-btn"
                                                                 onClick={() => setEditingRoleIndex(index)}
                                                                 title="Edit Role"
                                                             >
@@ -950,7 +951,7 @@ export const SettingsModal: FC<{
                                                             </div>
 
                                                             <button
-                                                                className="icon-btn delete-role-btn"
+                                                                className="modal-icon-btn delete-role-btn"
                                                                 onClick={() => handleDeleteRole(index)}
                                                                 title="Delete Role"
                                                             >
@@ -975,9 +976,9 @@ export const SettingsModal: FC<{
                         </div>
                     )}
                 </div>
-                <div className="settings-modal-footer">
-                    <button className="settings-btn reset" onClick={handleReset}>Reset to Defaults</button>
-                    <button className="settings-btn save" onClick={() => {
+                <div className="modal-footer">
+                    <button className="modal-btn reset" onClick={handleReset}>Reset to Defaults</button>
+                    <button className="modal-btn save" onClick={() => {
                         const finalSettings = { ...localSettings };
                         // If switching to proxy mode (no API key) AND not in private server mode, enforce the demo model
                         const hasClientKey = !!finalSettings.apiKey || !!process.env.GEMINI_API_KEY;
@@ -1096,9 +1097,9 @@ export const SettingsModal: FC<{
     // Render the Edit Role Modal
     const editRoleModal = editingRoleIndex !== null && (
         createPortal(
-            <div className="work-modal-overlay" onClick={() => setEditingRoleIndex(null)}>
-                <div className="settings-modal role-edit-modal" onClick={e => e.stopPropagation()}>
-                    <div className="work-modal-header">
+            <div className="modal-overlay" onClick={() => setEditingRoleIndex(null)}>
+                <div className="modal-container settings-modal role-edit-modal" onClick={e => e.stopPropagation()}>
+                    <div className="modal-header">
                         <h3>Edit Role #{editingRoleIndex + 1}</h3>
                         <button className="close-modal-button" onClick={() => setEditingRoleIndex(null)}>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -1106,29 +1107,29 @@ export const SettingsModal: FC<{
                             </svg>
                         </button>
                     </div>
-                    <div className="settings-modal-body">
-                        <div className="settings-form-group">
-                            <label className="settings-label">Role Name</label>
+                    <div className="modal-body">
+                        <div className="modal-form-group">
+                            <label className="modal-label">Role Name</label>
                             <input
                                 type="text"
                                 value={((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.name || ''}
                                 onChange={(e) => handleRoleChange(editingRoleIndex, 'name', e.target.value)}
-                                className="settings-input"
+                                className="modal-input"
                                 placeholder="e.g. Critic, Visionary"
                                 autoFocus
                             />
                         </div>
-                        <div className="settings-form-group">
-                            <label className="settings-label">Role Instruction</label>
+                        <div className="modal-form-group">
+                            <label className="modal-label">Role Instruction</label>
                             <textarea
                                 value={((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.instruction || ''}
                                 onChange={(e) => handleRoleChange(editingRoleIndex, 'instruction', e.target.value)}
-                                className="settings-textarea role-instruction-textarea-large"
+                                className="modal-textarea role-instruction-textarea-large"
                                 placeholder="Instructions for this specific role..."
                             />
                         </div>
                     </div>
-                    <div className="settings-modal-footer space-between">
+                    <div className="modal-footer space-between">
                         <div className="save-preset-container">
                             {isSavingPreset ? (
                                 <div className="save-preset-input-group">
@@ -1137,19 +1138,19 @@ export const SettingsModal: FC<{
                                         placeholder="Preset Name"
                                         value={newPresetName}
                                         onChange={(e) => setNewPresetName(e.target.value)}
-                                        className="settings-input small"
+                                        className="modal-input small"
                                         autoFocus
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') handleSaveRolePreset();
                                             if (e.key === 'Escape') setIsSavingPreset(false);
                                         }}
                                     />
-                                    <button className="icon-btn save-confirm-btn" onClick={handleSaveRolePreset} disabled={!newPresetName.trim()}>
+                                    <button className="modal-icon-btn save-confirm-btn" onClick={handleSaveRolePreset} disabled={!newPresetName.trim()}>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <polyline points="20 6 9 17 4 12"></polyline>
                                         </svg>
                                     </button>
-                                    <button className="icon-btn save-cancel-btn" onClick={() => setIsSavingPreset(false)}>
+                                    <button className="modal-icon-btn save-cancel-btn" onClick={() => setIsSavingPreset(false)}>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <line x1="18" y1="6" x2="6" y2="18"></line>
                                             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -1157,12 +1158,12 @@ export const SettingsModal: FC<{
                                     </button>
                                 </div>
                             ) : (
-                                <button className="settings-btn outline small" onClick={() => setIsSavingPreset(true)}>
+                                <button className="modal-btn outline small" onClick={() => setIsSavingPreset(true)}>
                                     Save as Preset
                                 </button>
                             )}
                         </div>
-                        <button className="settings-btn save" onClick={() => setEditingRoleIndex(null)}>Done</button>
+                        <button className="modal-btn save" onClick={() => setEditingRoleIndex(null)}>Done</button>
                     </div>
                 </div>
             </div>,
@@ -1173,9 +1174,9 @@ export const SettingsModal: FC<{
     // Render the Edit Instruction Modal
     const editInstructionModal = editingInstruction !== null && (
         createPortal(
-            <div className="work-modal-overlay" onClick={() => setEditingInstruction(null)}>
-                <div className="settings-modal role-edit-modal" onClick={e => e.stopPropagation()}>
-                    <div className="work-modal-header">
+            <div className="modal-overlay" onClick={() => setEditingInstruction(null)}>
+                <div className="modal-container settings-modal role-edit-modal" onClick={e => e.stopPropagation()}>
+                    <div className="modal-header">
                         <h3>Edit {editingInstruction === 'initial' ? 'Initial Agent' : editingInstruction === 'refinement' ? 'Refinement' : 'Synthesizer'} Instruction</h3>
                         <button className="close-modal-button" onClick={() => setEditingInstruction(null)}>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -1183,20 +1184,20 @@ export const SettingsModal: FC<{
                             </svg>
                         </button>
                     </div>
-                    <div className="settings-modal-body">
-                        <div className="settings-form-group">
-                            <label className="settings-label">Instruction</label>
+                    <div className="modal-body">
+                        <div className="modal-form-group">
+                            <label className="modal-label">Instruction</label>
                             <textarea
                                 name={editingInstruction === 'initial' ? 'initialInstruction' : editingInstruction === 'refinement' ? 'refinementInstruction' : 'synthesizerInstruction'}
                                 value={editingInstruction === 'initial' ? activeProfile.initialInstruction : editingInstruction === 'refinement' ? activeProfile.refinementInstruction : activeProfile.synthesizerInstruction}
                                 onChange={handleInstructionChange}
-                                className="settings-textarea role-instruction-textarea-large"
+                                className="modal-textarea role-instruction-textarea-large"
                                 placeholder="Enter instructions..."
                                 autoFocus
                             />
                         </div>
                     </div>
-                    <div className="settings-modal-footer space-between">
+                    <div className="modal-footer space-between">
                         <div className="save-preset-container">
                             {isSavingPreset ? (
                                 <div className="save-preset-input-group">
@@ -1205,19 +1206,19 @@ export const SettingsModal: FC<{
                                         placeholder="Preset Name"
                                         value={newPresetName}
                                         onChange={(e) => setNewPresetName(e.target.value)}
-                                        className="settings-input small"
+                                        className="modal-input small"
                                         autoFocus
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') handleSaveInstructionPreset();
                                             if (e.key === 'Escape') setIsSavingPreset(false);
                                         }}
                                     />
-                                    <button className="icon-btn save-confirm-btn" onClick={handleSaveInstructionPreset} disabled={!newPresetName.trim()}>
+                                    <button className="modal-icon-btn save-confirm-btn" onClick={handleSaveInstructionPreset} disabled={!newPresetName.trim()}>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <polyline points="20 6 9 17 4 12"></polyline>
                                         </svg>
                                     </button>
-                                    <button className="icon-btn save-cancel-btn" onClick={() => setIsSavingPreset(false)}>
+                                    <button className="modal-icon-btn save-cancel-btn" onClick={() => setIsSavingPreset(false)}>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <line x1="18" y1="6" x2="6" y2="18"></line>
                                             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -1225,12 +1226,12 @@ export const SettingsModal: FC<{
                                     </button>
                                 </div>
                             ) : (
-                                <button className="settings-btn outline small" onClick={() => setIsSavingPreset(true)}>
+                                <button className="modal-btn outline small" onClick={() => setIsSavingPreset(true)}>
                                     Save as Preset
                                 </button>
                             )}
                         </div>
-                        <button className="settings-btn save" onClick={() => setEditingInstruction(null)}>Done</button>
+                        <button className="modal-btn save" onClick={() => setEditingInstruction(null)}>Done</button>
                     </div>
                 </div>
             </div>,

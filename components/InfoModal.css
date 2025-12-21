@@ -1,0 +1,78 @@
+/* Info Modal Specific Styles */
+.info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1rem 0;
+}
+
+.info-step {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+.info-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background-color: #f1f5f9;
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.info-icon-wrapper svg {
+  width: 24px;
+  height: 24px;
+}
+
+.info-content {
+  flex: 1;
+}
+
+.info-content h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.info-content p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.info-arrow {
+  display: flex;
+  justify-content: center;
+  color: #cbd5e1;
+  margin: -0.5rem 0;
+  padding-left: 24px;
+}
+
+.info-arrow svg {
+  width: 20px;
+  height: 20px;
+}
+
+@media (max-width: 768px) {
+  .info-step {
+    gap: 1rem;
+  }
+  .info-icon-wrapper {
+    width: 40px;
+    height: 40px;
+  }
+  .info-icon-wrapper svg {
+    width: 20px;
+    height: 20px;
+  }
+  .info-arrow {
+    padding-left: 20px;
+  }
+}

@@ -1,5 +1,7 @@
 import React, { FC, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import './Modal.css';
+import './InfoModal.css';
 
 interface InfoModalProps {
   isOpen: boolean;
@@ -25,9 +27,9 @@ export const InfoModal: FC<InfoModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="work-modal-overlay" onClick={onClose}>
-      <div className="settings-modal info-modal" onClick={e => e.stopPropagation()}>
-        <div className="work-modal-header">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container modal-sm info-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
           <h3>How it Works</h3>
           <button className="close-modal-button" onClick={onClose} aria-label="Close">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -36,7 +38,7 @@ export const InfoModal: FC<InfoModalProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
         
-        <div className="settings-modal-body">
+        <div className="modal-body">
           <div className="info-section">
             <div className="info-step">
               <div className="info-icon-wrapper">
@@ -98,8 +100,8 @@ export const InfoModal: FC<InfoModalProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
         
-        <div className="settings-modal-footer justify-end">
-          <button className="settings-btn save" onClick={onClose}>Got it</button>
+        <div className="modal-footer justify-end">
+          <button className="modal-btn save" onClick={onClose}>Got it</button>
         </div>
       </div>
     </div>,

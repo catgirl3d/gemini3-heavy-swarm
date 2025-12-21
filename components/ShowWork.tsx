@@ -2,6 +2,8 @@ import React, { FC, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Work, AgentState } from '../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import './Modal.css';
+import './ShowWork.css';
 
 const WorkModal: FC<{ title: string; content: string; onClose: () => void }> = ({ title, content, onClose }) => {
   useEffect(() => {
@@ -17,9 +19,9 @@ const WorkModal: FC<{ title: string; content: string; onClose: () => void }> = (
   }, [onClose]);
 
   return createPortal(
-    <div className="work-modal-overlay" onClick={onClose}>
-      <div className="work-modal" onClick={e => e.stopPropagation()}>
-        <div className="work-modal-header">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container work-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
           <h3>{title}</h3>
           <button className="close-modal-button" onClick={onClose} aria-label="Close">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -27,7 +29,7 @@ const WorkModal: FC<{ title: string; content: string; onClose: () => void }> = (
             </svg>
           </button>
         </div>
-        <div className="work-modal-body">
+        <div className="modal-body">
             <MarkdownRenderer content={content} />
         </div>
       </div>
@@ -65,7 +67,7 @@ const ActionMenu: FC<{
   return (
     <div className="action-menu-container" ref={menuRef}>
       <button
-        className="action-menu-trigger"
+        className="modal-icon-btn action-menu-trigger"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -153,9 +155,9 @@ const DebugModal: FC<{ title: string; debugInfo: any; onClose: () => void }> = (
     };
 
     return createPortal(
-        <div className="work-modal-overlay" onClick={onClose}>
-            <div className="work-modal" onClick={e => e.stopPropagation()}>
-                <div className="work-modal-header">
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-container work-modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
                     <div className="header-content">
                         <h3>{title}</h3>
                         <div className="debug-view-toggle">
@@ -179,7 +181,7 @@ const DebugModal: FC<{ title: string; debugInfo: any; onClose: () => void }> = (
                         </svg>
                     </button>
                 </div>
-                <div className="work-modal-body">
+                <div className="modal-body">
                     {viewMode === 'formatted' ? (
                         <MarkdownRenderer content={formatDebugInfo(debugInfo)} />
                     ) : (
@@ -273,13 +275,13 @@ export const ShowWork: FC<{
           <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
         </svg>
       </summary>
-      <div className="work-details">
+      <div className="work-details animate-fade-in">
         <div className="work-category">
           <h4 className="work-category-title">Initial Drafts</h4>
           <div className={`work-grid ${work.initialResponses.length === 1 ? 'single-column' : ''}`}>
             {work.initialResponses.map((resp, i) => (
               <div key={`initial-${i}`} className={`work-card ${effectiveAgentStates?.[i]?.status === 'error' ? 'error' : ''}`}>
-                <div className="work-card-header">
+                <div className="modal-header work-card-header">
                     <div className="work-card-title-group">
                         {(() => {
                             const currentState = effectiveAgentStates?.[i];
@@ -326,7 +328,7 @@ export const ShowWork: FC<{
                                     )}
                                 </div>
                                 <div className="work-card-info">
-                                    <span>{work.agentNames ? work.agentNames[i] : `Agent ${i + 1}`}</span>
+                                    <span className="work-card-name">{work.agentNames ? work.agentNames[i] : `Agent ${i + 1}`}</span>
                                     <span className={`work-card-status ${displayStatus === 'error' ? 'error' : ''}`}>
                                         {displayLabel}
                                     </span>
@@ -338,7 +340,7 @@ export const ShowWork: FC<{
                     {resp && (
                         <div className="work-card-actions">
                             <button
-                                className="expand-work-button"
+                                className="modal-icon-btn expand-work-button"
                                 onClick={(e) => {
                                     e.preventDefault();
                                     setModalData({ title: `Agent ${i + 1} - Initial Draft`, content: resp });
@@ -375,11 +377,11 @@ export const ShowWork: FC<{
                         </div>
                     )}
                 </div>
-                <div className="work-card-body">
+                <div className="modal-body work-card-body">
                     {renderContent(resp)}
                 </div>
                 {work.initialTokenUsage?.[i] && (
-                    <div className="work-card-footer">
+                    <div className="modal-footer work-card-footer">
                         {renderTokenUsage(work.initialTokenUsage[i])}
                     </div>
                 )}
@@ -392,7 +394,7 @@ export const ShowWork: FC<{
            <div className={`work-grid ${work.refinedResponses.length === 1 ? 'single-column' : ''}`}>
             {work.refinedResponses.map((resp, i) => (
               <div key={`refined-${i}`} className={`work-card refined ${effectiveAgentStates?.[i]?.status === 'error' ? 'error' : ''}`}>
-                 <div className="work-card-header">
+                 <div className="modal-header work-card-header">
                     <div className="work-card-title-group">
                         {(() => {
                             const currentState = effectiveAgentStates?.[i];
@@ -439,7 +441,7 @@ export const ShowWork: FC<{
                                     )}
                                 </div>
                                 <div className="work-card-info">
-                                    <span>{work.agentNames ? work.agentNames[i] : `Agent ${i + 1}`}</span>
+                                    <span className="work-card-name">{work.agentNames ? work.agentNames[i] : `Agent ${i + 1}`}</span>
                                     <span className={`work-card-status ${displayStatus === 'error' ? 'error' : ''}`}>
                                         {displayLabel}
                                     </span>
@@ -451,7 +453,7 @@ export const ShowWork: FC<{
                     {resp && (
                         <div className="work-card-actions">
                             <button
-                                className="expand-work-button"
+                                className="modal-icon-btn expand-work-button"
                                 onClick={(e) => {
                                     e.preventDefault();
                                     setModalData({ title: `Agent ${i + 1} - Refined Response`, content: resp });
@@ -488,11 +490,11 @@ export const ShowWork: FC<{
                         </div>
                     )}
                  </div>
-                 <div className="work-card-body">
+                 <div className="modal-body work-card-body">
                     {renderContent(resp)}
                  </div>
                  {work.refinedTokenUsage?.[i] && (
-                    <div className="work-card-footer">
+                    <div className="modal-footer work-card-footer">
                         {renderTokenUsage(work.refinedTokenUsage[i])}
                     </div>
                 )}
@@ -504,7 +506,7 @@ export const ShowWork: FC<{
             <div className="work-category">
                 <h4 className="work-category-title">Final Synthesis</h4>
                 <div className={`work-card synthesizer ${synthesizerState.status === 'error' ? 'error' : ''}`}>
-                    <div className="work-card-header">
+                    <div className="modal-header work-card-header">
                         <div className="work-card-title-group">
                             <div className={`work-card-icon ${synthesizerState.status === 'working' ? 'working' : synthesizerState.status === 'error' ? 'error' : 'done'}`}>
                                 {synthesizerState.status === 'working' ? (
@@ -523,7 +525,7 @@ export const ShowWork: FC<{
                                 )}
                             </div>
                             <div className="work-card-info">
-                                <span>Synthesizer</span>
+                                <span className="work-card-name">Synthesizer</span>
                                 <span className={`work-card-status ${synthesizerState.status === 'error' ? 'error' : ''}`}>
                                     {synthesizerState.label}
                                 </span>
@@ -532,7 +534,7 @@ export const ShowWork: FC<{
                         <div className="work-card-actions">
                             {synthesisText && (
                                 <button
-                                    className="expand-work-button"
+                                    className="modal-icon-btn expand-work-button"
                                     onClick={(e) => {
                                         e.preventDefault();
                                         setModalData({ title: `Synthesizer - Final Response`, content: synthesisText });
@@ -570,7 +572,7 @@ export const ShowWork: FC<{
                             ]} />
                         </div>
                     </div>
-                    <div className="work-card-body">
+                    <div className="modal-body work-card-body">
                         {synthesizerState.status === 'error' ? (
                             <p className="synthesis-error-msg">Synthesis failed. Click the retry button to try again.</p>
                         ) : synthesisText ? (
@@ -580,7 +582,7 @@ export const ShowWork: FC<{
                         )}
                     </div>
                     {work.synthesisTokenUsage && (
-                        <div className="work-card-footer">
+                        <div className="modal-footer work-card-footer">
                             {renderTokenUsage(work.synthesisTokenUsage)}
                         </div>
                     )}

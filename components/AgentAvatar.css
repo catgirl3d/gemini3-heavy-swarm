@@ -1,0 +1,65 @@
+/* Agent Avatar Component Styles */
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+}
+.avatar svg,
+.avatar img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.message-wrapper.user .avatar {
+  background: var(--primary-color);
+  color: white;
+}
+.message-wrapper.model .avatar {
+  background-color: #f1f5f9;
+  color: var(--text-primary);
+  border: 1px solid #e2e8f0;
+}
+
+/* Responsive AgentAvatar */
+@media (max-width: 768px) {
+  .avatar {
+    width: 32px;
+    height: 32px;
+    margin-top: 2px;
+    min-width: 32px;
+  }
+  .avatar svg,
+  .avatar img {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.agent-label-header {
+  margin-top: 8px;
+}
+
+.agent-label {
+  font-weight: 700;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background-color: #f1f5f9;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+@media (max-width: 768px) {
+  .agent-label-header {
+    margin-top: 0;
+    margin-left: 0;
+    margin-bottom: 0.5rem;
+  }
+}

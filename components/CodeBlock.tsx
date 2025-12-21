@@ -1,4 +1,5 @@
 import React, { FC, ReactNode, useState } from 'react';
+import './CodeBlock.css';
 
 export const CodeBlock: FC<{ children?: ReactNode, className?: string }> = ({ children, className }) => {
   const [copied, setCopied] = useState(false);
