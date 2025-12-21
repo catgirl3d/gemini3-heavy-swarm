@@ -15,7 +15,9 @@ const getModelDisplayName = (model: string) => {
   if (model === 'gemini-2.5-flash-lite') return 'Gemini 2.5 Flash-Lite Swarm';
   if (model === 'gemini-2.5-flash') return 'Gemini 2.5 Flash Swarm';
   if (model === 'gemini-2.5-pro') return 'Gemini 2.5 Pro Swarm';
-  return 'Gemini 3 Heavy Swarm';
+  if (model === 'gemini-3-flash-preview') return 'Gemini 3 Flash Swarm';
+  if (model === 'gemini-3-pro-preview') return 'Gemini 3 Pro Swarm';
+  return 'Gemini Swarm';
 };
 
 const App: FC = () => {

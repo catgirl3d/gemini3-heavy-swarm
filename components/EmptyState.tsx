@@ -3,9 +3,9 @@ import geminiIcon from '../assets/Google-gemini-icon.png';
 
 export const EmptyState: FC<{ onPromptClick: (prompt: string) => void; modelDisplayName: string }> = ({ onPromptClick, modelDisplayName }) => {
   const examplePrompts = [
-    "Explain the concept of 'agentic workflows' in AI.",
-    "Compare the pros and cons of Next.js and Remix.",
-    "What are the ethical implications of generative AI in art?",
+    "Analyze the impact of Blackwell GPUs on AI scaling laws.",
+    "Draft a technical proposal for a multi-agent orchestration layer.",
+    "Synthesize the main arguments for and against AGI by 2030.",
   ];
   return (
     <div className="empty-state-container">
@@ -14,7 +14,7 @@ export const EmptyState: FC<{ onPromptClick: (prompt: string) => void; modelDisp
       </div>
       <h2 className="welcome-title">{modelDisplayName}</h2>
       <p className="welcome-subtitle">How can this AI swarm assist you today?</p>
-      
+
       <a href="https://t.me/temnobogin9" target="_blank" rel="noopener noreferrer" className="creator-credit">
         by Lisova
       </a>

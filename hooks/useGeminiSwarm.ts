@@ -13,8 +13,8 @@ export const useGeminiSwarm = () => {
   const [timer, setTimer] = useState<number>(0);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [error, setError] = useState<string | null>(null);
-  const [lastInput, setLastInput] = useState<{text: string, image: string | null, imageFile: File | null} | null>(null);
-  
+  const [lastInput, setLastInput] = useState<{ text: string, image: string | null, imageFile: File | null } | null>(null);
+
   const startTimeRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const regenerateAbortControllerRef = useRef<AbortController | null>(null);
@@ -37,84 +37,88 @@ export const useGeminiSwarm = () => {
             parsedSettings.refinementInstruction !== DEFAULT_PROFILES[0].refinementInstruction ||
             parsedSettings.synthesizerInstruction !== DEFAULT_PROFILES[0].synthesizerInstruction
           ) {
-             const customProfile = {
-                id: 'custom-migrated',
-                name: 'Custom (Migrated)',
-                initialInstruction: parsedSettings.initialInstruction || DEFAULT_PROFILES[0].initialInstruction,
-                refinementInstruction: parsedSettings.refinementInstruction || DEFAULT_PROFILES[0].refinementInstruction,
-                synthesizerInstruction: parsedSettings.synthesizerInstruction || DEFAULT_PROFILES[0].synthesizerInstruction
-             };
-             parsedSettings.profiles.push(customProfile);
-             parsedSettings.activeProfileId = 'custom-migrated';
+            const customProfile = {
+              id: 'custom-migrated',
+              name: 'Custom (Migrated)',
+              initialInstruction: parsedSettings.initialInstruction || DEFAULT_PROFILES[0].initialInstruction,
+              refinementInstruction: parsedSettings.refinementInstruction || DEFAULT_PROFILES[0].refinementInstruction,
+              synthesizerInstruction: parsedSettings.synthesizerInstruction || DEFAULT_PROFILES[0].synthesizerInstruction
+            };
+            parsedSettings.profiles.push(customProfile);
+            parsedSettings.activeProfileId = 'custom-migrated';
           }
         }
         // Migration: Ensure roleProfiles exist
         if (!parsedSettings.roleProfiles) {
-            parsedSettings.roleProfiles = DEFAULT_ROLE_PROFILES;
-            parsedSettings.activeRoleProfileId = 'default-roles';
-            
-            // Migrate old agentRoles to a custom profile if they exist
-            if (parsedSettings.agentRoles && parsedSettings.agentRoles.length > 0) {
-                 const customRoleProfile = {
-                    id: 'custom-roles-migrated',
-                    name: 'Custom Roles (Migrated)',
-                    roles: parsedSettings.agentRoles
-                 };
-                 parsedSettings.roleProfiles.push(customRoleProfile);
-                 parsedSettings.activeRoleProfileId = 'custom-roles-migrated';
-            }
-            // Clean up old property
-            delete parsedSettings.agentRoles;
+          parsedSettings.roleProfiles = DEFAULT_ROLE_PROFILES;
+          parsedSettings.activeRoleProfileId = 'default-roles';
+
+          // Migrate old agentRoles to a custom profile if they exist
+          if (parsedSettings.agentRoles && parsedSettings.agentRoles.length > 0) {
+            const customRoleProfile = {
+              id: 'custom-roles-migrated',
+              name: 'Custom Roles (Migrated)',
+              roles: parsedSettings.agentRoles
+            };
+            parsedSettings.roleProfiles.push(customRoleProfile);
+            parsedSettings.activeRoleProfileId = 'custom-roles-migrated';
+          }
+          // Clean up old property
+          delete parsedSettings.agentRoles;
         } else {
-            // Ensure new default profiles are available even if settings exist
-            const madScientistProfile = DEFAULT_ROLE_PROFILES.find(p => p.id === 'mad-scientists');
-            if (madScientistProfile && !parsedSettings.roleProfiles.some((p: any) => p.id === 'mad-scientists')) {
-                parsedSettings.roleProfiles.push(madScientistProfile);
-            }
+          // Ensure new default profiles are available even if settings exist
+          const madScientistProfile = DEFAULT_ROLE_PROFILES.find(p => p.id === 'mad-scientists');
+          if (madScientistProfile && !parsedSettings.roleProfiles.some((p: any) => p.id === 'mad-scientists')) {
+            parsedSettings.roleProfiles.push(madScientistProfile);
+          }
         }
-  
+
         // Migration: Ensure criticRoles exist in roleProfiles
         if (parsedSettings.roleProfiles) {
-            parsedSettings.roleProfiles = parsedSettings.roleProfiles.map((profile: any) => {
-                if (!profile.criticRoles) {
-                    // Find matching default profile to copy critic roles from
-                    const defaultProfile = DEFAULT_ROLE_PROFILES.find(p => p.id === profile.id);
-                    return {
-                        ...profile,
-                        criticRoles: defaultProfile?.criticRoles || []
-                    };
-                }
-                return profile;
-            });
+          parsedSettings.roleProfiles = parsedSettings.roleProfiles.map((profile: any) => {
+            if (!profile.criticRoles) {
+              // Find matching default profile to copy critic roles from
+              const defaultProfile = DEFAULT_ROLE_PROFILES.find(p => p.id === profile.id);
+              return {
+                ...profile,
+                criticRoles: defaultProfile?.criticRoles || []
+              };
+            }
+            return profile;
+          });
         }
-  
+
         // Migration: Ensure savedInstructions exist
         if (!parsedSettings.savedInstructions) {
-            parsedSettings.savedInstructions = [];
+          parsedSettings.savedInstructions = [];
         }
-  
+
         // Migration: Ensure savedRoles exist
         if (!parsedSettings.savedRoles) {
-            parsedSettings.savedRoles = [];
+          parsedSettings.savedRoles = [];
         }
-  
+
         // Migration: Ensure pauseAfterRefinement exists
         if (parsedSettings.pauseAfterRefinement === undefined) {
-            parsedSettings.pauseAfterRefinement = false;
+          parsedSettings.pauseAfterRefinement = false;
         }
-  
+
         // Migration: Ensure dynamicAgentRoles exists (default to true)
         if (parsedSettings.dynamicAgentRoles === undefined) {
-            parsedSettings.dynamicAgentRoles = true;
+          parsedSettings.dynamicAgentRoles = true;
         }
 
         // Migration: Ensure model is compatible with current environment (demo vs full)
         const hasClientKey = !!parsedSettings.apiKey || !!process.env.GEMINI_API_KEY;
         if (!hasClientKey) {
-            // In demo/proxy mode without a direct key, always fall back to the environment default
-            parsedSettings.model = DEFAULT_SETTINGS.model;
+          // In demo/proxy mode without a direct key, always fall back to the environment default
+          parsedSettings.model = DEFAULT_SETTINGS.model;
         }
-  
+
+        if (parsedSettings.numAgents > 5) {
+          parsedSettings.numAgents = 5;
+        }
+
         setSettings(parsedSettings);
       } catch (error) {
         console.error('Failed to parse saved settings:', error);
@@ -142,9 +146,9 @@ export const useGeminiSwarm = () => {
 
   const continueGeneration = () => {
     if (pauseResolverRef.current) {
-        pauseResolverRef.current();
-        pauseResolverRef.current = null;
-        setIsPaused(false);
+      pauseResolverRef.current();
+      pauseResolverRef.current = null;
+      setIsPaused(false);
     }
   };
 
@@ -167,15 +171,15 @@ export const useGeminiSwarm = () => {
     setIsPaused(false);
     setAgentStates([]);
     setCurrentWork({
-        initialResponses: Array(settings.numAgents).fill(null),
-        refinedResponses: Array(settings.numAgents).fill(null)
+      initialResponses: Array(settings.numAgents).fill(null),
+      refinedResponses: Array(settings.numAgents).fill(null)
     });
 
     // This will always hold the latest snapshot of agent states
     let latestAgents: AgentState[] = [];
     // This will always hold the latest snapshot of work (including results/debugInfo/etc.)
     let latestWork: Work | undefined;
-    
+
     // Create new AbortController
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -203,20 +207,20 @@ export const useGeminiSwarm = () => {
           }
         },
         (text, isFinal) => {
-           if (isFinal) {
-             setIsLoading(false);
-           }
-           setMessages(prev => {
-             const newMessages = [...prev];
-             // If the last message is from the model, update it. Otherwise add a new one.
-             const lastMsg = newMessages[newMessages.length - 1];
-             if (lastMsg.role === 'model') {
-               lastMsg.parts[0].text = text;
-             } else {
-               newMessages.push({ role: 'model', parts: [{ text }] });
-             }
-             return newMessages;
-           });
+          if (isFinal) {
+            setIsLoading(false);
+          }
+          setMessages(prev => {
+            const newMessages = [...prev];
+            // If the last message is from the model, update it. Otherwise add a new one.
+            const lastMsg = newMessages[newMessages.length - 1];
+            if (lastMsg.role === 'model') {
+              lastMsg.parts[0].text = text;
+            } else {
+              newMessages.push({ role: 'model', parts: [{ text }] });
+            }
+            return newMessages;
+          });
         },
         signal,
         pauseResolverRef
@@ -244,19 +248,19 @@ export const useGeminiSwarm = () => {
 
       console.error('Error in agentic workflow:', error);
       setIsLoading(false);
-      
+
       // Preserve the latest work snapshot on error so user can see partial results and retry
       if (latestWork) {
-          setMessages(prev => {
-              const newMessages = [...prev];
-              const lastMessage = newMessages[newMessages.length - 1];
-              lastMessage.work = latestWork;
-              return newMessages;
-          });
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          lastMessage.work = latestWork;
+          return newMessages;
+        });
       }
-      
+
       setCurrentWork(undefined);
-      
+
       let errorMessage = 'An unexpected error occurred.';
       if (error instanceof Error) {
         if (error.message.includes('429')) {
@@ -293,229 +297,229 @@ export const useGeminiSwarm = () => {
 
   const regenerateAgentResponse = async (messageIndex: number, stepId: string, agentIndex: number) => {
     if (!lastInput) return;
-    
+
     // Find the message to update or use currentWork if it's the active generation
     const targetMessage = messages[messageIndex];
     let workContext = targetMessage?.work;
-    
+
     if (!workContext && currentWork) {
-        workContext = currentWork;
+      workContext = currentWork;
     }
 
     if (!workContext) return;
 
     // Helper to get updated agent name based on current settings
     const getUpdatedAgentName = (index: number, stepId: string) => {
-        const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0];
-        
-        if (stepId === 'initial') {
-            const perspectives = activeRoleProfile?.roles || [];
-            if (perspectives.length === 0) return `Agent ${index + 1}`;
-            const role = perspectives[index % perspectives.length];
-            return settings.dynamicAgentRoles ? `Agent ${index + 1} (${role.name})` : `Agent ${index + 1}`;
-        } else if (stepId === 'refined') {
-            const perspectives = activeRoleProfile?.criticRoles || [];
-            if (perspectives.length === 0) return `Critic ${index + 1}`;
-            const role = perspectives[index % perspectives.length];
-            return settings.dynamicAgentRoles ? `Agent ${index + 1} (${role.name})` : `Critic ${index + 1}`;
-        }
-        return `Agent ${index + 1}`;
+      const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0];
+
+      if (stepId === 'initial') {
+        const perspectives = activeRoleProfile?.roles || [];
+        if (perspectives.length === 0) return `Agent ${index + 1}`;
+        const role = perspectives[index % perspectives.length];
+        return settings.dynamicAgentRoles ? `Agent ${index + 1} (${role.name})` : `Agent ${index + 1}`;
+      } else if (stepId === 'refined') {
+        const perspectives = activeRoleProfile?.criticRoles || [];
+        if (perspectives.length === 0) return `Critic ${index + 1}`;
+        const role = perspectives[index % perspectives.length];
+        return settings.dynamicAgentRoles ? `Agent ${index + 1} (${role.name})` : `Critic ${index + 1}`;
+      }
+      return `Agent ${index + 1}`;
     };
 
     // Helper to keep agent status in sync across: live state, current work, and stored message work
     const updateAgentStatus = (status: AgentState['status'], label: string) => {
-        const updateStates = (states: AgentState[] | undefined): AgentState[] | undefined => {
-            if (!states) return states;
-            const copy = [...states];
+      const updateStates = (states: AgentState[] | undefined): AgentState[] | undefined => {
+        if (!states) return states;
+        const copy = [...states];
 
-            if (stepId === 'synthesis') {
-                const synthIndex = copy.findIndex(a => a.id === 'synthesizer');
-                if (synthIndex >= 0) {
-                    copy[synthIndex] = { ...copy[synthIndex], status, label };
-                }
-            } else {
-                if (copy[agentIndex]) {
-                    // Update name if settings changed
-                    const newName = getUpdatedAgentName(agentIndex, stepId);
-                    copy[agentIndex] = { ...copy[agentIndex], status, label, name: newName };
-                }
-            }
+        if (stepId === 'synthesis') {
+          const synthIndex = copy.findIndex(a => a.id === 'synthesizer');
+          if (synthIndex >= 0) {
+            copy[synthIndex] = { ...copy[synthIndex], status, label };
+          }
+        } else {
+          if (copy[agentIndex]) {
+            // Update name if settings changed
+            const newName = getUpdatedAgentName(agentIndex, stepId);
+            copy[agentIndex] = { ...copy[agentIndex], status, label, name: newName };
+          }
+        }
 
-            return copy;
-        };
+        return copy;
+      };
 
-        // Update top-level agentStates used by the loader
-        setAgentStates(prev => {
-            const updated = updateStates(prev);
-            return updated ?? prev;
-        });
+      // Update top-level agentStates used by the loader
+      setAgentStates(prev => {
+        const updated = updateStates(prev);
+        return updated ?? prev;
+      });
 
-        // Update the stored work attached to the specific message (for history view)
-        setMessages(prev => {
-            const newMessages = [...prev];
-            const msg = newMessages[messageIndex];
-            if (msg && msg.work && msg.work.agentStates) {
-                const updated = updateStates(msg.work.agentStates);
-                if (updated) {
-                    msg.work = { ...msg.work, agentStates: updated };
-                }
-            }
-            return newMessages;
-        });
+      // Update the stored work attached to the specific message (for history view)
+      setMessages(prev => {
+        const newMessages = [...prev];
+        const msg = newMessages[messageIndex];
+        if (msg && msg.work && msg.work.agentStates) {
+          const updated = updateStates(msg.work.agentStates);
+          if (updated) {
+            msg.work = { ...msg.work, agentStates: updated };
+          }
+        }
+        return newMessages;
+      });
 
-        // Update the live currentWork used in the "Show Agent Work (Live)" section
-        setCurrentWork(prev => {
-            if (!prev || !prev.agentStates) return prev;
-            const updated = updateStates(prev.agentStates);
-            return updated ? { ...prev, agentStates: updated } : prev;
-        });
+      // Update the live currentWork used in the "Show Agent Work (Live)" section
+      setCurrentWork(prev => {
+        if (!prev || !prev.agentStates) return prev;
+        const updated = updateStates(prev.agentStates);
+        return updated ? { ...prev, agentStates: updated } : prev;
+      });
     };
 
     // Create new AbortController for this specific operation
     if (regenerateAbortControllerRef.current) {
-        regenerateAbortControllerRef.current.abort();
+      regenerateAbortControllerRef.current.abort();
     }
     const abortController = new AbortController();
     regenerateAbortControllerRef.current = abortController;
 
     try {
-        // Set status to working while regeneration is in progress
-        const regenLabel = stepId === 'initial' ? 'Regenerating Draft...' :
-                          stepId === 'refined' ? 'Regenerating Critique...' :
-                          stepId === 'synthesis' ? 'Regenerating Synthesis...' : 'Regenerating...';
-        updateAgentStatus('working', regenLabel);
+      // Set status to working while regeneration is in progress
+      const regenLabel = stepId === 'initial' ? 'Regenerating Draft...' :
+        stepId === 'refined' ? 'Regenerating Critique...' :
+          stepId === 'synthesis' ? 'Regenerating Synthesis...' : 'Regenerating...';
+      updateAgentStatus('working', regenLabel);
 
-        // We need the history up to this point
-        const history = messages.slice(0, messageIndex);
+      // We need the history up to this point
+      const history = messages.slice(0, messageIndex);
 
-        await geminiServiceRef.current.regenerateResponse(
-            settings,
-            lastInput.text,
-            lastInput.image,
-            lastInput.imageFile,
-            history,
-            agentIndex,
-            stepId,
-            workContext,
-            (text) => {
-                // Update Messages (both visible text and attached work, if present)
-                setMessages(prev => {
-                    const newMessages = [...prev];
-                    const msg = newMessages[messageIndex];
+      await geminiServiceRef.current.regenerateResponse(
+        settings,
+        lastInput.text,
+        lastInput.image,
+        lastInput.imageFile,
+        history,
+        agentIndex,
+        stepId,
+        workContext,
+        (text) => {
+          // Update Messages (both visible text and attached work, if present)
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const msg = newMessages[messageIndex];
 
-                    if (msg) {
-                        // For synthesis: update the final answer in the message card itself
-                        if (stepId === 'synthesis') {
-                            if (msg.role === 'model') {
-                                if (msg.parts && msg.parts.length > 0) {
-                                    msg.parts[0] = { ...msg.parts[0], text };
-                                } else {
-                                    msg.parts = [{ text }];
-                                }
-                            }
-                        }
+            if (msg) {
+              // For synthesis: update the final answer in the message card itself
+              if (stepId === 'synthesis') {
+                if (msg.role === 'model') {
+                  if (msg.parts && msg.parts.length > 0) {
+                    msg.parts[0] = { ...msg.parts[0], text };
+                  } else {
+                    msg.parts = [{ text }];
+                  }
+                }
+              }
 
-                        if (msg.work) {
-                            const newWork = { ...msg.work };
-                            
-                            // Update agent names in work object
-                            if (stepId !== 'synthesis' && newWork.agentNames) {
-                                const newName = getUpdatedAgentName(agentIndex, stepId);
-                                const newAgentNames = [...newWork.agentNames];
-                                newAgentNames[agentIndex] = newName;
-                                newWork.agentNames = newAgentNames;
-                            }
+              if (msg.work) {
+                const newWork = { ...msg.work };
 
-                            // Update generic results
-                            if (!newWork.results) newWork.results = {};
+                // Update agent names in work object
+                if (stepId !== 'synthesis' && newWork.agentNames) {
+                  const newName = getUpdatedAgentName(agentIndex, stepId);
+                  const newAgentNames = [...newWork.agentNames];
+                  newAgentNames[agentIndex] = newName;
+                  newWork.agentNames = newAgentNames;
+                }
 
-                            if (stepId === 'synthesis') {
-                                // Single synthesized result (object with text/sources), not per-agent array
-                                const existing = newWork.results[stepId];
-                                const base =
-                                    existing && typeof existing === 'object'
-                                        ? existing
-                                        : {};
-                                newWork.results[stepId] = { ...base, text };
-                            } else {
-                                if (!newWork.results[stepId]) newWork.results[stepId] = [];
-                                
-                                // Ensure array exists and update it
-                                const currentResults = [...(newWork.results[stepId] as string[])];
-                                currentResults[agentIndex] = text;
-                                newWork.results[stepId] = currentResults;
+                // Update generic results
+                if (!newWork.results) newWork.results = {};
 
-                                // Update legacy fields for compatibility
-                                if (stepId === 'initial') {
-                                    newWork.initialResponses = [...newWork.initialResponses];
-                                    newWork.initialResponses[agentIndex] = text;
-                                } else if (stepId === 'refined') {
-                                    newWork.refinedResponses = [...newWork.refinedResponses];
-                                    newWork.refinedResponses[agentIndex] = text;
-                                }
-                            }
-                            
-                            msg.work = newWork;
-                        }
-                    }
+                if (stepId === 'synthesis') {
+                  // Single synthesized result (object with text/sources), not per-agent array
+                  const existing = newWork.results[stepId];
+                  const base =
+                    existing && typeof existing === 'object'
+                      ? existing
+                      : {};
+                  newWork.results[stepId] = { ...base, text };
+                } else {
+                  if (!newWork.results[stepId]) newWork.results[stepId] = [];
 
-                    return newMessages;
-                });
+                  // Ensure array exists and update it
+                  const currentResults = [...(newWork.results[stepId] as string[])];
+                  currentResults[agentIndex] = text;
+                  newWork.results[stepId] = currentResults;
 
-                // Update Current Work (for live view)
-                setCurrentWork(prev => {
-                    if (!prev) return prev;
-                    const newWork = { ...prev };
-                    
-                    // Update agent names in work object
-                    if (stepId !== 'synthesis' && newWork.agentNames) {
-                        const newName = getUpdatedAgentName(agentIndex, stepId);
-                        const newAgentNames = [...newWork.agentNames];
-                        newAgentNames[agentIndex] = newName;
-                        newWork.agentNames = newAgentNames;
-                    }
+                  // Update legacy fields for compatibility
+                  if (stepId === 'initial') {
+                    newWork.initialResponses = [...newWork.initialResponses];
+                    newWork.initialResponses[agentIndex] = text;
+                  } else if (stepId === 'refined') {
+                    newWork.refinedResponses = [...newWork.refinedResponses];
+                    newWork.refinedResponses[agentIndex] = text;
+                  }
+                }
 
-                    // Update generic results
-                    if (!newWork.results) newWork.results = {};
+                msg.work = newWork;
+              }
+            }
 
-                    if (stepId === 'synthesis') {
-                        const existing = newWork.results[stepId];
-                        const base =
-                            existing && typeof existing === 'object'
-                                ? existing
-                                : {};
-                        newWork.results[stepId] = { ...base, text };
-                    } else {
-                        if (!newWork.results[stepId]) newWork.results[stepId] = [];
-                        
-                        const currentResults = [...(newWork.results[stepId] as string[])];
-                        currentResults[agentIndex] = text;
-                        newWork.results[stepId] = currentResults;
+            return newMessages;
+          });
 
-                        // Update legacy fields for compatibility
-                        if (stepId === 'initial') {
-                            newWork.initialResponses = [...newWork.initialResponses];
-                            newWork.initialResponses[agentIndex] = text;
-                        } else if (stepId === 'refined') {
-                            newWork.refinedResponses = [...newWork.refinedResponses];
-                            newWork.refinedResponses[agentIndex] = text;
-                        }
-                    }
-                    return newWork;
-                });
-            },
-            abortController.signal
-        );
+          // Update Current Work (for live view)
+          setCurrentWork(prev => {
+            if (!prev) return prev;
+            const newWork = { ...prev };
+
+            // Update agent names in work object
+            if (stepId !== 'synthesis' && newWork.agentNames) {
+              const newName = getUpdatedAgentName(agentIndex, stepId);
+              const newAgentNames = [...newWork.agentNames];
+              newAgentNames[agentIndex] = newName;
+              newWork.agentNames = newAgentNames;
+            }
+
+            // Update generic results
+            if (!newWork.results) newWork.results = {};
+
+            if (stepId === 'synthesis') {
+              const existing = newWork.results[stepId];
+              const base =
+                existing && typeof existing === 'object'
+                  ? existing
+                  : {};
+              newWork.results[stepId] = { ...base, text };
+            } else {
+              if (!newWork.results[stepId]) newWork.results[stepId] = [];
+
+              const currentResults = [...(newWork.results[stepId] as string[])];
+              currentResults[agentIndex] = text;
+              newWork.results[stepId] = currentResults;
+
+              // Update legacy fields for compatibility
+              if (stepId === 'initial') {
+                newWork.initialResponses = [...newWork.initialResponses];
+                newWork.initialResponses[agentIndex] = text;
+              } else if (stepId === 'refined') {
+                newWork.refinedResponses = [...newWork.refinedResponses];
+                newWork.refinedResponses[agentIndex] = text;
+              }
+            }
+            return newWork;
+          });
+        },
+        abortController.signal
+      );
 
     } catch (error) {
-        console.error("Regeneration failed:", error);
+      console.error("Regeneration failed:", error);
     } finally {
-        regenerateAbortControllerRef.current = null;
-        // Mark agent as done once regeneration finishes
-        const doneLabel = stepId === 'initial' ? 'Draft Regenerated' :
-                         stepId === 'refined' ? 'Critique Regenerated' :
-                         stepId === 'synthesis' ? 'Synthesis Regenerated' : 'Regenerated';
-        updateAgentStatus('done', doneLabel);
+      regenerateAbortControllerRef.current = null;
+      // Mark agent as done once regeneration finishes
+      const doneLabel = stepId === 'initial' ? 'Draft Regenerated' :
+        stepId === 'refined' ? 'Critique Regenerated' :
+          stepId === 'synthesis' ? 'Synthesis Regenerated' : 'Regenerated';
+      updateAgentStatus('done', doneLabel);
     }
   };
 
