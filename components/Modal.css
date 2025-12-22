@@ -95,22 +95,24 @@
   cursor: pointer;
   color: var(--text-secondary);
   padding: 0.5rem;
-  border-radius: 50%;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  width: 32px;
+  height: 32px;
 }
 
 .modal-icon-btn:hover,
 .close-modal-button:hover {
-  background-color: #e2e8f0;
+  background-color: #f1f5f9;
   color: var(--text-primary);
 }
 .modal-icon-btn svg,
 .close-modal-button svg {
-  width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
 }
 .modal-icon-btn.small {
   padding: 0.25rem;
@@ -182,14 +184,16 @@
 }
 .modal-btn.outline:hover {
   background-color: #f8fafc;
-  border-color: var(--text-primary);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
 }
 .modal-btn.danger {
   background-color: #fee2e2;
   color: #991b1b;
 }
 .modal-btn.danger:hover {
-  background-color: #fecaca;
+  background-color: #fee2e2;
+  color: #ef4444;
 }
 .modal-btn.small {
   padding: 0.4rem 0.8rem;
