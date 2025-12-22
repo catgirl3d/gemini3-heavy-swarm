@@ -14,6 +14,10 @@
   animation: fade-in 0.2s ease-out;
 }
 
+.modal-overlay.top {
+  z-index: 2000;
+}
+
 .modal-container {
   background-color: white;
   width: 90%;
@@ -141,6 +145,12 @@
   background-color: #f8fafc;
   display: flex;
   justify-content: space-between;
+  align-items: center;
+}
+
+.modal-footer-actions {
+  display: flex;
+  gap: 0.75rem;
 }
 .modal-footer.justify-end {
   justify-content: flex-end;

@@ -1,7 +1,10 @@
-import React, { FC, useState, useEffect, ChangeEvent } from 'react';
+import React, { FC, useState, useEffect, ChangeEvent, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { AppSettings, PromptProfile, RoleProfile } from '../types';
 import { DEFAULT_SETTINGS } from '../constants';
+import { UniversalConfigModal } from './UniversalConfigModal';
+import { ConfirmationModal } from './ConfirmationModal';
+import { useModalGlobalHandlers } from '../hooks/useModalGlobalHandlers';
 import './Modal.css';
 import './SettingsModal.css';
 
@@ -17,48 +20,52 @@ export const SettingsModal: FC<{
     const [isEditingRoleName, setIsEditingRoleName] = useState(false);
     const [isEditingProfileName, setIsEditingProfileName] = useState(false);
     const [activeRoleType, setActiveRoleType] = useState<'drafter' | 'critic'>('drafter');
-    const [activePresetMenu, setActivePresetMenu] = useState<number | null>(null);
-    const [dropdownPosition, setDropdownPosition] = useState<{ top: number, right: number } | null>(null);
     const [editingRoleIndex, setEditingRoleIndex] = useState<number | null>(null);
+    const [isRolePresetDropdownOpen, setIsRolePresetDropdownOpen] = useState(false);
+    const [isInstructionPresetDropdownOpen, setIsInstructionPresetDropdownOpen] = useState(false);
     const [editingInstruction, setEditingInstruction] = useState<'initial' | 'refinement' | 'synthesizer' | null>(null);
-    const [activeInstructionPresetMenu, setActiveInstructionPresetMenu] = useState<'initial' | 'refinement' | 'synthesizer' | null>(null);
-    const [newPresetName, setNewPresetName] = useState('');
-    const [isSavingPreset, setIsSavingPreset] = useState(false);
+    const [showConfirmClose, setShowConfirmClose] = useState(false);
 
     useEffect(() => {
-        setLocalSettings(settings);
-    }, [settings, isOpen]);
-
-    useEffect(() => {
-        const handleEsc = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
-        };
-        const handleClickOutside = (e: MouseEvent) => {
-            if (activePresetMenu !== null &&
-                !(e.target as Element).closest('.preset-menu-container') &&
-                !(e.target as Element).closest('.preset-menu-dropdown-portal')) {
-                setActivePresetMenu(null);
-                setDropdownPosition(null);
-            }
-            if (activeInstructionPresetMenu !== null &&
-                !(e.target as Element).closest('.preset-menu-container') &&
-                !(e.target as Element).closest('.preset-menu-dropdown-portal')) {
-                setActiveInstructionPresetMenu(null);
-                setDropdownPosition(null);
-            }
-        };
-
         if (isOpen) {
-            window.addEventListener('keydown', handleEsc);
-            window.addEventListener('click', handleClickOutside, true);
-            document.body.style.overflow = 'hidden';
+            setLocalSettings(settings);
         }
-        return () => {
-            window.removeEventListener('keydown', handleEsc);
-            window.removeEventListener('click', handleClickOutside, true);
-            document.body.style.overflow = 'unset';
-        };
-    }, [isOpen, onClose, activePresetMenu, activeInstructionPresetMenu]);
+    }, [isOpen]); // Removed 'settings' from dependencies to prevent overwriting local edits when parent updates settings
+
+    const hasUnsavedChanges = useMemo(() => {
+        return JSON.stringify(localSettings) !== JSON.stringify(settings);
+    }, [localSettings, settings]);
+
+    const handleCloseAttempt = () => {
+        if (hasUnsavedChanges) {
+            setShowConfirmClose(true);
+        } else {
+            onClose();
+        }
+    };
+
+    // Use the custom hook for global handlers (ESC, click-outside, scroll lock)
+    useModalGlobalHandlers({
+        isOpen,
+        onEscape: () => {
+            if (showConfirmClose) {
+                setShowConfirmClose(false);
+            } else if (editingRoleIndex !== null) {
+                setEditingRoleIndex(null);
+                setIsRolePresetDropdownOpen(false);
+            } else if (editingInstruction !== null) {
+                setEditingInstruction(null);
+                setIsInstructionPresetDropdownOpen(false);
+            } else {
+                handleCloseAttempt();
+            }
+        },
+        clickOutsideSelectors: ['.preset-menu-container'],
+        onCloseDropdowns: () => {
+            if (isRolePresetDropdownOpen) setIsRolePresetDropdownOpen(false);
+            if (isInstructionPresetDropdownOpen) setIsInstructionPresetDropdownOpen(false);
+        }
+    });
 
     if (!isOpen) return null;
 
@@ -101,10 +108,10 @@ export const SettingsModal: FC<{
         }));
     };
 
-    const handleInstructionChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-        const { name, value } = e.target;
+    const handleInstructionChange = (name: 'initialInstruction' | 'refinementInstruction' | 'synthesizerInstruction', value: string) => {
         setLocalSettings(prev => {
-            const newProfiles = prev.profiles.map(p => {
+            const profiles = prev.profiles || [];
+            const newProfiles = profiles.map(p => {
                 if (p.id === prev.activeProfileId) {
                     return { ...p, [name]: value };
                 }
@@ -124,7 +131,7 @@ export const SettingsModal: FC<{
         };
         setLocalSettings(prev => ({
             ...prev,
-            profiles: [...prev.profiles, newProfile],
+            profiles: [...(prev.profiles || []), newProfile],
             activeProfileId: newProfile.id
         }));
     };
@@ -144,13 +151,15 @@ export const SettingsModal: FC<{
     };
 
     const handleDeleteProfile = () => {
-        if (localSettings.profiles.length <= 1) return;
+        const profiles = localSettings.profiles || [];
+        if (profiles.length <= 1) return;
         setLocalSettings(prev => {
-            const newProfiles = prev.profiles.filter(p => p.id !== prev.activeProfileId);
+            const currentProfiles = prev.profiles || [];
+            const newProfiles = currentProfiles.filter(p => p.id !== prev.activeProfileId);
             return {
                 ...prev,
                 profiles: newProfiles,
-                activeProfileId: newProfiles[0].id
+                activeProfileId: newProfiles[0]?.id || ''
             };
         });
     };
@@ -169,7 +178,8 @@ export const SettingsModal: FC<{
 
     const handleRenameProfile = (newName: string) => {
         setLocalSettings(prev => {
-            const newProfiles = prev.profiles.map(p => {
+            const profiles = prev.profiles || [];
+            const newProfiles = profiles.map(p => {
                 if (p.id === prev.activeProfileId) {
                     return { ...p, name: newName };
                 }
@@ -235,10 +245,10 @@ export const SettingsModal: FC<{
         const defaultProfile = DEFAULT_SETTINGS.roleProfiles.find(p => p.id === profileId);
         const defaultRoles = defaultProfile ? (type === 'drafter' ? defaultProfile.roles : (defaultProfile.criticRoles || [])) : [];
 
-        const profilePresets = defaultRoles.map(r => ({
+        const profilePresets = defaultRoles.map((r, index) => ({
             ...r,
             isCustom: false,
-            id: `default-${r.name}` // Pseudo-ID for keying
+            id: `default-${profileId}-${type}-${index}` // Stable unique ID based on profile, type, and index
         }));
 
         const savedPresets = (localSettings.savedRoles || []).map(r => ({
@@ -252,7 +262,7 @@ export const SettingsModal: FC<{
             name: "No Role",
             instruction: "",
             isCustom: false,
-            id: "default-no-role"
+            id: `default-${profileId}-${type}-no-role` // Stable unique ID for "No Role"
         };
 
         // Check if "No Role" is already in profilePresets or savedPresets to avoid duplicates
@@ -266,7 +276,7 @@ export const SettingsModal: FC<{
     };
 
     const getInstructionPresets = (type: 'initial' | 'refinement' | 'synthesizer') => {
-        const profilePresets = DEFAULT_SETTINGS.profiles.filter(p => p.id !== localSettings.activeProfileId).map(p => ({
+        const profilePresets = (localSettings.profiles || []).filter(p => p.id !== localSettings.activeProfileId).map(p => ({
             id: p.id,
             name: p.name,
             instruction: type === 'initial' ? p.initialInstruction : type === 'refinement' ? p.refinementInstruction : p.synthesizerInstruction,
@@ -283,8 +293,8 @@ export const SettingsModal: FC<{
         return [...savedPresets, ...profilePresets];
     };
 
-    const handleSaveInstructionPreset = () => {
-        if (!editingInstruction || !newPresetName.trim()) return;
+    const handleSaveInstructionPreset = (name: string) => {
+        if (!editingInstruction) return;
 
         const currentInstruction = editingInstruction === 'initial'
             ? activeProfile.initialInstruction
@@ -298,15 +308,12 @@ export const SettingsModal: FC<{
                 ...(prev.savedInstructions || []),
                 {
                     id: `saved-${Date.now()}`,
-                    name: newPresetName.trim(),
+                    name: name,
                     type: editingInstruction,
                     content: currentInstruction
                 }
             ]
         }));
-
-        setNewPresetName('');
-        setIsSavingPreset(false);
     };
 
     const handleDeleteInstructionPreset = (id: string) => {
@@ -316,8 +323,8 @@ export const SettingsModal: FC<{
         }));
     };
 
-    const handleSaveRolePreset = () => {
-        if (editingRoleIndex === null || !newPresetName.trim()) return;
+    const handleSaveRolePreset = (name: string) => {
+        if (editingRoleIndex === null) return;
 
         const roleList = activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles;
         const currentRole = (roleList || [])[editingRoleIndex];
@@ -330,14 +337,11 @@ export const SettingsModal: FC<{
                 ...(prev.savedRoles || []),
                 {
                     id: `saved-role-${Date.now()}`,
-                    name: newPresetName.trim(),
+                    name: name,
                     instruction: currentRole.instruction
                 }
             ]
         }));
-
-        setNewPresetName('');
-        setIsSavingPreset(false);
     };
 
     const handleDeleteRolePreset = (id: string) => {
@@ -349,7 +353,7 @@ export const SettingsModal: FC<{
 
     const handleApplyInstructionPreset = (type: 'initial' | 'refinement' | 'synthesizer', instruction: string) => {
         setLocalSettings(prev => {
-            const newProfiles = prev.profiles.map(p => {
+            const newProfiles = (prev.profiles || []).map(p => {
                 if (p.id === prev.activeProfileId) {
                     return {
                         ...p,
@@ -384,6 +388,8 @@ export const SettingsModal: FC<{
                 if (p.id === targetId) {
                     const roleKey = activeRoleType === 'drafter' ? 'roles' : 'criticRoles';
                     const currentRoles = p[roleKey] || [];
+                    if (currentRoles.length <= 1) return p; // Defense in depth: don't delete the last role
+
                     const newRoles = [...currentRoles];
                     newRoles.splice(index, 1);
                     return { ...p, [roleKey]: newRoles };
@@ -415,12 +421,25 @@ export const SettingsModal: FC<{
         });
     };
 
+    const handleSave = () => {
+        const finalSettings = { ...localSettings };
+        // If switching to proxy mode (no API key) AND not in private server mode, enforce the demo model
+        const hasClientKey = !!finalSettings.apiKey || !!process.env.GEMINI_API_KEY;
+        const isPrivateServer = serverStatus?.hasServerKey && serverStatus?.proxyMode === 'private';
+
+        if (!hasClientKey && !isPrivateServer) {
+            finalSettings.model = 'gemini-2.5-flash-lite';
+        }
+        onSave(finalSettings);
+        onClose();
+    };
+
     const mainModal = createPortal(
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onClick={handleCloseAttempt}>
             <div className="modal-container settings-modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                     <h3>Swarm Configuration</h3>
-                    <button className="close-modal-button" onClick={onClose} aria-label="Close">
+                    <button className="close-modal-button" onClick={handleCloseAttempt} aria-label="Close">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
                         </svg>
@@ -650,7 +669,7 @@ export const SettingsModal: FC<{
                                                 onChange={handleProfileChange}
                                                 className="modal-input font-semibold"
                                             >
-                                                {localSettings.profiles.map(p => (
+                                                {(localSettings.profiles || []).map(p => (
                                                     <option key={p.id} value={p.id}>{p.name}</option>
                                                 ))}
                                             </select>
@@ -669,7 +688,7 @@ export const SettingsModal: FC<{
                                 </div>
                                 <div className="profile-actions">
                                     <button className="modal-btn outline" onClick={handleCreateProfile}>+ New</button>
-                                    {localSettings.profiles.length > 1 && (
+                                    {(localSettings.profiles || []).length > 1 && (
                                         <button className="modal-btn danger" onClick={handleDeleteProfile}>Delete</button>
                                     )}
                                 </div>
@@ -681,84 +700,37 @@ export const SettingsModal: FC<{
                                 </div>
                                 <div className="roles-list-container">
                                     <div className="roles-list">
-                                        {[
-                                            {
-                                                id: 'initial',
-                                                label: 'Initial Agent Instruction',
-                                                value: activeProfile.initialInstruction,
-                                                help: 'Instructions for the agents drafting the first response.'
-                                            },
-                                            {
-                                                id: 'refinement',
-                                                label: 'Refinement Instruction',
-                                                value: activeProfile.refinementInstruction,
-                                                help: 'Instructions for agents critiquing the initial drafts.'
-                                            },
-                                            {
-                                                id: 'synthesizer',
-                                                label: 'Synthesizer Instruction',
-                                                value: activeProfile.synthesizerInstruction,
-                                                help: 'Instructions for the final agent merging all refined responses.'
-                                            }
-                                        ].map((item, index) => {
-                                            const presets = getInstructionPresets(item.id as any);
+                                        {(['initial', 'refinement', 'synthesizer'] as const).map((id, index) => {
+                                            const item = {
+                                                id,
+                                                label: id === 'initial' ? 'Initial Agent Instruction' : id === 'refinement' ? 'Refinement Instruction' : 'Synthesizer Instruction',
+                                                help: id === 'initial' ? 'Instructions for the agents drafting the first response.' : id === 'refinement' ? 'Instructions for agents critiquing the initial drafts.' : 'Instructions for the final agent merging all refined responses.'
+                                            };
                                             return (
                                                 <div key={item.id} className="role-item compact">
                                                     <div className="role-compact-row">
                                                         <div className="role-ordinal">#{index + 1}</div>
 
-                                                        <div className="role-main-content">
-                                                            <div className="role-info-group">
-                                                                <div className="role-name-display">
-                                                                    {item.label}
-                                                                </div>
-                                                                <div className="role-help-text">
-                                                                    {item.help}
+                                                            <div className="role-main-content">
+                                                                <div className="role-info-group">
+                                                                    <div className="role-name-display">
+                                                                        {item.label}
+                                                                    </div>
+                                                                    <div className="role-help-text">
+                                                                        {item.help}
+                                                                    </div>
                                                                 </div>
                                                             </div>
 
-                                                            {presets.length > 0 && (
-                                                                <div className="preset-menu-container">
-                                                                    <button
-                                                                        className={`preset-menu-trigger ${activeInstructionPresetMenu === item.id ? 'active' : ''}`}
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            if (activeInstructionPresetMenu === item.id) {
-                                                                                setActiveInstructionPresetMenu(null);
-                                                                                setDropdownPosition(null);
-                                                                            } else {
-                                                                                const rect = e.currentTarget.getBoundingClientRect();
-                                                                                const spaceBelow = window.innerHeight - rect.bottom;
-                                                                                const spaceAbove = rect.top;
-                                                                                const dropdownHeight = 200; // Approximate max height
-
-                                                                                setDropdownPosition({
-                                                                                    top: spaceBelow < dropdownHeight && spaceAbove > spaceBelow ? rect.top - dropdownHeight : rect.bottom,
-                                                                                    right: window.innerWidth - rect.right
-                                                                                });
-                                                                                setActiveInstructionPresetMenu(item.id as any);
-                                                                            }
-                                                                        }}
-                                                                        title="Load a preset instruction"
-                                                                    >
-                                                                        <span>Presets</span>
-                                                                        <svg className="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                            <polyline points="6 9 12 15 18 9"></polyline>
-                                                                        </svg>
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        <div className="role-actions-compact">
+                                                         <div className="role-actions-compact">
                                                             <button
                                                                 className="modal-icon-btn"
-                                                                onClick={() => setEditingInstruction(item.id as any)}
-                                                                title="Edit Instruction"
+                                                                onClick={() => setEditingInstruction(item.id)}
+                                                                title="Configure Instruction"
                                                             >
                                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                                    <circle cx="12" cy="12" r="3"></circle>
+                                                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                                                                 </svg>
                                                             </button>
                                                         </div>
@@ -878,55 +850,12 @@ export const SettingsModal: FC<{
                                                         <div className="role-ordinal">#{index + 1}</div>
 
                                                         <div className="role-main-content">
-                                                            <div className="role-name-display">
+                                                             <div className="role-name-display">
                                                                 {role.name || 'Unnamed Role'}
                                                             </div>
-
-                                                            {presets.length > 0 && (
-                                                                <div className="preset-menu-container">
-                                                                    <button
-                                                                        className={`preset-menu-trigger ${activePresetMenu === index ? 'active' : ''}`}
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            if (activePresetMenu === index) {
-                                                                                setActivePresetMenu(null);
-                                                                                setDropdownPosition(null);
-                                                                            } else {
-                                                                                const rect = e.currentTarget.getBoundingClientRect();
-                                                                                const spaceBelow = window.innerHeight - rect.bottom;
-                                                                                const spaceAbove = rect.top;
-                                                                                const dropdownHeight = 200; // Approximate max height
-
-                                                                                setDropdownPosition({
-                                                                                    top: spaceBelow < dropdownHeight && spaceAbove > spaceBelow ? rect.top - dropdownHeight : rect.bottom,
-                                                                                    right: window.innerWidth - rect.right
-                                                                                });
-                                                                                setActivePresetMenu(index);
-                                                                            }
-                                                                        }}
-                                                                        title="Load a preset role"
-                                                                    >
-                                                                        <span>Presets</span>
-                                                                        <svg className="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                            <polyline points="6 9 12 15 18 9"></polyline>
-                                                                        </svg>
-                                                                    </button>
-                                                                </div>
-                                                            )}
                                                         </div>
 
                                                         <div className="role-actions-compact">
-                                                            <button
-                                                                className="modal-icon-btn"
-                                                                onClick={() => setEditingRoleIndex(index)}
-                                                                title="Edit Role"
-                                                            >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                                                </svg>
-                                                            </button>
-
                                                             <div className="role-move-buttons horizontal">
                                                                 <button
                                                                     className="move-role-btn"
@@ -951,15 +880,28 @@ export const SettingsModal: FC<{
                                                             </div>
 
                                                             <button
-                                                                className="modal-icon-btn delete-role-btn"
-                                                                onClick={() => handleDeleteRole(index)}
-                                                                title="Delete Role"
+                                                                className="modal-icon-btn"
+                                                                onClick={() => setEditingRoleIndex(index)}
+                                                                title="Configure Role"
                                                             >
                                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                    <polyline points="3 6 5 6 21 6"></polyline>
-                                                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                                    <circle cx="12" cy="12" r="3"></circle>
+                                                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                                                                 </svg>
                                                             </button>
+
+                                                            {((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || []).length > 1 && (
+                                                                <button
+                                                                    className="modal-icon-btn delete-role-btn"
+                                                                    onClick={() => handleDeleteRole(index)}
+                                                                    title="Delete Role"
+                                                                >
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                                    </svg>
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -978,265 +920,116 @@ export const SettingsModal: FC<{
                 </div>
                 <div className="modal-footer">
                     <button className="modal-btn reset" onClick={handleReset}>Reset to Defaults</button>
-                    <button className="modal-btn save" onClick={() => {
-                        const finalSettings = { ...localSettings };
-                        // If switching to proxy mode (no API key) AND not in private server mode, enforce the demo model
-                        const hasClientKey = !!finalSettings.apiKey || !!process.env.GEMINI_API_KEY;
-                        const isPrivateServer = serverStatus?.hasServerKey && serverStatus?.proxyMode === 'private';
-
-                        if (!hasClientKey && !isPrivateServer) {
-                            finalSettings.model = 'gemini-2.5-flash-lite';
-                        }
-                        onSave(finalSettings);
-                        onClose();
-                    }}>Save Changes</button>
+                    <button className="modal-btn save" onClick={handleSave}>Save Changes</button>
                 </div>
             </div>
         </div>,
         document.body
     );
 
-    // Render the Preset Menu Dropdown via Portal
-    const presetDropdown = activePresetMenu !== null && dropdownPosition && (
-        createPortal(
-            <div
-                className="preset-menu-dropdown preset-menu-dropdown-portal"
-                style={{
-                    position: 'fixed',
-                    top: dropdownPosition.top,
-                    right: dropdownPosition.right,
-                    zIndex: 2000
-                }}
-                onClick={e => e.stopPropagation()}
-            >
-                <div className="preset-menu-header">Select a Role</div>
-                {getRolePresets(activeRoleProfile.id, activeRoleType).map((p, i) => (
-                    <div key={i} className="preset-menu-item-wrapper">
-                        <button
-                            className="preset-menu-item"
-                            onClick={() => {
-                                handleApplyRole(activePresetMenu, p);
-                                setActivePresetMenu(null);
-                                setDropdownPosition(null);
-                            }}
-                        >
-                            <span className="preset-name">{p.name}</span>
-                            {p.isCustom && <span className="preset-tag">Saved</span>}
-                        </button>
-                        {p.isCustom && (
-                            <button
-                                className="preset-delete-btn"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteRolePreset(p.id);
-                                }}
-                                title="Delete Preset"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                                </svg>
-                            </button>
-                        )}
-                    </div>
-                ))}
-            </div>,
-            document.body
-        )
-    );
-
-    // Render the Instruction Preset Menu Dropdown via Portal
-    const instructionPresetDropdown = activeInstructionPresetMenu !== null && dropdownPosition && (
-        createPortal(
-            <div
-                className="preset-menu-dropdown preset-menu-dropdown-portal"
-                style={{
-                    position: 'fixed',
-                    top: dropdownPosition.top,
-                    right: dropdownPosition.right,
-                    zIndex: 2000
-                }}
-                onClick={e => e.stopPropagation()}
-            >
-                <div className="preset-menu-header">Select a Preset</div>
-                {getInstructionPresets(activeInstructionPresetMenu).map((p, i) => (
-                    <div key={i} className="preset-menu-item-wrapper">
-                        <button
-                            className="preset-menu-item"
-                            onClick={() => {
-                                handleApplyInstructionPreset(activeInstructionPresetMenu, p.instruction);
-                                setActiveInstructionPresetMenu(null);
-                                setDropdownPosition(null);
-                            }}
-                        >
-                            <span className="preset-name">{p.name}</span>
-                            {p.isCustom && <span className="preset-tag">Saved</span>}
-                        </button>
-                        {p.isCustom && (
-                            <button
-                                className="preset-delete-btn"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteInstructionPreset(p.id);
-                                }}
-                                title="Delete Preset"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                                </svg>
-                            </button>
-                        )}
-                    </div>
-                ))}
-            </div>,
-            document.body
-        )
-    );
 
     // Render the Edit Role Modal
     const editRoleModal = editingRoleIndex !== null && (
-        createPortal(
-            <div className="modal-overlay" onClick={() => setEditingRoleIndex(null)}>
-                <div className="modal-container settings-modal role-edit-modal" onClick={e => e.stopPropagation()}>
-                    <div className="modal-header">
-                        <h3>Edit Role #{editingRoleIndex + 1}</h3>
-                        <button className="close-modal-button" onClick={() => setEditingRoleIndex(null)}>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-                            </svg>
-                        </button>
-                    </div>
-                    <div className="modal-body">
-                        <div className="modal-form-group">
-                            <label className="modal-label">Role Name</label>
-                            <input
-                                type="text"
-                                value={((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.name || ''}
-                                onChange={(e) => handleRoleChange(editingRoleIndex, 'name', e.target.value)}
-                                className="modal-input"
-                                placeholder="e.g. Critic, Visionary"
-                                autoFocus
-                            />
-                        </div>
-                        <div className="modal-form-group">
-                            <label className="modal-label">Role Instruction</label>
-                            <textarea
-                                value={((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.instruction || ''}
-                                onChange={(e) => handleRoleChange(editingRoleIndex, 'instruction', e.target.value)}
-                                className="modal-textarea role-instruction-textarea-large"
-                                placeholder="Instructions for this specific role..."
-                            />
-                        </div>
-                    </div>
-                    <div className="modal-footer space-between">
-                        <div className="save-preset-container">
-                            {isSavingPreset ? (
-                                <div className="save-preset-input-group">
-                                    <input
-                                        type="text"
-                                        placeholder="Preset Name"
-                                        value={newPresetName}
-                                        onChange={(e) => setNewPresetName(e.target.value)}
-                                        className="modal-input small"
-                                        autoFocus
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') handleSaveRolePreset();
-                                            if (e.key === 'Escape') setIsSavingPreset(false);
-                                        }}
-                                    />
-                                    <button className="modal-icon-btn save-confirm-btn" onClick={handleSaveRolePreset} disabled={!newPresetName.trim()}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <polyline points="20 6 9 17 4 12"></polyline>
-                                        </svg>
-                                    </button>
-                                    <button className="modal-icon-btn save-cancel-btn" onClick={() => setIsSavingPreset(false)}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                                        </svg>
-                                    </button>
-                                </div>
-                            ) : (
-                                <button className="modal-btn outline small" onClick={() => setIsSavingPreset(true)}>
-                                    Save as Preset
-                                </button>
-                            )}
-                        </div>
-                        <button className="modal-btn save" onClick={() => setEditingRoleIndex(null)}>Done</button>
-                    </div>
-                </div>
-            </div>,
-            document.body
-        )
+        <UniversalConfigModal
+            isOpen={editingRoleIndex !== null}
+            onClose={() => {
+                setEditingRoleIndex(null);
+                setIsRolePresetDropdownOpen(false);
+            }}
+            title={`Configure Role #${editingRoleIndex + 1}`}
+            fields={[
+                {
+                    label: "Role Name",
+                    value: ((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.name || '',
+                    onChange: (val) => handleRoleChange(editingRoleIndex, 'name', val),
+                    type: 'input',
+                    placeholder: "e.g. Critic, Visionary",
+                    autoFocus: true
+                },
+                {
+                    label: "Role Instruction",
+                    value: ((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.instruction || '',
+                    onChange: (val) => handleRoleChange(editingRoleIndex, 'instruction', val),
+                    type: 'textarea',
+                    placeholder: "Instructions for this specific role..."
+                }
+            ]}
+            presets={getRolePresets(activeRoleProfile.id, activeRoleType)}
+            onApplyPreset={(preset) => handleApplyRole(editingRoleIndex, {
+                name: preset.name,
+                instruction: preset.instruction
+            })}
+            onDeletePreset={handleDeleteRolePreset}
+            isDropdownOpen={isRolePresetDropdownOpen}
+            setIsDropdownOpen={setIsRolePresetDropdownOpen}
+            onSavePreset={handleSaveRolePreset}
+            extraActions={
+                ((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || []).length > 1 && (
+                    <button
+                        className="modal-icon-btn delete-role-btn"
+                        onClick={() => {
+                            handleDeleteRole(editingRoleIndex!);
+                            setEditingRoleIndex(null);
+                            setIsRolePresetDropdownOpen(false);
+                        }}
+                        title="Delete Role"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                )
+            }
+        />
     );
 
     // Render the Edit Instruction Modal
     const editInstructionModal = editingInstruction !== null && (
-        createPortal(
-            <div className="modal-overlay" onClick={() => setEditingInstruction(null)}>
-                <div className="modal-container settings-modal role-edit-modal" onClick={e => e.stopPropagation()}>
-                    <div className="modal-header">
-                        <h3>Edit {editingInstruction === 'initial' ? 'Initial Agent' : editingInstruction === 'refinement' ? 'Refinement' : 'Synthesizer'} Instruction</h3>
-                        <button className="close-modal-button" onClick={() => setEditingInstruction(null)}>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-                            </svg>
-                        </button>
-                    </div>
-                    <div className="modal-body">
-                        <div className="modal-form-group">
-                            <label className="modal-label">Instruction</label>
-                            <textarea
-                                name={editingInstruction === 'initial' ? 'initialInstruction' : editingInstruction === 'refinement' ? 'refinementInstruction' : 'synthesizerInstruction'}
-                                value={editingInstruction === 'initial' ? activeProfile.initialInstruction : editingInstruction === 'refinement' ? activeProfile.refinementInstruction : activeProfile.synthesizerInstruction}
-                                onChange={handleInstructionChange}
-                                className="modal-textarea role-instruction-textarea-large"
-                                placeholder="Enter instructions..."
-                                autoFocus
-                            />
-                        </div>
-                    </div>
-                    <div className="modal-footer space-between">
-                        <div className="save-preset-container">
-                            {isSavingPreset ? (
-                                <div className="save-preset-input-group">
-                                    <input
-                                        type="text"
-                                        placeholder="Preset Name"
-                                        value={newPresetName}
-                                        onChange={(e) => setNewPresetName(e.target.value)}
-                                        className="modal-input small"
-                                        autoFocus
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') handleSaveInstructionPreset();
-                                            if (e.key === 'Escape') setIsSavingPreset(false);
-                                        }}
-                                    />
-                                    <button className="modal-icon-btn save-confirm-btn" onClick={handleSaveInstructionPreset} disabled={!newPresetName.trim()}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <polyline points="20 6 9 17 4 12"></polyline>
-                                        </svg>
-                                    </button>
-                                    <button className="modal-icon-btn save-cancel-btn" onClick={() => setIsSavingPreset(false)}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                                        </svg>
-                                    </button>
-                                </div>
-                            ) : (
-                                <button className="modal-btn outline small" onClick={() => setIsSavingPreset(true)}>
-                                    Save as Preset
-                                </button>
-                            )}
-                        </div>
-                        <button className="modal-btn save" onClick={() => setEditingInstruction(null)}>Done</button>
-                    </div>
-                </div>
-            </div>,
-            document.body
-        )
+        <UniversalConfigModal
+            isOpen={editingInstruction !== null}
+            onClose={() => {
+                setEditingInstruction(null);
+                setIsInstructionPresetDropdownOpen(false);
+            }}
+            title={`Configure ${editingInstruction === 'initial' ? 'Initial Agent' : editingInstruction === 'refinement' ? 'Refinement' : 'Synthesizer'} Instruction`}
+            fields={[
+                {
+                    label: "Instruction",
+                    value: editingInstruction === 'initial' ? activeProfile.initialInstruction : editingInstruction === 'refinement' ? activeProfile.refinementInstruction : activeProfile.synthesizerInstruction,
+                    onChange: (val) => handleInstructionChange(editingInstruction === 'initial' ? 'initialInstruction' : editingInstruction === 'refinement' ? 'refinementInstruction' : 'synthesizerInstruction', val),
+                    type: 'textarea',
+                    placeholder: "Enter instructions...",
+                    autoFocus: true
+                }
+            ]}
+            presets={getInstructionPresets(editingInstruction!)}
+            onApplyPreset={(preset) => handleApplyInstructionPreset(editingInstruction!, preset.instruction)}
+            onDeletePreset={handleDeleteInstructionPreset}
+            isDropdownOpen={isInstructionPresetDropdownOpen}
+            setIsDropdownOpen={setIsInstructionPresetDropdownOpen}
+            onSavePreset={handleSaveInstructionPreset}
+        />
+    );
+
+    const confirmCloseModal = (
+        <ConfirmationModal
+            isOpen={showConfirmClose}
+            title="Unsaved Changes"
+            message="You have unsaved changes. Would you like to save them before closing?"
+            confirmLabel="Save Changes"
+            discardLabel="Discard"
+            cancelLabel="Cancel"
+            onConfirm={() => {
+                setShowConfirmClose(false);
+                handleSave();
+            }}
+            onDiscard={() => {
+                setShowConfirmClose(false);
+                onClose();
+            }}
+            onCancel={() => setShowConfirmClose(false)}
+        />
     );
 
     return (
@@ -1244,8 +1037,7 @@ export const SettingsModal: FC<{
             {mainModal}
             {editRoleModal}
             {editInstructionModal}
-            {presetDropdown}
-            {instructionPresetDropdown}
+            {confirmCloseModal}
         </>
     );
 };
