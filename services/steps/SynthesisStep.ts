@@ -169,11 +169,15 @@ As defined in <mission> synthesize the best single, final answer from <agent_dra
           if (groundingChunks) {
               allGroundingChunks.push(...groundingChunks);
           }
-          if (isFirstChunk) {
-            onMessageUpdate(finalResponseText, true);
-            isFirstChunk = false;
-          } else {
-            onMessageUpdate(finalResponseText, false);
+          
+          // Only update message display when there is actual text content (not just thinking)
+          if (finalResponseText.length > 0) {
+            if (isFirstChunk) {
+              onMessageUpdate(finalResponseText, true);
+              isFirstChunk = false;
+            } else {
+              onMessageUpdate(finalResponseText, false);
+            }
           }
         }
 

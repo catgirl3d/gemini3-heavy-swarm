@@ -261,7 +261,10 @@ export class InitialStep implements StepDescriptor {
         };
       }
 
-      context.onMessageUpdate(fullText, false);
+      // Only update message display when there is actual text content (not just thinking)
+      if (fullText.length > 0) {
+        context.onMessageUpdate(fullText, false);
+      }
     }
     return fullText;
   }
