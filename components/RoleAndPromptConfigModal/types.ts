@@ -14,7 +14,7 @@ export interface Preset {
     isCustom: boolean;
 }
 
-export interface UniversalConfigModalProps {
+export interface RoleAndPromptConfigModalProps {
     isOpen: boolean;
     onClose: () => void;
     title: string;

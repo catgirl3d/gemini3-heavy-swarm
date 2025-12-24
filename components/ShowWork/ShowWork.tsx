@@ -5,7 +5,6 @@ import { DebugModal } from './components/DebugModal';
 import { WorkCard } from './components/WorkCard';
 import { ArrowDownIcon, TokenIcon } from './icons';
 import './ShowWork.css';
-import '@/components/Modal.css';
 
 export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentStates, onRegenerate }) => {
   const [modalData, setModalData] = useState<WorkModalData | null>(null);

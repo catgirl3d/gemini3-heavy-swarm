@@ -1,7 +1,5 @@
-interface Env {
-  GEMINI_API_KEY: string;
-  GEMINI_PROXY_MODE?: string;
-}
+import type { PagesFunction } from '@cloudflare/workers-types';
+import type { Env, GeminiRequest } from '../_types';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
@@ -15,8 +13,25 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
     }
 
-    const body = await request.json() as any;
+    let body: GeminiRequest;
+    try {
+      body = await request.json() as GeminiRequest;
+    } catch (e) {
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const { model, contents, generationConfig, systemInstruction, tools } = body;
+
+    // Validation: GeminiRequest requires contents
+    if (!contents || !Array.isArray(contents) || contents.length === 0) {
+      return new Response(JSON.stringify({ error: 'Missing or invalid "contents" in request body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
     // Determine model based on proxy mode
     // If GEMINI_PROXY_MODE is 'demo' OR not set, enforce flash-lite to prevent abuse
@@ -59,8 +74,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }
     });
 
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });

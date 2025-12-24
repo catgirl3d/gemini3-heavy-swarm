@@ -43,19 +43,6 @@
   padding: 0.75rem 1rem;
 }
 
-.roles-toolbar-title {
-  font-weight: 600;
-  color: var(--text-primary);
-  font-size: 0.95rem;
-  margin: 0;
-}
-
-.roles-toolbar-subtitle {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  font-weight: 400;
-  margin-left: 0.5rem;
-}
 
 .roles-list-container {
   border-top: none;
@@ -99,13 +86,6 @@
   gap: 0.25rem;
 }
 
-.profile-select-label {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
 
 .profile-name-edit {
   display: flex;
@@ -131,109 +111,9 @@
   margin-bottom: 0;
 }
 
-/* Stepper Control */
-.stepper-control {
-  display: flex;
-  align-items: center;
-  border: 1px solid var(--model-message-border);
-  border-radius: 8px;
-  overflow: hidden;
-  width: fit-content;
-}
-
-.stepper-btn {
-  background: #f8fafc;
-  border: none;
-  padding: 0.5rem 1rem;
-  cursor: pointer;
-  color: var(--text-primary);
-  font-size: 1.2rem;
-  line-height: 1;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 40px;
-}
-
-.stepper-btn:hover:not(:disabled) {
-  background-color: #e2e8f0;
-}
-
-.stepper-btn:disabled {
-  color: #cbd5e1;
-  cursor: not-allowed;
-  background-color: #f1f5f9;
-}
-
-.stepper-value {
-  padding: 0.5rem 1rem;
-  font-weight: 600;
-  min-width: 40px;
-  text-align: center;
-  border-left: 1px solid var(--model-message-border);
-  border-right: 1px solid var(--model-message-border);
-  background: white;
-}
-.settings-card {
-  background-color: #f8fafc;
-  border: 1px solid var(--model-message-border);
-  border-radius: 12px;
-  padding: 1.25rem;
-  margin-bottom: 0.5rem;
-}
-
-.settings-card-title {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 1rem;
-  display: block;
-}
-
-.settings-card .modal-form-group:last-child {
+.modal-card .modal-form-group:last-child {
   margin-bottom: 0;
   width: 100%;
-}
-
-.checkbox-group {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-  padding: 0rem;
-  border-radius: 8px;
-  transition: background-color 0.2s;
-}
-
-.checkbox-group:hover {
-  background-color: #f8fafc;
-}
-
-.checkbox-group input[type="checkbox"] {
-  width: 1.2rem;
-  height: 1.2rem;
-  margin: 0;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.checkbox-label {
-  margin: 0;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.checkbox-label.warning {
-  color: #c2410c;
-}
-
-.modal-help-text.warning {
-  margin-left: 1.75rem;
-  margin-top: 0.25rem;
-  color: #9a3412;
 }
 
 .profile-header {
@@ -256,26 +136,7 @@
   padding-top: 1.3rem;
 }
 
-.modal-form-group.horizontal {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.modal-label.no-margin {
-  margin-bottom: 0;
-}
-
 /* Agent Roles Settings */
-.roles-header {
-  margin: 0;
-}
-
-.roles-description {
-  margin-bottom: 1rem;
-}
 
 .roles-list {
   display: flex;
@@ -342,13 +203,6 @@
   text-overflow: ellipsis;
 }
 
-.role-help-text {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .role-actions-compact {
   display: flex;
@@ -420,29 +274,6 @@
 
 /* ... existing preset-menu styles ... */
 
-.modal-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  min-width: 240px;
-  max-width: 350px;
-  z-index: 100;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  margin-top: 0.25rem;
-}
-
-.modal-divider {
-  height: 1px;
-  background: var(--model-message-border);
-  margin: 1.5rem 0;
-}
-
-.modal-actions-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
 .preset-menu-trigger .chevron.open {
   transform: rotate(180deg);
 }
@@ -452,27 +283,7 @@
 }
 
 .preset-menu-dropdown {
-  position: absolute;
-  right: 0;
-  margin-top: 0.25rem;
-  margin-bottom: 0.25rem;
-  background-color: white;
-  border: 1px solid var(--model-message-border);
-  border-radius: 8px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
-    0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  z-index: 100;
-  min-width: 240px;
-  max-width: 300px;
-  overflow: hidden;
   animation: fade-in 0.2s ease-out;
-  display: flex;
-  flex-direction: column;
-}
-
-.preset-menu-dropdown-portal {
-  z-index: 2000 !important;
-  margin-top: 0;
 }
 
 .preset-menu-header {
@@ -531,8 +342,8 @@
 }
 
 .delete-role-btn:hover {
-  background-color: #fee2e2 !important;
-  color: #ef4444 !important;
+  background-color: #fee2e2;
+  color: #ef4444;
   border-radius: 8px;
 }
 
@@ -806,15 +617,6 @@
   color: #b91c1c;
 }
 
-.modal-help-text {
-  margin-top: 4px;
-  font-size: 0.8rem;
-  color: #666;
-}
-
-.modal-help-text.warning {
-  color: #c2410c;
-}
 
 @media (max-width: 768px) {
   /* Settings Row */
@@ -828,14 +630,6 @@
   }
 
   /* General Tab Mobile Optimization */
-  .settings-card {
-    padding: 0.75rem;
-    margin-bottom: 0.5rem;
-  }
-  .settings-card-title {
-    margin-bottom: 0.75rem;
-    font-size: 0.75rem;
-  }
   .settings-section {
     gap: 0.75rem;
   }
@@ -905,7 +699,7 @@
   .profile-name-edit select {
     width: 100%;
   }
-   .role-name-display {
+  .role-name-display {
     font-size: 0.85rem;
   }
   .role-item.compact {
@@ -953,9 +747,5 @@
     min-width: 200px;
     max-width: 85vw;
   }
-  .preset-menu-dropdown-portal {
-    max-width: 85vw;
-    right: 1rem !important;
-    left: auto !important;
-  }
+
 }

@@ -1,7 +1,5 @@
-interface Env {
-  GEMINI_API_KEY: string;
-  GEMINI_PROXY_MODE?: string;
-}
+import type { PagesFunction } from '@cloudflare/workers-types';
+import type { Env } from '../_types';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { env } = context;

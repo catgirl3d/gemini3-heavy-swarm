@@ -1,5 +1,6 @@
 import React, { FC, useState, useRef, useEffect, ReactNode } from 'react';
 import { MoreActionsIcon } from '../icons';
+import { PortalDropdown } from '@/components/PortalDropdown/PortalDropdown';
 
 interface Action {
   label: string;
@@ -11,6 +12,7 @@ interface Action {
 export const ActionMenu: FC<{ actions: Action[] }> = ({ actions }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -30,6 +32,7 @@ export const ActionMenu: FC<{ actions: Action[] }> = ({ actions }) => {
   return (
     <div className="action-menu-container" ref={menuRef}>
       <button
+        ref={triggerRef}
         className="modal-icon-btn action-menu-trigger"
         onClick={(e) => {
           e.preventDefault();
@@ -41,7 +44,13 @@ export const ActionMenu: FC<{ actions: Action[] }> = ({ actions }) => {
       >
         <MoreActionsIcon />
       </button>
-      {isOpen && (
+      
+      <PortalDropdown
+        isOpen={isOpen}
+        triggerRef={triggerRef}
+        className="action-menu-portal"
+        width={200}
+      >
         <div className="action-menu-dropdown">
           {actions.map((action, index) => (
             <button
@@ -59,7 +68,7 @@ export const ActionMenu: FC<{ actions: Action[] }> = ({ actions }) => {
             </button>
           ))}
         </div>
-      )}
+      </PortalDropdown>
     </div>
   );
 };

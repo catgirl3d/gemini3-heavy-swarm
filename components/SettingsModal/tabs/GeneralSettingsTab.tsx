@@ -17,10 +17,12 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
     setLocalSettings,
     isModelUnlocked
 }) => {
+    const model = localSettings.model ?? 'gemini-3-flash-preview';
+
     return (
         <div className="settings-section fade-in">
-            <div className="settings-card">
-                <span className="settings-card-title">Core Configuration</span>
+            <div className="modal-card">
+                <span className="modal-card-title">Core Configuration</span>
                 <div className="modal-form-group">
                     <label className="modal-label">API Key (Optional)</label>
                     <input
@@ -69,7 +71,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
 
                     <div className="modal-form-group">
                         <label className="modal-label">
-                            Temperature ({localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? '1.0' : (localSettings.temperature ?? 0.7)})
+                            Temperature ({model.includes('gemini-3') && !localSettings.unsafeTemperature ? '1.0' : (localSettings.temperature ?? 0.7)})
                         </label>
                         <input
                             type="range"
@@ -77,15 +79,15 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                             min="0"
                             max="2"
                             step="0.1"
-                            value={localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? 1.0 : (localSettings.temperature ?? 0.7)}
+                            value={model.includes('gemini-3') && !localSettings.unsafeTemperature ? 1.0 : (localSettings.temperature ?? 0.7)}
                             onChange={handleChange}
-                            disabled={localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature}
-                            className={`modal-input ${localSettings.model.includes('gemini-3') && !localSettings.unsafeTemperature ? 'modal-input-disabled' : ''}`}
+                            disabled={model.includes('gemini-3') && !localSettings.unsafeTemperature}
+                            className={`modal-input ${model.includes('gemini-3') && !localSettings.unsafeTemperature ? 'modal-input-disabled' : ''}`}
                         />
                     </div>
                 </div>
 
-                {localSettings.model.includes('gemini-3') && (
+                {model.includes('gemini-3') && (
                     <TemperatureBanner
                         isActive={!!localSettings.unsafeTemperature}
                         onToggle={() => setLocalSettings(prev => ({ ...prev, unsafeTemperature: !prev.unsafeTemperature }))}
@@ -93,8 +95,8 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                 )}
             </div>
 
-            <div className="settings-card">
-                <span className="settings-card-title">Workflow</span>
+            <div className="modal-card">
+                <span className="modal-card-title">Workflow</span>
                 <div className="modal-form-group checkbox-group">
                     <input
                         type="checkbox"
@@ -135,8 +137,8 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                 </div>
             </div>
 
-            <div className="settings-card">
-                <span className="settings-card-title">System</span>
+            <div className="modal-card">
+                <span className="modal-card-title">System</span>
                 <div className="modal-form-group checkbox-group">
                     <input
                         type="checkbox"

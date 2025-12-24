@@ -32,7 +32,7 @@ export const getGenerationConfig = (
     // 2. Thinking: use thinking_level instead of budget
     config.thinkingConfig = {
       includeThoughts: true, // To see thoughts (optional)
-      thinkingLevel: "high"  // "low" for speed, "high" for quality
+      thinkingLevel: "high" as ThinkingLevel  // "low" for speed, "high" for quality
     };
 
   } else if (isThinkingModel) {

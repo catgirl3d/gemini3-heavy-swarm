@@ -46,7 +46,7 @@ export const PromptsTab: FC<PromptsTabProps> = ({
 
             <div className="roles-section-wrapper">
                 <div className="roles-toolbar">
-                    <h4 className="roles-toolbar-title">System Instructions</h4>
+                    <h4 className="modal-section-title">System Instructions</h4>
                 </div>
                 <div className="roles-list-container">
                     <div className="roles-list">

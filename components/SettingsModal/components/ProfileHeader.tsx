@@ -33,7 +33,7 @@ export const ProfileHeader: FC<ProfileHeaderProps> = ({
     return (
         <div className="profile-header-compact">
             <div className="profile-select-wrapper">
-                <span className="profile-select-label">{label}</span>
+                <span className="modal-section-title">{label}</span>
                 {isEditing ? (
                     <div className="profile-name-edit">
                         <input

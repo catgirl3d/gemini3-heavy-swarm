@@ -19,7 +19,7 @@ export const InstructionItem: FC<InstructionItemProps> = ({ index, label, help, 
                         <div className="role-name-display">
                             {label}
                         </div>
-                        <div className="role-help-text">
+                        <div className="modal-help-text ellipsis">
                             {help}
                         </div>
                     </div>

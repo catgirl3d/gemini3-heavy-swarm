@@ -1,12 +1,12 @@
-import React, { FC, useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import React, { FC, useState, useEffect, useMemo } from 'react';
 import { AppSettings } from '../../types';
 import { DEFAULT_SETTINGS } from '../../constants';
-import { UniversalConfigModal } from '../UniversalConfigModal';
+import { RoleAndPromptConfigModal } from '../RoleAndPromptConfigModal';
+import { BaseModal } from '../BaseModal';
+import { ConfirmationModal } from '../ConfirmationModal';
 
 // Local parts
 import { SettingsModalProps } from './types';
-import { CloseIcon } from './icons';
 import { useProfileManagement } from './hooks/useProfileManagement';
 import { useRoleManagement } from './hooks/useRoleManagement';
 import { usePresetManagement } from './hooks/usePresetManagement';
@@ -14,7 +14,6 @@ import { GeneralSettingsTab } from './tabs/GeneralSettingsTab';
 import { PromptsTab } from './tabs/PromptsTab';
 import { RolesTab } from './tabs/RolesTab';
 
-import '../Modal.css';
 import './SettingsModal.css';
 
 export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, serverStatus }) => {
@@ -31,42 +30,27 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     // Preset states
     const [isRolePresetDropdownOpen, setIsRolePresetDropdownOpen] = useState(false);
     const [isInstructionPresetDropdownOpen, setIsInstructionPresetDropdownOpen] = useState(false);
+    const [showConfirmClose, setShowConfirmClose] = useState(false);
+
+    const hasChanges = useMemo(() => {
+        try {
+            return JSON.stringify(localSettings) !== JSON.stringify(settings);
+        } catch (e) {
+            return true; // Fallback to safe side
+        }
+    }, [localSettings, settings]);
 
     useEffect(() => {
         setLocalSettings(settings);
     }, [settings, isOpen]);
 
-    useEffect(() => {
-        const handleEsc = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                if (editingRoleIndex !== null) {
-                    setEditingRoleIndex(null);
-                    setIsRolePresetDropdownOpen(false);
-                } else if (editingInstruction !== null) {
-                    setEditingInstruction(null);
-                    setIsInstructionPresetDropdownOpen(false);
-                } else {
-                    onClose();
-                }
-            }
-        };
-        const handleClickOutside = (e: MouseEvent) => {
-            if (!(e.target instanceof Element)) return;
-            if (isRolePresetDropdownOpen && !e.target.closest('.preset-menu-container')) setIsRolePresetDropdownOpen(false);
-            if (isInstructionPresetDropdownOpen && !e.target.closest('.preset-menu-container')) setIsInstructionPresetDropdownOpen(false);
-        };
-
-        if (isOpen) {
-            window.addEventListener('keydown', handleEsc);
-            window.addEventListener('click', handleClickOutside, true);
-            document.body.style.overflow = 'hidden';
+    const handleClose = () => {
+        if (hasChanges) {
+            setShowConfirmClose(true);
+        } else {
+            onClose();
         }
-        return () => {
-            window.removeEventListener('keydown', handleEsc);
-            window.removeEventListener('click', handleClickOutside, true);
-            document.body.style.overflow = 'unset';
-        };
-    }, [isOpen, onClose, isRolePresetDropdownOpen, isInstructionPresetDropdownOpen, editingRoleIndex, editingInstruction]);
+    };
 
     // Derived values
     const activeProfile = localSettings.profiles?.find(p => p.id === localSettings.activeProfileId) || localSettings.profiles?.[0] || DEFAULT_SETTINGS.profiles[0];
@@ -77,8 +61,6 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     const profileMgr = useProfileManagement(localSettings, setLocalSettings, activeProfile, activeRoleProfile, setIsEditingProfileName, setIsEditingRoleName);
     const roleMgr = useRoleManagement(localSettings, setLocalSettings, activeRoleProfile, activeRoleType);
     const presetMgr = usePresetManagement(localSettings, setLocalSettings, activeProfile);
-
-    if (!isOpen) return null;
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -95,128 +77,147 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
         if (!hasKey) finalSettings.model = 'gemini-2.5-flash-lite';
         onSave(finalSettings);
         onClose();
+        setShowConfirmClose(false);
     };
 
-    return createPortal(
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-container settings-modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h3>Swarm Configuration</h3>
-                    <button className="close-modal-button" onClick={onClose} aria-label="Close">
-                        <CloseIcon />
+    return (
+        <>
+        <BaseModal
+            isOpen={isOpen}
+            onClose={handleClose}
+            size="lg"
+            className=""
+        >
+            <BaseModal.Header title="Swarm Configuration" onClose={handleClose} />
+            
+            <div className="settings-tabs">
+                {(['general', 'prompts', 'roles'] as const).map(tab => (
+                    <button
+                        key={tab}
+                        className={`settings-tab ${activeTab === tab ? 'active' : ''}`}
+                        onClick={() => setActiveTab(tab)}
+                    >
+                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
                     </button>
-                </div>
-
-                <div className="settings-tabs">
-                    {(['general', 'prompts', 'roles'] as const).map(tab => (
-                        <button
-                            key={tab}
-                            className={`settings-tab ${activeTab === tab ? 'active' : ''}`}
-                            onClick={() => setActiveTab(tab)}
-                        >
-                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="modal-body">
-                    {activeTab === 'general' && (
-                        <GeneralSettingsTab
-                            localSettings={localSettings}
-                            handleChange={handleChange}
-                            setLocalSettings={setLocalSettings}
-                            isModelUnlocked={isModelUnlocked}
-                        />
-                    )}
-                    {activeTab === 'prompts' && (
-                        <PromptsTab
-                            localSettings={localSettings}
-                            activeProfile={activeProfile}
-                            isEditingProfileName={isEditingProfileName}
-                            setIsEditingProfileName={setIsEditingProfileName}
-                            handleRenameProfile={profileMgr.handleRenameProfile}
-                            handleProfileChange={profileMgr.handleProfileChange}
-                            handleCreateProfile={profileMgr.handleCreateProfile}
-                            handleDeleteProfile={profileMgr.handleDeleteProfile}
-                            setEditingInstruction={setEditingInstruction}
-                        />
-                    )}
-                    {activeTab === 'roles' && (
-                        <RolesTab
-                            localSettings={localSettings}
-                            activeRoleProfile={activeRoleProfile}
-                            isEditingRoleName={isEditingRoleName}
-                            setIsEditingRoleName={setIsEditingRoleName}
-                            activeRoleType={activeRoleType}
-                            setActiveRoleType={setActiveRoleType}
-                            handleRenameRoleProfile={profileMgr.handleRenameRoleProfile}
-                            handleRoleProfileChange={profileMgr.handleRoleProfileChange}
-                            handleCreateRoleProfile={profileMgr.handleCreateRoleProfile}
-                            handleDeleteRoleProfile={profileMgr.handleDeleteRoleProfile}
-                            handleAddRole={roleMgr.handleAddRole}
-                            handleDeleteRole={roleMgr.handleDeleteRole}
-                            handleMoveRole={roleMgr.handleMoveRole}
-                            setEditingRoleIndex={setEditingRoleIndex}
-                            setLocalSettings={setLocalSettings}
-                        />
-                    )}
-                </div>
-
-                <div className="modal-footer">
-                    <button className="modal-btn reset" onClick={() => setLocalSettings(DEFAULT_SETTINGS)}>Reset to Defaults</button>
-                    <button className="modal-btn save" onClick={handleSave}>Save Changes</button>
-                </div>
+                ))}
             </div>
 
-            {/* Sub-modals */}
-            {editingRoleIndex !== null && (
-                <UniversalConfigModal
-                    isOpen={true}
-                    onClose={() => { setEditingRoleIndex(null); setIsRolePresetDropdownOpen(false); }}
-                    title={`Configure Role #${editingRoleIndex + 1}`}
-                    fields={[
-                        {
-                            label: "Role Name",
-                            value: ((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.name || '',
-                            onChange: (val) => roleMgr.handleRoleChange(editingRoleIndex, 'name', val),
-                            type: 'input', placeholder: "e.g. Critic, Visionary", autoFocus: true
-                        },
-                        {
-                            label: "Role Instruction",
-                            value: ((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.instruction || '',
-                            onChange: (val) => roleMgr.handleRoleChange(editingRoleIndex, 'instruction', val),
-                            type: 'textarea', placeholder: "Instructions for this specific role..."
-                        }
-                    ]}
-                    presets={presetMgr.getRolePresets(activeRoleProfile.id, activeRoleType)}
-                    onApplyPreset={(p) => roleMgr.handleApplyRole(editingRoleIndex, { name: p.name, instruction: p.instruction })}
-                    onDeletePreset={presetMgr.handleDeleteRolePreset}
-                    isDropdownOpen={isRolePresetDropdownOpen}
-                    setIsDropdownOpen={setIsRolePresetDropdownOpen}
-                    onSavePreset={(name) => presetMgr.handleSaveRolePreset(editingRoleIndex, activeRoleType, activeRoleProfile, name)}
-                />
-            )}
+            <BaseModal.Body>
+                {activeTab === 'general' && (
+                    <GeneralSettingsTab
+                        localSettings={localSettings}
+                        handleChange={handleChange}
+                        setLocalSettings={setLocalSettings}
+                        isModelUnlocked={isModelUnlocked}
+                    />
+                )}
+                {activeTab === 'prompts' && (
+                    <PromptsTab
+                        localSettings={localSettings}
+                        activeProfile={activeProfile}
+                        isEditingProfileName={isEditingProfileName}
+                        setIsEditingProfileName={setIsEditingProfileName}
+                        handleRenameProfile={profileMgr.handleRenameProfile}
+                        handleProfileChange={profileMgr.handleProfileChange}
+                        handleCreateProfile={profileMgr.handleCreateProfile}
+                        handleDeleteProfile={profileMgr.handleDeleteProfile}
+                        setEditingInstruction={setEditingInstruction}
+                    />
+                )}
+                {activeTab === 'roles' && (
+                    <RolesTab
+                        localSettings={localSettings}
+                        activeRoleProfile={activeRoleProfile}
+                        isEditingRoleName={isEditingRoleName}
+                        setIsEditingRoleName={setIsEditingRoleName}
+                        activeRoleType={activeRoleType}
+                        setActiveRoleType={setActiveRoleType}
+                        handleRenameRoleProfile={profileMgr.handleRenameRoleProfile}
+                        handleRoleProfileChange={profileMgr.handleRoleProfileChange}
+                        handleCreateRoleProfile={profileMgr.handleCreateRoleProfile}
+                        handleDeleteRoleProfile={profileMgr.handleDeleteRoleProfile}
+                        handleAddRole={roleMgr.handleAddRole}
+                        handleDeleteRole={roleMgr.handleDeleteRole}
+                        handleMoveRole={roleMgr.handleMoveRole}
+                        setEditingRoleIndex={setEditingRoleIndex}
+                        setLocalSettings={setLocalSettings}
+                    />
+                )}
+                
+                {/* Sub-modals are rendered inside the container to benefit from BaseModal logic if they were part of it,
+                    but since they are conditional, they will render their own BaseModal via RoleAndPromptConfigModal.
+                    This handles nesting correctly because useModalGlobalHandlers uses ref-counting. */}
+                {editingRoleIndex !== null && (
+                    <RoleAndPromptConfigModal
+                        isOpen={true}
+                        onClose={() => { setEditingRoleIndex(null); setIsRolePresetDropdownOpen(false); }}
+                        title={`Configure Role #${editingRoleIndex + 1}`}
+                        fields={[
+                            {
+                                label: "Role Name",
+                                value: ((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.name || '',
+                                onChange: (val) => roleMgr.handleRoleChange(editingRoleIndex, 'name', val),
+                                type: 'input', placeholder: "e.g. Critic, Visionary", autoFocus: true
+                            },
+                            {
+                                label: "Role Instruction",
+                                value: ((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.instruction || '',
+                                onChange: (val) => roleMgr.handleRoleChange(editingRoleIndex, 'instruction', val),
+                                type: 'textarea', placeholder: "Instructions for this specific role..."
+                            }
+                        ]}
+                        presets={presetMgr.getRolePresets(activeRoleProfile.id, activeRoleType)}
+                        onApplyPreset={(p) => roleMgr.handleApplyRole(editingRoleIndex, { name: p.name, instruction: p.instruction })}
+                        onDeletePreset={presetMgr.handleDeleteRolePreset}
+                        isDropdownOpen={isRolePresetDropdownOpen}
+                        setIsDropdownOpen={setIsRolePresetDropdownOpen}
+                        onSavePreset={(name) => presetMgr.handleSaveRolePreset(editingRoleIndex, activeRoleType, activeRoleProfile, name)}
+                    />
+                )}
 
-            {editingInstruction !== null && (
-                <UniversalConfigModal
-                    isOpen={true}
-                    onClose={() => { setEditingInstruction(null); setIsInstructionPresetDropdownOpen(false); }}
-                    title={`Configure ${editingInstruction.charAt(0).toUpperCase() + editingInstruction.slice(1)} Instruction`}
-                    fields={[{
-                        label: "Instruction",
-                        value: editingInstruction === 'initial' ? activeProfile.initialInstruction : editingInstruction === 'refinement' ? activeProfile.refinementInstruction : activeProfile.synthesizerInstruction,
-                        onChange: (val) => presetMgr.handleApplyInstructionPreset(editingInstruction, val),
-                        type: 'textarea', placeholder: "Enter instructions...", autoFocus: true
-                    }]}
-                    presets={presetMgr.getInstructionPresets(editingInstruction)}
-                    onApplyPreset={(p) => presetMgr.handleApplyInstructionPreset(editingInstruction, p.instruction)}
-                    onDeletePreset={presetMgr.handleDeleteInstructionPreset}
-                    isDropdownOpen={isInstructionPresetDropdownOpen}
-                    setIsDropdownOpen={setIsInstructionPresetDropdownOpen}
-                    onSavePreset={(name) => presetMgr.handleSaveInstructionPreset(editingInstruction, name)}
-                />
-            )}
-        </div>,
-        document.body
+                {editingInstruction !== null && (
+                    <RoleAndPromptConfigModal
+                        isOpen={true}
+                        onClose={() => { setEditingInstruction(null); setIsInstructionPresetDropdownOpen(false); }}
+                        title={`Configure ${editingInstruction.charAt(0).toUpperCase() + editingInstruction.slice(1)} Instruction`}
+                        fields={[{
+                            label: "Instruction",
+                            value: editingInstruction === 'initial' ? activeProfile.initialInstruction : editingInstruction === 'refinement' ? activeProfile.refinementInstruction : activeProfile.synthesizerInstruction,
+                            onChange: (val) => presetMgr.handleApplyInstructionPreset(editingInstruction, val),
+                            type: 'textarea', placeholder: "Enter instructions...", autoFocus: true
+                        }]}
+                        presets={presetMgr.getInstructionPresets(editingInstruction)}
+                        onApplyPreset={(p) => presetMgr.handleApplyInstructionPreset(editingInstruction, p.instruction)}
+                        onDeletePreset={presetMgr.handleDeleteInstructionPreset}
+                        isDropdownOpen={isInstructionPresetDropdownOpen}
+                        setIsDropdownOpen={setIsInstructionPresetDropdownOpen}
+                        onSavePreset={(name) => presetMgr.handleSaveInstructionPreset(editingInstruction, name)}
+                    />
+                )}
+            </BaseModal.Body>
+
+            <BaseModal.Footer>
+                <button className="modal-btn reset" onClick={() => setLocalSettings(DEFAULT_SETTINGS)}>Reset to Defaults</button>
+                <button className="modal-btn save" onClick={handleSave}>Save Changes</button>
+            </BaseModal.Footer>
+        </BaseModal>
+        
+        {showConfirmClose && (
+            <ConfirmationModal
+                isOpen={true}
+                title="Unsaved Changes"
+                message="You have unsaved changes. Would you like to save them before closing?"
+                confirmLabel="Save & Close"
+                cancelLabel="Stay"
+                discardLabel="Discard"
+                onConfirm={handleSave}
+                onCancel={() => setShowConfirmClose(false)}
+                onDiscard={() => {
+                    setShowConfirmClose(false);
+                    onClose();
+                }}
+            />
+        )}
+        </>
     );
 };
