@@ -1,15 +1,34 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env, GeminiRequest } from '../_types';
+import { handleCorsPreflight, getCorsHeaders } from '../_cors';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
+  
+  // Handle CORS preflight
+  const preflightResponse = handleCorsPreflight(request, env);
+  if (preflightResponse) {
+    return preflightResponse;
+  }
+
+  // Check origin for actual request
+  const origin = request.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(request, env);
+  
+  // If there's an origin but it's not in corsHeaders, block the request
+  if (origin && !corsHeaders.has('Access-Control-Allow-Origin')) {
+    return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
   
   try {
     const apiKey = env.GEMINI_API_KEY;
     if (!apiKey) {
       return new Response(JSON.stringify({ error: 'Server configuration error: API key missing' }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json' }
+        headers: corsHeaders
       });
     }
 
@@ -19,7 +38,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     } catch (e) {
       return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' }
+        headers: corsHeaders
       });
     }
 
@@ -29,7 +48,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!contents || !Array.isArray(contents) || contents.length === 0) {
       return new Response(JSON.stringify({ error: 'Missing or invalid "contents" in request body' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' }
+        headers: corsHeaders
       });
     }
 
@@ -60,25 +79,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       const errorText = await response.text();
       return new Response(JSON.stringify({ error: `Gemini API error: ${response.status}`, details: errorText }), {
         status: response.status,
-        headers: { 'Content-Type': 'application/json' }
+        headers: corsHeaders
       });
     }
 
-    // Proxy the stream directly
-    // The Google API returns a stream of JSON objects (SSE-like but just concatenated JSONs in an array structure usually, 
-    // or specifically for streamGenerateContent, it returns a stream of partial JSON responses)
-    // We will pass the raw stream to the client to handle parsing
+    // Proxy the stream directly with CORS headers
     return new Response(response.body, {
-      headers: {
-        'Content-Type': 'application/json',
-      }
+      headers: corsHeaders
     });
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: corsHeaders
     });
   }
 };

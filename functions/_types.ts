@@ -3,6 +3,7 @@ import type { Content, GenerationConfig, Tool } from '@google/genai';
 export interface Env {
   GEMINI_API_KEY: string;
   GEMINI_PROXY_MODE?: string;
+  ALLOWED_ORIGINS?: string; // Comma-separated list of allowed origins
 }
 
 export interface GeminiRequest {

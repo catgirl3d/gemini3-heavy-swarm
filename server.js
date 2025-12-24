@@ -12,6 +12,47 @@ const PORT = process.env.PORT || 8080;
 // Middleware to parse JSON bodies
 app.use(express.json());
 
+// CORS Middleware with whitelist
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:8080',
+  'http://localhost:3000',
+  'https://gemini3-heavy-swarm.pages.dev',
+  'https://ai-swarm.lisova-minds.pro'
+];
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : DEFAULT_ALLOWED_ORIGINS;
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Check if origin is in whitelist
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Max-Age', '86400');
+  }
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    if (origin && allowedOrigins.includes(origin)) {
+      return res.status(204).end();
+    } else {
+      return res.status(403).json({ error: 'Origin not allowed' });
+    }
+  }
+  
+  // Block requests from non-whitelisted origins
+  if (origin && !allowedOrigins.includes(origin)) {
+    return res.status(403).json({ error: 'Origin not allowed' });
+  }
+  
+  next();
+});
+
 // Serve static files from the dist directory
 app.use(express.static(path.join(__dirname, 'dist')));
 
