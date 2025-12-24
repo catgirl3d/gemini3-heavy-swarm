@@ -103,7 +103,7 @@ const App: FC = () => {
     if (shouldAutoScroll && messageListRef.current) {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
-  }, [messages, isLoading, agentStates, currentWork, shouldAutoScroll]);
+  }, [messages, isLoading, agentStates, currentWork, error, shouldAutoScroll]);
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

@@ -84,6 +84,7 @@ export interface Work {
   }[];
 
   agentNames?: string[];
+  criticNames?: string[];
   agentStates?: AgentState[];
   debugInfo?: Record<string, any>;
 }
@@ -101,4 +102,5 @@ export interface AgentState {
   name: string;
   status: 'waiting' | 'working' | 'done' | 'error';
   label: string;
+  stepId?: string; // Track which step this status belongs to
 }

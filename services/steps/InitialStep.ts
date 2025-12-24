@@ -39,7 +39,8 @@ export class InitialStep implements StepDescriptor {
         id: `agent-${i}`,
         name: role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`,
         status: 'working',
-        label: 'Drafting initial response...'
+        label: 'Drafting initial response...',
+        stepId: 'initial'
       };
     });
     
@@ -77,7 +78,7 @@ export class InitialStep implements StepDescriptor {
           onProgress('Initializing agents (DEV MODE)...', currentAgentStates, { ...work });
         }
         
-        currentAgentStates = currentAgentStates.map((a, idx) => idx === i ? { ...a, status: 'done', label: 'Drafted' } : a);
+        currentAgentStates = currentAgentStates.map((a, idx) => idx === i ? { ...a, status: 'done', label: 'Drafted', stepId: 'initial' } : a);
         onProgress('Initializing agents (DEV MODE)...', currentAgentStates, { ...work });
         return currentText;
 
@@ -160,7 +161,7 @@ export class InitialStep implements StepDescriptor {
           onProgress('Initializing agents...', currentAgentStates, { ...work });
         }
 
-        currentAgentStates = currentAgentStates.map((a, idx) => idx === i ? { ...a, status: 'done', label: 'Drafted' } : a);
+        currentAgentStates = currentAgentStates.map((a, idx) => idx === i ? { ...a, status: 'done', label: 'Drafted', stepId: 'initial' } : a);
         onProgress('Initializing agents...', currentAgentStates, { ...work });
         return fullText;
       }
@@ -168,17 +169,51 @@ export class InitialStep implements StepDescriptor {
 
     const outcomes = await Promise.allSettled(agentPromises);
 
+    const failures: any[] = [];
     outcomes.forEach((outcome, i) => {
       if (outcome.status === 'rejected') {
+        failures.push(outcome.reason);
         console.error(`Agent ${i + 1} failed:`, outcome.reason);
         const errorMessage = `\n\n[System: Agent failed to complete. ${outcome.reason instanceof Error ? outcome.reason.message : 'Unknown error'}]`;
         
         results[i] += errorMessage;
         if (work.initialResponses) work.initialResponses[i] = results[i];
         
-        currentAgentStates = currentAgentStates.map((a, idx) => idx === i ? { ...a, status: 'error', label: 'Draft Failed' } : a);
+        // Determine appropriate error label based on error type
+        let errorLabel = 'Draft Failed';
+        if (outcome.reason instanceof Error) {
+          const errStr = (outcome.reason.message + (outcome.reason.stack || '')).toLowerCase();
+          if (errStr.includes('429') || errStr.includes('rate limit') || errStr.includes('too many requests')) {
+            errorLabel = 'Rate Limited - Try Later';
+          } else if (errStr.includes('503') || errStr.includes('overloaded') || errStr.includes('transient')) {
+            errorLabel = 'Service Overloaded';
+          } else if (errStr.includes('safety') || errStr.includes('block') || errStr.includes('finish_reason_safety')) {
+            errorLabel = 'Blocked by Safety';
+          } else if (errStr.includes('quota')) {
+            errorLabel = 'Quota Exceeded';
+          }
+        }
+        
+        currentAgentStates = currentAgentStates.map((a, idx) => idx === i ? { ...a, status: 'error', label: errorLabel, stepId: 'initial' } : a);
       }
     });
+
+    // If ALL agents failed due to a RATE LIMIT, halt the entire swarm immediately.
+    // Rate limiting is a global issue — no agent can proceed.
+    // Other errors (e.g., transient network issues) might be recoverable.
+    if (failures.length === settings.numAgents && settings.numAgents > 0) {
+        const hasRateLimitError = failures.some(err => {
+            const msg = err instanceof Error ? (err.message + (err.stack || '')) : String(err);
+            return msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('too many requests');
+        });
+        if (hasRateLimitError) {
+            // Update work and notify UI BEFORE throwing so the error states are visible
+            if (!work.results) work.results = {};
+            work.results['initial'] = [...results];
+            onProgress('Rate limit reached', currentAgentStates, { ...work });
+            throw failures[0];
+        }
+    }
 
     if (!work.results) work.results = {};
     work.results['initial'] = [...results];

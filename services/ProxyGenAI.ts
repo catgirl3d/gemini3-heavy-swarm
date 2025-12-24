@@ -1,4 +1,5 @@
 import { GenerationConfig, Content } from '@google/genai';
+import { API_SECRET } from '../constants';
 
 // Minimal interface matching what the steps use from the Google SDK
 export class ProxyGenAI {
@@ -48,6 +49,7 @@ class ProxyGenerativeModel {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-API-Secret': API_SECRET,
       },
       body: JSON.stringify({
         model: this.model,

@@ -22,6 +22,13 @@ const getAgentPerspective = (index: number, settings: AppSettings): { name: stri
   return perspectives[index % perspectives.length];
 };
 
+const getCriticPerspective = (index: number, settings: AppSettings): { name: string, instruction: string } => {
+  const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0];
+  const perspectives = activeRoleProfile?.criticRoles || [];
+  if (perspectives.length === 0) return { name: `Critic ${index + 1}`, instruction: '' };
+  return perspectives[index % perspectives.length];
+};
+
 export class GeminiService {
   private ai: GoogleGenAI | ProxyGenAI | null = null;
   private steps: StepDescriptor[];
@@ -51,14 +58,20 @@ export class GeminiService {
     pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>
   ): Promise<{ text: string; sources?: any[]; work: Work }> {
     
+    // FORCE PROXY FOR LOCAL TESTING (dev mode only):
+    // This allows testing server.js logic (rate limits, security headers) locally
+    // even if a GEMINI_API_KEY is defined in .env.local.
+    // Can be disabled in dev by setting VITE_FORCE_PROXY_OFF=true
+    const forceProxy = import.meta.env.DEV && import.meta.env.VITE_FORCE_PROXY_OFF !== 'true';
+
     // Initialize AI client with user key if provided, otherwise fall back to env key
-    const apiKey = settings.apiKey || process.env.GEMINI_API_KEY;
+    const apiKey = !forceProxy && (settings.apiKey || process.env.GEMINI_API_KEY);
     if (apiKey) {
         console.log("Using direct API key from settings/env");
         this.ai = new GoogleGenAI({ apiKey });
     } else {
-        // Fallback to proxy if no key is provided
-        console.log("No API key provided, using ProxyGenAI");
+        // Fallback to proxy if no key is provided OR if forceProxy is enabled
+        console.log(`Using ProxyGenAI${forceProxy ? " (FORCED)" : ""}`);
         this.ai = new ProxyGenAI();
     }
 
@@ -76,6 +89,10 @@ export class GeminiService {
       agentNames: Array.from({ length: settings.numAgents }, (_, i) => {
         const role = settings.dynamicAgentRoles ? getAgentPerspective(i, settings).name : null;
         return role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`;
+      }),
+      criticNames: Array.from({ length: settings.numAgents }, (_, i) => {
+        const role = settings.dynamicAgentRoles ? getCriticPerspective(i, settings).name : null;
+        return role ? `Agent ${i + 1} (${role})` : `Critic ${i + 1}`;
       })
     };
 
@@ -124,13 +141,17 @@ export class GeminiService {
     onUpdate: (text: string) => void,
     signal: AbortSignal
   ): Promise<string> {
+    // FORCE PROXY FOR LOCAL TESTING - dev mode only (Regeneration)
+    // Can be disabled in dev by setting VITE_FORCE_PROXY_OFF=true
+    const forceProxy = import.meta.env.DEV && import.meta.env.VITE_FORCE_PROXY_OFF !== 'true';
+
     // Ensure AI client is updated with the latest key from settings
-    const apiKey = settings.apiKey || process.env.GEMINI_API_KEY;
+    const apiKey = !forceProxy && (settings.apiKey || process.env.GEMINI_API_KEY);
     if (apiKey) {
         console.log("Using direct API key from settings/env (regeneration)");
         this.ai = new GoogleGenAI({ apiKey });
     } else {
-        console.log("Using ProxyGenAI (regeneration)");
+        console.log(`Using ProxyGenAI${forceProxy ? " (FORCED)" : ""} (regeneration)`);
         this.ai = new ProxyGenAI();
     }
 

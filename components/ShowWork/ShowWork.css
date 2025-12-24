@@ -346,6 +346,17 @@
 }
 
 .action-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 200px;
+  background-color: white;
+  border: 1px solid var(--model-message-border);
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  z-index: 100;
+  margin-top: 4px;
+  overflow: hidden;
   animation: fade-in 0.2s ease-out;
 }
 
@@ -473,4 +484,35 @@
     font-size: 0.85rem;
     padding: 0.6rem 1rem;
   }
+}
+
+/* Agent Error Display */
+.agent-error-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem 1.5rem;
+  height: 100%;
+  min-height: 120px;
+}
+
+.agent-error-type {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #ef4444;
+  margin-bottom: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  background-color: #fee2e2;
+  border-radius: 4px;
+}
+
+.agent-error-message {
+  font-size: 0.9rem;
+  color: #991b1b;
+  line-height: 1.5;
+  max-width: 280px;
 }

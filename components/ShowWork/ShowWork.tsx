@@ -35,23 +35,31 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
     const currentState = step === 'synthesis' ? synthesizerState : effectiveAgentStates?.[index];
     
     if (step === 'initial') {
-        const isWorking = currentState?.label === 'Drafting initial response...' || currentState?.label === 'Regenerating Draft...';
-        const hasError = work.initialResponses[index]?.includes('[System: Agent failed to complete.');
+        // Use status + stepId for robust working detection (not fragile label string matching)
+        const isWorking = currentState?.status === 'working' && (currentState?.stepId === 'initial' || currentState?.stepId === undefined);
+        const hasContentError = work.initialResponses[index]?.includes('[System: Agent failed to complete.');
+        // Check if agentState has error status for THIS step
+        const isInitialError = currentState?.status === 'error' && currentState?.stepId === 'initial';
+        const hasError = hasContentError || isInitialError;
         const isDone = !!work.initialResponses[index] && !hasError;
 
         if (isWorking) return { status: 'working', label: currentState?.label || 'Drafting...' };
-        if (hasError) return { status: 'error', label: 'Draft Failed' };
+        if (hasError) return { status: 'error', label: currentState?.label || 'Draft Failed' };
         if (isDone) return { status: 'done', label: 'Drafted' };
         return { status: 'waiting', label: 'Waiting...' };
     }
 
     if (step === 'refined') {
-        const isWorking = currentState?.label === 'Critiquing & Refining...' || currentState?.label === 'Regenerating Critique...';
-        const hasError = work.refinedResponses[index]?.includes('[System: Agent failed to refine.');
+        // Use status + stepId for robust working detection (not fragile label string matching)
+        const isWorking = currentState?.status === 'working' && currentState?.stepId === 'refined';
+        const hasContentError = work.refinedResponses[index]?.includes('[System: Agent failed to refine.');
+        // Check if agentState has error status for THIS step
+        const isRefinedError = currentState?.status === 'error' && currentState?.stepId === 'refined';
+        const hasError = hasContentError || isRefinedError;
         const isDone = !!work.refinedResponses[index] && !hasError;
 
         if (isWorking) return { status: 'working', label: currentState?.label || 'Refining...' };
-        if (hasError) return { status: 'error', label: 'Refinement Failed' };
+        if (hasError) return { status: 'error', label: currentState?.label || 'Refinement Failed' };
         if (isDone) return { status: 'done', label: 'Refined' };
         return { status: 'waiting', label: 'Waiting...' };
     }
@@ -111,7 +119,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
                 <WorkCard
                   key={`refined-${i}`}
                   className="refined"
-                  title={work.agentNames ? work.agentNames[i] : `Agent ${i + 1}`}
+                  title={work.criticNames?.[i] || `Critic ${i + 1}`}
                   statusLabel={label}
                   status={status}
                   icon={status === 'waiting' ? <span>{i + 1}</span> : undefined}

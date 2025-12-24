@@ -41,6 +41,34 @@ export const WorkCard: FC<WorkCardProps> = ({
   const renderContent = (content: string | null) => {
     if (content === null) return <div className="pending-work">Waiting for agent output...</div>;
     if (content === '') return <div className="pending-work">Thinking...</div>;
+    
+    // Check if this is an error message from the system
+    const errorMatch = content.match(/\[System: (.+?)\]/);
+    if (errorMatch && status === 'error') {
+      const errorMessage = errorMatch[1];
+      // Extract human-readable error
+      const is429 = errorMessage.includes('429') || errorMessage.toLowerCase().includes('rate limit');
+      const is503 = errorMessage.includes('503');
+      
+      let displayMessage = errorMessage;
+      let errorType = 'Error';
+      
+      if (is429) {
+        errorType = 'Rate Limit';
+        displayMessage = 'Too many requests. The API is temporarily blocked. Please wait a moment and try again.';
+      } else if (is503) {
+        errorType = 'Service Unavailable';
+        displayMessage = 'The server is temporarily unavailable. Please try again later.';
+      }
+      
+      return (
+        <div className="agent-error-display">
+          <div className="agent-error-type">{errorType}</div>
+          <div className="agent-error-message">{displayMessage}</div>
+        </div>
+      );
+    }
+    
     return <MarkdownRenderer content={content} />;
   };
 

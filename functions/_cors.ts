@@ -3,13 +3,8 @@
  * Validates origin against whitelist and generates appropriate headers
  */
 
-const DEFAULT_ALLOWED_ORIGINS = [
-  'https://gemini3-heavy-swarm.pages.dev',
-  'https://ai-swarm.lisova-minds.pro',
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://localhost:8080'
-];
+import { DEFAULT_ALLOWED_ORIGINS } from '../constants/security.js';
+
 
 /**
  * Parse allowed origins from environment or use defaults
@@ -36,7 +31,7 @@ export function getCorsHeaders(request: any, env: { ALLOWED_ORIGINS?: string }):
   if (origin && allowedOrigins.includes(origin)) {
     headers.set('Access-Control-Allow-Origin', origin);
     headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    headers.set('Access-Control-Allow-Headers', 'Content-Type');
+    headers.set('Access-Control-Allow-Headers', 'Content-Type, X-API-Secret');
     headers.set('Access-Control-Max-Age', '86400'); // 24 hours
   }
 
@@ -57,7 +52,7 @@ export function handleCorsPreflight(request: any, env: { ALLOWED_ORIGINS?: strin
         headers: {
           'Access-Control-Allow-Origin': origin,
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Headers': 'Content-Type, X-API-Secret',
           'Access-Control-Max-Age': '86400',
         }
       });

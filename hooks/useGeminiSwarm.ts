@@ -247,33 +247,41 @@ export const useGeminiSwarm = () => {
       }
 
       console.error('Error in agentic workflow:', error);
-      setIsLoading(false);
-
-      // Preserve the latest work snapshot on error so user can see partial results and retry
-      if (latestWork) {
-        setMessages(prev => {
-          const newMessages = [...prev];
-          const lastMessage = newMessages[newMessages.length - 1];
-          lastMessage.work = latestWork;
-          return newMessages;
-        });
-      }
-
-      setCurrentWork(undefined);
 
       let errorMessage = 'An unexpected error occurred.';
       if (error instanceof Error) {
-        if (error.message.includes('429')) {
+        const errorStr = error.message + (error.stack || '');
+        if (errorStr.includes('429')) {
           errorMessage = 'Too many requests (429). Please wait a moment and try again.';
-        } else if (error.message.includes('503')) {
+        } else if (errorStr.includes('503')) {
           errorMessage = 'Service temporarily unavailable (503). Please try again later.';
-        } else if (error.message.includes('SAFETY')) {
+        } else if (errorStr.includes('SAFETY')) {
           errorMessage = 'Response blocked due to safety settings.';
         } else {
           errorMessage = `Error: ${error.message}`;
         }
       }
-      setError(errorMessage);
+
+      // Check if we have partial results to display
+      const hasPartialResults = latestWork && (
+        latestWork.initialResponses?.some(r => r && !r.includes('[System:')) ||
+        latestWork.refinedResponses?.some(r => r && !r.includes('[System:'))
+      );
+
+      if (hasPartialResults) {
+        // Keep isLoading true so LoadingIndicator stays visible (preserves ShowWork details open state)
+        // Update status to show error but allow user to see partial work and retry
+        setLoadingStatus(`Error: ${errorMessage}`);
+        setIsPaused(true); // Pause so continue button is available
+        
+        // Keep currentWork so ShowWork stays visible in LoadingIndicator
+        // Don't create a message or clear work - LoadingIndicator shows everything needed
+      } else {
+        // No partial results - show error banner and stop loading
+        setIsLoading(false);
+        setCurrentWork(undefined);
+        setError(errorMessage);
+      }
     } finally {
       abortControllerRef.current = null;
     }
@@ -335,13 +343,13 @@ export const useGeminiSwarm = () => {
         if (stepId === 'synthesis') {
           const synthIndex = copy.findIndex(a => a.id === 'synthesizer');
           if (synthIndex >= 0) {
-            copy[synthIndex] = { ...copy[synthIndex], status, label };
+            copy[synthIndex] = { ...copy[synthIndex], status, label, stepId };
           }
         } else {
           if (copy[agentIndex]) {
             // Update name if settings changed
             const newName = getUpdatedAgentName(agentIndex, stepId);
-            copy[agentIndex] = { ...copy[agentIndex], status, label, name: newName };
+            copy[agentIndex] = { ...copy[agentIndex], status, label, name: newName, stepId };
           }
         }
 
@@ -422,12 +430,17 @@ export const useGeminiSwarm = () => {
               if (msg.work) {
                 const newWork = { ...msg.work };
 
-                // Update agent names in work object
-                if (stepId !== 'synthesis' && newWork.agentNames) {
+                // Update agent names in work object (use correct array per step)
+                if (stepId === 'initial' && newWork.agentNames) {
                   const newName = getUpdatedAgentName(agentIndex, stepId);
                   const newAgentNames = [...newWork.agentNames];
                   newAgentNames[agentIndex] = newName;
                   newWork.agentNames = newAgentNames;
+                } else if (stepId === 'refined' && newWork.criticNames) {
+                  const newName = getUpdatedAgentName(agentIndex, stepId);
+                  const newCriticNames = [...newWork.criticNames];
+                  newCriticNames[agentIndex] = newName;
+                  newWork.criticNames = newCriticNames;
                 }
 
                 // Update generic results
@@ -471,12 +484,17 @@ export const useGeminiSwarm = () => {
             if (!prev) return prev;
             const newWork = { ...prev };
 
-            // Update agent names in work object
-            if (stepId !== 'synthesis' && newWork.agentNames) {
+            // Update agent names in work object (use correct array per step)
+            if (stepId === 'initial' && newWork.agentNames) {
               const newName = getUpdatedAgentName(agentIndex, stepId);
               const newAgentNames = [...newWork.agentNames];
               newAgentNames[agentIndex] = newName;
               newWork.agentNames = newAgentNames;
+            } else if (stepId === 'refined' && newWork.criticNames) {
+              const newName = getUpdatedAgentName(agentIndex, stepId);
+              const newCriticNames = [...newWork.criticNames];
+              newCriticNames[agentIndex] = newName;
+              newWork.criticNames = newCriticNames;
             }
 
             // Update generic results
@@ -513,14 +531,30 @@ export const useGeminiSwarm = () => {
 
     } catch (error) {
       console.error("Regeneration failed:", error);
-    } finally {
+      
+      // Determine error message for the status label
+      let errorLabel = 'Regeneration Failed';
+      if (error instanceof Error) {
+        const errorStr = error.message + (error.stack || '');
+        if (errorStr.includes('429') || errorStr.toLowerCase().includes('rate limit') || errorStr.toLowerCase().includes('too many requests')) {
+          errorLabel = 'Rate Limited - Try Later';
+        } else if (errorStr.includes('503')) {
+          errorLabel = 'Service Unavailable';
+        }
+      }
+      
+      // Show error status on the agent card
+      updateAgentStatus('error', errorLabel);
       regenerateAbortControllerRef.current = null;
-      // Mark agent as done once regeneration finishes
-      const doneLabel = stepId === 'initial' ? 'Draft Regenerated' :
-        stepId === 'refined' ? 'Critique Regenerated' :
-          stepId === 'synthesis' ? 'Synthesis Regenerated' : 'Regenerated';
-      updateAgentStatus('done', doneLabel);
+      return; // Exit early, don't run finally's "done" status
     }
+    
+    regenerateAbortControllerRef.current = null;
+    // Mark agent as done once regeneration finishes successfully
+    const doneLabel = stepId === 'initial' ? 'Draft Regenerated' :
+      stepId === 'refined' ? 'Critique Regenerated' :
+        stepId === 'synthesis' ? 'Synthesis Regenerated' : 'Regenerated';
+    updateAgentStatus('done', doneLabel);
   };
 
   return {

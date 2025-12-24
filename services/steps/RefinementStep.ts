@@ -46,7 +46,8 @@ export class RefinementStep implements StepDescriptor {
         id: `agent-${i}`,
         name: role ? `Agent ${i + 1} (${role})` : `Critic ${i + 1}`,
         status: 'working',
-        label: 'Critiquing & Refining...'
+        label: 'Critiquing & Refining...',
+        stepId: 'refined'
       };
     });
     
@@ -79,7 +80,7 @@ export class RefinementStep implements StepDescriptor {
           onProgress('Refining answers (DEV MODE)...', currentAgentStates, { ...work });
         }
         
-        currentAgentStates = currentAgentStates.map((a, idx) => idx === index ? { ...a, status: 'done', label: 'Refined' } : a);
+        currentAgentStates = currentAgentStates.map((a, idx) => idx === index ? { ...a, status: 'done', label: 'Refined', stepId: 'refined' } : a);
         onProgress('Refining answers (DEV MODE)...', currentAgentStates, { ...work });
         return currentText;
 
@@ -192,7 +193,7 @@ ${peerDrafts}
           onProgress('Refining answers...', currentAgentStates, { ...work });
         }
 
-        currentAgentStates = currentAgentStates.map((a, idx) => idx === index ? { ...a, status: 'done', label: 'Refined' } : a);
+        currentAgentStates = currentAgentStates.map((a, idx) => idx === index ? { ...a, status: 'done', label: 'Refined', stepId: 'refined' } : a);
         onProgress('Refining answers...', currentAgentStates, { ...work });
         return fullText;
       }
@@ -200,17 +201,51 @@ ${peerDrafts}
 
     const outcomes = await Promise.allSettled(agentPromises);
 
+    const failures: any[] = [];
     outcomes.forEach((outcome, i) => {
       if (outcome.status === 'rejected') {
+        failures.push(outcome.reason);
         console.error(`Agent ${i + 1} failed refinement:`, outcome.reason);
         const errorMessage = `\n\n[System: Agent failed to refine. ${outcome.reason instanceof Error ? outcome.reason.message : 'Unknown error'}]`;
         
         results[i] += errorMessage;
         if (work.refinedResponses) work.refinedResponses[i] = results[i];
         
-        currentAgentStates = currentAgentStates.map((a, idx) => idx === i ? { ...a, status: 'error', label: 'Refinement Failed' } : a);
+        // Determine appropriate error label based on error type
+        let errorLabel = 'Refinement Failed';
+        if (outcome.reason instanceof Error) {
+          const errStr = (outcome.reason.message + (outcome.reason.stack || '')).toLowerCase();
+          if (errStr.includes('429') || errStr.includes('rate limit') || errStr.includes('too many requests')) {
+            errorLabel = 'Rate Limited - Try Later';
+          } else if (errStr.includes('503') || errStr.includes('overloaded') || errStr.includes('transient')) {
+            errorLabel = 'Service Overloaded';
+          } else if (errStr.includes('safety') || errStr.includes('block') || errStr.includes('finish_reason_safety')) {
+            errorLabel = 'Blocked by Safety';
+          } else if (errStr.includes('quota')) {
+            errorLabel = 'Quota Exceeded';
+          }
+        }
+        
+        currentAgentStates = currentAgentStates.map((a, idx) => idx === i ? { ...a, status: 'error', label: errorLabel, stepId: 'refined' } : a);
       }
     });
+
+    // If ALL agents failed due to a RATE LIMIT, halt the entire swarm immediately.
+    // Rate limiting is a global issue — no agent can proceed.
+    // Other errors (e.g., transient network issues) might be recoverable.
+    if (failures.length === settings.numAgents && settings.numAgents > 0) {
+        const hasRateLimitError = failures.some(err => {
+            const msg = err instanceof Error ? (err.message + (err.stack || '')) : String(err);
+            return msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('too many requests');
+        });
+        if (hasRateLimitError) {
+            // Update work and notify UI BEFORE throwing so the error states are visible
+            if (!work.results) work.results = {};
+            work.results['refined'] = [...results];
+            onProgress('Rate limit reached', currentAgentStates, { ...work });
+            throw failures[0];
+        }
+    }
 
     if (!work.results) work.results = {};
     work.results['refined'] = [...results];

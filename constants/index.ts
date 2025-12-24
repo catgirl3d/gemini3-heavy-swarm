@@ -1,5 +1,9 @@
 import { AppSettings, PromptProfile, AgentRole, RoleProfile } from '../types';
 
+// This value is injected at build time from the .env or environment variables.
+// In development, Vite takes this from .env.local
+export const API_SECRET = (import.meta.env.VITE_API_SECRET as string) || '';
+
 export const DEFAULT_AGENT_ROLES: AgentRole[] = [
     {
       name: "No Role",

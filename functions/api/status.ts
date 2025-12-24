@@ -2,7 +2,7 @@ import type { PagesFunction } from '@cloudflare/workers-types';
 import type { Env } from '../_types';
 import { handleCorsPreflight, getCorsHeaders } from '../_cors';
 
-export const onRequestGet: PagesFunction<Env> = async (context) => {
+export const onRequestGet = (async (context) => {
   const { request, env } = context;
   
   // Handle CORS preflight
@@ -20,4 +20,5 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }), {
     headers: corsHeaders
   });
-};
+}) as unknown as PagesFunction<Env>;
+

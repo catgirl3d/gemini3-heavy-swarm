@@ -36,10 +36,11 @@ export class SynthesisStep implements StepDescriptor {
         id: `agent-${i}`,
         name: role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`,
         status: 'done',
-        label: 'Refined'
+        label: 'Refined',
+        stepId: 'refined' // Track which step this state belongs to
       };
     });
-    currentAgentStates.push({ id: 'synthesizer', name: 'Synthesizer', status: 'working', label: 'Synthesizing...' });
+    currentAgentStates.push({ id: 'synthesizer', name: 'Synthesizer', status: 'working', label: 'Synthesizing...', stepId: 'synthesis' });
     
     onProgress('Synthesizing final response...', currentAgentStates, work);
 

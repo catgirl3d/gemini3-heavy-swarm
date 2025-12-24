@@ -50,13 +50,37 @@ You can configure the proxy behavior using the `GEMINI_PROXY_MODE` environment v
   - Allows the client to request any available model (e.g., Gemini 3 Pro).
   - Use this for personal deployments where you want full access to all models via your server's API key.
 
-### Development
+### Local Testing (Force Proxy)
 
-Start the development server:
+In development mode (`npm run dev`), the application **forces all requests through the local proxy server** (`server.js`) by default. This allows you to test server-side logic (rate limits, security headers, etc.) even if you have a `GEMINI_API_KEY` set in your `.env.local`.
 
-```bash
-npm run dev
-```
+- **To bypass the forced proxy in dev**:
+  Set `VITE_FORCE_PROXY_OFF=true` in your `.env.local`. This will allow the client to use a direct API key if one is provided in the UI settings or environment.
+  
+- **Production behavior**:
+  In production builds (`npm run build`), the forced proxy is automatically disabled. Users can either provide their own API key (direct route) or be routed through the proxy if no key is provided.
+
+### Security (X-API-Secret)
+
+For **anti-abuse protection** in proxy mode, the application uses a "Secret Handshake" mechanism. Both the client and the server must have the same `API_SECRET` configured.
+
+> [!WARNING]
+> This is an **anti-abuse measure**, not a full authentication solution. Because `VITE_API_SECRET` is bundled into the frontend code, it is **visible in the browser's Network tab**. This prevents unauthorized third-party site usage and automated bot access, but it is not a secret from the end-user.
+
+**Required Environment Variables:**
+- `API_SECRET`: (Backend) Set in your server environment or Cloudflare dashboard.
+- `VITE_API_SECRET`: (Frontend) Injected during build time. Must match `API_SECRET`.
+
+For detailed security instructions and implementation details, see [docs/API_SECURITY.md](./docs/API_SECURITY.md).
+
+### Deployment Configuration
+
+When deploying (Cloudflare Pages or Google Cloud Run), ensure the following variables are set:
+
+1. `GEMINI_API_KEY`: Your Google AI API key.
+2. `API_SECRET`: A complex secret string to protect your proxy.
+3. `ALLOWED_ORIGINS`: A comma-separated list of domains allowed to access your API.
+4. `GEMINI_PROXY_MODE`: Set to `private` for full model access or `demo` for restricted mode.
 
 ### Build & Deploy
 
