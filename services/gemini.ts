@@ -6,7 +6,8 @@ import { StepRunner } from './StepRunner';
 import { InitialStep } from './steps/InitialStep';
 import { RefinementStep } from './steps/RefinementStep';
 import { SynthesisStep } from './steps/SynthesisStep';
-import { StepContext, StepDescriptor } from '../types/steps';
+import { StepContext, StepDescriptor, StepId } from '../types/steps';
+import { getAgentRole } from './steps/utils/roleUtils';
 
 const debug = (settings: AppSettings, ...args: any[]) => {
   if (settings.debugMode) {
@@ -15,19 +16,6 @@ const debug = (settings: AppSettings, ...args: any[]) => {
   }
 };
 
-const getAgentPerspective = (index: number, settings: AppSettings): { name: string, instruction: string } => {
-  const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0];
-  const perspectives = activeRoleProfile?.roles || [];
-  if (perspectives.length === 0) return { name: `Agent ${index + 1}`, instruction: '' };
-  return perspectives[index % perspectives.length];
-};
-
-const getCriticPerspective = (index: number, settings: AppSettings): { name: string, instruction: string } => {
-  const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0];
-  const perspectives = activeRoleProfile?.criticRoles || [];
-  if (perspectives.length === 0) return { name: `Critic ${index + 1}`, instruction: '' };
-  return perspectives[index % perspectives.length];
-};
 
 export class GeminiService {
   private ai: GoogleGenAI | ProxyGenAI | null = null;
@@ -87,12 +75,12 @@ export class GeminiService {
       results: {},
       stepMetadata: [],
       agentNames: Array.from({ length: settings.numAgents }, (_, i) => {
-        const role = settings.dynamicAgentRoles ? getAgentPerspective(i, settings).name : null;
+        const role = settings.dynamicAgentRoles ? getAgentRole(i, settings, 'roles').name : null;
         return role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`;
       }),
       criticNames: Array.from({ length: settings.numAgents }, (_, i) => {
-        const role = settings.dynamicAgentRoles ? getCriticPerspective(i, settings).name : null;
-        return role ? `Agent ${i + 1} (${role})` : `Critic ${i + 1}`;
+        const role = settings.dynamicAgentRoles ? getAgentRole(i, settings, 'criticRoles').name : null;
+        return role ? `Critic ${i + 1} (${role})` : `Critic ${i + 1}`;
       })
     };
 
@@ -120,7 +108,7 @@ export class GeminiService {
     const finalWork = await runner.run(context, pauseResolverRef);
 
     // Extract final result from synthesis step
-    const synthesisResult = finalWork.results?.['synthesis'];
+    const synthesisResult = finalWork.results?.['synthesis_step'];
     
     return { 
       text: synthesisResult?.text || '', 
@@ -136,9 +124,10 @@ export class GeminiService {
     imageFile: File | null,
     history: Message[],
     agentIndex: number,
-    stepId: string, // Changed from phase to stepId
+    stepId: StepId, // Use formal StepId type
     workContext: Work,
-    onUpdate: (text: string) => void,
+    onUpdate: (text: string, isFirstChunk: boolean) => void,
+    onProgress: (status: string, agents: AgentState[], work: Work) => void,
     signal: AbortSignal
   ): Promise<string> {
     // FORCE PROXY FOR LOCAL TESTING - dev mode only (Regeneration)
@@ -160,8 +149,8 @@ export class GeminiService {
     
     // Compatibility layer for legacy calls
     if (!step) {
-        if (stepId === 'initial') {
-            const initialStep = this.steps.find(s => s.id === 'initial');
+        if (stepId === 'initial_step') {
+            const initialStep = this.steps.find(s => s.id === 'initial_step');
             if (initialStep && initialStep.regenerate) {
                  return initialStep.regenerate({
                     ai: this.ai,
@@ -172,12 +161,12 @@ export class GeminiService {
                     history,
                     work: workContext,
                     onProgress: () => {}, // No-op for regeneration
-                    onMessageUpdate: (text) => onUpdate(text),
+                    onMessageUpdate: (text, isFirstChunk) => onUpdate(text, isFirstChunk),
                     signal
                 }, agentIndex);
             }
-        } else if (stepId === 'refined') {
-             const refinedStep = this.steps.find(s => s.id === 'refined');
+        } else if (stepId === 'refinement_step') {
+             const refinedStep = this.steps.find(s => s.id === 'refinement_step');
              if (refinedStep && refinedStep.regenerate) {
                  return refinedStep.regenerate({
                     ai: this.ai,
@@ -188,7 +177,7 @@ export class GeminiService {
                     history,
                     work: workContext,
                     onProgress: () => {}, // No-op for regeneration
-                    onMessageUpdate: (text) => onUpdate(text),
+                    onMessageUpdate: (text, isFirstChunk) => onUpdate(text, isFirstChunk),
                     signal
                 }, agentIndex);
              }
@@ -210,8 +199,8 @@ export class GeminiService {
         imageFile,
         history,
         work: workContext,
-        onProgress: () => {},
-        onMessageUpdate: (text) => onUpdate(text), // Map message update to the callback
+        onProgress,
+        onMessageUpdate: (text, isFirstChunk) => onUpdate(text, isFirstChunk), // Map message update to the callback
         signal
     };
 

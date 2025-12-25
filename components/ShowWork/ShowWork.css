@@ -138,6 +138,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  line-height: 1.5;
 }
 .work-card-name {
   font-weight: 600;
@@ -151,7 +152,6 @@
   font-size: 0.7rem;
   color: var(--text-secondary);
   font-weight: 400;
-  margin-top: 0.2rem;
 }
 .work-card-status.error {
   color: #991b1b;
@@ -164,9 +164,7 @@
   color: #ef4444;
 }
 
-.synthesis-error-msg {
-  color: #991b1b;
-}
+
 .show-work-footer {
   display: flex;
   align-items: center;

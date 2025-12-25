@@ -1,8 +1,9 @@
-import { AppSettings, Message, AgentState, Work } from './index';
+import { AppSettings, Message, AgentState, Work, StepId } from './index';
+export type { StepId };
 import { GoogleGenAI } from '@google/genai';
 import { ProxyGenAI } from '../services/ProxyGenAI';
 
-export type StepId = string;
+/** Pipeline step identifiers. Note: 'refinement_step' is distinct from 'refinement_prompt' InstructionType */
 
 export interface StepContext {
   ai: GoogleGenAI | ProxyGenAI | null;
@@ -24,7 +25,7 @@ export interface StepContext {
 }
 
 export interface StepDescriptor {
-  // Unique identifier (e.g., 'initial', 'refinement', 'synthesis')
+  // Unique identifier (e.g., 'initial_step', 'refinement_step', 'synthesis_step')
   id: StepId;
   
   // Display name for UI/Logging

@@ -1,5 +1,6 @@
 import React, { FC, useState, useRef } from 'react';
 import { ShowWorkProps, WorkModalData, DebugModalData, ThoughtModalData, DisplayStatus } from './types';
+import { StepId } from '../../types/steps';
 import { WorkModal } from './components/WorkModal';
 import { DebugModal } from './components/DebugModal';
 import { WorkCard } from './components/WorkCard';
@@ -13,9 +14,9 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
   const effectiveAgentStates = (isLive && liveAgentStates ? liveAgentStates : work.agentStates);
-  const synthesizerState = effectiveAgentStates?.find(a => a.id === 'synthesizer');
+  const synthesizerState = effectiveAgentStates?.find(a => a.id === 'synthesizer_agent');
   
-  const synthesisResult = work.results?.['synthesis'];
+  const synthesisResult = work.results?.['synthesis_step'];
   const synthesisText: string | null =
     typeof synthesisResult === 'string'
       ? synthesisResult
@@ -31,15 +32,15 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
 
   const totalTokens = calculateTotalTokens();
 
-  const getCardStatus = (step: 'initial' | 'refined' | 'synthesis', index: number): { status: DisplayStatus, label: string } => {
-    const currentState = step === 'synthesis' ? synthesizerState : effectiveAgentStates?.[index];
+  const getCardStatus = (step: StepId, index: number): { status: DisplayStatus, label: string } => {
+    const currentState = step === 'synthesis_step' ? synthesizerState : effectiveAgentStates?.[index];
     
-    if (step === 'initial') {
+    if (step === 'initial_step') {
         // Use status + stepId for robust working detection (not fragile label string matching)
-        const isWorking = currentState?.status === 'working' && (currentState?.stepId === 'initial' || currentState?.stepId === undefined);
+        const isWorking = currentState?.status === 'working' && (currentState?.stepId === 'initial_step' || currentState?.stepId === undefined);
         const hasContentError = work.initialResponses[index]?.includes('[System: Agent failed to complete.');
         // Check if agentState has error status for THIS step
-        const isInitialError = currentState?.status === 'error' && currentState?.stepId === 'initial';
+        const isInitialError = currentState?.status === 'error' && currentState?.stepId === 'initial_step';
         const hasError = hasContentError || isInitialError;
         const isDone = !!work.initialResponses[index] && !hasError;
 
@@ -49,12 +50,12 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
         return { status: 'waiting', label: 'Waiting...' };
     }
 
-    if (step === 'refined') {
+    if (step === 'refinement_step') {
         // Use status + stepId for robust working detection (not fragile label string matching)
-        const isWorking = currentState?.status === 'working' && currentState?.stepId === 'refined';
+        const isWorking = currentState?.status === 'working' && currentState?.stepId === 'refinement_step';
         const hasContentError = work.refinedResponses[index]?.includes('[System: Agent failed to refine.');
         // Check if agentState has error status for THIS step
-        const isRefinedError = currentState?.status === 'error' && currentState?.stepId === 'refined';
+        const isRefinedError = currentState?.status === 'error' && currentState?.stepId === 'refinement_step';
         const hasError = hasContentError || isRefinedError;
         const isDone = !!work.refinedResponses[index] && !hasError;
 
@@ -66,7 +67,9 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
 
     // Synthesis
     const isWorking = synthesizerState?.status === 'working';
-    const hasError = synthesizerState?.status === 'error';
+    const hasContentError = synthesisResult?.error === true;
+    const hasStateError = synthesizerState?.status === 'error';
+    const hasError = hasContentError || hasStateError;
     const isDone = !!synthesisText && !hasError;
 
     if (isWorking) return { status: 'working', label: synthesizerState?.label || 'Synthesizing...' };
@@ -87,23 +90,27 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
           <h4 className="work-category-title">Initial Drafts</h4>
           <div className={`work-grid ${work.initialResponses.length === 1 ? 'single-column' : ''}`}>
             {work.initialResponses.map((resp, i) => {
-              const { status, label } = getCardStatus('initial', i);
+              const { status, label } = getCardStatus('initial_step', i);
+              const name = work.agentNames?.[i] || `Agent ${i + 1}`;
               return (
                 <WorkCard
                   key={`initial-${i}`}
-                  title={work.agentNames ? work.agentNames[i] : `Agent ${i + 1}`}
+                  title={name}
                   statusLabel={label}
                   status={status}
                   icon={status === 'waiting' ? <span>{i + 1}</span> : undefined}
                   content={resp}
                   tokenUsage={work.initialTokenUsage?.[i]}
                   thought={work.initialThoughts?.[i]}
-                  debugInfo={work.debugInfo?.['initial']?.[i]}
-                  onExpand={() => setModalData({ title: `Agent ${i + 1} - Initial Draft`, content: resp })}
-                  onShowThought={() => setThoughtModalData({ title: `Agent ${i + 1} - Initial Thought Process`, content: work.initialThoughts![i]! })}
-                  onShowDebug={() => setDebugModalData({ title: `Agent ${i + 1} - Initial Draft Debug Info`, debugInfo: work.debugInfo?.['initial']?.[i] })}
-                  onRegenerate={onRegenerate ? () => onRegenerate('initial', i) : undefined}
-                  downloadFilename={`Agent-${i + 1}-Initial_Draft.md`}
+                  debugInfo={work.debugInfo?.['initial_step']?.[i]}
+                  onExpand={() => setModalData({ title: `${name} - Initial Draft`, content: resp })}
+                  onShowThought={() => {
+                    const thought = work.initialThoughts?.[i];
+                    if (thought) setThoughtModalData({ title: `${name} - Initial Thought Process`, content: thought });
+                  }}
+                  onShowDebug={() => setDebugModalData({ title: `${name} - Initial Draft Debug Info`, debugInfo: work.debugInfo?.['initial_step']?.[i] })}
+                  onRegenerate={onRegenerate ? () => onRegenerate('initial_step', i) : undefined}
+                  downloadFilename={`${name.replace(/\s+/g, '-')}-Initial_Draft.md`}
                 />
               );
             })}
@@ -114,24 +121,28 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
           <h4 className="work-category-title">Critiques & Refinements</h4>
           <div className={`work-grid ${work.refinedResponses.length === 1 ? 'single-column' : ''}`}>
             {work.refinedResponses.map((resp, i) => {
-              const { status, label } = getCardStatus('refined', i);
+              const { status, label } = getCardStatus('refinement_step', i);
+              const name = work.criticNames?.[i] || `Critic ${i + 1}`;
               return (
                 <WorkCard
                   key={`refined-${i}`}
-                  className="refined"
-                  title={work.criticNames?.[i] || `Critic ${i + 1}`}
+                  className="refinement-step"
+                  title={name}
                   statusLabel={label}
                   status={status}
                   icon={status === 'waiting' ? <span>{i + 1}</span> : undefined}
                   content={resp}
                   tokenUsage={work.refinedTokenUsage?.[i]}
                   thought={work.refinedThoughts?.[i]}
-                  debugInfo={work.debugInfo?.['refined']?.[i]}
-                  onExpand={() => setModalData({ title: `Agent ${i + 1} - Refined Response`, content: resp })}
-                  onShowThought={() => setThoughtModalData({ title: `Agent ${i + 1} - Refinement Thought Process`, content: work.refinedThoughts![i]! })}
-                  onShowDebug={() => setDebugModalData({ title: `Agent ${i + 1} - Refinement Debug Info`, debugInfo: work.debugInfo?.['refined']?.[i] })}
-                  onRegenerate={onRegenerate ? () => onRegenerate('refined', i) : undefined}
-                  downloadFilename={`Agent-${i + 1}-Refined_Response.md`}
+                  debugInfo={work.debugInfo?.['refinement_step']?.[i]}
+                  onExpand={() => setModalData({ title: `${name} - Refined Response`, content: resp })}
+                  onShowThought={() => {
+                    const thought = work.refinedThoughts?.[i];
+                    if (thought) setThoughtModalData({ title: `${name} - Refinement Thought Process`, content: thought });
+                  }}
+                  onShowDebug={() => setDebugModalData({ title: `${name} - Refinement Debug Info`, debugInfo: work.debugInfo?.['refinement_step']?.[i] })}
+                  onRegenerate={onRegenerate ? () => onRegenerate('refinement_step', i) : undefined}
+                  downloadFilename={`${name.replace(/\s+/g, '-')}-Refined_Response.md`}
                 />
               );
             })}
@@ -142,21 +153,29 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
             <div className="work-category">
                 <h4 className="work-category-title">Final Synthesis</h4>
                 {(() => {
-                    const { status, label } = getCardStatus('synthesis', 0);
+                    const { status, label } = getCardStatus('synthesis_step', 0);
                     return (
                         <WorkCard
-                            className="synthesizer"
+                            className="synthesis_step"
                             title="Synthesizer"
                             statusLabel={label}
                             status={status}
                             content={synthesisText}
                             tokenUsage={work.synthesisTokenUsage}
                             thought={work.synthesisThought}
-                            debugInfo={work.debugInfo?.['synthesis']}
-                            onExpand={() => setModalData({ title: `Synthesizer - Final Response`, content: synthesisText! })}
-                            onShowThought={() => setThoughtModalData({ title: `Synthesizer - Thought Process`, content: work.synthesisThought! })}
-                            onShowDebug={() => setDebugModalData({ title: `Synthesizer - Debug Info`, debugInfo: work.debugInfo?.['synthesis'] })}
-                            onRegenerate={onRegenerate ? () => onRegenerate('synthesis', 0) : undefined}
+                            debugInfo={work.debugInfo?.['synthesis_step']}
+                            onExpand={() => {
+                                if (synthesisText) {
+                                    setModalData({ title: `Synthesizer - Final Response`, content: synthesisText });
+                                }
+                            }}
+                            onShowThought={() => {
+                                if (work.synthesisThought) {
+                                    setThoughtModalData({ title: `Synthesizer - Thought Process`, content: work.synthesisThought });
+                                }
+                            }}
+                            onShowDebug={() => setDebugModalData({ title: `Synthesizer - Debug Info`, debugInfo: work.debugInfo?.['synthesis_step'] })}
+                            onRegenerate={onRegenerate ? () => onRegenerate('synthesis_step', 0) : undefined}
                             downloadFilename="Synthesis_Report.md"
                         />
                     );

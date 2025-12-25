@@ -15,8 +15,17 @@ export class StepRunner {
     context: StepContext,
     pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>
   ): Promise<Work> {
-    const { settings, onProgress } = context;
+    const { settings, onProgress: originalOnProgress } = context;
     let currentWork = context.work;
+
+    // Wrap onProgress to keep currentWork.agentStates in sync
+    const onProgress = (status: string, agents: AgentState[], work: Work, isPaused?: boolean) => {
+      currentWork.agentStates = agents;
+      originalOnProgress(status, agents, work, isPaused);
+    };
+
+    // Reconstruct context with wrapped onProgress
+    const runnerContext = { ...context, onProgress };
 
     for (const step of this.steps) {
       debug(settings, `Starting step: ${step.id}`);
@@ -30,7 +39,7 @@ export class StepRunner {
       // 2. Execute Step
       try {
         const stepResult = await step.execute({
-          ...context,
+          ...runnerContext,
           work: currentWork // Pass the latest work
         });
 
@@ -82,8 +91,8 @@ export class StepRunner {
   private shouldPauseAfter(step: StepDescriptor, settings: AppSettings): boolean {
     // Map legacy settings to step IDs
     // In the future, this could be driven by a more generic configuration
-    if (step.id === 'initial' && settings.pauseAfterInitial) return true;
-    if (step.id === 'refined' && settings.pauseAfterRefinement) return true;
+    if (step.id === 'initial_step' && settings.pauseAfterInitial) return true;
+    if (step.id === 'refinement_step' && settings.pauseAfterRefinement) return true;
     return false;
   }
 }

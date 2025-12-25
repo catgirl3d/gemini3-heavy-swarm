@@ -1,20 +1,14 @@
-import { GoogleGenAI, Content, Part } from '@google/genai';
-import { StepDescriptor, StepContext } from '../../types/steps';
-import { AppSettings, AgentState } from '../../types';
+import { Content } from '@google/genai';
+import { StepContext, StepId } from '../../types/steps';
+import { AgentState } from '../../types';
 import { prepareGeminiContent } from '../contentUtils';
 import { getGenerationConfig } from '../geminiConfig';
+import { getAgentRole } from './utils/roleUtils';
+import { BaseStep } from './BaseStep';
 
-const getAgentPerspective = (index: number, settings: AppSettings): { name: string, instruction: string } => {
-  const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0];
-  // Use criticRoles for refinement step if available, otherwise fallback to standard roles or generic
-  const perspectives = activeRoleProfile?.criticRoles || [];
-  if (perspectives.length === 0) return { name: `Critic ${index + 1}`, instruction: '' };
-  return perspectives[index % perspectives.length];
-};
-
-export class RefinementStep implements StepDescriptor {
-  id = 'refined';
-  name = 'Refinement';
+export class RefinementStep extends BaseStep {
+  id: StepId = 'refinement_step';
+  name = 'Refinement Step';
   description = 'Agents critique and refine their responses based on other agents\' inputs.';
   ui = {
     visibleInModal: true,
@@ -25,7 +19,7 @@ export class RefinementStep implements StepDescriptor {
     const { ai, settings, history, userInput, image, imageFile, work, onProgress, signal } = context;
 
     // Ensure we have initial responses
-    const initialResponses = work.results?.['initial'] || work.initialResponses;
+    const initialResponses = work.results?.['initial_step'] || work.initialResponses;
     if (!initialResponses || initialResponses.length === 0) {
       throw new Error('Cannot run refinement step without initial responses');
     }
@@ -39,16 +33,11 @@ export class RefinementStep implements StepDescriptor {
     if (!work.refinedThoughts) work.refinedThoughts = Array(settings.numAgents).fill(null);
     if (!work.refinedTokenUsage) work.refinedTokenUsage = Array(settings.numAgents).fill(null);
 
-    // Initialize agent states
-    let currentAgentStates: AgentState[] = Array.from({ length: settings.numAgents }, (_, i) => {
-      const role = settings.dynamicAgentRoles ? getAgentPerspective(i, settings).name : null;
-      return {
-        id: `agent-${i}`,
-        name: role ? `Agent ${i + 1} (${role})` : `Critic ${i + 1}`,
-        status: 'working',
-        label: 'Critiquing & Refining...',
-        stepId: 'refined'
-      };
+    // Initialize agent states using BaseStep utility
+    let currentAgentStates: AgentState[] = this.createAgentStates(settings.numAgents, settings, {
+      stepId: 'refinement_step',
+      status: 'working',
+      statusLabel: 'Critiquing & Refining...'
     });
     
     onProgress('Refining answers...', currentAgentStates, work);
@@ -59,28 +48,27 @@ export class RefinementStep implements StepDescriptor {
     // Execute agents
     const agentPromises = initialResponses.map(async (initialAnswer: string, index: number) => {
       if (settings.devMode) {
-        // DEV MODE SIMULATION
-        const dummyText = `[DEV MODE] Refined response from Agent ${index + 1}. Critiquing the initial draft.`;
-        const words = dummyText.split(' ');
-        let currentText = '';
+        // DEV MODE SIMULATION using BaseStep utility
+        const dummyText = this.getDevModeText('refinement_step', index);
         
-        for (const word of words) {
-          if (signal.aborted) throw new Error('Aborted');
-          await new Promise(resolve => setTimeout(resolve, 100));
-          currentText += word + ' ';
-          
-          // Update both new and legacy storage
-          results[index] = currentText;
-          work.refinedResponses[index] = currentText;
-          
-          // Update generic results map
-          if (!work.results) work.results = {};
-          work.results['refined'] = [...results];
-
-          onProgress('Refining answers (DEV MODE)...', currentAgentStates, { ...work });
-        }
+        const currentText = await this.simulateDevMode(
+            dummyText,
+            signal,
+            (chunk) => {
+                 // Update both new and legacy storage
+                 results[index] = chunk;
+                 work.refinedResponses[index] = chunk;
+                 
+                 // Update generic results map
+                 if (!work.results) work.results = {};
+                 work.results['refinement_step'] = [...results];
+       
+                 onProgress('Refining answers (DEV MODE)...', currentAgentStates, { ...work });
+            },
+           100 // Fast simulation for refinement
+        );
         
-        currentAgentStates = currentAgentStates.map((a, idx) => idx === index ? { ...a, status: 'done', label: 'Refined', stepId: 'refined' } : a);
+        currentAgentStates = this.updateAgentState(currentAgentStates, index, { status: 'done', label: 'Refined', stepId: 'refinement_step' });
         onProgress('Refining answers (DEV MODE)...', currentAgentStates, { ...work });
         return currentText;
 
@@ -125,7 +113,7 @@ ${peerDrafts}
         // Add role-specific instruction if dynamic roles are enabled
         let roleInstruction = '';
         if (settings.dynamicAgentRoles) {
-            const role = getAgentPerspective(index, settings);
+            const role = getAgentRole(index, settings, 'criticRoles');
             if (role.instruction) {
                 roleInstruction = `\n\n<role_assignment>\n${role.instruction}\n</role_assignment>`;
             }
@@ -135,8 +123,8 @@ ${peerDrafts}
 
         // Capture debug info
         if (!work.debugInfo) work.debugInfo = {};
-        if (!work.debugInfo['refined']) work.debugInfo['refined'] = [];
-        work.debugInfo['refined'][index] = {
+        if (!work.debugInfo['refinement_step']) work.debugInfo['refinement_step'] = [];
+        work.debugInfo['refinement_step'][index] = {
             systemInstruction,
             history: mainChatHistory,
             userTurn: refinementTurn
@@ -157,20 +145,9 @@ ${peerDrafts}
         for await (const chunk of stream) {
           if (signal.aborted) throw new Error('Aborted');
           
-          if (chunk.candidates?.[0]?.content?.parts) {
-            for (const part of chunk.candidates[0].content.parts) {
-              const p = part as any;
-              // If it's a thought, capture it and DO NOT add to fullText
-              if (p.thought) {
-                if (part.text) {
-                  fullThought += part.text;
-                }
-              } else if (part.text) {
-                // Only add to fullText if it's NOT a thought
-                fullText += part.text;
-              }
-            }
-          }
+          const { text, thought } = this.extractStreamContent(chunk.candidates?.[0]?.content?.parts);
+          fullText += text;
+          fullThought += thought;
           
           // Update both new and legacy storage
           results[index] = fullText;
@@ -178,22 +155,19 @@ ${peerDrafts}
           work.refinedResponses[index] = fullText;
           if (work.refinedThoughts) work.refinedThoughts[index] = fullThought;
 
-          if (chunk.usageMetadata && work.refinedTokenUsage) {
-            work.refinedTokenUsage[index] = {
-              promptTokens: chunk.usageMetadata.promptTokenCount || 0,
-              candidatesTokens: chunk.usageMetadata.candidatesTokenCount || 0,
-              totalTokens: chunk.usageMetadata.totalTokenCount || 0
-            };
+          const usage = this.extractTokenUsage(chunk.usageMetadata);
+          if (usage && work.refinedTokenUsage) {
+            work.refinedTokenUsage[index] = usage;
           }
           
           // Update generic results map
           if (!work.results) work.results = {};
-          work.results['refined'] = [...results];
+          work.results['refinement_step'] = [...results];
 
           onProgress('Refining answers...', currentAgentStates, { ...work });
         }
 
-        currentAgentStates = currentAgentStates.map((a, idx) => idx === index ? { ...a, status: 'done', label: 'Refined', stepId: 'refined' } : a);
+        currentAgentStates = this.updateAgentState(currentAgentStates, index, { status: 'done', label: 'Refined', stepId: 'refinement_step' });
         onProgress('Refining answers...', currentAgentStates, { ...work });
         return fullText;
       }
@@ -205,50 +179,28 @@ ${peerDrafts}
     outcomes.forEach((outcome, i) => {
       if (outcome.status === 'rejected') {
         failures.push(outcome.reason);
-        console.error(`Agent ${i + 1} failed refinement:`, outcome.reason);
-        const errorMessage = `\n\n[System: Agent failed to refine. ${outcome.reason instanceof Error ? outcome.reason.message : 'Unknown error'}]`;
+        console.error(`Critic ${i + 1} failed refinement:`, outcome.reason);
+        const errorMessage = `\n\n[System: Critic failed to refine. ${outcome.reason instanceof Error ? outcome.reason.message : 'Unknown error'}]`;
         
         results[i] += errorMessage;
         if (work.refinedResponses) work.refinedResponses[i] = results[i];
         
-        // Determine appropriate error label based on error type
-        let errorLabel = 'Refinement Failed';
-        if (outcome.reason instanceof Error) {
-          const errStr = (outcome.reason.message + (outcome.reason.stack || '')).toLowerCase();
-          if (errStr.includes('429') || errStr.includes('rate limit') || errStr.includes('too many requests')) {
-            errorLabel = 'Rate Limited - Try Later';
-          } else if (errStr.includes('503') || errStr.includes('overloaded') || errStr.includes('transient')) {
-            errorLabel = 'Service Overloaded';
-          } else if (errStr.includes('safety') || errStr.includes('block') || errStr.includes('finish_reason_safety')) {
-            errorLabel = 'Blocked by Safety';
-          } else if (errStr.includes('quota')) {
-            errorLabel = 'Quota Exceeded';
-          }
-        }
-        
-        currentAgentStates = currentAgentStates.map((a, idx) => idx === i ? { ...a, status: 'error', label: errorLabel, stepId: 'refined' } : a);
+        // Determine appropriate error label using BaseStep utility
+        const errorLabel = this.getErrorLabel(outcome.reason, 'Refinement Failed');
+        currentAgentStates = this.updateAgentState(currentAgentStates, i, { status: 'error', label: errorLabel, stepId: 'refinement_step' });
       }
     });
 
-    // If ALL agents failed due to a RATE LIMIT, halt the entire swarm immediately.
-    // Rate limiting is a global issue — no agent can proceed.
-    // Other errors (e.g., transient network issues) might be recoverable.
-    if (failures.length === settings.numAgents && settings.numAgents > 0) {
-        const hasRateLimitError = failures.some(err => {
-            const msg = err instanceof Error ? (err.message + (err.stack || '')) : String(err);
-            return msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('too many requests');
-        });
-        if (hasRateLimitError) {
-            // Update work and notify UI BEFORE throwing so the error states are visible
-            if (!work.results) work.results = {};
-            work.results['refined'] = [...results];
-            onProgress('Rate limit reached', currentAgentStates, { ...work });
-            throw failures[0];
-        }
+    // Check global rate limit using BaseStep utility
+    if (this.checkGlobalRateLimitFailure(failures, settings.numAgents)) {
+        if (!work.results) work.results = {};
+        work.results['refinement_step'] = [...results];
+        onProgress('Rate limit reached', currentAgentStates, { ...work });
+        throw failures[0];
     }
 
     if (!work.results) work.results = {};
-    work.results['refined'] = [...results];
+    work.results['refinement_step'] = [...results];
     onProgress('Refinement completed', currentAgentStates, { ...work });
 
     return results;
@@ -259,7 +211,7 @@ ${peerDrafts}
     if (!ai) throw new Error("API Key not found");
 
     // Ensure we have initial responses
-    const initialResponses = work.results?.['initial'] || work.initialResponses;
+    const initialResponses = work.results?.['initial_step'] || work.initialResponses;
     if (!initialResponses || initialResponses.length === 0) {
       throw new Error('Cannot regenerate refinement without initial responses');
     }
@@ -305,7 +257,7 @@ ALWAYS use the googleSearch tool to verify facts and find additional information
     // Add role-specific instruction if dynamic roles are enabled
     let roleInstruction = '';
     if (settings.dynamicAgentRoles) {
-        const role = getAgentPerspective(agentIndex, settings);
+        const role = getAgentRole(agentIndex, settings, 'criticRoles');
         if (role.instruction) {
             roleInstruction = `\n\n<role_assignment>\n${role.instruction}\n</role_assignment>`;
         }
@@ -314,9 +266,9 @@ ALWAYS use the googleSearch tool to verify facts and find additional information
     const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.refinementInstruction}</mission>${roleInstruction}\n</system_instruction>`;
 
     // Capture debug info for regeneration
-    if (context.work.debugInfo && context.work.debugInfo['refined']) {
-        context.work.debugInfo['refined'][agentIndex] = {
-            systemInstruction: activeProfile.refinementInstruction,
+    if (context.work.debugInfo && context.work.debugInfo['refinement_step']) {
+        context.work.debugInfo['refinement_step'][agentIndex] = {
+            systemInstruction,
             history: mainChatHistory,
             userTurn: refinementTurn
         };
@@ -337,31 +289,17 @@ ALWAYS use the googleSearch tool to verify facts and find additional information
     for await (const chunk of stream) {
       if (signal.aborted) throw new Error('Aborted');
       
-      if (chunk.candidates?.[0]?.content?.parts) {
-        for (const part of chunk.candidates[0].content.parts) {
-          const p = part as any;
-          // If it's a thought, capture it and DO NOT add to fullText
-          if (p.thought) {
-            if (part.text) {
-              fullThought += part.text;
-            }
-          } else if (part.text) {
-            // Only add to fullText if it's NOT a thought
-            fullText += part.text;
-          }
-        }
-      }
+      const { text, thought } = this.extractStreamContent(chunk.candidates?.[0]?.content?.parts);
+      fullText += text;
+      fullThought += thought;
 
       if (context.work.refinedThoughts) {
         context.work.refinedThoughts[agentIndex] = fullThought;
       }
 
-      if (chunk.usageMetadata && context.work.refinedTokenUsage) {
-        context.work.refinedTokenUsage[agentIndex] = {
-          promptTokens: chunk.usageMetadata.promptTokenCount || 0,
-          candidatesTokens: chunk.usageMetadata.candidatesTokenCount || 0,
-          totalTokens: chunk.usageMetadata.totalTokenCount || 0
-        };
+      const usage = this.extractTokenUsage(chunk.usageMetadata);
+      if (usage && context.work.refinedTokenUsage) {
+        context.work.refinedTokenUsage[agentIndex] = usage;
       }
 
       // Only update message display when there is actual text content (not just thinking)

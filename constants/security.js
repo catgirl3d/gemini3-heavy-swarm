@@ -1,4 +1,4 @@
-export const RATE_LIMIT_PER_MINUTE = 4; // Currently set to 4, for testing Rate Limit system
+export const RATE_LIMIT_PER_MINUTE = 5; // Low values for testing Rate Limit system
 
 // Production origins - these are always allowed
 export const PRODUCTION_ORIGINS = [

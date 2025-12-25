@@ -1,4 +1,5 @@
 import { Work, AgentState } from '@/types';
+import { StepId } from '@/types/steps';
 
 export type DisplayStatus = 'working' | 'done' | 'error' | 'waiting';
 
@@ -21,5 +22,5 @@ export interface ShowWorkProps {
   work: Work;
   isLive?: boolean;
   liveAgentStates?: AgentState[];
-  onRegenerate?: (stepId: string, agentIndex: number) => void;
+  onRegenerate?: (stepId: StepId, agentIndex: number) => void;
 }

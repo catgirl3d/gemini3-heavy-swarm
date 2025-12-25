@@ -3,6 +3,7 @@ import { AppSettings, PromptProfile } from '../../../types';
 import { ProfileHeader } from '../components/ProfileHeader';
 import { InstructionItem } from '../components/InstructionItem';
 import { INSTRUCTION_METADATA } from '../constants';
+import { InstructionType } from '../types';
 
 interface PromptsTabProps {
     localSettings: AppSettings;
@@ -13,7 +14,7 @@ interface PromptsTabProps {
     handleProfileChange: (e: ChangeEvent<HTMLSelectElement>) => void;
     handleCreateProfile: () => void;
     handleDeleteProfile: () => void;
-    setEditingInstruction: (type: 'initial' | 'refinement' | 'synthesizer' | null) => void;
+    setEditingInstruction: (type: InstructionType | null) => void;
 }
 
 export const PromptsTab: FC<PromptsTabProps> = ({
@@ -50,7 +51,7 @@ export const PromptsTab: FC<PromptsTabProps> = ({
                 </div>
                 <div className="roles-list-container">
                     <div className="roles-list">
-                        {(['initial', 'refinement', 'synthesizer'] as const).map((id, index) => (
+                        {(['initial_prompt', 'refinement_prompt', 'synthesis_prompt'] as const).map((id, index) => (
                             <InstructionItem
                                 key={id}
                                 index={index}

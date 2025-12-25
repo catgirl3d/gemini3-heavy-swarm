@@ -23,6 +23,7 @@ COPY --from=build /app/dist ./dist
 
 # Copy server script
 COPY server.js .
+COPY constants ./constants
 
 # Cloud Run expects the container to listen on port 8080 by default
 ENV PORT=8080

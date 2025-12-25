@@ -11,8 +11,10 @@ import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { ShowWork } from './components/ShowWork';
 import { LoadingIndicator } from './components/LoadingIndicator';
 import { Sources } from './components/Sources';
+import { StepId } from './types/steps';
 
 const getModelDisplayName = (model: string) => {
+  if (model === 'gemini-1.5-flash-8b') return 'Gemini 1.5 Flash-8B Swarm';
   if (model === 'gemini-2.5-flash-lite') return 'Gemini 2.5 Flash-Lite Swarm';
   if (model === 'gemini-2.5-flash') return 'Gemini 2.5 Flash Swarm';
   if (model === 'gemini-2.5-pro') return 'Gemini 2.5 Pro Swarm';
@@ -103,7 +105,14 @@ const App: FC = () => {
     if (shouldAutoScroll && messageListRef.current) {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
-  }, [messages, isLoading, agentStates, currentWork, error, shouldAutoScroll]);
+  }, [messages.length, isLoading, shouldAutoScroll, error]);
+
+  // Handle auto-scroll for streaming content (messages changing internally)
+  useEffect(() => {
+    if (shouldAutoScroll && messageListRef.current && isLoading) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -267,7 +276,7 @@ const App: FC = () => {
                 {msg.work && (
                     <ShowWork
                         work={msg.work}
-                        onRegenerate={(phase, agentIndex) => regenerateAgentResponse(index, phase, agentIndex)}
+                        onRegenerate={(phase, agentIndex) => regenerateAgentResponse(index, phase as StepId, agentIndex)}
                     />
                 )}
                 {msg.sources && <Sources sources={msg.sources} />}
@@ -284,7 +293,11 @@ const App: FC = () => {
                 isPaused={isPaused}
                 onContinue={continueGeneration}
                 onRegenerate={(phase, agentIndex) => {
-                    regenerateAgentResponse(messages.length - 1, phase, agentIndex);
+                    // Enable auto-scroll when regenerating synthesis so user sees the new answer
+                    if (phase === 'synthesis_step') {
+                      setShouldAutoScroll(true);
+                    }
+                    regenerateAgentResponse(messages.length - 1, phase as StepId, agentIndex);
                 }}
             />
         )}

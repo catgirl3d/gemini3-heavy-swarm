@@ -1,6 +1,7 @@
 import React from 'react';
 import { AppSettings, PromptProfile } from '../../../types';
 import { DEFAULT_SETTINGS } from '../../../constants';
+import { InstructionType } from '../types';
 
 export function usePresetManagement(
     localSettings: AppSettings,
@@ -40,11 +41,11 @@ export function usePresetManagement(
         return [...savedPresets, ...profilePresets];
     };
 
-    const getInstructionPresets = (type: 'initial' | 'refinement' | 'synthesizer') => {
+    const getInstructionPresets = (type: InstructionType) => {
         const profilePresets = (localSettings.profiles || []).filter(p => p.id !== localSettings.activeProfileId).map(p => ({
             id: p.id,
             name: p.name,
-            instruction: type === 'initial' ? p.initialInstruction : type === 'refinement' ? p.refinementInstruction : p.synthesizerInstruction,
+            instruction: type === 'initial_prompt' ? p.initialInstruction : type === 'refinement_prompt' ? p.refinementInstruction : p.synthesizerInstruction,
             isCustom: false
         }));
 
@@ -58,12 +59,12 @@ export function usePresetManagement(
         return [...savedPresets, ...profilePresets];
     };
 
-    const handleSaveInstructionPreset = (editingInstruction: 'initial' | 'refinement' | 'synthesizer' | null, newPresetName: string) => {
+    const handleSaveInstructionPreset = (editingInstruction: InstructionType | null, newPresetName: string) => {
         if (!editingInstruction || !newPresetName.trim()) return;
 
-        const currentInstruction = editingInstruction === 'initial'
+        const currentInstruction = editingInstruction === 'initial_prompt'
             ? activeProfile.initialInstruction
-            : editingInstruction === 'refinement'
+            : editingInstruction === 'refinement_prompt'
                 ? activeProfile.refinementInstruction
                 : activeProfile.synthesizerInstruction;
 
@@ -116,13 +117,13 @@ export function usePresetManagement(
         }));
     };
 
-    const handleApplyInstructionPreset = (type: 'initial' | 'refinement' | 'synthesizer', instruction: string) => {
+    const handleApplyInstructionPreset = (type: InstructionType, instruction: string) => {
         setLocalSettings(prev => {
             const newProfiles = prev.profiles.map(p => {
                 if (p.id === prev.activeProfileId) {
                     return {
                         ...p,
-                        [type === 'initial' ? 'initialInstruction' : type === 'refinement' ? 'refinementInstruction' : 'synthesizerInstruction']: instruction
+                        [type === 'initial_prompt' ? 'initialInstruction' : type === 'refinement_prompt' ? 'refinementInstruction' : 'synthesizerInstruction']: instruction
                     };
                 }
                 return p;

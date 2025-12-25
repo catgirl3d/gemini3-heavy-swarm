@@ -6,7 +6,7 @@ import { BaseModal } from '../BaseModal';
 import { ConfirmationModal } from '../ConfirmationModal';
 
 // Local parts
-import { SettingsModalProps } from './types';
+import { SettingsModalProps, InstructionType } from './types';
 import { useProfileManagement } from './hooks/useProfileManagement';
 import { useRoleManagement } from './hooks/useRoleManagement';
 import { usePresetManagement } from './hooks/usePresetManagement';
@@ -25,7 +25,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     const [isEditingProfileName, setIsEditingProfileName] = useState(false);
     const [activeRoleType, setActiveRoleType] = useState<'drafter' | 'critic'>('drafter');
     const [editingRoleIndex, setEditingRoleIndex] = useState<number | null>(null);
-    const [editingInstruction, setEditingInstruction] = useState<'initial' | 'refinement' | 'synthesizer' | null>(null);
+    const [editingInstruction, setEditingInstruction] = useState<InstructionType | null>(null);
     
     // Preset states
     const [isRolePresetDropdownOpen, setIsRolePresetDropdownOpen] = useState(false);
@@ -179,10 +179,10 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                     <RoleAndPromptConfigModal
                         isOpen={true}
                         onClose={() => { setEditingInstruction(null); setIsInstructionPresetDropdownOpen(false); }}
-                        title={`Configure ${editingInstruction.charAt(0).toUpperCase() + editingInstruction.slice(1)} Instruction`}
+                        title={`Configure ${editingInstruction.replace('_prompt', '').charAt(0).toUpperCase() + editingInstruction.replace('_prompt', '').slice(1)} Instruction`}
                         fields={[{
                             label: "Instruction",
-                            value: editingInstruction === 'initial' ? activeProfile.initialInstruction : editingInstruction === 'refinement' ? activeProfile.refinementInstruction : activeProfile.synthesizerInstruction,
+                            value: editingInstruction === 'initial_prompt' ? activeProfile.initialInstruction : editingInstruction === 'refinement_prompt' ? activeProfile.refinementInstruction : activeProfile.synthesizerInstruction,
                             onChange: (val) => presetMgr.handleApplyInstructionPreset(editingInstruction, val),
                             type: 'textarea', placeholder: "Enter instructions...", autoFocus: true
                         }]}

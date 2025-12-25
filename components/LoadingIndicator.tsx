@@ -1,5 +1,6 @@
 import React, { FC } from 'react';
 import { AgentState, Work } from '../types';
+import { StepId } from '../types/steps';
 import { AgentAvatar } from './AgentAvatar';
 import { ShowWork } from './ShowWork';
 import './LoadingIndicator.css';
@@ -11,8 +12,26 @@ export const LoadingIndicator: FC<{
     currentWork?: Work;
     isPaused?: boolean;
     onContinue?: () => void;
-    onRegenerate?: (stepId: string, agentIndex: number) => void;
-}> = ({ status, time, agentStates, currentWork, isPaused, onContinue, onRegenerate }) => (
+    onRegenerate?: (stepId: StepId, agentIndex: number) => void;
+}> = ({ status, time, agentStates, currentWork, isPaused, onContinue, onRegenerate }) => {
+  // Check if synthesizer is in error state - if so, Continue should trigger regeneration
+  const synthesizerState = agentStates.find(a => a.id === 'synthesizer_agent');
+  const isSynthesizerError = synthesizerState?.status === 'error';
+
+  const handleContinueClick = () => {
+    if (isSynthesizerError && onRegenerate) {
+      // Synthesizer errored - Continue should retry synthesis
+                onRegenerate?.('synthesis_step', 0);
+    } else if (onContinue) {
+      // Normal pause - continue the workflow
+      onContinue();
+    }
+  };
+
+  // Determine button text based on context
+  const continueButtonText = isSynthesizerError ? 'Retry Synthesis' : 'Continue';
+
+  return (
   <div className="message-wrapper model loading-state">
     <AgentAvatar type="model" />
     <div className="loading-container-wrapper">
@@ -20,9 +39,9 @@ export const LoadingIndicator: FC<{
         <div className="loading-header">
             <span className="loading-status">{status}</span>
             <div className="loading-header-content">
-                {isPaused && onContinue && (
-                    <button className="continue-button" onClick={onContinue}>
-                        Continue
+                {isPaused && (onContinue || (isSynthesizerError && onRegenerate)) && (
+                    <button className="continue-button" onClick={handleContinueClick}>
+                        {continueButtonText}
                     </button>
                 )}
                 <span className="timer-display">{(time / 1000).toFixed(1)}s</span>
@@ -32,7 +51,7 @@ export const LoadingIndicator: FC<{
             {agentStates.map((agent) => (
             <div key={agent.id} className="agent-progress-item">
                 <div className={`agent-icon ${agent.status}`}>
-                    {agent.id === 'synthesizer' ? (
+                    {agent.id === 'synthesizer_agent' ? (
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 2l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 6 6.5 9.5 3 12l3.5 2.5L9 18l2.5-3.5L15 12l-3.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z" />
                         </svg>
@@ -65,3 +84,4 @@ export const LoadingIndicator: FC<{
     </div>
   </div>
 );
+};

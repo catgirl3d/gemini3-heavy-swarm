@@ -21,7 +21,8 @@ export interface RoleProfile {
 export interface SavedInstruction {
     id: string;
     name: string;
-    type: 'initial' | 'refinement' | 'synthesizer';
+    /** Instruction types for UI/settings. Note: 'refinement_prompt' differs from StepId 'refinement_step' */
+    type: 'initial_prompt' | 'refinement_prompt' | 'synthesis_prompt';
     content: string;
 }
 
@@ -73,7 +74,7 @@ export interface Work {
   refinedTokenUsage?: (TokenUsage | null)[];
   synthesisTokenUsage?: TokenUsage | null;
 
-  // Generic storage for step results
+  // Generic storage for step results. Keys match StepId (e.g., 'initial_step', 'refinement_step', 'synthesis_step')
   results?: Record<string, any>;
   
   // Metadata about the steps that ran
@@ -96,11 +97,13 @@ export interface Message {
   sources?: Source[];
   work?: Work;
 }
+/** Pipeline step identifiers. Note: 'refinement_step' is distinct from 'refinement_prompt' InstructionType */
+export type StepId = 'initial_step' | 'refinement_step' | 'synthesis_step';
 
 export interface AgentState {
   id: string;
   name: string;
   status: 'waiting' | 'working' | 'done' | 'error';
   label: string;
-  stepId?: string; // Track which step this status belongs to
+  stepId?: StepId; // Track which step this status belongs to
 }

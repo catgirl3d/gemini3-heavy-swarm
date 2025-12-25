@@ -10,7 +10,7 @@ export interface SettingsModalProps {
 
 export type TabType = 'general' | 'prompts' | 'roles';
 export type RoleType = 'drafter' | 'critic';
-export type InstructionType = 'initial' | 'refinement' | 'synthesizer';
+export type InstructionType = 'initial_prompt' | 'refinement_prompt' | 'synthesis_prompt';
 
 export interface ProfileMetadata {
     id: InstructionType;

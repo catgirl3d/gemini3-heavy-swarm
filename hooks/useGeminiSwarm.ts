@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { AppSettings, Message, AgentState, Work } from '../types';
+import { StepId } from '../types/steps';
 import { DEFAULT_SETTINGS, DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES } from '../constants';
 import { GeminiService } from '../services/gemini';
 
@@ -106,6 +107,16 @@ export const useGeminiSwarm = () => {
         // Migration: Ensure dynamicAgentRoles exists (default to true)
         if (parsedSettings.dynamicAgentRoles === undefined) {
           parsedSettings.dynamicAgentRoles = true;
+        }
+
+        // Migration: Update identifiers to use _step and _prompt suffixes
+        if (parsedSettings.savedInstructions) {
+          parsedSettings.savedInstructions = parsedSettings.savedInstructions.map((inst: any) => {
+            if (inst.type === 'initial') inst.type = 'initial_prompt';
+            if (inst.type === 'refinement') inst.type = 'refinement_prompt';
+            if (inst.type === 'synthesizer') inst.type = 'synthesis_prompt';
+            return inst;
+          });
         }
 
         // Migration: Ensure model is compatible with current environment (demo vs full)
@@ -303,7 +314,7 @@ export const useGeminiSwarm = () => {
     }
   };
 
-  const regenerateAgentResponse = async (messageIndex: number, stepId: string, agentIndex: number) => {
+  const regenerateAgentResponse = async (messageIndex: number, stepId: StepId, agentIndex: number) => {
     if (!lastInput) return;
 
     // Find the message to update or use currentWork if it's the active generation
@@ -317,19 +328,19 @@ export const useGeminiSwarm = () => {
     if (!workContext) return;
 
     // Helper to get updated agent name based on current settings
-    const getUpdatedAgentName = (index: number, stepId: string) => {
+    const getUpdatedAgentName = (index: number, stepId: StepId) => {
       const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0];
 
-      if (stepId === 'initial') {
+      if (stepId === 'initial_step') {
         const perspectives = activeRoleProfile?.roles || [];
         if (perspectives.length === 0) return `Agent ${index + 1}`;
         const role = perspectives[index % perspectives.length];
         return settings.dynamicAgentRoles ? `Agent ${index + 1} (${role.name})` : `Agent ${index + 1}`;
-      } else if (stepId === 'refined') {
+      } else if (stepId === 'refinement_step') {
         const perspectives = activeRoleProfile?.criticRoles || [];
         if (perspectives.length === 0) return `Critic ${index + 1}`;
         const role = perspectives[index % perspectives.length];
-        return settings.dynamicAgentRoles ? `Agent ${index + 1} (${role.name})` : `Critic ${index + 1}`;
+        return settings.dynamicAgentRoles ? `Critic ${index + 1} (${role.name})` : `Critic ${index + 1}`;
       }
       return `Agent ${index + 1}`;
     };
@@ -340,8 +351,8 @@ export const useGeminiSwarm = () => {
         if (!states) return states;
         const copy = [...states];
 
-        if (stepId === 'synthesis') {
-          const synthIndex = copy.findIndex(a => a.id === 'synthesizer');
+        if (stepId === 'synthesis_step') {
+          const synthIndex = copy.findIndex(a => a.id === 'synthesizer_agent');
           if (synthIndex >= 0) {
             copy[synthIndex] = { ...copy[synthIndex], status, label, stepId };
           }
@@ -392,9 +403,15 @@ export const useGeminiSwarm = () => {
 
     try {
       // Set status to working while regeneration is in progress
-      const regenLabel = stepId === 'initial' ? 'Regenerating Draft...' :
-        stepId === 'refined' ? 'Regenerating Critique...' :
-          stepId === 'synthesis' ? 'Regenerating Synthesis...' : 'Regenerating...';
+      const regenLabel = stepId === 'initial_step' ? 'Regenerating Draft...' :
+        stepId === 'refinement_step' ? 'Regenerating Critique...' :
+          stepId === 'synthesis_step' ? 'Regenerating Synthesis...' : 'Regenerating...';
+      
+      // Reset pause state when starting regeneration (hides Continue button)
+      if (stepId === 'synthesis_step') {
+        setIsPaused(false);
+      }
+      
       updateAgentStatus('working', regenLabel);
 
       // We need the history up to this point
@@ -409,34 +426,93 @@ export const useGeminiSwarm = () => {
         agentIndex,
         stepId,
         workContext,
-        (text) => {
+        (text, isFirstChunk) => {
           // Update Messages (both visible text and attached work, if present)
           setMessages(prev => {
             const newMessages = [...prev];
-            const msg = newMessages[messageIndex];
+            let msg = newMessages[messageIndex];
 
-            if (msg) {
-              // For synthesis: update the final answer in the message card itself
-              if (stepId === 'synthesis') {
-                if (msg.role === 'model') {
-                  if (msg.parts && msg.parts.length > 0) {
-                    msg.parts[0] = { ...msg.parts[0], text };
-                  } else {
-                    msg.parts = [{ text }];
+            // For synthesis: update the final answer in the message card itself
+            // If the target message is not a model message (e.g., error happened before any text was streamed),
+            // we need to find or create a model message to display the regenerated answer.
+              if (stepId === 'synthesis_step') {
+              if (settings.debugMode) {
+                console.log('[DEBUG:Synthesis] onUpdate called:', { textLength: text.length, isFirstChunk, messageIndex });
+                if (isFirstChunk) {
+                  console.log('[DEBUG:Synthesis] First chunk - hiding loading UI');
+                }
+              }
+              
+              if (isFirstChunk) {
+                  // JUMP BEHAVIOR: immediately hide cards and indicator when first chunk of text arrives
+                  setIsLoading(false);
+                  setIsPaused(false);
+              }
+
+              if (!msg || msg.role !== 'model') {
+                if (settings.debugMode) {
+                  console.log('[DEBUG:Synthesis] Target msg is not model:', { msgRole: msg?.role, messageIndex });
+                }
+                // Check if there's already a model message after the user message
+                const nextMsg = newMessages[messageIndex + 1];
+                if (nextMsg && nextMsg.role === 'model') {
+                  // Use the existing model message
+                  if (settings.debugMode) {
+                    console.log('[DEBUG:Synthesis] Found existing model message at index', messageIndex + 1);
+                  }
+                  msg = nextMsg;
+                } else {
+                  // Create a new model message with the work from currentWork or workContext
+                  if (settings.debugMode) {
+                    console.log('[DEBUG:Synthesis] Creating NEW model message');
+                  }
+                  const newModelMessage: Message = {
+                    role: 'model',
+                    parts: [{ text }],
+                    work: workContext
+                  };
+                  newMessages.push(newModelMessage);
+                  msg = newModelMessage;
+                  if (settings.debugMode) {
+                    console.log('[DEBUG:Synthesis] New message created, array length:', newMessages.length);
                   }
                 }
               }
+              
+              // Now update the model message text
+              if (settings.debugMode) {
+                console.log('[DEBUG:Synthesis] Updating model message text:', { hasMsg: !!msg, msgRole: msg?.role, textLength: text.length });
+              }
+              if (msg && msg.role === 'model') {
+                if (msg.parts && msg.parts.length > 0) {
+                  msg.parts[0] = { ...msg.parts[0], text };
+                } else {
+                  msg.parts = [{ text }];
+                }
+                if (settings.debugMode) {
+                  console.log('[DEBUG:Synthesis] Text updated successfully');
+                }
+              } else {
+                // error should probably be logged regardless of debugMode as it's a critical failure, 
+                // but following the user's request to tie logs to the checkbox:
+                if (settings.debugMode) {
+                  console.error('[DEBUG:Synthesis] ERROR: Could not update text - msg is not a model message!');
+                }
+              }
+            }
 
-              if (msg.work) {
+            // Update work data on the message (for non-synthesis stepIds this is the main logic,
+            // for synthesis we already handled the text above but still need to update work.results)
+            if (msg && msg.work) {
                 const newWork = { ...msg.work };
 
                 // Update agent names in work object (use correct array per step)
-                if (stepId === 'initial' && newWork.agentNames) {
+                if (stepId === 'initial_step' && newWork.agentNames) {
                   const newName = getUpdatedAgentName(agentIndex, stepId);
                   const newAgentNames = [...newWork.agentNames];
                   newAgentNames[agentIndex] = newName;
                   newWork.agentNames = newAgentNames;
-                } else if (stepId === 'refined' && newWork.criticNames) {
+                } else if (stepId === 'refinement_step' && newWork.criticNames) {
                   const newName = getUpdatedAgentName(agentIndex, stepId);
                   const newCriticNames = [...newWork.criticNames];
                   newCriticNames[agentIndex] = newName;
@@ -446,7 +522,7 @@ export const useGeminiSwarm = () => {
                 // Update generic results
                 if (!newWork.results) newWork.results = {};
 
-                if (stepId === 'synthesis') {
+                if (stepId === 'synthesis_step') {
                   // Single synthesized result (object with text/sources), not per-agent array
                   const existing = newWork.results[stepId];
                   const base =
@@ -463,17 +539,16 @@ export const useGeminiSwarm = () => {
                   newWork.results[stepId] = currentResults;
 
                   // Update legacy fields for compatibility
-                  if (stepId === 'initial') {
+                  if (stepId === 'initial_step') {
                     newWork.initialResponses = [...newWork.initialResponses];
                     newWork.initialResponses[agentIndex] = text;
-                  } else if (stepId === 'refined') {
+                  } else if (stepId === 'refinement_step') {
                     newWork.refinedResponses = [...newWork.refinedResponses];
                     newWork.refinedResponses[agentIndex] = text;
                   }
                 }
 
                 msg.work = newWork;
-              }
             }
 
             return newMessages;
@@ -485,12 +560,12 @@ export const useGeminiSwarm = () => {
             const newWork = { ...prev };
 
             // Update agent names in work object (use correct array per step)
-            if (stepId === 'initial' && newWork.agentNames) {
+            if (stepId === 'initial_step' && newWork.agentNames) {
               const newName = getUpdatedAgentName(agentIndex, stepId);
               const newAgentNames = [...newWork.agentNames];
               newAgentNames[agentIndex] = newName;
               newWork.agentNames = newAgentNames;
-            } else if (stepId === 'refined' && newWork.criticNames) {
+            } else if (stepId === 'refinement_step' && newWork.criticNames) {
               const newName = getUpdatedAgentName(agentIndex, stepId);
               const newCriticNames = [...newWork.criticNames];
               newCriticNames[agentIndex] = newName;
@@ -500,7 +575,7 @@ export const useGeminiSwarm = () => {
             // Update generic results
             if (!newWork.results) newWork.results = {};
 
-            if (stepId === 'synthesis') {
+            if (stepId === 'synthesis_step') {
               const existing = newWork.results[stepId];
               const base =
                 existing && typeof existing === 'object'
@@ -515,16 +590,22 @@ export const useGeminiSwarm = () => {
               newWork.results[stepId] = currentResults;
 
               // Update legacy fields for compatibility
-              if (stepId === 'initial') {
+              if (stepId === 'initial_step') {
                 newWork.initialResponses = [...newWork.initialResponses];
                 newWork.initialResponses[agentIndex] = text;
-              } else if (stepId === 'refined') {
+              } else if (stepId === 'refinement_step') {
                 newWork.refinedResponses = [...newWork.refinedResponses];
                 newWork.refinedResponses[agentIndex] = text;
               }
             }
             return newWork;
           });
+        },
+        // onProgress callback - update UI state during regeneration (especially for synthesis)
+        (status, agents, work) => {
+          setLoadingStatus(status);
+          setAgentStates(agents);
+          setCurrentWork({ ...work, agentStates: agents });
         },
         abortController.signal
       );
@@ -551,10 +632,40 @@ export const useGeminiSwarm = () => {
     
     regenerateAbortControllerRef.current = null;
     // Mark agent as done once regeneration finishes successfully
-    const doneLabel = stepId === 'initial' ? 'Draft Regenerated' :
-      stepId === 'refined' ? 'Critique Regenerated' :
-        stepId === 'synthesis' ? 'Synthesis Regenerated' : 'Regenerated';
+    const doneLabel = stepId === 'initial_step' ? 'Draft Regenerated' :
+      stepId === 'refinement_step' ? 'Critique Regenerated' :
+        stepId === 'synthesis_step' ? 'Synthesis Regenerated' : 'Regenerated';
     updateAgentStatus('done', doneLabel);
+
+    // If synthesis regeneration completed successfully, finish the loading state
+    // so LoadingIndicator hides and only the model message with final answer shows
+    if (stepId === 'synthesis_step') {
+      // Transfer work to the model message if not already done
+      // We must explicitly update the synthesizer state here because React state updates are async
+      // and agentStates closure would still have the old (error) value
+      setMessages(prev => {
+        const newMessages = [...prev];
+        const lastMsg = newMessages[newMessages.length - 1];
+        if (lastMsg && lastMsg.role === 'model') {
+          // Get the work from either the message or currentWork
+          const workToUse = lastMsg.work || currentWork;
+          if (workToUse) {
+            // Create updated agentStates with synthesizer marked as done
+            const updatedAgentStates = (workToUse.agentStates || agentStates || []).map(agent => {
+              if (agent.id === 'synthesizer_agent') {
+                return { ...agent, status: 'done' as const, label: doneLabel, stepId: 'synthesis_step' as StepId };
+              }
+              return agent;
+            });
+            lastMsg.work = { ...workToUse, agentStates: updatedAgentStates };
+          }
+        }
+        return newMessages;
+      });
+      setCurrentWork(undefined);
+      setIsLoading(false);
+      setIsPaused(false);
+    }
   };
 
   return {
