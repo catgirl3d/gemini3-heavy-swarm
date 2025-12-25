@@ -11,8 +11,8 @@ export abstract class BaseStep implements StepDescriptor {
   abstract description: string;
   abstract ui: { visibleInModal: boolean; regenerateLabel?: string };
 
-  abstract execute(context: StepContext): Promise<any>;
-  abstract regenerate?(context: StepContext, agentIndex: number): Promise<any>;
+  abstract execute(context: StepContext): Promise<unknown>;
+  abstract regenerate?(context: StepContext, agentIndex: number): Promise<unknown>;
 
   // --- Shared utility methods ---
 

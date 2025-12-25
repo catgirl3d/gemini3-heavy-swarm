@@ -47,7 +47,7 @@ export interface StepDescriptor {
    * Returns the data produced by this step (e.g., array of strings).
    * The step is responsible for calling onProgress to update UI during execution.
    */
-  execute: (context: StepContext) => Promise<any>;
+  execute: (context: StepContext) => Promise<unknown>;
 
   /**
    * Optional: Logic to regenerate a specific agent's output for this step.
@@ -56,5 +56,5 @@ export interface StepDescriptor {
   regenerate?: (
     context: StepContext,
     agentIndex: number
-  ) => Promise<any>;
+  ) => Promise<unknown>;
 }

@@ -1,4 +1,5 @@
 import React, { FC, ReactNode } from 'react';
+import { TokenUsage as TokenUsageType } from '@/types';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { SpinnerIcon, ErrorIcon, CheckIcon, ExpandIcon, ThoughtIcon, DebugIcon, DownloadIcon, RegenerateIcon } from '../icons';
 import { ActionMenu } from './ActionMenu';
@@ -11,9 +12,9 @@ interface WorkCardProps {
   status: 'working' | 'done' | 'error' | 'waiting';
   icon?: ReactNode;
   content: string | null;
-  tokenUsage?: any;
+  tokenUsage?: TokenUsageType | null;
   thought?: string | null;
-  debugInfo?: any;
+  debugInfo?: unknown;
   onExpand: () => void;
   onShowThought?: () => void;
   onShowDebug?: () => void;

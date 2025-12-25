@@ -1,6 +1,6 @@
 import { Content, GroundingChunk } from '@google/genai';
 import { StepContext, StepId } from '../../types/steps';
-import { AgentState } from '../../types';
+import { AgentState, Source } from '../../types';
 import { prepareGeminiContent } from '../contentUtils';
 import { getGenerationConfig } from '../geminiConfig';
 import { BaseStep } from './BaseStep';
@@ -14,11 +14,11 @@ export class SynthesisStep extends BaseStep {
     regenerateLabel: 'Regenerate Final Answer'
   };
 
-  async execute(context: StepContext): Promise<{ text: string; sources?: any[] }> {
+  async execute(context: StepContext): Promise<{ text: string; sources?: Source[] }> {
     const { ai, settings, history, userInput, image, imageFile, work, onProgress, onMessageUpdate, signal } = context;
 
     // Ensure we have refined responses
-    const refinedResponses = work.results?.['refinement_step'] || work.refinedResponses;
+    const refinedResponses = (work.results?.['refinement_step'] || work.refinedResponses) as string[];
     if (!refinedResponses || refinedResponses.length === 0) {
       throw new Error('Cannot run synthesis step without refined responses');
     }
@@ -203,7 +203,7 @@ As defined in <mission> synthesize the best single, final answer from <agent_dra
     }
   }
 
-  async regenerate(context: StepContext): Promise<{ text: string; sources?: any[] }> {
+  async regenerate(context: StepContext): Promise<{ text: string; sources?: Source[] }> {
     // execute already handles token usage update
     return this.execute(context);
   }

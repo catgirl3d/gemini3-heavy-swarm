@@ -8,20 +8,21 @@ export const downloadContent = (filename: string, content: string) => {
   document.body.removeChild(element);
 };
 
-export const formatDebugInfo = (info: any) => {
-  if (!info) return "No debug info available.";
+export const formatDebugInfo = (info: unknown) => {
+  if (!info || typeof info !== 'object') return "No debug info available.";
   
+  const debugInfo = info as Record<string, unknown>;
   let output = "";
   
-  if (info.systemInstruction) {
-    output += `### System Instruction\n\n\`\`\`xml\n${info.systemInstruction.trim()}\n\`\`\`\n\n`;
+  if (debugInfo.systemInstruction && typeof debugInfo.systemInstruction === 'string') {
+    output += `### System Instruction\n\n\`\`\`xml\n${debugInfo.systemInstruction.trim()}\n\`\`\`\n\n`;
   }
 
-  if (info.history && Array.isArray(info.history)) {
+  if (debugInfo.history && Array.isArray(debugInfo.history)) {
     output += `### Chat History\n\n`;
-    info.history.forEach((msg: any) => {
+    debugInfo.history.forEach((msg: any) => {
       output += `#### ${msg.role}\n`;
-      if (msg.parts) {
+      if (msg.parts && Array.isArray(msg.parts)) {
         msg.parts.forEach((part: any) => {
           if (part.text) output += `\`\`\`\n${part.text.trim()}\n\`\`\`\n\n`;
           if (part.inlineData) output += `*[Image Data]*\n\n`;
@@ -30,11 +31,12 @@ export const formatDebugInfo = (info: any) => {
     });
   }
 
-  if (info.userTurn) {
+  if (debugInfo.userTurn && typeof debugInfo.userTurn === 'object') {
+    const userTurn = debugInfo.userTurn as Record<string, unknown>;
     output += `### Current Turn\n\n`;
-    output += `#### ${info.userTurn.role}\n`;
-    if (info.userTurn.parts) {
-      info.userTurn.parts.forEach((part: any) => {
+    output += `#### ${userTurn.role}\n`;
+    if (userTurn.parts && Array.isArray(userTurn.parts)) {
+      userTurn.parts.forEach((part: any) => {
         if (part.text) output += `\`\`\`xml\n${part.text.trim()}\n\`\`\`\n\n`;
         if (part.inlineData) output += `*[Image Data]*\n\n`;
       });

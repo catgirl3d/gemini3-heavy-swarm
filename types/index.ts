@@ -75,7 +75,7 @@ export interface Work {
   synthesisTokenUsage?: TokenUsage | null;
 
   // Generic storage for step results. Keys match StepId (e.g., 'initial_step', 'refinement_step', 'synthesis_step')
-  results?: Record<string, any>;
+  results?: Record<string, unknown>;
   
   // Metadata about the steps that ran
   stepMetadata?: {
@@ -87,7 +87,7 @@ export interface Work {
   agentNames?: string[];
   criticNames?: string[];
   agentStates?: AgentState[];
-  debugInfo?: Record<string, any>;
+  debugInfo?: Record<string, unknown>;
 }
 
 export interface Message {
@@ -106,4 +106,10 @@ export interface AgentState {
   status: 'waiting' | 'working' | 'done' | 'error';
   label: string;
   stepId?: StepId; // Track which step this status belongs to
+}
+
+export interface ServerStatus {
+  hasServerKey: boolean;
+  proxyMode: string;
+  isLoaded: boolean;
 }

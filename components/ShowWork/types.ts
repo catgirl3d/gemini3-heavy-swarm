@@ -10,7 +10,7 @@ export interface WorkModalData {
 
 export interface DebugModalData {
   title: string;
-  debugInfo: any;
+  debugInfo: unknown;
 }
 
 export interface ThoughtModalData {

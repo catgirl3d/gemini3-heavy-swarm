@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { ProxyGenAI } from './ProxyGenAI';
 import { IS_FORCED_PROXY } from '../constants';
 import { getDirectApiKey } from './proxyUtils';
-import { AppSettings, Work, AgentState, Message } from '../types';
+import { AppSettings, Work, AgentState, Message, Source } from '../types';
 import type { MutableRefObject } from 'react';
 import { StepRunner } from './StepRunner';
 import { InitialStep } from './steps/InitialStep';
@@ -11,7 +11,7 @@ import { SynthesisStep } from './steps/SynthesisStep';
 import { StepContext, StepDescriptor, StepId } from '../types/steps';
 import { getAgentRole } from './steps/utils/roleUtils';
 
-const debug = (settings: AppSettings, ...args: any[]) => {
+const debug = (settings: AppSettings, ...args: unknown[]) => {
   if (settings.debugMode) {
     // Centralized debug hook for swarm internals
     console.debug('[GeminiSwarm]', ...args);
@@ -49,7 +49,7 @@ export class GeminiService {
     onMessageUpdate: (text: string, isFinal: boolean) => void,
     signal: AbortSignal,
     pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>
-  ): Promise<{ text: string; sources?: any[]; work: Work }> {
+  ): Promise<{ text: string; sources?: Source[]; work: Work }> {
     
     // Initialize AI client with user key if provided, otherwise fall back to env key
     // Initialize AI client with user key if provided, otherwise fall back to env key
@@ -108,12 +108,12 @@ export class GeminiService {
     const finalWork = await runner.run(context, pauseResolverRef);
 
     // Extract final result from synthesis step
-    const synthesisResult = finalWork.results?.['synthesis_step'];
+    const synthesisResult = finalWork.results?.['synthesis_step'] as { text?: string; sources?: Source[] } | undefined;
     
-    return { 
-      text: synthesisResult?.text || '', 
+    return {
+      text: synthesisResult?.text || '',
       sources: synthesisResult?.sources,
-      work: finalWork 
+      work: finalWork
     };
   }
 
@@ -129,7 +129,7 @@ export class GeminiService {
     onUpdate: (text: string, isFirstChunk: boolean) => void,
     onProgress: (status: string, agents: AgentState[], work: Work) => void,
     signal: AbortSignal
-  ): Promise<string> {
+  ): Promise<string | { text: string; sources?: Source[] }> {
     // Ensure AI client is updated with the latest key from settings
     // Ensure AI client is updated with the latest key from settings
     const apiKey = getDirectApiKey(settings.apiKey);
@@ -160,7 +160,7 @@ export class GeminiService {
                     onProgress: () => {}, // No-op for regeneration
                     onMessageUpdate: (text, isFirstChunk) => onUpdate(text, isFirstChunk),
                     signal
-                }, agentIndex);
+                }, agentIndex) as Promise<string>;
             }
         } else if (stepId === 'refinement_step') {
              const refinedStep = this.steps.find(s => s.id === 'refinement_step');
@@ -176,7 +176,7 @@ export class GeminiService {
                     onProgress: () => {}, // No-op for regeneration
                     onMessageUpdate: (text, isFirstChunk) => onUpdate(text, isFirstChunk),
                     signal
-                }, agentIndex);
+                }, agentIndex) as Promise<string>;
              }
         }
         throw new Error(`Step ${stepId} not found or does not support regeneration`);
@@ -201,6 +201,6 @@ export class GeminiService {
         signal
     };
 
-    return step.regenerate(context, agentIndex);
+    return step.regenerate(context, agentIndex) as Promise<string | { text: string; sources?: Source[] }>;
   }
 }

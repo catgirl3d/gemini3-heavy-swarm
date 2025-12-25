@@ -19,7 +19,7 @@ export class RefinementStep extends BaseStep {
     const { ai, settings, history, userInput, image, imageFile, work, onProgress, signal } = context;
 
     // Ensure we have initial responses
-    const initialResponses = work.results?.['initial_step'] || work.initialResponses;
+    const initialResponses = (work.results?.['initial_step'] || work.initialResponses) as string[];
     if (!initialResponses || initialResponses.length === 0) {
       throw new Error('Cannot run refinement step without initial responses');
     }
@@ -78,9 +78,9 @@ export class RefinementStep extends BaseStep {
 
         const peerDrafts = initialResponses
           .map((text: string, i: number) => ({ text, id: i + 1 }))
-          .filter((_: any, i: number) => i !== index)
-          .filter((a: any) => !a.text.trim().startsWith('[System:')) // Filter out failed agents
-          .map((a: any) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
+          .filter((_, i) => i !== index)
+          .filter((a) => !a.text.trim().startsWith('[System:')) // Filter out failed agents
+          .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
           .join('\n\n');
 
         const refinementContext = `
@@ -175,7 +175,7 @@ ${peerDrafts}
 
     const outcomes = await Promise.allSettled(agentPromises);
 
-    const failures: any[] = [];
+    const failures: unknown[] = [];
     outcomes.forEach((outcome, i) => {
       if (outcome.status === 'rejected') {
         failures.push(outcome.reason);
@@ -211,7 +211,7 @@ ${peerDrafts}
     if (!ai) throw new Error("API Key not found");
 
     // Ensure we have initial responses
-    const initialResponses = work.results?.['initial_step'] || work.initialResponses;
+    const initialResponses = (work.results?.['initial_step'] || work.initialResponses) as string[];
     if (!initialResponses || initialResponses.length === 0) {
       throw new Error('Cannot regenerate refinement without initial responses');
     }
@@ -222,9 +222,9 @@ ${peerDrafts}
     const initialAnswer = initialResponses[agentIndex];
     const peerDrafts = initialResponses
       .map((text: string, i: number) => ({ text, id: i + 1 }))
-      .filter((_: any, i: number) => i !== agentIndex)
-      .filter((a: any) => !a.text.trim().startsWith('[System:')) // Filter out failed agents
-      .map((a: any) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
+      .filter((_, i) => i !== agentIndex)
+      .filter((a) => !a.text.trim().startsWith('[System:')) // Filter out failed agents
+      .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
       .join('\n\n');
 
     const refinementContext = `

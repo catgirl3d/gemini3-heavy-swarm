@@ -12,7 +12,7 @@ export class ProxyGenAI {
   // Add models property to match GoogleGenAI interface used by steps
   get models() {
     return {
-      generateContentStream: async (request: any) => {
+      generateContentStream: async (request: { model?: string; config?: any; contents: Content[] }) => {
         // Use the requested model, or fallback to flash-lite
         // The server will enforce restrictions if GEMINI_PROXY_MODE is 'demo'
         const modelName = request.model || 'gemini-2.5-flash-lite';
@@ -40,8 +40,8 @@ class ProxyGenerativeModel {
   constructor(
     private model: string,
     private generationConfig?: GenerationConfig,
-    private systemInstruction?: any,
-    private tools?: any[]
+    private systemInstruction?: unknown,
+    private tools?: unknown[]
   ) {}
 
   async generateContentStream(request: { contents: Content[] }) {
@@ -94,65 +94,77 @@ class ProxyGenerativeModel {
                 break;
             }
 
-            // We have a '{'. Now find the matching '}'.
-            let braceCount = 0;
-            let inString = false;
-            let escape = false;
-            let endIndex = -1;
+            try {
+                // We have a '{'. Now find the matching '}'.
+                let braceCount = 0;
+                let inString = false;
+                let escape = false;
+                let endIndex = -1;
 
-            for (let i = openBraceIndex; i < buffer.length; i++) {
-                const char = buffer[i];
-                
-                if (inString) {
-                    if (escape) {
-                        escape = false;
-                    } else if (char === '\\') {
-                        escape = true;
-                    } else if (char === '"') {
-                        inString = false;
-                    }
-                } else {
-                    if (char === '"') {
-                        inString = true;
-                    } else if (char === '{') {
-                        braceCount++;
-                    } else if (char === '}') {
-                        braceCount--;
-                        if (braceCount === 0) {
-                            endIndex = i;
-                            break;
+                for (let i = openBraceIndex; i < buffer.length; i++) {
+                    const char = buffer[i];
+                    
+                    if (inString) {
+                        if (escape) {
+                            escape = false;
+                        } else if (char === '\\') {
+                            escape = true;
+                        } else if (char === '"') {
+                            inString = false;
+                        }
+                    } else {
+                        if (char === '"') {
+                            inString = true;
+                        } else if (char === '{') {
+                            braceCount++;
+                        } else if (char === '}') {
+                            braceCount--;
+                            if (braceCount === 0) {
+                                endIndex = i;
+                                break;
+                            }
                         }
                     }
                 }
-            }
 
-            if (endIndex !== -1) {
-                // Found a complete object
-                const jsonStr = buffer.substring(openBraceIndex, endIndex + 1);
-                buffer = buffer.substring(endIndex + 1); // Advance buffer
-                
-                try {
-                    const parsed = JSON.parse(jsonStr);
-                    yield {
-                        text: () => {
-                            if (parsed.candidates && parsed.candidates[0] && parsed.candidates[0].content && parsed.candidates[0].content.parts) {
-                                return parsed.candidates[0].content.parts.map((p: any) => p.text).join('');
-                            }
-                            return '';
-                        },
-                        candidates: parsed.candidates,
-                        usageMetadata: parsed.usageMetadata
-                    };
-                } catch (e) {
-                    console.warn('Failed to parse extracted JSON:', e);
+                if (endIndex !== -1) {
+                    // Found a complete object
+                    const jsonStr = buffer.substring(openBraceIndex, endIndex + 1);
+                    buffer = buffer.substring(endIndex + 1); // Advance buffer
+                    
+                    try {
+                        const parsed = JSON.parse(jsonStr);
+                        yield {
+                            text: () => {
+                                try {
+                                    if (parsed.candidates && parsed.candidates[0] && parsed.candidates[0].content && Array.isArray(parsed.candidates[0].content.parts)) {
+                                        return parsed.candidates[0].content.parts.map((p: { text?: string }) => p.text || '').join('');
+                                    }
+                                } catch (e) {
+                                    console.warn('Error extracting text from chunk:', e);
+                                }
+                                return '';
+                            },
+                            candidates: parsed.candidates,
+                            usageMetadata: parsed.usageMetadata
+                        };
+                    } catch (e) {
+                        console.warn('Failed to parse extracted JSON chunk:', e);
+                        // We continue the loop to find next valid JSON object
+                    }
+                } else {
+                    // Incomplete object
+                    if (done) {
+                        console.warn('Stream ended with incomplete JSON object');
+                        buffer = '';
+                    }
+                    break; // Wait for more data
                 }
-            } else {
-                // Incomplete object
-                if (done) {
-                    console.warn('Stream ended with incomplete JSON object');
-                    buffer = '';
-                }
-                break; // Wait for more data
+            } catch (error) {
+                console.error('Error in ProxyGenAI stream processing logic:', error);
+                // Clear buffer and stop this iteration to avoid infinite loop on same error
+                buffer = '';
+                break;
             }
         }
       }

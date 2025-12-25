@@ -35,7 +35,7 @@ export const extractTextFromParts = (
   let text = '';
   let thought = '';
   
-  if (!parts) return { text, thought };
+  if (!parts || !Array.isArray(parts)) return { text, thought };
   
   for (const part of parts) {
     // Gemini marks "thoughts" with the thought: true flag

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppSettings, PromptProfile } from '../../../types';
+import { AppSettings, PromptProfile, RoleProfile } from '../../../types';
 import { DEFAULT_SETTINGS } from '../../../constants';
 import { InstructionType } from '../types';
 
@@ -89,7 +89,7 @@ export function usePresetManagement(
         }));
     };
 
-    const handleSaveRolePreset = (editingRoleIndex: number | null, activeRoleType: 'drafter' | 'critic', activeRoleProfile: any, newPresetName: string) => {
+    const handleSaveRolePreset = (editingRoleIndex: number | null, activeRoleType: 'drafter' | 'critic', activeRoleProfile: RoleProfile, newPresetName: string) => {
         if (editingRoleIndex === null || !newPresetName.trim()) return;
 
         const roleList = activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles;

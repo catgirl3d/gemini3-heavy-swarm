@@ -19,7 +19,7 @@ export function getAllowedOrigins(env: { ALLOWED_ORIGINS?: string }): string[] {
 /**
  * Check if origin is allowed and return appropriate CORS headers
  */
-export function getCorsHeaders(request: any, env: { ALLOWED_ORIGINS?: string }): Headers {
+export function getCorsHeaders(request: Request, env: { ALLOWED_ORIGINS?: string }): Headers {
   const origin = request.headers.get('Origin');
   const allowedOrigins = getAllowedOrigins(env);
   
@@ -49,7 +49,7 @@ export function getCorsHeaders(request: any, env: { ALLOWED_ORIGINS?: string }):
 /**
  * Handle CORS preflight requests
  */
-export function handleCorsPreflight(request: any, env: { ALLOWED_ORIGINS?: string }): Response | null {
+export function handleCorsPreflight(request: Request, env: { ALLOWED_ORIGINS?: string }): Response | null {
   if (request.method === 'OPTIONS') {
     const origin = request.headers.get('Origin');
     const allowedOrigins = getAllowedOrigins(env);

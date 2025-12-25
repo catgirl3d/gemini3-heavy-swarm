@@ -29,6 +29,21 @@
   
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --code-font-family: 'Fira Code', 'Courier New', Courier, monospace;
+
+  /* Toast Notifications */
+  --toast-bg: #ffffff;
+  --toast-info-edge: #3b82f6;
+  --toast-info-bg: #f5f9ff;
+  --toast-info-text: #1e40af;
+  --toast-warning-edge: #f59e0b;
+  --toast-warning-bg: #fffdf5;
+  --toast-warning-text: #92400e;
+  --toast-error-edge: #ef4444;
+  --toast-error-bg: #fffafb;
+  --toast-error-text: #991b1b;
+  --toast-success-edge: #10b981;
+  --toast-success-bg: #f6fff9;
+  --toast-success-text: #065f46;
 }
 
 body {

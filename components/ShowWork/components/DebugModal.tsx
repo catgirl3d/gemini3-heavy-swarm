@@ -3,7 +3,7 @@ import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { BaseModal } from '@/components/BaseModal';
 import { formatDebugInfo } from '../utils';
 
-export const DebugModal: FC<{ title: string; debugInfo: any; onClose: () => void }> = ({ title, debugInfo, onClose }) => {
+export const DebugModal: FC<{ title: string; debugInfo: unknown; onClose: () => void }> = ({ title, debugInfo, onClose }) => {
     const [viewMode, setViewMode] = useState<'formatted' | 'raw'>('formatted');
 
     return (

@@ -1,10 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
-import { AppSettings, Message, AgentState, Work } from '../types';
+import { AppSettings, Message, AgentState, Work, RoleProfile, SavedInstruction, AgentRole } from '../types';
 import { StepId } from '../types/steps';
-import { DEFAULT_SETTINGS, DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES, IS_FORCED_PROXY } from '../constants';
-import { isUsingProxy as checkProxyUsage } from '../services/proxyUtils';
+import { DEFAULT_SETTINGS, DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES } from '../constants';
 
 import { GeminiService } from '../services/gemini';
+
+/**
+ * Represents settings from older versions of the application for migration purposes.
+ */
+interface LegacyAppSettings extends Partial<AppSettings> {
+  initialInstruction?: string;
+  refinementInstruction?: string;
+  synthesizerInstruction?: string;
+  agentRoles?: AgentRole[];
+}
 
 export const useGeminiSwarm = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -15,6 +24,7 @@ export const useGeminiSwarm = () => {
   const [currentWork, setCurrentWork] = useState<Work | undefined>(undefined);
   const [timer, setTimer] = useState<number>(0);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [settingsLoaded, setSettingsLoaded] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [lastInput, setLastInput] = useState<{ text: string, image: string | null, imageFile: File | null } | null>(null);
 
@@ -23,13 +33,19 @@ export const useGeminiSwarm = () => {
   const regenerateAbortControllerRef = useRef<AbortController | null>(null);
   const pauseResolverRef = useRef<((value: void | PromiseLike<void>) => void) | null>(null);
   const geminiServiceRef = useRef<GeminiService>(new GeminiService());
+  const messagesRef = useRef<Message[]>(messages);
+
+  // Keep messagesRef in sync with messages state
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // Load settings from localStorage on mount
   useEffect(() => {
     const savedSettings = localStorage.getItem('gemini3-settings');
     if (savedSettings) {
       try {
-        const parsedSettings = JSON.parse(savedSettings);
+        const parsedSettings = JSON.parse(savedSettings) as LegacyAppSettings;
         // Migration: Ensure profiles exist
         if (!parsedSettings.profiles) {
           parsedSettings.profiles = DEFAULT_PROFILES;
@@ -71,14 +87,14 @@ export const useGeminiSwarm = () => {
         } else {
           // Ensure new default profiles are available even if settings exist
           const madScientistProfile = DEFAULT_ROLE_PROFILES.find(p => p.id === 'mad-scientists');
-          if (madScientistProfile && !parsedSettings.roleProfiles.some((p: any) => p.id === 'mad-scientists')) {
+          if (madScientistProfile && !parsedSettings.roleProfiles.some((p: RoleProfile) => p.id === 'mad-scientists')) {
             parsedSettings.roleProfiles.push(madScientistProfile);
           }
         }
 
         // Migration: Ensure criticRoles exist in roleProfiles
         if (parsedSettings.roleProfiles) {
-          parsedSettings.roleProfiles = parsedSettings.roleProfiles.map((profile: any) => {
+          parsedSettings.roleProfiles = parsedSettings.roleProfiles.map((profile: RoleProfile) => {
             if (!profile.criticRoles) {
               // Find matching default profile to copy critic roles from
               const defaultProfile = DEFAULT_ROLE_PROFILES.find(p => p.id === profile.id);
@@ -113,11 +129,11 @@ export const useGeminiSwarm = () => {
 
         // Migration: Update identifiers to use _step and _prompt suffixes
         if (parsedSettings.savedInstructions) {
-          parsedSettings.savedInstructions = parsedSettings.savedInstructions.map((inst: any) => {
-            if (inst.type === 'initial') inst.type = 'initial_prompt';
-            if (inst.type === 'refinement') inst.type = 'refinement_prompt';
-            if (inst.type === 'synthesizer') inst.type = 'synthesis_prompt';
-            return inst;
+          parsedSettings.savedInstructions = parsedSettings.savedInstructions.map((inst: SavedInstruction | { type: string }) => {
+            if (inst.type === 'initial') (inst as any).type = 'initial_prompt';
+            if (inst.type === 'refinement') (inst as any).type = 'refinement_prompt';
+            if (inst.type === 'synthesizer') (inst as any).type = 'synthesis_prompt';
+            return inst as SavedInstruction;
           });
         }
 
@@ -125,17 +141,20 @@ export const useGeminiSwarm = () => {
           parsedSettings.numAgents = 5;
         }
 
-        setSettings(parsedSettings);
+        setSettings(parsedSettings as AppSettings);
       } catch (error) {
         console.error('Failed to parse saved settings:', error);
       }
     }
+    setSettingsLoaded(true);
   }, []);
 
   // Save settings to localStorage when they change
   useEffect(() => {
-    localStorage.setItem('gemini3-settings', JSON.stringify(settings));
-  }, [settings]);
+    if (settingsLoaded) {
+      localStorage.setItem('gemini3-settings', JSON.stringify(settings));
+    }
+  }, [settings, settingsLoaded]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -166,11 +185,16 @@ export const useGeminiSwarm = () => {
       setLastInput({ text: userInput, image, imageFile });
     }
 
-    let currentMessages = messages;
+    // Use functional update to avoid stale closure issues
+    // messagesRef is updated synchronously so we can pass correct value to runSwarm
+    let currentMessages = messagesRef.current;
     if (!isRetry) {
       const userMessage: Message = { role: 'user', parts: [{ text: userInput }], image: image || undefined };
-      currentMessages = [...messages, userMessage];
-      setMessages(currentMessages);
+      setMessages(prev => {
+        currentMessages = [...prev, userMessage];
+        messagesRef.current = currentMessages;
+        return currentMessages;
+      });
     }
 
     setIsLoading(true);
@@ -412,7 +436,7 @@ export const useGeminiSwarm = () => {
       // We need the history up to this point
       const history = messages.slice(0, messageIndex);
 
-      await geminiServiceRef.current.regenerateResponse(
+      const result = await geminiServiceRef.current.regenerateResponse(
         settings,
         lastInput.text,
         lastInput.image,
@@ -519,7 +543,7 @@ export const useGeminiSwarm = () => {
 
                 if (stepId === 'synthesis_step') {
                   // Single synthesized result (object with text/sources), not per-agent array
-                  const existing = newWork.results[stepId];
+                  const existing = newWork.results[stepId] as Record<string, unknown> | undefined;
                   const base =
                     existing && typeof existing === 'object'
                       ? existing
@@ -571,7 +595,7 @@ export const useGeminiSwarm = () => {
             if (!newWork.results) newWork.results = {};
 
             if (stepId === 'synthesis_step') {
-              const existing = newWork.results[stepId];
+              const existing = newWork.results[stepId] as Record<string, unknown> | undefined;
               const base =
                 existing && typeof existing === 'object'
                   ? existing
@@ -604,6 +628,42 @@ export const useGeminiSwarm = () => {
         },
         abortController.signal
       );
+
+      // Handle full result for synthesis (including sources)
+      if (typeof result === 'object' && result !== null && 'sources' in result) {
+        setMessages(prev => {
+          const newMessages = [...prev];
+          let msg = newMessages[messageIndex];
+          
+          // If we found/created a model message during streaming, it might be at messageIndex or messageIndex + 1
+          if (!msg || msg.role !== 'model') {
+            const nextMsg = newMessages[messageIndex + 1];
+            if (nextMsg && nextMsg.role === 'model') {
+              msg = nextMsg;
+            }
+          }
+          
+          if (msg && msg.role === 'model') {
+            msg.sources = result.sources;
+            if (msg.work && msg.work.results) {
+              msg.work.results[stepId] = result;
+            }
+          }
+          return newMessages;
+        });
+
+        // Also update currentWork
+        setCurrentWork(prev => {
+          if (!prev || !prev.results) return prev;
+          return {
+            ...prev,
+            results: {
+              ...prev.results,
+              [stepId]: result
+            }
+          };
+        });
+      }
 
     } catch (error) {
       console.error("Regeneration failed:", error);
@@ -672,6 +732,7 @@ export const useGeminiSwarm = () => {
     currentWork,
     timer,
     settings,
+    settingsLoaded,
     error,
     setSettings,
     sendMessage,

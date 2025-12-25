@@ -144,7 +144,7 @@ export class InitialStep extends BaseStep {
 
     const outcomes = await Promise.allSettled(agentPromises);
 
-    const failures: any[] = [];
+    const failures: unknown[] = [];
     outcomes.forEach((outcome, i) => {
       if (outcome.status === 'rejected') {
         failures.push(outcome.reason);
