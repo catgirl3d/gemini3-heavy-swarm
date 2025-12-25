@@ -16,6 +16,7 @@ export const onRequestGet = (async (context) => {
   
   return new Response(JSON.stringify({
     hasServerKey: !!env.GEMINI_API_KEY,
+    hasKV: !!env.RATE_LIMIT_KV,
     proxyMode: env.GEMINI_PROXY_MODE || 'demo'
   }), {
     headers: corsHeaders

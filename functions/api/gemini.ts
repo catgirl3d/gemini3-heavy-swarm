@@ -2,6 +2,7 @@ import type { PagesFunction } from "@cloudflare/workers-types";
 import type { Env, GeminiRequest } from "../_types";
 import { handleCorsPreflight, getCorsHeaders } from "../_cors";
 import { validateSecretHeader, checkRateLimit } from "../_security";
+import { ALLOWED_MODELS, MAX_REQUEST_SIZE, MAX_CONTENT_CHARS } from "../../constants/security.js";
 
 export const onRequestPost = (async (context) => {
   const { request, env } = context;
@@ -41,6 +42,15 @@ export const onRequestPost = (async (context) => {
   if (!rateLimit.allowed) {
     return new Response(JSON.stringify({ error: "Too many requests" }), {
       status: 429,
+      headers: corsHeaders,
+    });
+  }
+
+  // Check Request Size (Content-Length)
+  const contentLength = parseInt(request.headers.get("Content-Length") || "0");
+  if (contentLength > MAX_REQUEST_SIZE) {
+    return new Response(JSON.stringify({ error: "Request too large" }), {
+      status: 413,
       headers: corsHeaders,
     });
   }
@@ -85,6 +95,36 @@ export const onRequestPost = (async (context) => {
       );
     }
 
+    // Deep validation of contents to prevent malformed data
+    const isValidContents = contents.every(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        Array.isArray(item.parts) &&
+        item.parts.length > 0
+    );
+
+    if (!isValidContents) {
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid "contents" structure: each item must have "parts" array',
+        }),
+        {
+          status: 400,
+          headers: corsHeaders,
+        }
+      );
+    }
+
+    // Validate content length to prevent DoS
+    const contentString = JSON.stringify(contents);
+    if (contentString.length > MAX_CONTENT_CHARS) {
+      return new Response(JSON.stringify({ error: "Content too large" }), {
+        status: 413,
+        headers: corsHeaders,
+      });
+    }
+
     // Determine model based on proxy mode
     // If GEMINI_PROXY_MODE is 'demo' OR not set, enforce flash-lite to prevent abuse
     // Only if GEMINI_PROXY_MODE is 'private', allow the requested model
@@ -92,6 +132,17 @@ export const onRequestPost = (async (context) => {
     const targetModel = isPrivateMode
       ? model || "gemini-2.5-flash-lite"
       : "gemini-2.5-flash-lite";
+
+    // Validate model against whitelist
+    if (!ALLOWED_MODELS.includes(targetModel)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid or unauthorized model" }),
+        {
+          status: 400,
+          headers: corsHeaders,
+        }
+      );
+    }
 
     // Construct the Google API URL (no key in URL)
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent`;

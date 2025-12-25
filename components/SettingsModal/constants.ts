@@ -1,4 +1,5 @@
 import { InstructionType, ProfileMetadata } from './types';
+import { AVAILABLE_MODELS as SHARED_MODELS } from '../../constants/security.js';
 
 export const INSTRUCTION_METADATA: Record<InstructionType, ProfileMetadata> = {
     initial_prompt: {
@@ -18,11 +19,4 @@ export const INSTRUCTION_METADATA: Record<InstructionType, ProfileMetadata> = {
     }
 };
 
-export const AVAILABLE_MODELS = [
-    { value: 'gemini-1.5-flash-8b', label: 'Gemini 1.5 Flash-8B' },
-    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-    { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)' },
-    { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro (Preview)' }
-];
+export const AVAILABLE_MODELS = SHARED_MODELS;

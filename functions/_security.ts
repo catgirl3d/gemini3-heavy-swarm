@@ -29,7 +29,10 @@ export async function checkRateLimit(
   ip: string,
   kv: any
 ): Promise<{ allowed: boolean; remaining: number }> {
-  if (!kv) return { allowed: true, remaining: -1 };
+  if (!kv) {
+    console.error("SERVER SECURITY ERROR: RATE_LIMIT_KV is not configured!");
+    return { allowed: false, remaining: 0 };
+  }
 
   const now = Math.floor(Date.now() / 1000);
   const minute = Math.floor(now / 60);
