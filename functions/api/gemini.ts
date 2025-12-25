@@ -19,14 +19,15 @@ export const onRequestPost = (async (context) => {
 
   // If there's an origin but it's not in corsHeaders, block the request
   if (origin && !corsHeaders.has("Access-Control-Allow-Origin")) {
+    corsHeaders.set('Content-Type', 'application/json');
     return new Response(JSON.stringify({ error: "Origin not allowed" }), {
       status: 403,
-      headers: { "Content-Type": "application/json" },
+      headers: corsHeaders,
     });
   }
-
   // Validate API Secret
   if (!validateSecretHeader(request, env)) {
+    corsHeaders.set('Content-Type', 'application/json');
     return new Response(
       JSON.stringify({ error: "Invalid or missing API secret" }),
       {
@@ -40,6 +41,7 @@ export const onRequestPost = (async (context) => {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const rateLimit = await checkRateLimit(ip, env.RATE_LIMIT_KV);
   if (!rateLimit.allowed) {
+    corsHeaders.set('Content-Type', 'application/json');
     return new Response(JSON.stringify({ error: "Too many requests" }), {
       status: 429,
       headers: corsHeaders,
@@ -49,6 +51,7 @@ export const onRequestPost = (async (context) => {
   // Check Request Size (Content-Length)
   const contentLength = parseInt(request.headers.get("Content-Length") || "0");
   if (contentLength > MAX_REQUEST_SIZE) {
+    corsHeaders.set('Content-Type', 'application/json');
     return new Response(JSON.stringify({ error: "Request too large" }), {
       status: 413,
       headers: corsHeaders,
@@ -58,6 +61,7 @@ export const onRequestPost = (async (context) => {
   try {
     const apiKey = env.GEMINI_API_KEY;
     if (!apiKey) {
+      corsHeaders.set('Content-Type', 'application/json');
       return new Response(
         JSON.stringify({
           error: "Server configuration error: API key missing",
@@ -73,6 +77,7 @@ export const onRequestPost = (async (context) => {
     try {
       body = (await request.json()) as GeminiRequest;
     } catch (e) {
+      corsHeaders.set('Content-Type', 'application/json');
       return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
         status: 400,
         headers: corsHeaders,
@@ -84,6 +89,7 @@ export const onRequestPost = (async (context) => {
 
     // Validation: GeminiRequest requires contents
     if (!contents || !Array.isArray(contents) || contents.length === 0) {
+      corsHeaders.set('Content-Type', 'application/json');
       return new Response(
         JSON.stringify({
           error: 'Missing or invalid "contents" in request body',
@@ -105,6 +111,7 @@ export const onRequestPost = (async (context) => {
     );
 
     if (!isValidContents) {
+      corsHeaders.set('Content-Type', 'application/json');
       return new Response(
         JSON.stringify({
           error: 'Invalid "contents" structure: each item must have "parts" array',
@@ -119,6 +126,7 @@ export const onRequestPost = (async (context) => {
     // Validate content length to prevent DoS
     const contentString = JSON.stringify(contents);
     if (contentString.length > MAX_CONTENT_CHARS) {
+      corsHeaders.set('Content-Type', 'application/json');
       return new Response(JSON.stringify({ error: "Content too large" }), {
         status: 413,
         headers: corsHeaders,
@@ -135,6 +143,7 @@ export const onRequestPost = (async (context) => {
 
     // Validate model against whitelist
     if (!ALLOWED_MODELS.includes(targetModel)) {
+      corsHeaders.set('Content-Type', 'application/json');
       return new Response(
         JSON.stringify({ error: "Invalid or unauthorized model" }),
         {
@@ -163,6 +172,7 @@ export const onRequestPost = (async (context) => {
 
     if (!response.ok) {
       const errorText = await response.text();
+      corsHeaders.set('Content-Type', 'application/json');
       return new Response(
         JSON.stringify({
           error: `Gemini API error: ${response.status}`,
@@ -176,12 +186,19 @@ export const onRequestPost = (async (context) => {
     }
 
     // Proxy the stream directly with CORS headers
+    // Use upstream Content-Type from Google API
+    const upstreamContentType = response.headers.get('Content-Type');
+    if (upstreamContentType) {
+      corsHeaders.set('Content-Type', upstreamContentType);
+    }
+    
     return new Response(response.body, {
       headers: corsHeaders,
     });
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
+    corsHeaders.set('Content-Type', 'application/json');
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: corsHeaders,

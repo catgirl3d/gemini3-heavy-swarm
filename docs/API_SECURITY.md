@@ -73,3 +73,48 @@ The backend (both `server.js` and Cloudflare Functions) implements a rate limiti
 - **Excluded Requests:** Static files (HTML/JS/CSS), CORS preflight (`OPTIONS`), and health checks (`/api/status`) are **not** rate-limited to ensure smooth application loading.
 - **Limit:** Defined by `RATE_LIMIT_PER_MINUTE` in `constants/security.js`.
 - **Behavior:** If the limit is exceeded, the server returns a `429 Too Many Requests` error.
+- **Proxy Support:** The Express server uses `trust proxy: true` to correctly identify client IPs when running behind reverse proxies (Cloud Run Load Balancer, nginx, Cloudflare). Without this, all requests would appear to come from the proxy's IP, breaking per-user rate limiting.
+
+---
+
+## 🛡️ Security Headers
+
+The Express server (`server.js`) applies several security headers to protect against common web vulnerabilities.
+
+### 📋 Applied Headers
+
+#### Always Applied (All Responses)
+
+- **`X-Content-Type-Options: nosniff`**  
+  Prevents MIME-type sniffing attacks by forcing browsers to respect the declared `Content-Type`.
+
+- **`X-Frame-Options: DENY`**  
+  Prevents clickjacking attacks by disallowing the page from being embedded in `<iframe>`, `<frame>`, or `<object>` elements.
+
+#### API Endpoints Only (`/api/*`)
+
+- **`Content-Security-Policy: default-src 'none'; frame-ancestors 'none';`**  
+  Enforces a strict CSP that blocks all resource loading for API responses. This is appropriate for JSON endpoints that should never load scripts, styles, or other assets.
+  
+  > [!IMPORTANT]  
+  > **Why only `/api/*`?**  
+  > Applying `default-src 'none'` globally would **break the frontend** by blocking all JavaScript, CSS, and images. The UI routes (`/`, `index.html`, static assets) need to load resources normally, so CSP is intentionally scoped to API endpoints only.
+
+#### Production Only (Auto-Detected)
+
+- **`Strict-Transport-Security: max-age=31536000; includeSubDomains`**  
+  Forces browsers to use HTTPS for all future requests for 1 year. This header is:
+  - **Automatically enabled** when requests come from production domains (Cloudflare Pages, custom domains)
+  - **Automatically disabled** in local development (where `http://localhost` is used)
+  
+  > [!NOTE]  
+  > **Automatic Detection:**  
+  > Production environment is auto-detected based on request origin/hostname. No need to manually set `NODE_ENV`!
+  > 
+  > Production domains are defined in `PRODUCTION_ORIGINS` in `constants/security.js`:
+  > - `https://gemini3-heavy-swarm.pages.dev`
+  > - `https://ai-swarm.lisova-minds.pro`
+  
+  > [!WARNING]  
+  > **Why not in development?**  
+  > On `http://` connections, browsers ignore HSTS. However, if you use an HTTPS tunnel (ngrok, Cloudflare Tunnel) during development, the header would "stick" for a year, potentially causing issues. To avoid confusion and accidental HSTS pinning, it's only applied when requests come from production domains.

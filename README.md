@@ -27,9 +27,11 @@ An advanced AI swarm interface powered by Google's **Gemini 3 Pro Preview** mode
    ```bash
    npm install
    ```
-3. Set up your environment variables. Create a `.env` file (or set system variables):
+3. Set up your environment variables. Create a `.env.local` file:
    ```env
    GEMINI_API_KEY=your_api_key_here
+   API_SECRET=your-secret-here
+   VITE_API_SECRET=your-secret-here
    ```
 
 ### Server Configuration (Proxy Mode)
@@ -73,14 +75,63 @@ For **anti-abuse protection** in proxy mode, the application uses a "Secret Hand
 
 For detailed security instructions and implementation details, see [docs/API_SECURITY.md](./docs/API_SECURITY.md).
 
-### Deployment Configuration
+### Environment Variables Reference
 
-When deploying (Cloudflare Pages or Google Cloud Run), ensure the following variables are set:
+The application uses multiple environment variables for configuration. Here's a complete reference:
 
-1. `GEMINI_API_KEY`: Your Google AI API key.
-2. `API_SECRET`: A complex secret string to protect your proxy.
-3. `ALLOWED_ORIGINS`: A comma-separated list of domains allowed to access your API.
-4. `GEMINI_PROXY_MODE`: Set to `private` for full model access or `demo` for restricted mode.
+| Variable | Required | Where to Set | Purpose | Example Value |
+|----------|----------|--------------|---------|---------------|
+| **Core Configuration** |
+| `GEMINI_API_KEY` | ✅ Yes | Backend (`.env.local`, Cloudflare, Cloud Run) | Google Gemini API key for making requests | `AIzaSy...` |
+| `API_SECRET` | ✅ Yes | Backend (`.env.local`, Cloudflare, Cloud Run) | Secret for anti-abuse protection (must match `VITE_API_SECRET`) | `your-complex-secret-123` |
+| `VITE_API_SECRET` | ✅ Yes | Frontend (`.env.local`, build environment) | Client-side secret (visible in browser) | `your-complex-secret-123` |
+| **Security & CORS** |
+| `ALLOWED_ORIGINS` | ⚠️ Recommended | Backend (Cloudflare, Cloud Run) | Comma-separated list of allowed origins for CORS | `https://example.com,https://app.example.com` |
+| **Proxy Configuration** |
+| `GEMINI_PROXY_MODE` | Optional | Backend (`.env.local`, Cloudflare, Cloud Run) | `demo` = force flash-lite model, `private` = allow all models | `demo` or `private` |
+| **Development Only** |
+| `VITE_FORCE_PROXY_OFF` | Optional | Frontend (`.env.local`) | Disable forced proxy in dev mode | `true` |
+| `PORT` | Optional | Backend (`.env.local`, Cloud Run) | Server port (defaults to 8080) | `8080` |
+
+#### Setup Instructions by Environment
+
+**Local Development (`.env.local`):**
+```env
+# Required
+GEMINI_API_KEY=your_api_key_here
+API_SECRET=your-secret-here
+VITE_API_SECRET=your-secret-here
+
+# Optional
+GEMINI_PROXY_MODE=private
+PORT=8080
+```
+
+**Cloudflare Pages (Dashboard → Settings → Environment variables):**
+- `GEMINI_API_KEY` - Your Google AI API key
+- `API_SECRET` - Complex secret string
+- `ALLOWED_ORIGINS` - Comma-separated list of allowed domains (optional)
+- `GEMINI_PROXY_MODE` - `demo` or `private`
+
+**Cloudflare KV Binding (Dashboard → Settings → Functions → KV namespace bindings):**
+- `RATE_LIMIT_KV` - Create a KV namespace for rate limiting and bind it with this name
+
+**Build Environment (for frontend):**
+```bash
+VITE_API_SECRET=your-secret-here npm run build
+```
+
+> [!NOTE]
+> **Automatic Production Detection:**
+> - Production environment is **auto-detected** based on request origin/hostname
+> - HSTS is automatically enabled when requests come from production domains
+> - No need to manually set `NODE_ENV` in Cloudflare!
+> 
+> **Default Behaviors:**
+> - `ALLOWED_ORIGINS`: Defaults to production + localhost origins (see `constants/security.js`)
+> - `GEMINI_PROXY_MODE`: Defaults to `demo` (restricts to flash-lite model)
+
+For detailed security information, see [docs/API_SECURITY.md](./docs/API_SECURITY.md).
 
 ### Build & Deploy
 

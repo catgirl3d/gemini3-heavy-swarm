@@ -14,6 +14,7 @@ export const onRequestGet = (async (context) => {
   // Get CORS headers
   const corsHeaders = getCorsHeaders(request, env);
   
+  corsHeaders.set('Content-Type', 'application/json');
   return new Response(JSON.stringify({
     hasServerKey: !!env.GEMINI_API_KEY,
     hasKV: !!env.RATE_LIMIT_KV,

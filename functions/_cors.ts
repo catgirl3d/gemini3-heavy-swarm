@@ -3,7 +3,7 @@
  * Validates origin against whitelist and generates appropriate headers
  */
 
-import { DEFAULT_ALLOWED_ORIGINS } from '../constants/security.js';
+import { DEFAULT_ALLOWED_ORIGINS, isProductionEnvironment } from '../constants/security.js';
 
 
 /**
@@ -24,8 +24,15 @@ export function getCorsHeaders(request: any, env: { ALLOWED_ORIGINS?: string }):
   const allowedOrigins = getAllowedOrigins(env);
   
   const headers = new Headers({
-    'Content-Type': 'application/json',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none';",
   });
+
+  // HSTS only in production (auto-detected from request)
+  if (isProductionEnvironment(request)) {
+    headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
 
   // Check if origin is in whitelist
   if (origin && allowedOrigins.includes(origin)) {
@@ -33,6 +40,7 @@ export function getCorsHeaders(request: any, env: { ALLOWED_ORIGINS?: string }):
     headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     headers.set('Access-Control-Allow-Headers', 'Content-Type, X-API-Secret');
     headers.set('Access-Control-Max-Age', '86400'); // 24 hours
+    headers.set('Vary', 'Origin'); // Prevent cache issues when reflecting origin
   }
 
   return headers;
@@ -47,24 +55,39 @@ export function handleCorsPreflight(request: any, env: { ALLOWED_ORIGINS?: strin
     const allowedOrigins = getAllowedOrigins(env);
     
     if (origin && allowedOrigins.includes(origin)) {
+      const preflightHeaders: Record<string, string> = {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, X-API-Secret',
+        'Access-Control-Max-Age': '86400',
+        'Vary': 'Origin',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none';",
+      };
+      
+      // HSTS only in production (auto-detected from request)
+      if (isProductionEnvironment(request)) {
+        preflightHeaders['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains';
+      }
+      
       return new Response(null, {
         status: 204,
-        headers: {
-          'Access-Control-Allow-Origin': origin,
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, X-API-Secret',
-          'Access-Control-Max-Age': '86400',
-        }
+        headers: preflightHeaders
       });
     }
     
     // Origin not allowed - return 403
     return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
       status: 403,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        'Vary': 'Origin',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+      }
     });
   }
   
   return null;
 }
-
