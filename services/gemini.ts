@@ -1,5 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { ProxyGenAI } from './ProxyGenAI';
+import { IS_FORCED_PROXY } from '../constants';
+import { getDirectApiKey } from './proxyUtils';
 import { AppSettings, Work, AgentState, Message } from '../types';
 import type { MutableRefObject } from 'react';
 import { StepRunner } from './StepRunner';
@@ -23,8 +25,11 @@ export class GeminiService {
 
   constructor() {
     // Initialize with default env key if available, but this can be overridden per-run
-    if (process.env.GEMINI_API_KEY) {
-      this.ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const apiKey = getDirectApiKey();
+    if (apiKey) {
+      this.ai = new GoogleGenAI({ apiKey });
+    } else {
+      this.ai = new ProxyGenAI();
     }
     // Initialize the default pipeline
     this.steps = [
@@ -46,20 +51,15 @@ export class GeminiService {
     pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>
   ): Promise<{ text: string; sources?: any[]; work: Work }> {
     
-    // FORCE PROXY FOR LOCAL TESTING (dev mode only):
-    // This allows testing server.js logic (rate limits, security headers) locally
-    // even if a GEMINI_API_KEY is defined in .env.local.
-    // Can be disabled in dev by setting VITE_FORCE_PROXY_OFF=true
-    const forceProxy = import.meta.env.DEV && import.meta.env.VITE_FORCE_PROXY_OFF !== 'true';
-
     // Initialize AI client with user key if provided, otherwise fall back to env key
-    const apiKey = !forceProxy && (settings.apiKey || process.env.GEMINI_API_KEY);
+    // Initialize AI client with user key if provided, otherwise fall back to env key
+    const apiKey = getDirectApiKey(settings.apiKey);
     if (apiKey) {
         console.log("Using direct API key from settings/env");
         this.ai = new GoogleGenAI({ apiKey });
     } else {
-        // Fallback to proxy if no key is provided OR if forceProxy is enabled
-        console.log(`Using ProxyGenAI${forceProxy ? " (FORCED)" : ""}`);
+        // Fallback to proxy if no key is provided OR if IS_FORCED_PROXY is enabled
+        console.log(`Using ProxyGenAI${IS_FORCED_PROXY ? " (FORCED)" : ""}`);
         this.ai = new ProxyGenAI();
     }
 
@@ -130,17 +130,14 @@ export class GeminiService {
     onProgress: (status: string, agents: AgentState[], work: Work) => void,
     signal: AbortSignal
   ): Promise<string> {
-    // FORCE PROXY FOR LOCAL TESTING - dev mode only (Regeneration)
-    // Can be disabled in dev by setting VITE_FORCE_PROXY_OFF=true
-    const forceProxy = import.meta.env.DEV && import.meta.env.VITE_FORCE_PROXY_OFF !== 'true';
-
     // Ensure AI client is updated with the latest key from settings
-    const apiKey = !forceProxy && (settings.apiKey || process.env.GEMINI_API_KEY);
+    // Ensure AI client is updated with the latest key from settings
+    const apiKey = getDirectApiKey(settings.apiKey);
     if (apiKey) {
         console.log("Using direct API key from settings/env (regeneration)");
         this.ai = new GoogleGenAI({ apiKey });
     } else {
-        console.log(`Using ProxyGenAI${forceProxy ? " (FORCED)" : ""} (regeneration)`);
+        console.log(`Using ProxyGenAI${IS_FORCED_PROXY ? " (FORCED)" : ""} (regeneration)`);
         this.ai = new ProxyGenAI();
     }
 

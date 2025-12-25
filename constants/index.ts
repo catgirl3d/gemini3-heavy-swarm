@@ -4,6 +4,12 @@ import { AppSettings, PromptProfile, AgentRole, RoleProfile } from '../types';
 // In development, Vite takes this from .env.local
 export const API_SECRET = (import.meta.env.VITE_API_SECRET as string) || '';
 
+// FORCE PROXY FOR LOCAL TESTING (dev mode only):
+// This allows testing server.js logic (rate limits, security headers) locally
+// even if a GEMINI_API_KEY is defined in .env.local.
+// Can be disabled in dev by setting VITE_FORCE_PROXY_OFF=true
+export const IS_FORCED_PROXY = import.meta.env.DEV && import.meta.env.VITE_FORCE_PROXY_OFF !== 'true';
+
 export const DEFAULT_AGENT_ROLES: AgentRole[] = [
     {
       name: "No Role",
@@ -456,7 +462,8 @@ Prohibitions:
 ];
 
 // Determine default model based on environment (Proxy vs Direct)
-const DEFAULT_MODEL = process.env.GEMINI_API_KEY ? 'gemini-3-pro-preview' : 'gemini-2.5-flash-lite';
+// If proxy is forced, we default to flash-lite (demo mode)
+const DEFAULT_MODEL = (process.env.GEMINI_API_KEY && !IS_FORCED_PROXY) ? 'gemini-3-pro-preview' : 'gemini-2.5-flash-lite';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   numAgents: 4,

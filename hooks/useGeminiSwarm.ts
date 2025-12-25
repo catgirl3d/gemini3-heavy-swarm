@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { AppSettings, Message, AgentState, Work } from '../types';
 import { StepId } from '../types/steps';
-import { DEFAULT_SETTINGS, DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES } from '../constants';
+import { DEFAULT_SETTINGS, DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES, IS_FORCED_PROXY } from '../constants';
+import { isUsingProxy as checkProxyUsage } from '../services/proxyUtils';
+
 import { GeminiService } from '../services/gemini';
 
 export const useGeminiSwarm = () => {
@@ -117,13 +119,6 @@ export const useGeminiSwarm = () => {
             if (inst.type === 'synthesizer') inst.type = 'synthesis_prompt';
             return inst;
           });
-        }
-
-        // Migration: Ensure model is compatible with current environment (demo vs full)
-        const hasClientKey = !!parsedSettings.apiKey || !!process.env.GEMINI_API_KEY;
-        if (!hasClientKey) {
-          // In demo/proxy mode without a direct key, always fall back to the environment default
-          parsedSettings.model = DEFAULT_SETTINGS.model;
         }
 
         if (parsedSettings.numAgents > 5) {

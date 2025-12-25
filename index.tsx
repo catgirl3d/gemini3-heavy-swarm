@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, FormEvent, FC } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import geminiIcon from './assets/Google-gemini-icon.png';
+import { IS_FORCED_PROXY } from './constants';
+import { isUsingProxy as checkProxyUsage } from './services/proxyUtils';
+
 import { useGeminiSwarm } from './hooks/useGeminiSwarm';
 import { AgentAvatar } from './components/AgentAvatar';
 import { EmptyState } from './components/EmptyState';
@@ -48,7 +51,7 @@ const App: FC = () => {
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const [serverStatus, setServerStatus] = useState<{ hasServerKey: boolean; proxyMode: string }>({ hasServerKey: false, proxyMode: 'demo' });
+  const [serverStatus, setServerStatus] = useState<{ hasServerKey: boolean; proxyMode: string; isLoaded: boolean }>({ hasServerKey: false, proxyMode: 'demo', isLoaded: false });
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
 
   const messageListRef = useRef<HTMLDivElement>(null);
@@ -91,13 +94,15 @@ const App: FC = () => {
         if (data && typeof data.hasServerKey === 'boolean') {
           setServerStatus({
             hasServerKey: data.hasServerKey,
-            proxyMode: data.proxyMode || 'demo'
+            proxyMode: data.proxyMode || 'demo',
+            isLoaded: true
           });
         }
       })
       .catch(err => {
         // Ignore network errors (e.g. if running purely client-side without our server)
         console.debug('Server status check failed (running client-only?):', err);
+        setServerStatus(prev => ({ ...prev, isLoaded: true }));
       });
   }, []);
 
@@ -161,6 +166,19 @@ const App: FC = () => {
     handleRemoveImage();
   };
 
+  // Enforce model restrictions based on server status
+  useEffect(() => {
+    if (!serverStatus.isLoaded) return;
+
+    const isUsingProxyNow = checkProxyUsage(settings.apiKey);
+    const isLocked = isUsingProxyNow && (serverStatus.proxyMode !== 'private');
+
+    if (isLocked && settings.model !== 'gemini-2.5-flash-lite') {
+        console.log("Enforcing demo model restriction (gemini-2.5-flash-lite)");
+        setSettings(prev => ({ ...prev, model: 'gemini-2.5-flash-lite' }));
+    }
+  }, [serverStatus.isLoaded, serverStatus.proxyMode, settings.apiKey]);
+
   const scrollToBottom = () => {
     if (messageListRef.current) {
       messageListRef.current.scrollTo({ top: messageListRef.current.scrollHeight, behavior: 'smooth' });
@@ -168,10 +186,13 @@ const App: FC = () => {
   };
 
   // Determine key status
-  const hasClientKey = !!settings.apiKey || !!process.env.GEMINI_API_KEY;
-  const isMissingKey = !hasClientKey && !serverStatus.hasServerKey;
-  const isProxyDemo = !hasClientKey && serverStatus.hasServerKey && serverStatus.proxyMode !== 'private';
-  const isProxyPrivate = !hasClientKey && serverStatus.hasServerKey && serverStatus.proxyMode === 'private';
+  // Determine key status
+  // If proxy is forced, we ignore client keys for banner logic
+  const isUsingProxy = checkProxyUsage(settings.apiKey);
+  
+  const isMissingKey = isUsingProxy && !serverStatus.hasServerKey;
+  const isProxyDemo = isUsingProxy && serverStatus.hasServerKey && serverStatus.proxyMode !== 'private';
+  const isProxyPrivate = isUsingProxy && serverStatus.hasServerKey && serverStatus.proxyMode === 'private';
 
   return (
     <div className="chat-container">

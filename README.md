@@ -62,6 +62,10 @@ In development mode (`npm run dev`), the application **forces all requests throu
 - **Production behavior**:
   In production builds (`npm run build`), the forced proxy is automatically disabled. Users can either provide their own API key (direct route) or be routed through the proxy if no key is provided.
 
+**Model Enforcement:**
+- **Demo Mode**: When using the proxy in `demo` mode (default), the application automatically resets the model selection to `gemini-2.5-flash-lite` on page reload to prevent unauthorized access to premium models.
+- **Private Mode**: When the server is configured with `GEMINI_PROXY_MODE=private`, user model preferences are preserved across page reloads, allowing full access to all available models.
+
 ### Security (X-API-Secret)
 
 For **anti-abuse protection** in proxy mode, the application uses a "Secret Handshake" mechanism. Both the client and the server must have the same `API_SECRET` configured.

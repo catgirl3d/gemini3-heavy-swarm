@@ -226,4 +226,9 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
 	console.log(`Server running on port ${PORT}`);
 	console.log(`Environment check: GEMINI_API_KEY is ${process.env.GEMINI_API_KEY ? 'SET' : 'NOT SET'}`);
+	console.log(`Environment check: GEMINI_PROXY_MODE is ${process.env.GEMINI_PROXY_MODE || 'demo (default)'}`);
+	console.log(`Environment check: API_SECRET is ${process.env.API_SECRET ? 'SET' : 'NOT SET'}`);
+	if (process.env.ALLOWED_ORIGINS) {
+		console.log(`Environment check: ALLOWED_ORIGINS is SET`);
+	}
 });

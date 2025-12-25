@@ -1,6 +1,8 @@
 import React, { FC, useState, useEffect, useMemo } from 'react';
 import { AppSettings } from '../../types';
-import { DEFAULT_SETTINGS } from '../../constants';
+import { DEFAULT_SETTINGS, IS_FORCED_PROXY } from '../../constants';
+import { isUsingProxy as checkProxyUsage } from '../../services/proxyUtils';
+
 import { RoleAndPromptConfigModal } from '../RoleAndPromptConfigModal';
 import { BaseModal } from '../BaseModal';
 import { ConfirmationModal } from '../ConfirmationModal';
@@ -55,7 +57,8 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     // Derived values
     const activeProfile = localSettings.profiles?.find(p => p.id === localSettings.activeProfileId) || localSettings.profiles?.[0] || DEFAULT_SETTINGS.profiles[0];
     const activeRoleProfile = localSettings.roleProfiles?.find(p => p.id === localSettings.activeRoleProfileId) || localSettings.roleProfiles?.[0] || DEFAULT_SETTINGS.roleProfiles[0];
-    const isModelUnlocked = !!localSettings.apiKey || !!process.env.GEMINI_API_KEY || (serverStatus?.hasServerKey && serverStatus?.proxyMode === 'private');
+    const isUsingProxy = checkProxyUsage(localSettings.apiKey);
+    const isModelUnlocked = !isUsingProxy || (serverStatus?.hasServerKey && serverStatus?.proxyMode === 'private');
 
     // Hooks
     const profileMgr = useProfileManagement(localSettings, setLocalSettings, activeProfile, activeRoleProfile, setIsEditingProfileName, setIsEditingRoleName);
@@ -73,8 +76,10 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
 
     const handleSave = () => {
         const finalSettings = { ...localSettings };
-        const hasKey = !!finalSettings.apiKey || !!process.env.GEMINI_API_KEY || (serverStatus?.hasServerKey && serverStatus?.proxyMode === 'private');
-        if (!hasKey) finalSettings.model = 'gemini-2.5-flash-lite';
+        const isUsingProxyFinal = checkProxyUsage(finalSettings.apiKey);
+        const isUnlockedFinal = !isUsingProxyFinal || (serverStatus?.hasServerKey && serverStatus?.proxyMode === 'private');
+        
+        if (!isUnlockedFinal) finalSettings.model = 'gemini-2.5-flash-lite';
         onSave(finalSettings);
         onClose();
         setShowConfirmClose(false);
