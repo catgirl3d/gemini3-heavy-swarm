@@ -3,6 +3,7 @@ import type { Env, GeminiRequest } from "../_types";
 import { handleCorsPreflight, getCorsHeaders } from "../_cors";
 import { validateSecretHeader, checkRateLimit } from "../_security";
 import { ALLOWED_MODELS, MAX_REQUEST_SIZE, MAX_CONTENT_CHARS } from "../../constants/security.js";
+import { validateContents, validateContentSize, getTargetModel, buildGeminiUrl } from "../../constants/geminiValidation.js";
 
 export const onRequestPost = (async (context) => {
   const { request, env } = context;
@@ -88,34 +89,11 @@ export const onRequestPost = (async (context) => {
       body;
 
     // Validation: GeminiRequest requires contents
-    if (!contents || !Array.isArray(contents) || contents.length === 0) {
+    const validation = validateContents(contents);
+    if (!validation.valid) {
       corsHeaders.set('Content-Type', 'application/json');
       return new Response(
-        JSON.stringify({
-          error: 'Missing or invalid "contents" in request body',
-        }),
-        {
-          status: 400,
-          headers: corsHeaders,
-        }
-      );
-    }
-
-    // Deep validation of contents to prevent malformed data
-    const isValidContents = contents.every(
-      (item) =>
-        item &&
-        typeof item === "object" &&
-        Array.isArray(item.parts) &&
-        item.parts.length > 0
-    );
-
-    if (!isValidContents) {
-      corsHeaders.set('Content-Type', 'application/json');
-      return new Response(
-        JSON.stringify({
-          error: 'Invalid "contents" structure: each item must have "parts" array',
-        }),
+        JSON.stringify({ error: validation.error }),
         {
           status: 400,
           headers: corsHeaders,
@@ -124,11 +102,11 @@ export const onRequestPost = (async (context) => {
     }
 
     // Validate content length to prevent DoS
-    const contentString = JSON.stringify(contents);
-    if (contentString.length > MAX_CONTENT_CHARS) {
+    const sizeValidation = validateContentSize(contents, MAX_CONTENT_CHARS);
+    if (!sizeValidation.valid) {
       corsHeaders.set('Content-Type', 'application/json');
-      return new Response(JSON.stringify({ error: "Content too large" }), {
-        status: 413,
+      return new Response(JSON.stringify({ error: sizeValidation.error }), {
+        status: sizeValidation.statusCode || 413,
         headers: corsHeaders,
       });
     }
@@ -137,9 +115,8 @@ export const onRequestPost = (async (context) => {
     // If GEMINI_PROXY_MODE is 'demo' OR not set, enforce flash-lite to prevent abuse
     // Only if GEMINI_PROXY_MODE is 'private', allow the requested model
     const isPrivateMode = env.GEMINI_PROXY_MODE === "private";
-    const targetModel = isPrivateMode
-      ? model || "gemini-2.5-flash-lite"
-      : "gemini-2.5-flash-lite";
+    const targetModel = getTargetModel(model, isPrivateMode);
+    console.log(`[Proxy] Request received. Requested: ${model || 'default'}, Target: ${targetModel}`);
 
     // Validate model against whitelist
     if (!ALLOWED_MODELS.includes(targetModel)) {
@@ -154,7 +131,7 @@ export const onRequestPost = (async (context) => {
     }
 
     // Construct the Google API URL (no key in URL)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent`;
+    const url = buildGeminiUrl(targetModel);
 
     const response = await fetch(url, {
       method: "POST",

@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { RATE_LIMIT_PER_MINUTE, DEFAULT_ALLOWED_ORIGINS, ALLOWED_MODELS, MAX_REQUEST_SIZE, MAX_CONTENT_CHARS, isProductionEnvironment } from './constants/security.js';
+import { validateContents, validateContentSize, getTargetModel, buildGeminiUrl } from './constants/geminiValidation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -142,7 +143,6 @@ app.get('/api/status', (req, res) => {
 
 // API Proxy Endpoint
 app.post('/api/gemini', async (req, res) => {
-	console.log(`[Proxy] Request received for model: ${req.body.model || 'default'}`);
 	try {
 		const apiKey = process.env.GEMINI_API_KEY;
 		
@@ -154,34 +154,23 @@ app.post('/api/gemini', async (req, res) => {
 		const { model, contents, generationConfig, systemInstruction, tools } = req.body;
 
 		// Validation: GeminiRequest requires contents
-		if (!contents || !Array.isArray(contents) || contents.length === 0) {
-			return res.status(400).json({ error: 'Missing or invalid "contents" in request body' });
-		}
-
-		// Deep validation of contents to prevent malformed data
-		const isValidContents = contents.every(
-			(item) =>
-				item &&
-				typeof item === "object" &&
-				Array.isArray(item.parts) &&
-				item.parts.length > 0
-		);
-
-		if (!isValidContents) {
-			return res.status(400).json({ error: 'Invalid "contents" structure: each item must have "parts" array' });
+		const validation = validateContents(contents);
+		if (!validation.valid) {
+			return res.status(400).json({ error: validation.error });
 		}
 
 		// Validate content length to prevent DoS
-		const contentString = JSON.stringify(contents);
-		if (contentString.length > MAX_CONTENT_CHARS) {
-			return res.status(413).json({ error: 'Content too large' });
+		const sizeValidation = validateContentSize(contents, MAX_CONTENT_CHARS);
+		if (!sizeValidation.valid) {
+			return res.status(sizeValidation.statusCode || 413).json({ error: sizeValidation.error });
 		}
 
 		// Determine model based on proxy mode
 		// If GEMINI_PROXY_MODE is 'demo' OR not set, enforce flash-lite to prevent abuse
 		// Only if GEMINI_PROXY_MODE is 'private', allow the requested model
 		const isPrivateMode = process.env.GEMINI_PROXY_MODE === 'private';
-		const targetModel = isPrivateMode ? (model || 'gemini-2.5-flash-lite') : 'gemini-2.5-flash-lite';
+		const targetModel = getTargetModel(model, isPrivateMode);
+		console.log(`[Proxy] Request received. Requested: ${model || 'default'}, Target: ${targetModel}`);
 
 		// Validate model against whitelist
 		if (!ALLOWED_MODELS.includes(targetModel)) {
@@ -190,7 +179,7 @@ app.post('/api/gemini', async (req, res) => {
 		}
 
 		// Construct the Google API URL (no key in URL)
-		const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent`;
+		const url = buildGeminiUrl(targetModel);
 
 		const response = await fetch(url, {
 			method: 'POST',
