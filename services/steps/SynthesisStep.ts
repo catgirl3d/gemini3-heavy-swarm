@@ -18,8 +18,10 @@ export class SynthesisStep extends BaseStep {
     const { ai, settings, history, userInput, image, imageFile, work, onProgress, onMessageUpdate, signal } = context;
 
     // Ensure we have refined responses
-    const refinedResponses = (work.results?.['refinement_step'] || work.refinedResponses) as string[];
-    if (!refinedResponses || refinedResponses.length === 0) {
+    const rawRefined = work.results?.['refinement_step'] || work.refinedResponses;
+    const refinedResponses = Array.isArray(rawRefined) ? (rawRefined as string[]) : [];
+    
+    if (refinedResponses.length === 0) {
       throw new Error('Cannot run synthesis step without refined responses');
     }
 

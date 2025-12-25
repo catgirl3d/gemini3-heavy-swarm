@@ -16,7 +16,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
   const effectiveAgentStates = (isLive && liveAgentStates ? liveAgentStates : work.agentStates);
   const synthesizerState = effectiveAgentStates?.find(a => a.id === 'synthesizer_agent');
   
-  const synthesisResult = work.results?.['synthesis_step'];
+  const synthesisResult = work.results?.['synthesis_step'] as { text?: string; error?: boolean } | string | undefined;
   const synthesisText: string | null =
     typeof synthesisResult === 'string'
       ? synthesisResult
@@ -67,7 +67,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
 
     // Synthesis
     const isWorking = synthesizerState?.status === 'working';
-    const hasContentError = synthesisResult?.error === true;
+    const hasContentError = typeof synthesisResult === 'object' && synthesisResult !== null && 'error' in synthesisResult && synthesisResult.error === true;
     const hasStateError = synthesizerState?.status === 'error';
     const hasError = hasContentError || hasStateError;
     const isDone = !!synthesisText && !hasError;

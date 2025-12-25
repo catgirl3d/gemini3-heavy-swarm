@@ -19,8 +19,10 @@ export class RefinementStep extends BaseStep {
     const { ai, settings, history, userInput, image, imageFile, work, onProgress, signal } = context;
 
     // Ensure we have initial responses
-    const initialResponses = (work.results?.['initial_step'] || work.initialResponses) as string[];
-    if (!initialResponses || initialResponses.length === 0) {
+    const rawInitial = work.results?.['initial_step'] || work.initialResponses;
+    const initialResponses = Array.isArray(rawInitial) ? (rawInitial as string[]) : [];
+    
+    if (initialResponses.length === 0) {
       throw new Error('Cannot run refinement step without initial responses');
     }
 
@@ -211,8 +213,10 @@ ${peerDrafts}
     if (!ai) throw new Error("API Key not found");
 
     // Ensure we have initial responses
-    const initialResponses = (work.results?.['initial_step'] || work.initialResponses) as string[];
-    if (!initialResponses || initialResponses.length === 0) {
+    const rawInitial = work.results?.['initial_step'] || work.initialResponses;
+    const initialResponses = Array.isArray(rawInitial) ? (rawInitial as string[]) : [];
+    
+    if (initialResponses.length === 0) {
       throw new Error('Cannot regenerate refinement without initial responses');
     }
 
