@@ -78,8 +78,17 @@ const App: FC = () => {
     return () => element.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const [shouldShowLoadingBanner, setShouldShowLoadingBanner] = useState(false);
+
   // Check if server has API key and proxy mode
   useEffect(() => {
+    // Show loading banner only if check takes longer than 300ms
+    const loadingTimer = setTimeout(() => {
+      if (!serverStatus.isLoaded) {
+        setShouldShowLoadingBanner(true);
+      }
+    }, 300);
+
     fetch('/api/status')
       .then(res => {
         // Check if we got a valid JSON response
@@ -91,19 +100,28 @@ const App: FC = () => {
         return res.json();
       })
       .then(data => {
+        clearTimeout(loadingTimer);
+        setShouldShowLoadingBanner(false);
         if (data && typeof data.hasServerKey === 'boolean') {
           setServerStatus({
             hasServerKey: data.hasServerKey,
             proxyMode: data.proxyMode || 'demo',
             isLoaded: true
           });
+        } else {
+          // No valid server response - mark as loaded with no key
+          setServerStatus(prev => ({ ...prev, isLoaded: true }));
         }
       })
       .catch(err => {
         // Ignore network errors (e.g. if running purely client-side without our server)
+        clearTimeout(loadingTimer);
+        setShouldShowLoadingBanner(false);
         console.debug('Server status check failed (running client-only?):', err);
         setServerStatus(prev => ({ ...prev, isLoaded: true }));
       });
+
+    return () => clearTimeout(loadingTimer);
   }, []);
 
   useEffect(() => {
@@ -196,7 +214,17 @@ const App: FC = () => {
 
   return (
     <div className="chat-container">
-      {isMissingKey && !isBannerDismissed && (
+      {shouldShowLoadingBanner && isUsingProxy && !isBannerDismissed && (
+        <div className="modal-banner info global">
+            <div className="modal-banner-content">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 01.67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 11-.671-1.34l.041-.022zM12 9a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
+                </svg>
+                Checking server status...
+            </div>
+        </div>
+      )}
+      {serverStatus.isLoaded && isMissingKey && !isBannerDismissed && (
         <div className="modal-banner warning global">
             <div className="modal-banner-content">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -211,7 +239,7 @@ const App: FC = () => {
             </button>
         </div>
       )}
-      {isProxyDemo && !isBannerDismissed && (
+      {serverStatus.isLoaded && isProxyDemo && !isBannerDismissed && (
         <div className="modal-banner info global">
             <div className="modal-banner-content">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -226,7 +254,7 @@ const App: FC = () => {
             </button>
         </div>
       )}
-      {isProxyPrivate && !isBannerDismissed && (
+      {serverStatus.isLoaded && isProxyPrivate && !isBannerDismissed && (
         <div className="modal-banner success global">
             <div className="modal-banner-content">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
