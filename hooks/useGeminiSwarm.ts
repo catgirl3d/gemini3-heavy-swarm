@@ -15,6 +15,61 @@ interface LegacyAppSettings extends Partial<AppSettings> {
   agentRoles?: AgentRole[];
 }
 
+/**
+ * Returns a Work object with guaranteed initialized results.
+ * Pure function - does not mutate the input.
+ * 
+ * @param work - The source Work object
+ * @returns Work object with initialized results (may be the same object if results already exist)
+ */
+function withEnsuredResults(work: Work): Work & { results: NonNullable<Work['results']> } {
+  if (work.results) return work as Work & { results: NonNullable<Work['results']> };
+  return { ...work, results: {} };
+}
+
+/**
+ * Returns a new Work object with updated step result.
+ * Pure function - does not mutate the input.
+ * 
+ * @param work - The source Work object (not modified)
+ * @param stepId - The step identifier
+ * @param agentIndex - Agent index (ignored for synthesis_step)
+ * @param text - The text content to store
+ * @returns New Work object with updated results
+ */
+function updateStepResult(
+  work: Work,
+  stepId: StepId,
+  agentIndex: number,
+  text: string
+): Work {
+  const currentResults = work.results ?? {};
+  
+  let updatedStepData: unknown;
+  
+  if (stepId === 'synthesis_step') {
+    const existing = currentResults[stepId];
+    // Explicit array check prevents incorrect spreading if existing is an array (legacy bug)
+    const base = existing && typeof existing === 'object' && !Array.isArray(existing) 
+      ? (existing as Record<string, unknown>) 
+      : {};
+    updatedStepData = { ...base, text };
+  } else {
+    const currentArray = (currentResults[stepId] as string[] | undefined) ?? [];
+    const newArray = [...currentArray];
+    newArray[agentIndex] = text;
+    updatedStepData = newArray;
+  }
+
+  return {
+    ...work,
+    results: {
+      ...currentResults,
+      [stepId]: updatedStepData
+    }
+  };
+}
+
 export const useGeminiSwarm = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -162,7 +217,7 @@ export const useGeminiSwarm = () => {
       startTimeRef.current = Date.now() - timer; // Resume timer
       interval = setInterval(() => {
         setTimer(Date.now() - startTimeRef.current);
-      }, 100);
+      }, 1000);
     } else if (!isLoading && !isPaused) {
       setTimer(0);
     }
@@ -189,7 +244,7 @@ export const useGeminiSwarm = () => {
     // messagesRef is updated synchronously so we can pass correct value to runSwarm
     let currentMessages = messagesRef.current;
     if (!isRetry) {
-      const userMessage: Message = { role: 'user', parts: [{ text: userInput }], image: image || undefined };
+      const userMessage: Message = { id: crypto.randomUUID(), role: 'user', parts: [{ text: userInput }], image: image || undefined };
       setMessages(prev => {
         currentMessages = [...prev, userMessage];
         messagesRef.current = currentMessages;
@@ -201,8 +256,7 @@ export const useGeminiSwarm = () => {
     setIsPaused(false);
     setAgentStates([]);
     setCurrentWork({
-      initialResponses: Array(settings.numAgents).fill(null),
-      refinedResponses: Array(settings.numAgents).fill(null)
+      results: {}
     });
 
     // This will always hold the latest snapshot of agent states
@@ -242,12 +296,17 @@ export const useGeminiSwarm = () => {
           }
           setMessages(prev => {
             const newMessages = [...prev];
-            // If the last message is from the model, update it. Otherwise add a new one.
-            const lastMsg = newMessages[newMessages.length - 1];
+            const lastMsgIndex = newMessages.length - 1;
+            const lastMsg = newMessages[lastMsgIndex];
+            
             if (lastMsg.role === 'model') {
-              lastMsg.parts[0].text = text;
+              // ✅ Immutable update: create new message object with new parts array
+              newMessages[lastMsgIndex] = {
+                ...lastMsg,
+                parts: [{ ...lastMsg.parts[0], text }, ...lastMsg.parts.slice(1)]
+              };
             } else {
-              newMessages.push({ role: 'model', parts: [{ text }] });
+              newMessages.push({ id: crypto.randomUUID(), role: 'model', parts: [{ text }] });
             }
             return newMessages;
           });
@@ -258,10 +317,15 @@ export const useGeminiSwarm = () => {
 
       setMessages(prev => {
         const newMessages = [...prev];
-        const lastMessage = newMessages[newMessages.length - 1];
-        lastMessage.sources = result.sources;
-        // Attach the final, real agent states snapshot to the message work
-        lastMessage.work = { ...result.work, agentStates: latestAgents };
+        const lastMsgIndex = newMessages.length - 1;
+        const lastMessage = newMessages[lastMsgIndex];
+        
+        // ✅ Immutable update: create new message object
+        newMessages[lastMsgIndex] = {
+          ...lastMessage,
+          sources: result.sources,
+          work: { ...result.work, agentStates: latestAgents }
+        };
         return newMessages;
       });
 
@@ -293,9 +357,11 @@ export const useGeminiSwarm = () => {
       }
 
       // Check if we have partial results to display
+      const initialResults = latestWork?.results?.['initial_step'];
+      const refinementResults = latestWork?.results?.['refinement_step'];
       const hasPartialResults = latestWork && (
-        latestWork.initialResponses?.some(r => r && !r.includes('[System:')) ||
-        latestWork.refinedResponses?.some(r => r && !r.includes('[System:'))
+        (Array.isArray(initialResults) && initialResults.some(r => r && !r.includes('[System:'))) ||
+        (Array.isArray(refinementResults) && refinementResults.some(r => r && !r.includes('[System:')))
       );
 
       if (hasPartialResults) {
@@ -399,7 +465,11 @@ export const useGeminiSwarm = () => {
         if (msg && msg.work && msg.work.agentStates) {
           const updated = updateStates(msg.work.agentStates);
           if (updated) {
-            msg.work = { ...msg.work, agentStates: updated };
+            // ✅ Immutable update: create new message with updated work
+            newMessages[messageIndex] = {
+              ...msg,
+              work: { ...msg.work, agentStates: updated }
+            };
           }
         }
         return newMessages;
@@ -450,6 +520,7 @@ export const useGeminiSwarm = () => {
           setMessages(prev => {
             const newMessages = [...prev];
             let msg = newMessages[messageIndex];
+            let targetIndex = messageIndex;
 
             // For synthesis: update the final answer in the message card itself
             // If the target message is not a model message (e.g., error happened before any text was streamed),
@@ -480,18 +551,21 @@ export const useGeminiSwarm = () => {
                     console.log('[DEBUG:Synthesis] Found existing model message at index', messageIndex + 1);
                   }
                   msg = nextMsg;
+                  targetIndex = messageIndex + 1;
                 } else {
                   // Create a new model message with the work from currentWork or workContext
                   if (settings.debugMode) {
                     console.log('[DEBUG:Synthesis] Creating NEW model message');
                   }
                   const newModelMessage: Message = {
+                    id: crypto.randomUUID(),
                     role: 'model',
                     parts: [{ text }],
                     work: workContext
                   };
                   newMessages.push(newModelMessage);
                   msg = newModelMessage;
+                  targetIndex = newMessages.length - 1;
                   if (settings.debugMode) {
                     console.log('[DEBUG:Synthesis] New message created, array length:', newMessages.length);
                   }
@@ -503,11 +577,17 @@ export const useGeminiSwarm = () => {
                 console.log('[DEBUG:Synthesis] Updating model message text:', { hasMsg: !!msg, msgRole: msg?.role, textLength: text.length });
               }
               if (msg && msg.role === 'model') {
-                if (msg.parts && msg.parts.length > 0) {
-                  msg.parts[0] = { ...msg.parts[0], text };
-                } else {
-                  msg.parts = [{ text }];
-                }
+                // ✅ Immutable update: create new message with updated parts
+                const updatedParts = msg.parts && msg.parts.length > 0
+                  ? [{ ...msg.parts[0], text }, ...msg.parts.slice(1)]
+                  : [{ text }];
+                
+                newMessages[targetIndex] = {
+                  ...msg,
+                  parts: updatedParts
+                };
+                msg = newMessages[targetIndex]; // Update reference for work update below
+                
                 if (settings.debugMode) {
                   console.log('[DEBUG:Synthesis] Text updated successfully');
                 }
@@ -523,51 +603,29 @@ export const useGeminiSwarm = () => {
             // Update work data on the message (for non-synthesis stepIds this is the main logic,
             // for synthesis we already handled the text above but still need to update work.results)
             if (msg && msg.work) {
-                const newWork = { ...msg.work };
+                let updatedWork = { ...msg.work };
 
                 // Update agent names in work object (use correct array per step)
-                if (stepId === 'initial_step' && newWork.agentNames) {
+                if (stepId === 'initial_step' && updatedWork.agentNames) {
                   const newName = getUpdatedAgentName(agentIndex, stepId);
-                  const newAgentNames = [...newWork.agentNames];
+                  const newAgentNames = [...updatedWork.agentNames];
                   newAgentNames[agentIndex] = newName;
-                  newWork.agentNames = newAgentNames;
-                } else if (stepId === 'refinement_step' && newWork.criticNames) {
+                  updatedWork = { ...updatedWork, agentNames: newAgentNames };
+                } else if (stepId === 'refinement_step' && updatedWork.criticNames) {
                   const newName = getUpdatedAgentName(agentIndex, stepId);
-                  const newCriticNames = [...newWork.criticNames];
+                  const newCriticNames = [...updatedWork.criticNames];
                   newCriticNames[agentIndex] = newName;
-                  newWork.criticNames = newCriticNames;
+                  updatedWork = { ...updatedWork, criticNames: newCriticNames };
                 }
 
-                // Update generic results
-                if (!newWork.results) newWork.results = {};
+                // Update generic results using helper
+                updatedWork = updateStepResult(updatedWork, stepId, agentIndex, text);
 
-                if (stepId === 'synthesis_step') {
-                  // Single synthesized result (object with text/sources), not per-agent array
-                  const existing = newWork.results[stepId] as Record<string, unknown> | undefined;
-                  const base =
-                    existing && typeof existing === 'object'
-                      ? existing
-                      : {};
-                  newWork.results[stepId] = { ...base, text };
-                } else {
-                  if (!newWork.results[stepId]) newWork.results[stepId] = [];
-
-                  // Ensure array exists and update it
-                  const currentResults = [...(newWork.results[stepId] as string[])];
-                  currentResults[agentIndex] = text;
-                  newWork.results[stepId] = currentResults;
-
-                  // Update legacy fields for compatibility
-                  if (stepId === 'initial_step') {
-                    newWork.initialResponses = [...newWork.initialResponses];
-                    newWork.initialResponses[agentIndex] = text;
-                  } else if (stepId === 'refinement_step') {
-                    newWork.refinedResponses = [...newWork.refinedResponses];
-                    newWork.refinedResponses[agentIndex] = text;
-                  }
-                }
-
-                msg.work = newWork;
+                // ✅ Immutable update: create new message with updated work
+                newMessages[targetIndex] = {
+                  ...newMessages[targetIndex],
+                  work: updatedWork
+                };
             }
 
             return newMessages;
@@ -576,48 +634,23 @@ export const useGeminiSwarm = () => {
           // Update Current Work (for live view)
           setCurrentWork(prev => {
             if (!prev) return prev;
-            const newWork = { ...prev };
+            let updatedWork = { ...prev };
 
             // Update agent names in work object (use correct array per step)
-            if (stepId === 'initial_step' && newWork.agentNames) {
+            if (stepId === 'initial_step' && updatedWork.agentNames) {
               const newName = getUpdatedAgentName(agentIndex, stepId);
-              const newAgentNames = [...newWork.agentNames];
+              const newAgentNames = [...updatedWork.agentNames];
               newAgentNames[agentIndex] = newName;
-              newWork.agentNames = newAgentNames;
-            } else if (stepId === 'refinement_step' && newWork.criticNames) {
+              updatedWork = { ...updatedWork, agentNames: newAgentNames };
+            } else if (stepId === 'refinement_step' && updatedWork.criticNames) {
               const newName = getUpdatedAgentName(agentIndex, stepId);
-              const newCriticNames = [...newWork.criticNames];
+              const newCriticNames = [...updatedWork.criticNames];
               newCriticNames[agentIndex] = newName;
-              newWork.criticNames = newCriticNames;
+              updatedWork = { ...updatedWork, criticNames: newCriticNames };
             }
 
-            // Update generic results
-            if (!newWork.results) newWork.results = {};
-
-            if (stepId === 'synthesis_step') {
-              const existing = newWork.results[stepId] as Record<string, unknown> | undefined;
-              const base =
-                existing && typeof existing === 'object'
-                  ? existing
-                  : {};
-              newWork.results[stepId] = { ...base, text };
-            } else {
-              if (!newWork.results[stepId]) newWork.results[stepId] = [];
-
-              const currentResults = [...(newWork.results[stepId] as string[])];
-              currentResults[agentIndex] = text;
-              newWork.results[stepId] = currentResults;
-
-              // Update legacy fields for compatibility
-              if (stepId === 'initial_step') {
-                newWork.initialResponses = [...newWork.initialResponses];
-                newWork.initialResponses[agentIndex] = text;
-              } else if (stepId === 'refinement_step') {
-                newWork.refinedResponses = [...newWork.refinedResponses];
-                newWork.refinedResponses[agentIndex] = text;
-              }
-            }
-            return newWork;
+            // Update generic results using helper
+            return updateStepResult(updatedWork, stepId, agentIndex, text);
           });
         },
         // onProgress callback - update UI state during regeneration (especially for synthesis)
@@ -634,20 +667,35 @@ export const useGeminiSwarm = () => {
         setMessages(prev => {
           const newMessages = [...prev];
           let msg = newMessages[messageIndex];
+          let targetIndex = messageIndex;
           
           // If we found/created a model message during streaming, it might be at messageIndex or messageIndex + 1
           if (!msg || msg.role !== 'model') {
             const nextMsg = newMessages[messageIndex + 1];
             if (nextMsg && nextMsg.role === 'model') {
               msg = nextMsg;
+              targetIndex = messageIndex + 1;
             }
           }
           
           if (msg && msg.role === 'model') {
-            msg.sources = result.sources;
-            if (msg.work && msg.work.results) {
-              msg.work.results[stepId] = result;
-            }
+            // ✅ Immutable update: create new message with updated sources and work
+            const updatedWork = msg.work ? (() => {
+              const ensuredWork = withEnsuredResults(msg.work!);
+              return {
+                ...ensuredWork,
+                results: {
+                  ...ensuredWork.results,
+                  [stepId]: result
+                }
+              };
+            })() : undefined;
+            
+            newMessages[targetIndex] = {
+              ...msg,
+              sources: result.sources,
+              work: updatedWork
+            };
           }
           return newMessages;
         });
@@ -700,7 +748,9 @@ export const useGeminiSwarm = () => {
       // and agentStates closure would still have the old (error) value
       setMessages(prev => {
         const newMessages = [...prev];
-        const lastMsg = newMessages[newMessages.length - 1];
+        const lastMsgIndex = newMessages.length - 1;
+        const lastMsg = newMessages[lastMsgIndex];
+        
         if (lastMsg && lastMsg.role === 'model') {
           // Get the work from either the message or currentWork
           const workToUse = lastMsg.work || currentWork;
@@ -712,7 +762,12 @@ export const useGeminiSwarm = () => {
               }
               return agent;
             });
-            lastMsg.work = { ...workToUse, agentStates: updatedAgentStates };
+            
+            // ✅ Immutable update: create new message with updated work
+            newMessages[lastMsgIndex] = {
+              ...lastMsg,
+              work: { ...workToUse, agentStates: updatedAgentStates }
+            };
           }
         }
         return newMessages;

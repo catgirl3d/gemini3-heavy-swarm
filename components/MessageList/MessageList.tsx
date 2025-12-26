@@ -1,4 +1,4 @@
-import React, { FC, RefObject } from 'react';
+import React, { FC, RefObject, memo } from 'react';
 import { AgentAvatar } from '../AgentAvatar';
 import { EmptyState } from '../EmptyState';
 import { MarkdownRenderer } from '../MarkdownRenderer';
@@ -25,7 +25,7 @@ interface MessageListProps {
   onRegenerate: (msgIndex: number, phase: StepId, agentIndex: number) => void;
 }
 
-export const MessageList: FC<MessageListProps> = ({
+const MessageListComponent: FC<MessageListProps> = ({
   messages,
   isLoading,
   isPaused,
@@ -47,7 +47,7 @@ export const MessageList: FC<MessageListProps> = ({
         <EmptyState onPromptClick={onPromptClick} modelDisplayName={modelDisplayName} />
       ) : (
         messages.map((msg, index) => (
-          <div key={index} className={`message-wrapper ${msg.role}`}>
+          <div key={msg.id} className={`message-wrapper ${msg.role}`}>
             <AgentAvatar type={msg.role} />
             <div className={`message ${msg.role}`}>
               {msg.role === 'model' && <div className="agent-label-header"><span className="agent-label">Synthesizer Agent</span></div>}
@@ -96,3 +96,6 @@ export const MessageList: FC<MessageListProps> = ({
     </div>
   );
 };
+
+// Memoized version for performance optimization
+export const MessageList = memo(MessageListComponent);

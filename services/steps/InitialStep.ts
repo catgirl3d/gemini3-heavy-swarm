@@ -22,10 +22,8 @@ export class InitialStep extends BaseStep {
     const results: string[] = Array(settings.numAgents).fill('');
     const thoughts: string[] = Array(settings.numAgents).fill('');
     
-    // Initialize legacy field if needed
-    if (!work.initialResponses) work.initialResponses = Array(settings.numAgents).fill(null);
-    if (!work.initialThoughts) work.initialThoughts = Array(settings.numAgents).fill(null);
-    if (!work.initialTokenUsage) work.initialTokenUsage = Array(settings.numAgents).fill(null);
+    // Initialize generic storage if needed
+    if (!work.results) work.results = {};
 
     // Initialize agent states using BaseStep utility
     let currentAgentStates: AgentState[] = this.createAgentStates(
@@ -54,9 +52,8 @@ export class InitialStep extends BaseStep {
           dummyText,
           signal,
           (chunk) => {
-             // Update both new and legacy storage
+             // Update storage
              results[i] = chunk;
-             work.initialResponses[i] = chunk;
              
              // Update generic results map
              if (!work.results) work.results = {};
@@ -118,20 +115,22 @@ export class InitialStep extends BaseStep {
           fullText += text;
           fullThought += thought;
           
-          // Update both new and legacy storage
+          // Update storage
           results[i] = fullText;
           thoughts[i] = fullThought;
-          work.initialResponses[i] = fullText;
-          if (work.initialThoughts) work.initialThoughts[i] = fullThought;
-
-          const usage = this.extractTokenUsage(chunk.usageMetadata);
-          if (usage && work.initialTokenUsage) {
-            work.initialTokenUsage[i] = usage;
-          }
           
           // Update generic results map
           if (!work.results) work.results = {};
           work.results['initial_step'] = [...results];
+          work.results['initial_step_thoughts'] = [...thoughts];
+
+          const usage = this.extractTokenUsage(chunk.usageMetadata);
+          if (usage) {
+            if (!work.results['initial_step_usage']) {
+                work.results['initial_step_usage'] = Array(settings.numAgents).fill(null);
+            }
+            work.results['initial_step_usage'][i] = usage;
+          }
 
           onProgress('Initializing agents...', currentAgentStates, { ...work });
         }
@@ -152,7 +151,6 @@ export class InitialStep extends BaseStep {
         const errorMessage = `\n\n[System: Agent failed to complete. ${outcome.reason instanceof Error ? outcome.reason.message : 'Unknown error'}]`;
         
         results[i] += errorMessage;
-        if (work.initialResponses) work.initialResponses[i] = results[i];
         
         // Determine appropriate error label using BaseStep utility
         const errorLabel = this.getErrorLabel(outcome.reason, 'Draft Failed');
@@ -229,13 +227,19 @@ export class InitialStep extends BaseStep {
       fullText += text;
       fullThought += thought;
 
-      if (context.work.initialThoughts) {
-        context.work.initialThoughts[agentIndex] = fullThought;
-      }
+      if (context.work.results) {
+        if (!context.work.results['initial_step_thoughts']) {
+            context.work.results['initial_step_thoughts'] = [];
+        }
+        context.work.results['initial_step_thoughts'][agentIndex] = fullThought;
 
-      const usage = this.extractTokenUsage(chunk.usageMetadata);
-      if (usage && context.work.initialTokenUsage) {
-        context.work.initialTokenUsage[agentIndex] = usage;
+        const usage = this.extractTokenUsage(chunk.usageMetadata);
+        if (usage) {
+            if (!context.work.results['initial_step_usage']) {
+                context.work.results['initial_step_usage'] = [];
+            }
+            context.work.results['initial_step_usage'][agentIndex] = usage;
+        }
       }
 
       // Only update message display when there is actual text content (not just thinking)

@@ -5,6 +5,7 @@ import { prepareGeminiContent } from '../contentUtils';
 import { getGenerationConfig } from '../geminiConfig';
 import { getAgentRole } from './utils/roleUtils';
 import { BaseStep } from './BaseStep';
+import { getStepResults } from '../../utils/workHelpers';
 
 export class RefinementStep extends BaseStep {
   id: StepId = 'refinement_step';
@@ -18,22 +19,18 @@ export class RefinementStep extends BaseStep {
   async execute(context: StepContext): Promise<string[]> {
     const { ai, settings, history, userInput, image, imageFile, work, onProgress, signal } = context;
 
-    // Ensure we have initial responses
-    const rawInitial = work.results?.['initial_step'] || work.initialResponses;
-    const initialResponses = Array.isArray(rawInitial) ? (rawInitial as string[]) : [];
+    const initialDrafts = getStepResults(work, 'initial_step');
     
-    if (initialResponses.length === 0) {
-      throw new Error('Cannot run refinement step without initial responses');
+    if (initialDrafts.length === 0) {
+      throw new Error('Cannot run refinement step without initial drafts');
     }
 
     // Initialize results array
     const results: string[] = Array(settings.numAgents).fill('');
     const thoughts: string[] = Array(settings.numAgents).fill('');
     
-    // Initialize legacy field if needed
-    if (!work.refinedResponses) work.refinedResponses = Array(settings.numAgents).fill(null);
-    if (!work.refinedThoughts) work.refinedThoughts = Array(settings.numAgents).fill(null);
-    if (!work.refinedTokenUsage) work.refinedTokenUsage = Array(settings.numAgents).fill(null);
+    // Initialize generic storage if needed
+    if (!work.results) work.results = {};
 
     // Initialize agent states using BaseStep utility
     let currentAgentStates: AgentState[] = this.createAgentStates(settings.numAgents, settings, {
@@ -48,7 +45,7 @@ export class RefinementStep extends BaseStep {
     const { history: mainChatHistory, baseApiParts } = prepareGeminiContent(history, userInput, image, imageFile);
 
     // Execute agents
-    const agentPromises = initialResponses.map(async (initialAnswer: string, index: number) => {
+    const agentPromises = initialDrafts.map(async (initialAnswer: string, index: number) => {
       if (settings.devMode) {
         // DEV MODE SIMULATION using BaseStep utility
         const dummyText = this.getDevModeText('refinement_step', index);
@@ -57,9 +54,7 @@ export class RefinementStep extends BaseStep {
             dummyText,
             signal,
             (chunk) => {
-                 // Update both new and legacy storage
                  results[index] = chunk;
-                 work.refinedResponses[index] = chunk;
                  
                  // Update generic results map
                  if (!work.results) work.results = {};
@@ -78,7 +73,7 @@ export class RefinementStep extends BaseStep {
         // PROD MODE
         if (!ai) throw new Error("API Key not found");
 
-        const peerDrafts = initialResponses
+        const peerDrafts = initialDrafts
           .map((text: string, i: number) => ({ text, id: i + 1 }))
           .filter((_, i) => i !== index)
           .filter((a) => !a.text.trim().startsWith('[System:')) // Filter out failed agents
@@ -151,20 +146,22 @@ ${peerDrafts}
           fullText += text;
           fullThought += thought;
           
-          // Update both new and legacy storage
+          // Update storage
           results[index] = fullText;
           thoughts[index] = fullThought;
-          work.refinedResponses[index] = fullText;
-          if (work.refinedThoughts) work.refinedThoughts[index] = fullThought;
-
-          const usage = this.extractTokenUsage(chunk.usageMetadata);
-          if (usage && work.refinedTokenUsage) {
-            work.refinedTokenUsage[index] = usage;
-          }
           
           // Update generic results map
           if (!work.results) work.results = {};
           work.results['refinement_step'] = [...results];
+          work.results['refinement_step_thoughts'] = [...thoughts];
+
+          const usage = this.extractTokenUsage(chunk.usageMetadata);
+          if (usage) {
+            if (!work.results['refinement_step_usage']) {
+                work.results['refinement_step_usage'] = Array(settings.numAgents).fill(null);
+            }
+            work.results['refinement_step_usage'][index] = usage;
+          }
 
           onProgress('Refining answers...', currentAgentStates, { ...work });
         }
@@ -185,7 +182,6 @@ ${peerDrafts}
         const errorMessage = `\n\n[System: Critic failed to refine. ${outcome.reason instanceof Error ? outcome.reason.message : 'Unknown error'}]`;
         
         results[i] += errorMessage;
-        if (work.refinedResponses) work.refinedResponses[i] = results[i];
         
         // Determine appropriate error label using BaseStep utility
         const errorLabel = this.getErrorLabel(outcome.reason, 'Refinement Failed');
@@ -212,19 +208,17 @@ ${peerDrafts}
     const { ai, settings, history, userInput, image, imageFile, work, signal } = context;
     if (!ai) throw new Error("API Key not found");
 
-    // Ensure we have initial responses
-    const rawInitial = work.results?.['initial_step'] || work.initialResponses;
-    const initialResponses = Array.isArray(rawInitial) ? (rawInitial as string[]) : [];
+    const initialDrafts = getStepResults(work, 'initial_step');
     
-    if (initialResponses.length === 0) {
-      throw new Error('Cannot regenerate refinement without initial responses');
+    if (initialDrafts.length === 0) {
+      throw new Error('Cannot regenerate refinement without initial drafts');
     }
 
     // Prepare content
     const { history: mainChatHistory, baseApiParts } = prepareGeminiContent(history, userInput, image, imageFile);
 
-    const initialAnswer = initialResponses[agentIndex];
-    const peerDrafts = initialResponses
+    const initialAnswer = initialDrafts[agentIndex];
+    const peerDrafts = initialDrafts
       .map((text: string, i: number) => ({ text, id: i + 1 }))
       .filter((_, i) => i !== agentIndex)
       .filter((a) => !a.text.trim().startsWith('[System:')) // Filter out failed agents
@@ -297,13 +291,19 @@ ALWAYS use the googleSearch tool to verify facts and find additional information
       fullText += text;
       fullThought += thought;
 
-      if (context.work.refinedThoughts) {
-        context.work.refinedThoughts[agentIndex] = fullThought;
-      }
+      if (context.work.results) {
+        if (!context.work.results['refinement_step_thoughts']) {
+            context.work.results['refinement_step_thoughts'] = [];
+        }
+        context.work.results['refinement_step_thoughts'][agentIndex] = fullThought;
 
-      const usage = this.extractTokenUsage(chunk.usageMetadata);
-      if (usage && context.work.refinedTokenUsage) {
-        context.work.refinedTokenUsage[agentIndex] = usage;
+        const usage = this.extractTokenUsage(chunk.usageMetadata);
+        if (usage) {
+            if (!context.work.results['refinement_step_usage']) {
+                context.work.results['refinement_step_usage'] = [];
+            }
+            context.work.results['refinement_step_usage'][agentIndex] = usage;
+        }
       }
 
       // Only update message display when there is actual text content (not just thinking)

@@ -4,6 +4,7 @@ import { AgentState, Source } from '../../types';
 import { prepareGeminiContent } from '../contentUtils';
 import { getGenerationConfig } from '../geminiConfig';
 import { BaseStep } from './BaseStep';
+import { getStepResults } from '../../utils/workHelpers';
 
 export class SynthesisStep extends BaseStep {
   id: StepId = 'synthesis_step';
@@ -17,12 +18,11 @@ export class SynthesisStep extends BaseStep {
   async execute(context: StepContext): Promise<{ text: string; sources?: Source[] }> {
     const { ai, settings, history, userInput, image, imageFile, work, onProgress, onMessageUpdate, signal } = context;
 
-    // Ensure we have refined responses
-    const rawRefined = work.results?.['refinement_step'] || work.refinedResponses;
-    const refinedResponses = Array.isArray(rawRefined) ? (rawRefined as string[]) : [];
+    // Ensure we have refined drafts
+    const refinedDrafts = getStepResults(work, 'refinement_step');
     
-    if (refinedResponses.length === 0) {
-      throw new Error('Cannot run synthesis step without refined responses');
+    if (refinedDrafts.length === 0) {
+      throw new Error('Cannot run synthesis step without refined drafts');
     }
 
     // Initialize agent states - these agents already completed refinement
@@ -77,7 +77,7 @@ export class SynthesisStep extends BaseStep {
 
       const { history: mainChatHistory, baseApiParts } = prepareGeminiContent(history, userInput, image, imageFile);
 
-      const agentDrafts = refinedResponses
+      const agentDrafts = refinedDrafts
         .map((answer: string, i: number) => `    <draft id="agent_${i + 1}">\n${answer}\n    </draft>`)
         .join('\n\n');
 
@@ -150,11 +150,13 @@ As defined in <mission> synthesize the best single, final answer from <agent_dra
           finalThought += thought;
           
           // Update work object with thought
-          work.synthesisThought = finalThought;
+          if (work.results) {
+              work.results['synthesis_step_thought'] = finalThought;
+          }
 
           const usage = this.extractTokenUsage(chunk.usageMetadata);
-          if (usage) {
-            work.synthesisTokenUsage = usage;
+          if (usage && work.results) {
+            work.results['synthesis_step_usage'] = usage;
           }
 
           const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;

@@ -44,8 +44,10 @@ export class StepRunner {
         });
 
         // 3. Store Results (Generic)
+        // Note: `as any` is required here because StepRunner is generic and stepResult is unknown.
+        // Type safety is ensured by step implementations returning correct types.
         if (!currentWork.results) currentWork.results = {};
-        currentWork.results[step.id] = stepResult;
+        (currentWork.results as any)[step.id] = stepResult;
 
         // Update metadata
         if (!currentWork.stepMetadata) currentWork.stepMetadata = [];

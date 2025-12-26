@@ -63,7 +63,7 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
                         <button
                             ref={triggerRef}
                             className={`preset-menu-trigger ${isDropdownOpen ? 'active' : ''}`}
-                            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                            onClick={() => setIsDropdownOpen(prev => !prev)}
                             disabled={presets.length === 0}
                             title={presets.length === 0 ? "No presets available" : "Load from a saved preset"}
                         >

@@ -62,20 +62,41 @@ export interface TokenUsage {
   totalTokens: number;
 }
 
+/**
+ * Type-safe keys for accessing work.results.
+ * Prevents typos and ensures only valid result keys are used.
+ */
+export type WorkResultKey = 
+  | 'initial_step' 
+  | 'refinement_step' 
+  | 'synthesis_step'
+  | 'initial_step_thoughts'
+  | 'refinement_step_thoughts'
+  | 'synthesis_step_thought'
+  | 'initial_step_usage'
+  | 'refinement_step_usage'
+  | 'synthesis_step_usage';
+
 export interface Work {
-  initialResponses: (string | null)[];
-  refinedResponses: (string | null)[];
-  
-  initialThoughts?: (string | null)[];
-  refinedThoughts?: (string | null)[];
-  synthesisThought?: string | null;
-
-  initialTokenUsage?: (TokenUsage | null)[];
-  refinedTokenUsage?: (TokenUsage | null)[];
-  synthesisTokenUsage?: TokenUsage | null;
-
   // Generic storage for step results. Keys match StepId (e.g., 'initial_step', 'refinement_step', 'synthesis_step')
-  results?: Record<string, unknown>;
+  results?: {
+    initial_step?: (string | null)[];
+    refinement_step?: (string | null)[];
+    synthesis_step?: { text?: string; error?: boolean; errorMessage?: string; sources?: Source[] } | string;
+    
+    // Unified step metadata (thoughts, token usage, etc.)
+    initial_step_thoughts?: (string | null)[];
+    refinement_step_thoughts?: (string | null)[];
+    synthesis_step_thought?: string | null;
+
+    initial_step_usage?: (TokenUsage | null)[];
+    refinement_step_usage?: (TokenUsage | null)[];
+    synthesis_step_usage?: TokenUsage | null;
+    
+    // Index signature for dynamic step keys (StepRunner extensibility)
+    [key: string]: unknown;
+  };
+
   
   // Metadata about the steps that ran
   stepMetadata?: {
@@ -91,6 +112,7 @@ export interface Work {
 }
 
 export interface Message {
+  id: string;
   role: 'user' | 'model';
   parts: { text: string }[];
   image?: string;

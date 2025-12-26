@@ -1,10 +1,12 @@
-import React, { FC, ReactNode } from 'react';
+import React, { FC, ReactNode, memo, useCallback, useMemo } from 'react';
 import { TokenUsage as TokenUsageType } from '@/types';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { SpinnerIcon, ErrorIcon, CheckIcon, ExpandIcon, ThoughtIcon, DebugIcon, DownloadIcon, RegenerateIcon } from '../icons';
 import { ActionMenu } from './ActionMenu';
 import { TokenUsage } from './TokenUsage';
 import { downloadContent } from '../utils';
+
+export type CardActionType = 'expand' | 'showThought' | 'showDebug' | 'regenerate';
 
 interface WorkCardProps {
   title: string;
@@ -15,7 +17,11 @@ interface WorkCardProps {
   tokenUsage?: TokenUsageType | null;
   thought?: string | null;
   debugInfo?: unknown;
-  onExpand: () => void;
+  /** Stable callback pattern: cardId + onCardAction instead of individual callbacks */
+  cardId?: string;
+  onCardAction?: (cardId: string, action: CardActionType) => void;
+  /** Legacy individual callbacks - will be deprecated */
+  onExpand?: () => void;
   onShowThought?: () => void;
   onShowDebug?: () => void;
   onRegenerate?: () => void;
@@ -23,7 +29,7 @@ interface WorkCardProps {
   className?: string;
 }
 
-export const WorkCard: FC<WorkCardProps> = ({
+const WorkCardComponent: FC<WorkCardProps> = ({
   title,
   statusLabel,
   status,
@@ -32,6 +38,8 @@ export const WorkCard: FC<WorkCardProps> = ({
   tokenUsage,
   thought,
   debugInfo,
+  cardId,
+  onCardAction,
   onExpand,
   onShowThought,
   onShowDebug,
@@ -39,6 +47,38 @@ export const WorkCard: FC<WorkCardProps> = ({
   downloadFilename,
   className = ''
 }) => {
+  // Unified action handlers that use stable cardId pattern when available
+  const handleExpand = useCallback(() => {
+    if (cardId && onCardAction) {
+      onCardAction(cardId, 'expand');
+    } else if (onExpand) {
+      onExpand();
+    }
+  }, [cardId, onCardAction, onExpand]);
+
+  const handleShowThought = useCallback(() => {
+    if (cardId && onCardAction) {
+      onCardAction(cardId, 'showThought');
+    } else if (onShowThought) {
+      onShowThought();
+    }
+  }, [cardId, onCardAction, onShowThought]);
+
+  const handleShowDebug = useCallback(() => {
+    if (cardId && onCardAction) {
+      onCardAction(cardId, 'showDebug');
+    } else if (onShowDebug) {
+      onShowDebug();
+    }
+  }, [cardId, onCardAction, onShowDebug]);
+
+  const handleRegenerate = useCallback(() => {
+    if (cardId && onCardAction) {
+      onCardAction(cardId, 'regenerate');
+    } else if (onRegenerate) {
+      onRegenerate();
+    }
+  }, [cardId, onCardAction, onRegenerate]);
   const renderContent = (content: string | null) => {
     if (content === null) return <div className="pending-work">Waiting for agent output...</div>;
     if (content === '') return <div className="pending-work">Thinking...</div>;
@@ -73,29 +113,31 @@ export const WorkCard: FC<WorkCardProps> = ({
     return <MarkdownRenderer content={content} />;
   };
 
-  const actions = [
+  const canRegenerate = Boolean(onRegenerate || (cardId && onCardAction));
+
+  const actions = useMemo(() => [
     ...(thought ? [{
         label: 'Show Thought Process',
         icon: <ThoughtIcon />,
-        onClick: onShowThought!
+        onClick: handleShowThought
     }] : []),
     ...(debugInfo ? [{
         label: 'Debug Info',
         icon: <DebugIcon />,
-        onClick: onShowDebug!
+        onClick: handleShowDebug
     }] : []),
     ...(content ? [{
         label: 'Download Response',
         icon: <DownloadIcon />,
         onClick: () => downloadContent(downloadFilename, content)
     }] : []),
-    ...(onRegenerate ? [{
+    ...(canRegenerate ? [{
         label: status === 'error' ? 'Retry' : 'Regenerate',
         icon: <RegenerateIcon />,
-        onClick: onRegenerate,
+        onClick: handleRegenerate,
         danger: status === 'error'
     }] : [])
-  ];
+  ], [thought, debugInfo, content, canRegenerate, status, handleShowThought, handleShowDebug, handleRegenerate, downloadFilename]);
 
   return (
     <div className={`work-card ${className} ${status === 'error' ? 'error' : ''}`}>
@@ -120,7 +162,7 @@ export const WorkCard: FC<WorkCardProps> = ({
               className="modal-icon-btn expand-work-button"
               onClick={(e) => {
                 e.preventDefault();
-                onExpand();
+                handleExpand();
               }}
               title="Expand Response"
               aria-label="Expand Response"
@@ -142,3 +184,6 @@ export const WorkCard: FC<WorkCardProps> = ({
     </div>
   );
 };
+
+// Memoized version for performance optimization
+export const WorkCard = memo(WorkCardComponent);

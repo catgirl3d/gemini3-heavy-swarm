@@ -34,7 +34,7 @@ export const ActionMenu: FC<{ actions: Action[] }> = ({ actions }) => {
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          setIsOpen(!isOpen);
+          setIsOpen(prev => !prev);
         }}
         title="More actions"
         aria-label="More actions"
@@ -44,9 +44,9 @@ export const ActionMenu: FC<{ actions: Action[] }> = ({ actions }) => {
       
       {isOpen && (
         <div className="action-menu-dropdown">
-          {actions.map((action, index) => (
+          {actions.map((action) => (
             <button
-              key={index}
+              key={action.label}
               className={`action-menu-item ${action.danger ? 'danger' : ''}`}
               onClick={(e) => {
                 e.preventDefault();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, FormEvent, FC } from 'react';
+import React, { useState, useEffect, useRef, useCallback, FormEvent, FC } from 'react';
 import { useGeminiSwarm } from './hooks/useGeminiSwarm';
 import { useServerStatus } from './hooks/useServerStatus';
 import { useAutoScroll } from './hooks/useAutoScroll';
@@ -66,7 +66,7 @@ export const App: FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       if (file.size > 4 * 1024 * 1024) {
@@ -80,32 +80,52 @@ export const App: FC = () => {
       };
       reader.readAsDataURL(file);
     }
-  };
+  }, []);
 
-  const handleRemoveImage = () => {
+  const handleRemoveImage = useCallback(() => {
     setImage(null);
     setImageFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
+  }, []);
 
-  const handlePromptClick = (prompt: string) => {
+  const handlePromptClick = useCallback((prompt: string) => {
     setUserInput(prompt);
     inputRef.current?.focus();
-  };
+  }, []);
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     
+    // Check if there's content to send BEFORE clearing the fields
     if (!userInput.trim() && !image) return;
-
-    const currentInput = userInput;
-    setUserInput('');
     
-    await sendMessage(currentInput, image, imageFile);
-    handleRemoveImage();
-  };
+    // Store current values
+    const currentInput = userInput;
+    const currentImage = image;
+    const currentImageFile = imageFile;
+    
+    // Clear the input fields
+    setUserInput('');
+    setImage(null);
+    setImageFile(null);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    
+    await sendMessage(currentInput, currentImage, currentImageFile);
+  }, [userInput, image, imageFile, sendMessage]);
+
+  // Memoized handler for regeneration to prevent MessageList re-renders
+  const handleRegenerate = useCallback((msgIndex: number, phase: StepId, agentIndex: number) => {
+    if (phase === 'synthesis_step') {
+      setShouldAutoScroll(true);
+    }
+    regenerateAgentResponse(msgIndex, phase, agentIndex);
+  }, [setShouldAutoScroll, regenerateAgentResponse]);
 
   // Enforce model restrictions based on server status
   useEffect(() => {
@@ -156,12 +176,7 @@ export const App: FC = () => {
         onPromptClick={handlePromptClick}
         onContinue={continueGeneration}
         onRetry={retry}
-        onRegenerate={(msgIndex, phase, agentIndex) => {
-            if (phase === 'synthesis_step') {
-              setShouldAutoScroll(true);
-            }
-            regenerateAgentResponse(msgIndex, phase as StepId, agentIndex);
-        }}
+        onRegenerate={handleRegenerate}
       />
 
       <InputArea
