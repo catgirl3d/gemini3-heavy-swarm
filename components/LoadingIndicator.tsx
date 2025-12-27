@@ -3,17 +3,17 @@ import { AgentState, Work } from '@/types';
 import { StepId } from '@/types/steps';
 import { AgentAvatar } from '@/components/AgentAvatar';
 import { ShowWork } from '@/components/ShowWork/ShowWork';
+import { TimerDisplay } from '@/components/TimerDisplay';
 import './LoadingIndicator.css';
 
 export const LoadingIndicator: FC<{
     status: string;
-    time: number;
     agentStates: AgentState[];
     currentWork?: Work;
     isPaused?: boolean;
     onContinue?: () => void;
     onRegenerate?: (stepId: StepId, agentIndex: number) => void;
-}> = ({ status, time, agentStates, currentWork, isPaused, onContinue, onRegenerate }) => {
+}> = ({ status, agentStates, currentWork, isPaused, onContinue, onRegenerate }) => {
   // Check if synthesizer is in error state - if so, Continue should trigger regeneration
   const synthesizerState = agentStates.find(a => a.id === 'synthesizer_agent');
   const isSynthesizerError = synthesizerState?.status === 'error';
@@ -44,7 +44,7 @@ export const LoadingIndicator: FC<{
                         {continueButtonText}
                     </button>
                 )}
-                <span className="timer-display">{(time / 1000).toFixed(1)}s</span>
+                <TimerDisplay isActive={!isPaused} />
             </div>
         </div>
         <div className="agent-progress-list">

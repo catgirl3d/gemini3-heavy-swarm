@@ -4,13 +4,14 @@ import { StepId } from '@/types/steps';
 
 import { GeminiService } from '@/services/gemini';
 import { updateStepResult, withEnsuredResults } from '@/utils/workHelpers';
-import { getUpdatedAgentName } from '@/utils/agentHelpers';
 import { generateUUID } from '@/utils/uuid';
 import { 
-  updateMessageParts, 
-  updateWorkAgentNames, 
-  ensureModelMessageForSynthesis 
+  updateMessageParts 
 } from '@/utils/messageHelpers';
+import { 
+  getStepLabels,
+  calculateUpdatedStateForRegeneration
+} from '@/utils/regenerationHelpers';
 
 import { useAppSettings } from '@/hooks/state/useAppSettings';
 import { useSwarmStatus } from '@/hooks/swarm/useSwarmStatus';
@@ -35,7 +36,6 @@ export const useGeminiSwarm = () => {
     error, setError 
   } = swarmStatus;
 
-  const { timer, setTimer } = useSwarmTimer(isLoading && !isPaused);
   const { agentStates, setAgentStates, currentWork, setCurrentWork } = useSwarmWork();
   const { messages, setMessages, messagesRef } = useMessages();
   
@@ -48,12 +48,6 @@ export const useGeminiSwarm = () => {
   const pauseResolverRef = useRef<((value: void | PromiseLike<void>) => void) | null>(null);
   const geminiServiceRef = useRef<GeminiService>(new GeminiService());
 
-  // 3. Effect for timer reset logic
-  useEffect(() => {
-    if (!isLoading && !isPaused) {
-      setTimer(0);
-    }
-  }, [isLoading, isPaused, setTimer]);
 
   const continueGeneration = () => {
     if (pauseResolverRef.current) {
@@ -195,7 +189,6 @@ export const useGeminiSwarm = () => {
 
     const targetMessage = messages[messageIndex];
     let workContext = targetMessage?.work || currentWork;
-
     if (!workContext) return;
 
     const syncStatus = (status: AgentState['status'], label: string) => 
@@ -203,16 +196,13 @@ export const useGeminiSwarm = () => {
 
     const controller = regenAbort.create();
 
+    // Start loading state
+    setIsLoading(true);
+    setIsPaused(false);
+
     try {
-      const regenLabel = stepId === 'initial_step' ? 'Regenerating Draft...' :
-        stepId === 'refinement_step' ? 'Regenerating Critique...' :
-          stepId === 'synthesis_step' ? 'Regenerating Synthesis...' : 'Regenerating...';
-      
-      if (stepId === 'synthesis_step') {
-        setIsPaused(false);
-      }
-      
-      syncStatus('working', regenLabel);
+      const labels = getStepLabels(stepId);
+      syncStatus('working', labels.regenerating);
       const history = messages.slice(0, messageIndex);
 
       const result = await geminiServiceRef.current.regenerateResponse(
@@ -225,50 +215,23 @@ export const useGeminiSwarm = () => {
         stepId,
         workContext,
         (text, isFirstChunk) => {
-          setMessages(prev => {
-            const newMessages = [...prev];
-            let msg = newMessages[messageIndex];
-            let targetIndex = messageIndex;
-
-            if (stepId === 'synthesis_step') {
-              if (isFirstChunk) {
-                  setIsLoading(false);
-                  setIsPaused(false);
-              }
-
-              const { message: foundMsg, index: foundIndex, wasCreated } = ensureModelMessageForSynthesis(
-                newMessages, messageIndex, workContext, text
-              );
-              
-              msg = foundMsg;
-              targetIndex = foundIndex;
-              
-              if (wasCreated) {
-                newMessages.push(msg);
-              }
-              
-              if (msg && msg.role === 'model') {
-                newMessages[targetIndex] = updateMessageParts(msg, text);
-                msg = newMessages[targetIndex]; 
-              }
+          const { updatedMessages, updatedWork } = calculateUpdatedStateForRegeneration(
+            messagesRef.current,
+            messageIndex,
+            stepId,
+            agentIndex,
+            workContext,
+            text,
+            settings,
+            () => {
+              // Note: synthesize-specific side effects can go here if needed
             }
+          );
 
-            if (msg && msg.work) {
-                const newName = getUpdatedAgentName(agentIndex, stepId, settings);
-                let updatedWork = updateWorkAgentNames(msg.work, stepId, agentIndex, newName);
-                updatedWork = updateStepResult(updatedWork, stepId, agentIndex, text);
-                newMessages[targetIndex] = { ...newMessages[targetIndex], work: updatedWork };
-            }
-
-            return newMessages;
-          });
-
-          setCurrentWork(prev => {
-            if (!prev) return prev;
-            const newName = getUpdatedAgentName(agentIndex, stepId, settings);
-            let updatedWork = updateWorkAgentNames(prev, stepId, agentIndex, newName);
-            return updateStepResult(updatedWork, stepId, agentIndex, text);
-          });
+          setMessages(updatedMessages);
+          if (updatedWork) {
+            setCurrentWork(updatedWork);
+          }
         },
         (status, agents, work) => {
           setLoadingStatus(status);
@@ -278,17 +241,23 @@ export const useGeminiSwarm = () => {
         controller.signal
       );
 
+      // Handle final result (sources and work updates)
       if (typeof result === 'object' && result !== null && 'sources' in result) {
         setMessages(prev => {
           const newMessages = [...prev];
-          let msg = newMessages[messageIndex];
           let targetIndex = messageIndex;
+          let msg = newMessages[targetIndex];
           
+          // Improved lookup for model message
           if (!msg || msg.role !== 'model') {
             const nextMsg = newMessages[messageIndex + 1];
             if (nextMsg && nextMsg.role === 'model') {
               msg = nextMsg;
               targetIndex = messageIndex + 1;
+            } else if (stepId === 'synthesis_step') {
+              // Fallback for synthesis messages pushed to the end
+              targetIndex = newMessages.length - 1;
+              msg = newMessages[targetIndex];
             }
           }
           
@@ -319,43 +288,45 @@ export const useGeminiSwarm = () => {
         });
       }
 
+      syncStatus('done', labels.done);
+
+      if (stepId === 'synthesis_step') {
+        finalizeSynthesisState(labels.done);
+      }
+
     } catch (error) {
       console.error("Regeneration failed:", error);
-      const errorLabel = getErrorLabel(error, 'Regeneration Failed');
-      syncStatus('error', errorLabel);
-      return; 
-    }
-    
-    regenAbort.ref.current = null;
-    const doneLabel = stepId === 'initial_step' ? 'Draft Regenerated' :
-      stepId === 'refinement_step' ? 'Critique Regenerated' :
-        stepId === 'synthesis_step' ? 'Synthesis Regenerated' : 'Regenerated';
-    syncStatus('done', doneLabel);
-
-    if (stepId === 'synthesis_step') {
-      setMessages(prev => {
-        const newMessages = [...prev];
-        const lastMsgIndex = newMessages.length - 1;
-        const lastMsg = newMessages[lastMsgIndex];
-        
-        if (lastMsg && lastMsg.role === 'model') {
-          const workToUse = lastMsg.work || currentWork;
-          if (workToUse) {
-            const updatedAgentStates = (workToUse.agentStates || agentStates || []).map(agent => {
-              if (agent.id === 'synthesizer_agent') {
-                return { ...agent, status: 'done' as const, label: doneLabel, stepId: 'synthesis_step' as StepId };
-              }
-              return agent;
-            });
-            newMessages[lastMsgIndex] = { ...lastMsg, work: { ...workToUse, agentStates: updatedAgentStates } };
-          }
-        }
-        return newMessages;
-      });
-      setCurrentWork(undefined);
+      syncStatus('error', getErrorLabel(error, 'Regeneration Failed'));
+    } finally {
+      regenAbort.ref.current = null;
       setIsLoading(false);
-      setIsPaused(false);
     }
+  };
+
+  /**
+   * Finalizes the state after a successful synthesis regeneration.
+   */
+  const finalizeSynthesisState = (doneLabel: string) => {
+    setMessages(prev => {
+      const newMessages = [...prev];
+      const lastMsgIndex = newMessages.length - 1;
+      const lastMsg = newMessages[lastMsgIndex];
+      
+      if (lastMsg && lastMsg.role === 'model') {
+        const workToUse = lastMsg.work || currentWork;
+        if (workToUse) {
+          const updatedAgentStates = (workToUse.agentStates || agentStates || []).map(agent => {
+            if (agent.id === 'synthesizer_agent') {
+              return { ...agent, status: 'done' as const, label: doneLabel, stepId: 'synthesis_step' as StepId };
+            }
+            return agent;
+          });
+          newMessages[lastMsgIndex] = { ...lastMsg, work: { ...workToUse, agentStates: updatedAgentStates } };
+        }
+      }
+      return newMessages;
+    });
+    setCurrentWork(undefined);
   };
 
   return {
@@ -365,7 +336,6 @@ export const useGeminiSwarm = () => {
     loadingStatus,
     agentStates,
     currentWork,
-    timer,
     settings,
     settingsLoaded,
     error,

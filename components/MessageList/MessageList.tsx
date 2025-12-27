@@ -14,7 +14,6 @@ interface MessageListProps {
   isPaused: boolean;
   error: string | null;
   loadingStatus: string;
-  timer: number;
   agentStates: AgentState[];
   currentWork: Work | undefined;
   modelDisplayName: string;
@@ -31,7 +30,6 @@ const MessageListComponent: FC<MessageListProps> = ({
   isPaused,
   error,
   loadingStatus,
-  timer,
   agentStates,
   currentWork,
   modelDisplayName,
@@ -69,7 +67,6 @@ const MessageListComponent: FC<MessageListProps> = ({
       {isLoading && (
           <LoadingIndicator
               status={loadingStatus}
-              time={timer}
               agentStates={agentStates}
               currentWork={currentWork}
               isPaused={isPaused}

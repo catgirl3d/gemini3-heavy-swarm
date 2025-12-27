@@ -17,7 +17,7 @@ export function useSwarmTimer(isActive: boolean) {
       startTimeRef.current = Date.now() - timerRef.current;
       interval = setInterval(() => {
         setTimer(Date.now() - startTimeRef.current);
-      }, 1000);
+      }, 100);
     }
     return () => clearInterval(interval);
   }, [isActive]);

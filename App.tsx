@@ -23,7 +23,6 @@ export const App: FC = () => {
     loadingStatus,
     agentStates,
     currentWork,
-    timer,
     settings,
     settingsLoaded,
     error,
@@ -168,7 +167,6 @@ export const App: FC = () => {
         isPaused={isPaused}
         error={error}
         loadingStatus={loadingStatus}
-        timer={timer}
         agentStates={agentStates}
         currentWork={currentWork}
         modelDisplayName={modelDisplayName}
