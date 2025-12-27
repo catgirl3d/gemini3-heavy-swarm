@@ -21,12 +21,12 @@ RUN npm install --only=production
 # Copy built assets from build stage
 COPY --from=build /app/dist ./dist
 
-# Copy server script
-COPY server.js .
+# Copy server script and constants
+COPY scripts/server.js ./scripts/
 COPY constants ./constants
 
 # Cloud Run expects the container to listen on port 8080 by default
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["node", "server.js"]
+CMD ["node", "scripts/server.js"]

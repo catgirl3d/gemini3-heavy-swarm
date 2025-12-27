@@ -2,14 +2,15 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { RATE_LIMIT_PER_MINUTE, DEFAULT_ALLOWED_ORIGINS, ALLOWED_MODELS, MAX_REQUEST_SIZE, MAX_CONTENT_CHARS, isProductionEnvironment } from './constants/security.js';
-import { validateContents, validateContentSize, getTargetModel, buildGeminiUrl } from './constants/geminiValidation.js';
+import { RATE_LIMIT_PER_MINUTE, DEFAULT_ALLOWED_ORIGINS, ALLOWED_MODELS, MAX_REQUEST_SIZE, MAX_CONTENT_CHARS, isProductionEnvironment } from '../constants/security.js';
+import { validateContents, validateContentSize, getTargetModel, buildGeminiUrl } from '../constants/geminiValidation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load .env.local if it exists
-const envPath = path.join(__dirname, '.env.local');
+// Since we are in scripts/, .env.local is in ../
+const envPath = path.join(__dirname, '..', '.env.local');
 if (fs.existsSync(envPath)) {
 	const envContent = fs.readFileSync(envPath, 'utf8');
 	envContent.split('\n').forEach(line => {
@@ -130,7 +131,8 @@ app.use((req, res, next) => {
 });
 
 // Serve static files from the dist directory
-app.use(express.static(path.join(__dirname, 'dist')));
+// dist is in ../dist
+app.use(express.static(path.join(__dirname, '..', 'dist')));
 
 // Check if server has API key configured
 app.get('/api/status', (req, res) => {
@@ -220,7 +222,7 @@ app.post('/api/gemini', async (req, res) => {
 
 // Handle client-side routing by serving index.html for all other routes
 app.get('*', (req, res) => {
-	res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+	res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {
