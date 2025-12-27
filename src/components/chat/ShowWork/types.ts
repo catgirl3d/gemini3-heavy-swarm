@@ -1,7 +1,15 @@
 import { Work, AgentState } from '@/types';
 import { StepId } from '@/types/steps';
 
-export type DisplayStatus = 'working' | 'done' | 'error' | 'waiting';
+/**
+ * Pre-calculated results optimization structure.
+ * Used to pass already-computed work results to avoid redundant parsing.
+ */
+export interface PrecalculatedResults {
+  initial?: (string | null)[];
+  refined?: (string | null)[];
+  synthesis?: { text?: string; error?: boolean } | string | null;
+}
 
 export interface WorkModalData {
   title: string;

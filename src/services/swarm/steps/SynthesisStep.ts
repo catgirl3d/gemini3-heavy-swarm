@@ -27,13 +27,12 @@ export class SynthesisStep extends BaseStep {
       throw new Error('Cannot run synthesis step without refined drafts');
     }
 
-    // Initialize agent states - these agents already completed refinement
+    // Initialize agent states - show the drafters (Initial step agents) who created the content
     // We use common state utils to prepare the initial state for the UI
-    const numAgents = settings.numAgents;
-    const refinedAgents = this.createAgentStates(numAgents, settings, {
-      stepId: STEPS.REFINEMENT,
+    const refinedAgents = this.createAgentStates(settings.numAgents, settings, {
+      stepId: STEPS.INITIAL,
       status: 'done',
-      statusLabel: getStepConfig(STEPS.REFINEMENT).labels.done
+      statusLabel: getStepConfig(STEPS.INITIAL).labels.done
     });
 
     // Check if this is a regeneration after error
@@ -81,7 +80,11 @@ export class SynthesisStep extends BaseStep {
           onChunk: (text, thought, usage) => {
             if (text.length > 0 && isFirstTextChunk) {
               // Transition to working status on first text chunk (initiates Synthesis Jump)
-              currentAgentStates = this.updateAgentStatus(currentAgentStates, numAgents, 'working');
+              currentAgentStates = this.updateAgentStateById(currentAgentStates, 'synthesizer_agent', {
+                status: 'working',
+                label: config.labels.working,
+                stepId: STEPS.SYNTHESIS
+              });
             }
 
             this.handleStreamChunk(context, -1, text, thought, usage, {
@@ -96,7 +99,13 @@ export class SynthesisStep extends BaseStep {
           onRetry: (attempt) => {
             // Reset jump trigger flag so it can fire again on the next successful attempt
             isFirstTextChunk = true;
-            currentAgentStates = this.handleRetryProgress(context, numAgents, attempt, currentAgentStates);
+            // Update synthesizer with retry label
+            currentAgentStates = this.updateAgentStateById(currentAgentStates, 'synthesizer_agent', {
+              status: 'working',
+              label: `Retrying (Attempt ${attempt})...`,
+              stepId: STEPS.SYNTHESIS
+            });
+            context.onProgress(config.progressMsg, currentAgentStates, { ...context.work });
           }
         }
       );
@@ -112,7 +121,11 @@ export class SynthesisStep extends BaseStep {
       work.results[STEPS.SYNTHESIS] = { text: finalResponseText, sources };
 
       // Mark synthesizer as completed
-      currentAgentStates = this.updateAgentStatus(currentAgentStates, numAgents, 'done');
+      currentAgentStates = this.updateAgentStateById(currentAgentStates, 'synthesizer_agent', {
+        status: 'done',
+        label: config.labels.done,
+        stepId: STEPS.SYNTHESIS
+      });
       onProgress(config.progressMsg, currentAgentStates, work);
 
       return { text: finalResponseText, sources };
@@ -134,7 +147,11 @@ export class SynthesisStep extends BaseStep {
         errorMessage 
       };
       
-      currentAgentStates = this.updateAgentStatus(currentAgentStates, numAgents, 'error', errorLabel);
+      currentAgentStates = this.updateAgentStateById(currentAgentStates, 'synthesizer_agent', {
+        status: 'error',
+        label: errorLabel,
+        stepId: STEPS.SYNTHESIS
+      });
       onProgress(config.progressMsg, currentAgentStates, { ...work });
       throw error;
     }
