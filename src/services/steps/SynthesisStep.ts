@@ -4,7 +4,7 @@ import { AgentState, Source } from '@/types';
 import { prepareGeminiContent } from '@/services/contentUtils';
 import { BaseStep } from '@/services/steps/BaseStep';
 import { getStepResults } from '@/utils/workHelpers';
-import { getStepConfig } from '@/utils/stepConfig';
+import { getStepConfig } from '@/utils/stepConstants';
 import { Logger } from '@/utils/logger';
 
 export class SynthesisStep extends BaseStep {

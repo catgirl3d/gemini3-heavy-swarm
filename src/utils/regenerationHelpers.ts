@@ -1,5 +1,5 @@
 import { StepId, STEPS } from '@/types/steps';
-import { getStepConfig } from '@/utils/stepConfig';
+import { getStepConfig } from '@/utils/stepConstants';
 import { AppSettings, Message, Work } from '@/types';
 import { ensureModelMessageForSynthesis, updateMessageParts, updateWorkAgentNames } from '@/utils/messageHelpers';
 import { getUpdatedAgentName } from '@/utils/agentHelpers';

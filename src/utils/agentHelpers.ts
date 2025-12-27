@@ -1,7 +1,7 @@
 import { AppSettings } from '@/types';
 import { StepId, STEPS } from '@/types/steps';
-import { getStepConfig } from '@/utils/stepConfig';
-import { getAgentRole } from '@/services/steps/utils/roleUtils';
+import { getStepConfig } from '@/utils/stepConstants';
+import { getAgentRole } from '@/utils/roleUtils';
 
 /**
  * Returns a descriptive name for an agent based on the current step and settings.

@@ -6,7 +6,7 @@ import { DebugModal } from '@/components/chat/ShowWork/components/DebugModal';
 import { WorkCard, CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
 import { ArrowDownIcon, TokenIcon } from '@/components/chat/ShowWork/icons';
 import { getStepResults, getStepThoughts, getStepUsage, getSynthesisThought, getSynthesisUsage, getSynthesisResult } from '@/utils/workHelpers';
-import { getStepConfig, hasStepContentError } from '@/utils/stepConfig';
+import { getStepConfig, hasStepContentError } from '@/utils/stepConstants';
 import './ShowWork.css';
 
 // Card metadata for stable callback resolution

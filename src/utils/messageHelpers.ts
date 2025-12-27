@@ -1,7 +1,7 @@
 import { Message, Work, AppSettings } from '@/types';
 import { StepId } from '@/types/steps';
 import { generateUUID } from '@/utils/uuid';
-import { setWorkName } from '@/utils/stepConfig';
+import { setWorkName } from '@/utils/stepConstants';
 import { Logger } from '@/utils/logger';
 
 /**

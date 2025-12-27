@@ -1,6 +1,6 @@
 import { Work, TokenUsage, AgentState } from '@/types';
 import { StepId, STEPS } from '@/types/steps';
-import { getStepConfig } from '@/utils/stepConfig';
+import { getStepConfig } from '@/utils/stepConstants';
 
 /**
  * Safely extracts array-based results for a specific step from the Work object.

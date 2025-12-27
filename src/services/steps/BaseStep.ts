@@ -1,6 +1,6 @@
 import { StepDescriptor, StepContext, StepId, STEPS, StreamConfig, StreamCallbacks, StreamResult, AgentInstruction, MultiAgentConfig } from '@/types/steps';
 import { Tool } from '@google/genai';
-import { getStepConfig, StepConfig } from '@/utils/stepConfig';
+import { getStepConfig, StepConfig } from '@/utils/stepConstants';
 import { AgentState } from '@/types';
 import { createAgentStates, updateAgentState, updateAgentStateById } from '@/services/steps/utils/agentStateUtils';
 import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from '@/services/steps/utils/devModeUtils';

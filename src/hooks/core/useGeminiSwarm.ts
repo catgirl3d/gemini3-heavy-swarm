@@ -6,7 +6,7 @@ import { Logger } from '@/utils/logger';
 import { GeminiService } from '@/services/gemini';
 import { updateStepResult, withEnsuredResults, updateStepWithError } from '@/utils/workHelpers';
 import { generateUUID } from '@/utils/uuid';
-import { getStepConfig } from '@/utils/stepConfig';
+import { getStepConfig } from '@/utils/stepConstants';
 import { 
   updateMessageParts 
 } from '@/utils/messageHelpers';
