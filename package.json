@@ -8,6 +8,7 @@
     "dev:proxy": "node scripts/server.js",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "vitest run",
     "deploy": "npm run build && wrangler pages deploy dist"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
+    "vitest": "^4.0.16",
     "wrangler": "^4.51.0"
   }
 }

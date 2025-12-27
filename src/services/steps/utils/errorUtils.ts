@@ -50,3 +50,14 @@ export const checkGlobalRateLimitFailure = (
   // All errors must be rate limit for a global stop
   return failures.every(isRateLimitError);
 };
+
+/**
+ * Checks if the step is fundamentally broken (e.g., all agents failed).
+ * Useful for "fail-fast" logic to avoid wasting time on subsequent steps.
+ */
+export const checkGlobalStepFailure = (
+  failures: unknown[],
+  totalAgents: number
+): boolean => {
+  return failures.length === totalAgents && totalAgents > 0;
+};

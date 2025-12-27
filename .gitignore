@@ -3,6 +3,7 @@ docs/internal
 docs/temp
 temp/*
 
+
 # Logs
 logs
 *.log
@@ -17,6 +18,7 @@ dist
 dist-ssr
 .env
 *.local
+*.bak
 
 # Editor directories and files
 .vscode/*

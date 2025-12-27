@@ -2,8 +2,8 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { RATE_LIMIT_PER_MINUTE, DEFAULT_ALLOWED_ORIGINS, ALLOWED_MODELS, MAX_REQUEST_SIZE, MAX_CONTENT_CHARS, isProductionEnvironment } from '../constants/security.js';
-import { validateContents, validateContentSize, getTargetModel, buildGeminiUrl } from '../constants/geminiValidation.js';
+import { RATE_LIMIT_PER_MINUTE, DEFAULT_ALLOWED_ORIGINS, ALLOWED_MODELS, MAX_REQUEST_SIZE, MAX_CONTENT_CHARS, isProductionEnvironment } from '../src/constants/security.js';
+import { validateContents, validateContentSize, getTargetModel, buildGeminiUrl } from '../src/constants/geminiValidation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,32 +66,6 @@ app.use((req, res, next) => {
 	const origin = req.headers.origin;
 	const ip = req.ip;
 	
-	// Rate limiting check - only for POST /api/gemini (not static files, OPTIONS, or status checks)
-	const isApiCall = req.method === 'POST' && req.path === '/api/gemini';
-	const now = Math.floor(Date.now() / 60000);
-	const rateLimitKey = `${ip}|${now}`; // Use | separator to avoid conflicts with IPv6 colons
-	const count = rateLimits.get(rateLimitKey) || 0;
-	
-	if (isApiCall) {
-		if (count >= RATE_LIMIT_PER_MINUTE) {
-			return res.status(429).json({ error: 'Too many requests' });
-		}
-		rateLimits.set(rateLimitKey, count + 1);
-	}
-
-	// Clean up old entries occasionally
-	if (rateLimits.size > 1000) {
-		const minuteAgo = now - 1;
-		for (const [key] of rateLimits) {
-				if (key.includes('|')) {
-						const minute = parseInt(key.split('|')[1]);
-						if (minute < minuteAgo) {
-								rateLimits.delete(key);
-						}
-				}
-		}
-	}
-	
 	// Check if origin is in whitelist
 	if (origin && allowedOrigins.includes(origin)) {
 		res.setHeader('Access-Control-Allow-Origin', origin);
@@ -124,6 +98,32 @@ app.use((req, res, next) => {
 		const secret = req.headers['x-api-secret'];
 		if (secret !== API_SECRET) {
 			return res.status(403).json({ error: 'Invalid or missing API secret' });
+		}
+	}
+
+	// Rate limiting check - only for POST /api/gemini (not static files, OPTIONS, or status checks)
+	const isApiCall = req.method === 'POST' && req.path === '/api/gemini';
+	const now = Math.floor(Date.now() / 60000);
+	const rateLimitKey = `${ip}|${now}`; // Use | separator to avoid conflicts with IPv6 colons
+	const count = rateLimits.get(rateLimitKey) || 0;
+	
+	if (isApiCall) {
+		if (count >= RATE_LIMIT_PER_MINUTE) {
+			return res.status(429).json({ error: 'Too many requests' });
+		}
+		rateLimits.set(rateLimitKey, count + 1);
+	}
+
+	// Clean up old entries occasionally
+	if (rateLimits.size > 1000) {
+		const minuteAgo = now - 1;
+		for (const [key] of rateLimits) {
+				if (key.includes('|')) {
+						const minute = parseInt(key.split('|')[1]);
+						if (minute < minuteAgo) {
+								rateLimits.delete(key);
+						}
+				}
 		}
 	}
 	

@@ -5,7 +5,7 @@ import { AgentState } from '@/types';
 import { createAgentStates, updateAgentState, updateAgentStateById } from '@/services/steps/utils/agentStateUtils';
 import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from '@/services/steps/utils/devModeUtils';
 import { extractTextFromParts, extractTokenUsage } from '@/services/steps/utils/streamUtils';
-import { getErrorLabel, checkGlobalRateLimitFailure } from '@/services/steps/utils/errorUtils';
+import { getErrorLabel, checkGlobalRateLimitFailure, checkGlobalStepFailure } from '@/services/steps/utils/errorUtils';
 import { getGenerationConfig } from '@/services/geminiConfig';
 import { GroundingChunk } from '@google/genai';
 import { Logger } from '@/utils/logger';
@@ -57,6 +57,7 @@ export abstract class BaseStep implements StepDescriptor {
   protected extractTokenUsage = extractTokenUsage;
   protected getErrorLabel = getErrorLabel;
   protected checkGlobalRateLimitFailure = checkGlobalRateLimitFailure;
+  protected checkGlobalStepFailure = checkGlobalStepFailure;
 
   protected formatExecuteError(reason: unknown): string {
     const config = getStepConfig(this.id);
@@ -266,6 +267,13 @@ export abstract class BaseStep implements StepDescriptor {
         work.results[this.id] = [...results];
         onProgress('Rate limit reached', agentStates, { ...work });
         throw failures[0];
+    }
+
+    if (this.checkGlobalStepFailure(failures, settings.numAgents)) {
+      work.results[this.id] = [...results];
+      const config = getStepConfig(this.id);
+      onProgress(`${config.name} failed`, agentStates, { ...work });
+      throw failures[0];
     }
 
     work.results[this.id] = [...results];

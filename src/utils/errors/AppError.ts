@@ -46,7 +46,12 @@ export class AppError extends Error {
       case ErrorCode.NETWORK_ERROR:
         return 'Network error. Please check your connection and try again.';
       case ErrorCode.INVALID_SETTINGS:
+        if (this.message.includes('Origin not allowed')) {
+          return 'Configuration error: Your browser origin is not allowed by the proxy.';
+        }
         return 'Configuration error. Please check your API key or model settings.';
+      case ErrorCode.PROXY_ERROR:
+        return this.message || 'The proxy encountered an error. Please try again later.';
       case ErrorCode.VALIDATION_ERROR:
         return 'Invalid request. Please check your prompt or model configuration.';
       case ErrorCode.ABORTED:

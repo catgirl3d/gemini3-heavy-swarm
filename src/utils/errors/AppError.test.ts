@@ -1,12 +1,11 @@
+import { describe, it, expect } from 'vitest';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
 
 /**
  * Unit tests for AppError classification logic.
  * These examples correspond to real-world errors from Google Gemini API and SDK.
  */
-function runTests() {
-  console.log('--- Running AppError Classification Tests ---');
-
+describe('AppError Classification', () => {
   const testCases = [
     {
       name: '429 via HTTP status',
@@ -65,31 +64,10 @@ function runTests() {
     }
   ];
 
-  let passed = 0;
   testCases.forEach(tc => {
-    const appErr = AppError.from(tc.input.err, tc.input.status);
-    if (appErr.code === tc.expected) {
-      console.log(`✅ [PASS] ${tc.name}`);
-      passed++;
-    } else {
-      console.log(`❌ [FAIL] ${tc.name}`);
-      console.log(`   Expected: ${tc.expected}`);
-      console.log(`   Received: ${appErr.code}`);
-      console.log(`   Message : ${appErr.message}`);
-    }
+    it(tc.name, () => {
+      const appErr = AppError.from(tc.input.err, tc.input.status);
+      expect(appErr.code).toBe(tc.expected);
+    });
   });
-
-  console.log(`\nResults: ${passed}/${testCases.length} tests passed.`);
-  
-  if (passed === testCases.length) {
-    console.log('Overall: SUCCESS');
-  } else {
-    console.log('Overall: FAILURE');
-    process.exit(1);
-  }
-}
-
-// Check if running in Node environment
-if (typeof process !== 'undefined') {
-  runTests();
-}
+});
