@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { CodeBlock } from '@/components/CodeBlock';
 import './MarkdownRenderer.css';
 
-export const MarkdownRenderer: FC<{ content: string }> = ({ content }) => (
+const MarkdownRendererComponent: FC<{ content: string }> = ({ content }) => (
   <div className="markdown-content">
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -22,3 +22,6 @@ export const MarkdownRenderer: FC<{ content: string }> = ({ content }) => (
     </ReactMarkdown>
   </div>
 );
+
+// Memoized to prevent expensive markdown parsing on every render
+export const MarkdownRenderer = React.memo(MarkdownRendererComponent);

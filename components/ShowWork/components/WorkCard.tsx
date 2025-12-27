@@ -1,4 +1,4 @@
-import React, { FC, ReactNode, memo, useCallback, useMemo } from 'react';
+import React, { FC, ReactNode, memo, useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { TokenUsage as TokenUsageType } from '@/types';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { SpinnerIcon, ErrorIcon, CheckIcon, ExpandIcon, ThoughtIcon, DebugIcon, DownloadIcon, RegenerateIcon } from '@/components/ShowWork/icons';
@@ -29,6 +29,52 @@ interface WorkCardProps {
   className?: string;
 }
 
+/**
+ * Custom hook to throttle content updates during active streaming.
+ * It ensures markdown parsing doesn't happen on every single token, 
+ * which can be 10-30 times per second per agent.
+ */
+function useThrottledContent(content: string | null, status: string, throttleMs: number = 300) {
+  const [throttledContent, setThrottledContent] = useState(content);
+  const lastUpdateRef = useRef<number>(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // If status is not 'working', update immediately
+    if (status !== 'working') {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      setThrottledContent(content);
+      lastUpdateRef.current = Date.now();
+      return;
+    }
+
+    const now = Date.now();
+    const timeSinceLastUpdate = now - lastUpdateRef.current;
+
+    if (timeSinceLastUpdate >= throttleMs) {
+      // Enough time has passed, update now
+      if (timerRef.current) clearTimeout(timerRef.current);
+      setThrottledContent(content);
+      lastUpdateRef.current = now;
+    } else {
+      // Schedule an update for the remainder of the throttle period
+      if (!timerRef.current) {
+        timerRef.current = setTimeout(() => {
+          setThrottledContent(content);
+          lastUpdateRef.current = Date.now();
+          timerRef.current = null;
+        }, throttleMs - timeSinceLastUpdate);
+      }
+    }
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [content, status, throttleMs]);
+
+  return throttledContent;
+}
+
 const WorkCardComponent: FC<WorkCardProps> = ({
   title,
   statusLabel,
@@ -47,6 +93,8 @@ const WorkCardComponent: FC<WorkCardProps> = ({
   downloadFilename,
   className = ''
 }) => {
+  const throttledContent = useThrottledContent(content, status);
+
   // Unified action handlers that use stable cardId pattern when available
   const handleExpand = useCallback(() => {
     if (cardId && onCardAction) {
@@ -174,7 +222,7 @@ const WorkCardComponent: FC<WorkCardProps> = ({
         )}
       </div>
       <div className="modal-body work-card-body">
-        {renderContent(content)}
+        {renderContent(throttledContent)}
       </div>
       {tokenUsage && (
         <div className="modal-footer work-card-footer">
