@@ -1,4 +1,4 @@
-import { AppSettings } from '@/types';
+import { AppSettings, PromptTypeId } from '@/types';
 
 export interface SettingsModalProps {
     isOpen: boolean;
@@ -10,7 +10,7 @@ export interface SettingsModalProps {
 
 export type TabType = 'general' | 'prompts' | 'roles';
 export type RoleType = 'drafter' | 'critic';
-export type InstructionType = 'initial_prompt' | 'refinement_prompt' | 'synthesis_prompt';
+export type InstructionType = PromptTypeId;
 
 export interface ProfileMetadata {
     id: InstructionType;

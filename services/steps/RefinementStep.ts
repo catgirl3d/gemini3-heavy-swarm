@@ -1,5 +1,5 @@
 import { Content } from '@google/genai';
-import { StepContext, StepId } from '@/types/steps';
+import { StepContext, StepId, STEPS } from '@/types/steps';
 import { AgentState } from '@/types';
 import { prepareGeminiContent } from '@/services/contentUtils';
 import { getAgentRole } from '@/services/steps/utils/roleUtils';
@@ -8,9 +8,9 @@ import { getStepResults } from '@/utils/workHelpers';
 import { getStepConfig, hasStepContentError } from '@/utils/stepConfig';
 
 export class RefinementStep extends BaseStep {
-  id: StepId = 'refinement_step';
-  name = getStepConfig('refinement_step').name;
-  description = getStepConfig('refinement_step').description;
+  id: StepId = STEPS.REFINEMENT;
+  name = getStepConfig(STEPS.REFINEMENT).name;
+  description = getStepConfig(STEPS.REFINEMENT).description;
   ui = {
     visibleInModal: true,
     regenerateLabel: 'Regenerate Refined Response'
@@ -18,7 +18,7 @@ export class RefinementStep extends BaseStep {
 
   async execute(context: StepContext): Promise<string[]> {
     const { work } = context;
-    const initialDrafts = getStepResults(work, 'initial_step');
+    const initialDrafts = getStepResults(work, STEPS.INITIAL);
     
     if (initialDrafts.length === 0) {
       throw new Error('Cannot run refinement step without initial drafts');
@@ -34,7 +34,7 @@ export class RefinementStep extends BaseStep {
     const { ai, settings, work, signal } = context;
     if (!ai) throw new Error("API Key not found");
 
-    const initialDrafts = getStepResults(work, 'initial_step');
+    const initialDrafts = getStepResults(work, STEPS.INITIAL);
     
     if (initialDrafts.length === 0) {
       throw new Error('Cannot regenerate refinement without initial drafts');
@@ -43,8 +43,8 @@ export class RefinementStep extends BaseStep {
     const { systemInstruction, userTurn, mainChatHistory } = this.prepareRefinement(context, agentIndex, initialDrafts as string[]);
 
     // Capture debug info for regeneration
-    if (context.work.debugInfo && context.work.debugInfo['refinement_step']) {
-        context.work.debugInfo['refinement_step'][agentIndex] = {
+    if (context.work.debugInfo && context.work.debugInfo[STEPS.REFINEMENT]) {
+        (context.work.debugInfo[STEPS.REFINEMENT] as any)[agentIndex] = {
             systemInstruction,
             history: mainChatHistory,
             userTurn: userTurn
@@ -79,7 +79,7 @@ export class RefinementStep extends BaseStep {
     const peerDrafts = initialDrafts
       .map((text: string, i: number) => ({ text, id: i + 1 }))
       .filter((_, i) => i !== index)
-      .filter((a) => !hasStepContentError(a.text, 'initial_step'))
+      .filter((a) => !hasStepContentError(a.text, STEPS.INITIAL))
       .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
       .join('\n\n');
 

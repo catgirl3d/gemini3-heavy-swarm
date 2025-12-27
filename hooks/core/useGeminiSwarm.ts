@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { AppSettings, Message, AgentState, Work } from '@/types';
-import { StepId } from '@/types/steps';
+import { StepId, STEPS } from '@/types/steps';
 import { Logger } from '@/utils/logger';
 
 import { GeminiService } from '@/services/gemini';
@@ -163,8 +163,8 @@ export const useGeminiSwarm = () => {
 
       const errorMessage = getFriendlyErrorMessage(error);
 
-      const initialResults = latestWork?.results?.['initial_step'];
-      const refinementResults = latestWork?.results?.['refinement_step'];
+      const initialResults = latestWork?.results?.[STEPS.INITIAL];
+      const refinementResults = latestWork?.results?.[STEPS.REFINEMENT];
       const hasPartialResults = latestWork && (
         (Array.isArray(initialResults) && initialResults.some(r => r && !r.includes('[System:'))) ||
         (Array.isArray(refinementResults) && refinementResults.some(r => r && !r.includes('[System:')))
@@ -212,12 +212,12 @@ export const useGeminiSwarm = () => {
 
 
     // Start loading state (but NOT for synthesis - it will hide on first chunk)
-    if (stepId !== 'synthesis_step') {
+    if (stepId !== STEPS.SYNTHESIS) {
       setIsLoading(true);
     }
     // For synthesis: keep cards visible until first chunk arrives
     // The onSynthesisStart callback will handle hiding them
-    if (stepId !== 'synthesis_step') {
+    if (stepId !== STEPS.SYNTHESIS) {
       setIsPaused(false);
     }
 
@@ -226,7 +226,7 @@ export const useGeminiSwarm = () => {
       const labels = getStepLabels(stepId);
       // Only set working status immediately for non-synthesis steps
       // For synthesis, this will be done in onSynthesisStart to maintain cards visibility
-      if (stepId !== 'synthesis_step') {
+      if (stepId !== STEPS.SYNTHESIS) {
         syncStatus('working', labels.regenerating);
       }
       const history = messages.slice(0, messageIndex);
@@ -258,7 +258,7 @@ export const useGeminiSwarm = () => {
                * ensuring the user sees the final answer appearing in the message list.
                * Also sets the synthesizer to 'working' status at this moment.
                */
-              syncStatus('working', getStepConfig('synthesis_step').labels.working);
+              syncStatus('working', getStepConfig(STEPS.SYNTHESIS).labels.working);
               setIsLoading(false);
               setIsPaused(false);
             }
@@ -290,7 +290,7 @@ export const useGeminiSwarm = () => {
             if (nextMsg && nextMsg.role === 'model') {
               msg = nextMsg;
               targetIndex = messageIndex + 1;
-            } else if (stepId === 'synthesis_step') {
+            } else if (stepId === STEPS.SYNTHESIS) {
               // Fallback for synthesis messages pushed to the end
               targetIndex = newMessages.length - 1;
               msg = newMessages[targetIndex];
@@ -326,7 +326,7 @@ export const useGeminiSwarm = () => {
 
       syncStatus('done', labels.done);
 
-      if (stepId === 'synthesis_step') {
+      if (stepId === STEPS.SYNTHESIS) {
         const logger = new Logger('Synthesis', settings.debugMode);
         logger.debug('Synthesis regeneration logic complete');
         finalizeSynthesisState(labels.done);
@@ -347,7 +347,7 @@ export const useGeminiSwarm = () => {
         
         // Find the target message (could be at messageIndex or messageIndex + 1 for synthesis)
         let msg = newMessages[targetIndex];
-        if (stepId === 'synthesis_step' && (!msg || msg.role !== 'model')) {
+        if (stepId === STEPS.SYNTHESIS && (!msg || msg.role !== 'model')) {
           msg = newMessages[targetIndex + 1];
           targetIndex = targetIndex + 1;
         }
@@ -386,7 +386,7 @@ export const useGeminiSwarm = () => {
         if (workToUse) {
           const updatedAgentStates = (workToUse.agentStates || agentStates || []).map(agent => {
             if (agent.id === 'synthesizer_agent') {
-              return { ...agent, status: 'done' as const, label: doneLabel, stepId: 'synthesis_step' as StepId };
+              return { ...agent, status: 'done' as const, label: doneLabel, stepId: STEPS.SYNTHESIS as StepId };
             }
             return agent;
           });

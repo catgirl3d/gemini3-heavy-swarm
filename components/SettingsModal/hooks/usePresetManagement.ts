@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppSettings, PromptProfile, RoleProfile } from '@/types';
+import { AppSettings, PromptProfile, RoleProfile, PROMPT_TYPES } from '@/types';
 import { DEFAULT_SETTINGS } from '@/constants';
 import { InstructionType } from '@/components/SettingsModal/types';
 
@@ -45,7 +45,7 @@ export function usePresetManagement(
         const profilePresets = (localSettings.profiles || []).filter(p => p.id !== localSettings.activeProfileId).map(p => ({
             id: p.id,
             name: p.name,
-            instruction: type === 'initial_prompt' ? p.initialInstruction : type === 'refinement_prompt' ? p.refinementInstruction : p.synthesizerInstruction,
+            instruction: type === PROMPT_TYPES.INITIAL ? p.initialInstruction : type === PROMPT_TYPES.REFINEMENT ? p.refinementInstruction : p.synthesizerInstruction,
             isCustom: false
         }));
 
@@ -62,9 +62,9 @@ export function usePresetManagement(
     const handleSaveInstructionPreset = (editingInstruction: InstructionType | null, newPresetName: string) => {
         if (!editingInstruction || !newPresetName.trim()) return;
 
-        const currentInstruction = editingInstruction === 'initial_prompt'
+        const currentInstruction = editingInstruction === PROMPT_TYPES.INITIAL
             ? activeProfile.initialInstruction
-            : editingInstruction === 'refinement_prompt'
+            : editingInstruction === PROMPT_TYPES.REFINEMENT
                 ? activeProfile.refinementInstruction
                 : activeProfile.synthesizerInstruction;
 
@@ -123,7 +123,7 @@ export function usePresetManagement(
                 if (p.id === prev.activeProfileId) {
                     return {
                         ...p,
-                        [type === 'initial_prompt' ? 'initialInstruction' : type === 'refinement_prompt' ? 'refinementInstruction' : 'synthesizerInstruction']: instruction
+                        [type === PROMPT_TYPES.INITIAL ? 'initialInstruction' : type === PROMPT_TYPES.REFINEMENT ? 'refinementInstruction' : 'synthesizerInstruction']: instruction
                     };
                 }
                 return p;

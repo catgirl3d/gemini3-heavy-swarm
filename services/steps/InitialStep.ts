@@ -1,5 +1,5 @@
 import { Content } from '@google/genai';
-import { StepContext, StepId } from '@/types/steps';
+import { StepContext, StepId, STEPS } from '@/types/steps';
 import { AgentState } from '@/types';
 import { prepareGeminiContent } from '@/services/contentUtils';
 import { getAgentRole } from '@/services/steps/utils/roleUtils';
@@ -7,9 +7,9 @@ import { BaseStep } from '@/services/steps/BaseStep';
 import { getStepConfig } from '@/utils/stepConfig';
 
 export class InitialStep extends BaseStep {
-  id: StepId = 'initial_step';
-  name = getStepConfig('initial_step').name;
-  description = getStepConfig('initial_step').description;
+  id: StepId = STEPS.INITIAL;
+  name = getStepConfig(STEPS.INITIAL).name;
+  description = getStepConfig(STEPS.INITIAL).description;
   ui = {
     visibleInModal: true,
     regenerateLabel: 'Regenerate Initial Response'
@@ -30,8 +30,8 @@ export class InitialStep extends BaseStep {
     const { systemInstruction, userTurn, mainChatHistory } = this.prepareInstruction(context, agentIndex);
 
     // Capture debug info for regeneration
-    if (context.work.debugInfo && context.work.debugInfo['initial_step']) {
-        context.work.debugInfo['initial_step'][agentIndex] = {
+    if (context.work.debugInfo && context.work.debugInfo[STEPS.INITIAL]) {
+        (context.work.debugInfo[STEPS.INITIAL] as any)[agentIndex] = {
             systemInstruction,
             history: mainChatHistory,
             userTurn

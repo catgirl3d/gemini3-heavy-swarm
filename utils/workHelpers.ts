@@ -1,5 +1,5 @@
 import { Work, TokenUsage, AgentState } from '@/types';
-import { StepId } from '@/types/steps';
+import { StepId, STEPS } from '@/types/steps';
 import { getStepConfig } from '@/utils/stepConfig';
 
 /**
@@ -53,7 +53,7 @@ export function getStepUsage(work: Work, stepId: StepId): (TokenUsage | null)[] 
  * @returns The synthesis thought string, or null if not available or not a string.
  */
 export function getSynthesisThought(work: Work): string | null {
-  const raw = work.results?.['synthesis_step_thought' as keyof NonNullable<Work['results']>];
+  const raw = work.results?.[`${STEPS.SYNTHESIS}_thought` as keyof NonNullable<Work['results']>];
   return typeof raw === 'string' ? raw : null;
 }
 
@@ -64,7 +64,7 @@ export function getSynthesisThought(work: Work): string | null {
  * @returns The synthesis token usage object, or null if not available or invalid structure.
  */
 export function getSynthesisUsage(work: Work): TokenUsage | null {
-  const raw = work.results?.['synthesis_step_usage' as keyof NonNullable<Work['results']>];
+  const raw = work.results?.[`${STEPS.SYNTHESIS}_usage` as keyof NonNullable<Work['results']>];
   return raw && typeof raw === 'object' && 'totalTokens' in raw ? raw as TokenUsage : null;
 }
 
@@ -78,7 +78,7 @@ export function getSynthesisUsage(work: Work): TokenUsage | null {
  *          - null if not available
  */
 export function getSynthesisResult(work: Work): { text?: string; error?: boolean } | string | null {
-  const raw = work.results?.['synthesis_step' as keyof NonNullable<Work['results']>];
+  const raw = work.results?.[STEPS.SYNTHESIS as keyof NonNullable<Work['results']>];
   if (typeof raw === 'string') return raw;
   if (raw && typeof raw === 'object' && ('text' in raw || 'error' in raw)) {
     return raw as { text?: string; error?: boolean };
@@ -118,7 +118,7 @@ export function updateStepResult(
   
   let updatedStepData: unknown;
   
-  if (stepId === 'synthesis_step') {
+  if (stepId === STEPS.SYNTHESIS) {
     const existing = currentResults[stepId];
     // Explicit array check prevents incorrect spreading if existing is an array (legacy bug)
     const base = existing && typeof existing === 'object' && !Array.isArray(existing) 
@@ -160,7 +160,7 @@ function createStepErrorData(
 ): unknown {
   const config = getStepConfig(stepId);
   
-  if (stepId === 'synthesis_step') {
+  if (stepId === STEPS.SYNTHESIS) {
     return {
       text: `[System: ${config.errorPrefix}. ${errorMessage}]`,
       error: true,

@@ -1,5 +1,5 @@
 import { Content } from '@google/genai';
-import { StepContext, StepId } from '@/types/steps';
+import { StepContext, StepId, STEPS } from '@/types/steps';
 import { AgentState, Source } from '@/types';
 import { prepareGeminiContent } from '@/services/contentUtils';
 import { BaseStep } from '@/services/steps/BaseStep';
@@ -8,9 +8,9 @@ import { getStepConfig } from '@/utils/stepConfig';
 import { Logger } from '@/utils/logger';
 
 export class SynthesisStep extends BaseStep {
-  id: StepId = 'synthesis_step';
-  name = getStepConfig('synthesis_step').name;
-  description = getStepConfig('synthesis_step').description;
+  id: StepId = STEPS.SYNTHESIS;
+  name = getStepConfig(STEPS.SYNTHESIS).name;
+  description = getStepConfig(STEPS.SYNTHESIS).description;
   ui = {
     visibleInModal: false, // Synthesis result is the main message text, not shown in "Show Work"
     regenerateLabel: 'Regenerate Final Answer',
@@ -21,7 +21,7 @@ export class SynthesisStep extends BaseStep {
     const { ai, settings, history, userInput, image, imageFile, work, onProgress, onMessageUpdate, signal } = context;
 
     // Ensure we have refined drafts
-    const refinedDrafts = getStepResults(work, 'refinement_step');
+    const refinedDrafts = getStepResults(work, STEPS.REFINEMENT);
     
     if (refinedDrafts.length === 0) {
       throw new Error('Cannot run synthesis step without refined drafts');
@@ -31,13 +31,13 @@ export class SynthesisStep extends BaseStep {
     // We use common state utils to prepare the initial state for the UI
     const numAgents = settings.numAgents;
     const refinedAgents = this.createAgentStates(numAgents, settings, {
-      stepId: 'refinement_step',
+      stepId: STEPS.REFINEMENT,
       status: 'done',
-      statusLabel: getStepConfig('refinement_step').labels.done
+      statusLabel: getStepConfig(STEPS.REFINEMENT).labels.done
     });
 
     // Check if this is a regeneration after error
-    const existingSynthesisResult = work.results?.['synthesis_step'];
+    const existingSynthesisResult = work.results?.[STEPS.SYNTHESIS];
     const hadError = typeof existingSynthesisResult === 'object' && existingSynthesisResult?.error === true;
     
     const config = getStepConfig(this.id);
@@ -46,7 +46,7 @@ export class SynthesisStep extends BaseStep {
       name: 'Synthesizer Agent',
       status: hadError ? 'error' : 'working', // Keep error status until first chunk arrives
       label: hadError ? 'Retrying synthesis...' : config.labels.working,
-      stepId: 'synthesis_step'
+      stepId: STEPS.SYNTHESIS
     };
     
     let currentAgentStates: AgentState[] = [...refinedAgents, synthesizerState];
@@ -64,7 +64,7 @@ export class SynthesisStep extends BaseStep {
 
       // Simulation mode for testing error UI (controlled via settings)
       if (settings.simulateSynthesisError && settings.simulateSynthesisError !== 'none') {
-        const synthesisResult = work.results?.['synthesis_step'] as any;
+        const synthesisResult = work.results?.[STEPS.SYNTHESIS] as any;
         const isFirstAttempt = !synthesisResult || (!synthesisResult.text && !synthesisResult.error);
         if (isFirstAttempt) {
           logger.debug(`SIMULATION: Throwing simulated ${settings.simulateSynthesisError} error for testing`);
@@ -111,7 +111,7 @@ export class SynthesisStep extends BaseStep {
       });
 
       // Update generic results map
-      work.results['synthesis_step'] = { text: finalResponseText, sources };
+      work.results[STEPS.SYNTHESIS] = { text: finalResponseText, sources };
 
       // Mark synthesizer as completed
       currentAgentStates = this.updateAgentStatus(currentAgentStates, numAgents, 'done');
@@ -121,7 +121,7 @@ export class SynthesisStep extends BaseStep {
     } catch (error) {
       logger.debug('SYNTHESIS FAILED', { 
         error: error instanceof Error ? error.message : String(error),
-        thoughtLength: work.results?.['synthesis_step_thought']?.length || 0
+        thoughtLength: (work.results?.[`${STEPS.SYNTHESIS}_thought`] as string)?.length || 0
       });
       logger.debug('SYNTHESIS ERROR (will be logged at top level)', { error });
       
@@ -130,7 +130,7 @@ export class SynthesisStep extends BaseStep {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       
       // Save error info to results for UI display
-      work.results['synthesis_step'] = { 
+      work.results[STEPS.SYNTHESIS] = { 
         text: this.formatExecuteError(error),
         error: true,
         errorMessage 
@@ -181,8 +181,8 @@ As defined in <mission> synthesize the best single, final answer from <agent_dra
     const synthesizerTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}`}] };
 
     // Capture debug info
-    this.ensureDebugInfo(work, 'synthesis_step', false);
-    work.debugInfo['synthesis_step'] = {
+    this.ensureDebugInfo(work, STEPS.SYNTHESIS, false);
+    work.debugInfo[STEPS.SYNTHESIS] = {
         systemInstruction,
         history: mainChatHistory,
         userTurn: synthesizerTurn

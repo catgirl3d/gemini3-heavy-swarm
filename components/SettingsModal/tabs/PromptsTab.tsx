@@ -1,5 +1,5 @@
 import React, { FC, ChangeEvent } from 'react';
-import { AppSettings, PromptProfile } from '@/types';
+import { AppSettings, PromptProfile, PROMPT_TYPES } from '@/types';
 import { ProfileHeader } from '@/components/SettingsModal/components/ProfileHeader';
 import { InstructionItem } from '@/components/SettingsModal/components/InstructionItem';
 import { INSTRUCTION_METADATA } from '@/components/SettingsModal/constants';
@@ -51,7 +51,7 @@ export const PromptsTab: FC<PromptsTabProps> = ({
                 </div>
                 <div className="roles-list-container">
                     <div className="roles-list">
-                        {(['initial_prompt', 'refinement_prompt', 'synthesis_prompt'] as const).map((id, index) => (
+                        {([PROMPT_TYPES.INITIAL, PROMPT_TYPES.REFINEMENT, PROMPT_TYPES.SYNTHESIS] as const).map((id, index) => (
                             <InstructionItem
                                 key={id}
                                 index={index}

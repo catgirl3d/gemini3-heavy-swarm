@@ -1,5 +1,6 @@
-import { AppSettings, Message, AgentState, Work, StepId, TokenUsage } from '@/types/index';
+import { AppSettings, Message, AgentState, Work, StepId, TokenUsage, STEPS } from '@/types/index';
 export type { StepId };
+export { STEPS };
 import { GoogleGenAI, Content, Tool, GroundingChunk } from '@google/genai';
 import { ProxyGenAI } from '@/services/ProxyGenAI';
 
@@ -56,7 +57,7 @@ export interface StepDescriptor {
   
   // Description of what this step does
   description?: string;
-
+ 
   // Configuration for the UI (optional)
   ui?: {
     // If true, this step's output is shown in the "Show Work" modal

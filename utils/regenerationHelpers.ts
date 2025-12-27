@@ -1,4 +1,4 @@
-import { StepId } from '@/types/steps';
+import { StepId, STEPS } from '@/types/steps';
 import { getStepConfig } from '@/utils/stepConfig';
 import { AppSettings, Message, Work } from '@/types';
 import { ensureModelMessageForSynthesis, updateMessageParts, updateWorkAgentNames } from '@/utils/messageHelpers';
@@ -100,7 +100,7 @@ export function calculateUpdatedStateForRegeneration(
   let updatedMsgs = [...messages];
 
   // 1. Handle Message Updates
-  if (stepId === 'synthesis_step') {
+  if (stepId === STEPS.SYNTHESIS) {
     const { updatedMessages, targetIndex } = processSynthesisChunkUpdate(
       messages, messageIndex, workContext, text, settings, isFirstChunk, onSynthesisStart
     );

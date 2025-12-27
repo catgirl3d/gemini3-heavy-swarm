@@ -1,4 +1,4 @@
-import { StepId } from '@/types/steps';
+import { StepId, STEPS } from '@/types/steps';
 import { Work } from '@/types';
 
 /**
@@ -39,7 +39,7 @@ export interface StepConfig {
 }
 
 const STEP_CONFIGS: Record<StepId, StepConfig> = {
-  'initial_step': {
+  [STEPS.INITIAL]: {
     namePrefix: 'Agent',
     roleKey: 'roles',
     namesKey: 'agentNames',
@@ -57,7 +57,7 @@ const STEP_CONFIGS: Record<StepId, StepConfig> = {
     allowPause: true,
     pauseSettingKey: 'pauseAfterInitial'
   },
-  'refinement_step': {
+  [STEPS.REFINEMENT]: {
     namePrefix: 'Critic',
     roleKey: 'criticRoles',
     namesKey: 'criticNames',
@@ -75,7 +75,7 @@ const STEP_CONFIGS: Record<StepId, StepConfig> = {
     allowPause: true,
     pauseSettingKey: 'pauseAfterRefinement'
   },
-  'synthesis_step': {
+  [STEPS.SYNTHESIS]: {
     namePrefix: 'Synthesizer',
     roleKey: 'roles', // Not used for synthesis
     namesKey: null,
@@ -107,7 +107,7 @@ export function getStepConfig(stepId: StepId): StepConfig {
 export function getWorkNames(work: Work, stepId: StepId): string[] | undefined {
   const config = STEP_CONFIGS[stepId];
   if (!config.namesKey) return undefined;
-  return work[config.namesKey];
+  return work[config.namesKey] as string[] | undefined;
 }
 
 /**
@@ -117,7 +117,7 @@ export function setWorkName(work: Work, stepId: StepId, index: number, name: str
   const config = STEP_CONFIGS[stepId];
   if (!config.namesKey) return work;
   
-  const currentNames = work[config.namesKey] || [];
+  const currentNames = (work[config.namesKey] as string[]) || [];
   const newNames = [...currentNames];
   newNames[index] = name;
   

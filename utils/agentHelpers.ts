@@ -1,5 +1,5 @@
 import { AppSettings } from '@/types';
-import { StepId } from '@/types/steps';
+import { StepId, STEPS } from '@/types/steps';
 import { getStepConfig } from '@/utils/stepConfig';
 import { getAgentRole } from '@/services/steps/utils/roleUtils';
 
@@ -15,7 +15,7 @@ export function getUpdatedAgentName(index: number, stepId: StepId, settings: App
   const config = getStepConfig(stepId);
   
   // Synthesis step has no indexed agents
-  if (stepId === 'synthesis_step') {
+  if (stepId === STEPS.SYNTHESIS) {
     return config.namePrefix;
   }
   

@@ -14,7 +14,7 @@ import { ScrollToBottomButton } from '@/components/ScrollToBottomButton';
 import { SettingsModal } from '@/components/SettingsModal/SettingsModal';
 import { InfoModal } from '@/components/InfoModal';
 import { Toast, ToastType } from '@/components/Toast/Toast';
-import { StepId } from '@/types/steps';
+import { StepId, STEPS } from '@/types/steps';
 
 export const App: FC = () => {
   const {
@@ -121,7 +121,7 @@ export const App: FC = () => {
 
   // Memoized handler for regeneration to prevent MessageList re-renders
   const handleRegenerate = useCallback((msgIndex: number, phase: StepId, agentIndex: number) => {
-    if (phase === 'synthesis_step') {
+    if (phase === STEPS.SYNTHESIS) {
       setShouldAutoScroll(true);
       // Force jump to bottom immediately
       setTimeout(() => scrollToBottom(), 0);

@@ -1,5 +1,5 @@
 import React, { FC, useState, useEffect, useMemo } from 'react';
-import { AppSettings } from '@/types';
+import { AppSettings, PROMPT_TYPES } from '@/types';
 import { DEFAULT_SETTINGS, IS_FORCED_PROXY } from '@/constants';
 import { isUsingProxy as checkProxyUsage } from '@/services/proxyUtils';
 
@@ -187,7 +187,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         title={`Configure ${editingInstruction.replace('_prompt', '').charAt(0).toUpperCase() + editingInstruction.replace('_prompt', '').slice(1)} Instruction`}
                         fields={[{
                             label: "Instruction",
-                            value: editingInstruction === 'initial_prompt' ? activeProfile.initialInstruction : editingInstruction === 'refinement_prompt' ? activeProfile.refinementInstruction : activeProfile.synthesizerInstruction,
+                            value: editingInstruction === PROMPT_TYPES.INITIAL ? activeProfile.initialInstruction : editingInstruction === PROMPT_TYPES.REFINEMENT ? activeProfile.refinementInstruction : activeProfile.synthesizerInstruction,
                             onChange: (val) => presetMgr.handleApplyInstructionPreset(editingInstruction, val),
                             type: 'textarea', placeholder: "Enter instructions...", autoFocus: true
                         }]}

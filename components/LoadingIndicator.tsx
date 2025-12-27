@@ -1,6 +1,6 @@
 import React, { FC } from 'react';
 import { AgentState, Work } from '@/types';
-import { StepId } from '@/types/steps';
+import { StepId, STEPS } from '@/types/steps';
 import { AgentAvatar } from '@/components/AgentAvatar';
 import { ShowWork } from '@/components/ShowWork/ShowWork';
 import { TimerDisplay } from '@/components/TimerDisplay';
@@ -21,7 +21,7 @@ export const LoadingIndicator: FC<{
   const handleContinueClick = () => {
     if (isSynthesizerError && onRegenerate) {
       // Synthesizer errored - Continue should retry synthesis
-                onRegenerate?.('synthesis_step', 0);
+      onRegenerate?.(STEPS.SYNTHESIS, 0);
     } else if (onContinue) {
       // Normal pause - continue the workflow
       onContinue();

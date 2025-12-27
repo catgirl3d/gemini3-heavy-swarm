@@ -1,4 +1,4 @@
-import { AppSettings, RoleProfile, SavedInstruction, LegacySavedInstruction, AgentRole } from '@/types';
+import { AppSettings, RoleProfile, SavedInstruction, LegacySavedInstruction, AgentRole, PROMPT_TYPES, PromptTypeId } from '@/types';
 import { DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES } from '@/constants';
 
 /**
@@ -16,11 +16,11 @@ export interface LegacyAppSettings extends Partial<AppSettings> {
  */
 function migrateLegacyInstructionType(
   legacyType: 'initial' | 'refinement' | 'synthesizer'
-): 'initial_prompt' | 'refinement_prompt' | 'synthesis_prompt' {
+): PromptTypeId {
   const typeMap = {
-    'initial': 'initial_prompt' as const,
-    'refinement': 'refinement_prompt' as const,
-    'synthesizer': 'synthesis_prompt' as const
+    'initial': PROMPT_TYPES.INITIAL,
+    'refinement': PROMPT_TYPES.REFINEMENT,
+    'synthesizer': PROMPT_TYPES.SYNTHESIS
   };
   return typeMap[legacyType];
 }

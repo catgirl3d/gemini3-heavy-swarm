@@ -8,7 +8,7 @@ import { StepRunner } from '@/services/StepRunner';
 import { InitialStep } from '@/services/steps/InitialStep';
 import { RefinementStep } from '@/services/steps/RefinementStep';
 import { SynthesisStep } from '@/services/steps/SynthesisStep';
-import { StepContext, StepDescriptor, StepId } from '@/types/steps';
+import { StepContext, StepDescriptor, StepId, STEPS } from '@/types/steps';
 import { getUpdatedAgentName } from '@/utils/agentHelpers';
 import { Logger } from '@/utils/logger';
 
@@ -54,10 +54,10 @@ export class GeminiService {
       results: {},
       stepMetadata: [],
       agentNames: Array.from({ length: settings.numAgents }, (_, i) => 
-        getUpdatedAgentName(i, 'initial_step', settings)
+        getUpdatedAgentName(i, STEPS.INITIAL, settings)
       ),
       criticNames: Array.from({ length: settings.numAgents }, (_, i) => 
-        getUpdatedAgentName(i, 'refinement_step', settings)
+        getUpdatedAgentName(i, STEPS.REFINEMENT, settings)
       )
     };
 
@@ -85,7 +85,7 @@ export class GeminiService {
     const finalWork = await runner.run(context, pauseResolverRef);
 
     // Extract final result from synthesis step
-    const synthesisResult = finalWork.results?.['synthesis_step'] as { text?: string; sources?: Source[] } | undefined;
+    const synthesisResult = finalWork.results?.[STEPS.SYNTHESIS] as { text?: string; sources?: Source[] } | undefined;
     
     return {
       text: synthesisResult?.text || '',

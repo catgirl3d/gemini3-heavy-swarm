@@ -18,11 +18,32 @@ export interface RoleProfile {
     criticRoles?: AgentRole[];
 }
 
+/** Pipeline step identifiers. Note: 'refinement_step' is distinct from 'refinement_prompt' InstructionType */
+export const STEPS = {
+  INITIAL: 'initial_step',
+  REFINEMENT: 'refinement_step',
+  SYNTHESIS: 'synthesis_step'
+} as const;
+
+export type StepId = typeof STEPS[keyof typeof STEPS];
+
+/**
+ * Constants for prompt instruction types.
+ * Used for saved instructions and settings UI.
+ */
+export const PROMPT_TYPES = {
+  INITIAL: 'initial_prompt',
+  REFINEMENT: 'refinement_prompt',
+  SYNTHESIS: 'synthesis_prompt'
+} as const;
+
+export type PromptTypeId = typeof PROMPT_TYPES[keyof typeof PROMPT_TYPES];
+
 export interface SavedInstruction {
     id: string;
     name: string;
     /** Instruction types for UI/settings. Note: 'refinement_prompt' differs from StepId 'refinement_step' */
-    type: 'initial_prompt' | 'refinement_prompt' | 'synthesis_prompt';
+    type: PromptTypeId;
     content: string;
 }
 
@@ -79,22 +100,22 @@ export interface TokenUsage {
  * Prevents typos and ensures only valid result keys are used.
  */
 export type WorkResultKey = 
-  | 'initial_step' 
-  | 'refinement_step' 
-  | 'synthesis_step'
-  | 'initial_step_thoughts'
-  | 'refinement_step_thoughts'
-  | 'synthesis_step_thought'
-  | 'initial_step_usage'
-  | 'refinement_step_usage'
-  | 'synthesis_step_usage';
+  | typeof STEPS.INITIAL 
+  | typeof STEPS.REFINEMENT 
+  | typeof STEPS.SYNTHESIS
+  | `${typeof STEPS.INITIAL}_thoughts`
+  | `${typeof STEPS.REFINEMENT}_thoughts`
+  | `${typeof STEPS.SYNTHESIS}_thought`
+  | `${typeof STEPS.INITIAL}_usage`
+  | `${typeof STEPS.REFINEMENT}_usage`
+  | `${typeof STEPS.SYNTHESIS}_usage`;
 
 export interface Work {
   // Generic storage for step results. Keys match StepId (e.g., 'initial_step', 'refinement_step', 'synthesis_step')
   results?: {
-    initial_step?: (string | null)[];
-    refinement_step?: (string | null)[];
-    synthesis_step?: { text?: string; error?: boolean; errorMessage?: string; sources?: Source[] } | string;
+    [STEPS.INITIAL]?: (string | null)[];
+    [STEPS.REFINEMENT]?: (string | null)[];
+    [STEPS.SYNTHESIS]?: { text?: string; error?: boolean; errorMessage?: string; sources?: Source[] } | string;
     
     // Unified step metadata (thoughts, token usage, etc.)
     initial_step_thoughts?: (string | null)[];
@@ -131,8 +152,6 @@ export interface Message {
   sources?: Source[];
   work?: Work;
 }
-/** Pipeline step identifiers. Note: 'refinement_step' is distinct from 'refinement_prompt' InstructionType */
-export type StepId = 'initial_step' | 'refinement_step' | 'synthesis_step';
 
 export interface AgentState {
   id: string;
