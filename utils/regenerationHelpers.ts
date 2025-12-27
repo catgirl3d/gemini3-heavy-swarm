@@ -1,23 +1,20 @@
 import { StepId } from '@/types/steps';
+import { getStepConfig } from '@/utils/stepConfig';
 import { AppSettings, Message, Work } from '@/types';
 import { ensureModelMessageForSynthesis, updateMessageParts, updateWorkAgentNames } from '@/utils/messageHelpers';
 import { getUpdatedAgentName } from '@/utils/agentHelpers';
 import { updateStepResult } from '@/utils/workHelpers';
+import { Logger } from '@/utils/logger';
 
 /**
  * Returns consistent UI labels for regeneration steps.
  */
 export function getStepLabels(stepId: StepId): { regenerating: string; done: string } {
-  switch (stepId) {
-    case 'initial_step':
-      return { regenerating: 'Regenerating Draft...', done: 'Draft Regenerated' };
-    case 'refinement_step':
-      return { regenerating: 'Regenerating Critique...', done: 'Critique Regenerated' };
-    case 'synthesis_step':
-      return { regenerating: 'Regenerating Synthesis...', done: 'Synthesis Regenerated' };
-    default:
-      return { regenerating: 'Regenerating...', done: 'Regenerated' };
-  }
+  const config = getStepConfig(stepId);
+  return { 
+    regenerating: config.labels.working, 
+    done: config.labels.done 
+  };
 }
 
 /**
@@ -28,16 +25,26 @@ export function processSynthesisChunkUpdate(
   messageIndex: number,
   workContext: Work | undefined,
   text: string,
+  settings: AppSettings,
+  isFirstChunk: boolean,
   onSynthesisStart?: () => void
 ): { updatedMessages: Message[]; targetIndex: number } {
+  const logger = new Logger('Synthesis', settings.debugMode);
+  logger.debug('processSynthesisChunkUpdate:', { textLength: text.length, messageIndex });
+  
   const newMessages = [...messages];
   
   // Custom logic for synthesis
   const { message: foundMsg, index: foundIndex, wasCreated } = ensureModelMessageForSynthesis(
-    newMessages, messageIndex, workContext, text
+    newMessages, messageIndex, workContext, text, settings
   );
   
-  if (onSynthesisStart && wasCreated) {
+  if (onSynthesisStart && isFirstChunk) {
+    logger.debug('First chunk detected - triggering onSynthesisStart (hiding loading UI)');
+    /**
+     * Trigger the 'jump' side-effect in the UI (e.g., hiding cards).
+     * This is called only on the first chunk to ensure the transition happens exactly once.
+     */
     onSynthesisStart();
   }
 
@@ -49,7 +56,11 @@ export function processSynthesisChunkUpdate(
   }
   
   if (msg && msg.role === 'model') {
+    logger.debug('Updating model message text:', { hasMsg: !!msg, msgRole: msg?.role, textLength: text.length });
     newMessages[targetIndex] = updateMessageParts(msg, text);
+    logger.debug('Text updated successfully');
+  } else {
+    logger.error('ERROR: Could not update text - msg is not a model message!');
   }
 
   return { updatedMessages: newMessages, targetIndex };
@@ -82,6 +93,7 @@ export function calculateUpdatedStateForRegeneration(
   workContext: Work | undefined,
   text: string,
   settings: AppSettings,
+  isFirstChunk: boolean,
   onSynthesisStart?: () => void
 ): { updatedMessages: Message[]; updatedWork: Work | undefined } {
   let targetIdx = messageIndex;
@@ -90,7 +102,7 @@ export function calculateUpdatedStateForRegeneration(
   // 1. Handle Message Updates
   if (stepId === 'synthesis_step') {
     const { updatedMessages, targetIndex } = processSynthesisChunkUpdate(
-      messages, messageIndex, workContext, text, onSynthesisStart
+      messages, messageIndex, workContext, text, settings, isFirstChunk, onSynthesisStart
     );
     updatedMsgs = updatedMessages;
     targetIdx = targetIndex;

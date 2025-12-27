@@ -4,6 +4,7 @@ import { useServerStatus } from '@/hooks/network/useServerStatus';
 import { useAutoScroll } from '@/hooks/ui/useAutoScroll';
 import { getModelDisplayName } from '@/utils/modelUtils';
 import { isUsingProxy as checkProxyUsage } from '@/services/proxyUtils';
+import { Logger } from '@/utils/logger';
 
 import { StatusBanner } from '@/components/StatusBanner/StatusBanner';
 import { Header } from '@/components/Header/Header';
@@ -122,9 +123,11 @@ export const App: FC = () => {
   const handleRegenerate = useCallback((msgIndex: number, phase: StepId, agentIndex: number) => {
     if (phase === 'synthesis_step') {
       setShouldAutoScroll(true);
+      // Force jump to bottom immediately
+      setTimeout(() => scrollToBottom(), 0);
     }
     regenerateAgentResponse(msgIndex, phase, agentIndex);
-  }, [setShouldAutoScroll, regenerateAgentResponse]);
+  }, [setShouldAutoScroll, scrollToBottom, regenerateAgentResponse]);
 
   // Enforce model restrictions based on server status
   useEffect(() => {
@@ -134,7 +137,7 @@ export const App: FC = () => {
     const isLocked = isUsingProxyNow && (serverStatus.proxyMode !== 'private');
 
     if (isLocked && settings.model !== 'gemini-2.5-flash-lite') {
-        console.log("Enforcing demo model restriction (gemini-2.5-flash-lite)");
+        new Logger('App', settings.debugMode).info("Enforcing demo model restriction (gemini-2.5-flash-lite)");
         setSettings(prev => ({ ...prev, model: 'gemini-2.5-flash-lite' }));
     }
   }, [serverStatus.isLoaded, serverStatus.proxyMode, settings.apiKey, settings.model, settingsLoaded, setSettings]);

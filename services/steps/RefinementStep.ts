@@ -5,54 +5,85 @@ import { prepareGeminiContent } from '@/services/contentUtils';
 import { getAgentRole } from '@/services/steps/utils/roleUtils';
 import { BaseStep } from '@/services/steps/BaseStep';
 import { getStepResults } from '@/utils/workHelpers';
+import { getStepConfig, hasStepContentError } from '@/utils/stepConfig';
 
 export class RefinementStep extends BaseStep {
   id: StepId = 'refinement_step';
-  name = 'Refinement Step';
-  description = 'Agents critique and refine their responses based on other agents\' inputs.';
+  name = getStepConfig('refinement_step').name;
+  description = getStepConfig('refinement_step').description;
   ui = {
     visibleInModal: true,
     regenerateLabel: 'Regenerate Refined Response'
   };
 
   async execute(context: StepContext): Promise<string[]> {
-    const { ai, settings, history, userInput, image, imageFile, work, onProgress, signal } = context;
-
+    const { work } = context;
     const initialDrafts = getStepResults(work, 'initial_step');
     
     if (initialDrafts.length === 0) {
       throw new Error('Cannot run refinement step without initial drafts');
     }
 
-    // Initialize results array
-    const results: string[] = Array(settings.numAgents).fill('');
-    const thoughts: string[] = Array(settings.numAgents).fill('');
-    
-    // Initialize generic storage if needed
-    this.ensureResults(work);
-
-    // Initialize agent states using BaseStep utility
-    let currentAgentStates: AgentState[] = this.createAgentStates(settings.numAgents, settings, {
-      stepId: 'refinement_step',
-      status: 'working',
-      statusLabel: 'Critiquing & Refining...'
+    return this.executeMultiAgent(context, {
+      prepareAgent: (i) => this.prepareRefinement(context, i, initialDrafts as string[]),
+      tools: [{ googleSearch: {} }]
     });
+  }
+
+  async regenerate(context: StepContext, agentIndex: number): Promise<string> {
+    const { ai, settings, work, signal } = context;
+    if (!ai) throw new Error("API Key not found");
+
+    const initialDrafts = getStepResults(work, 'initial_step');
     
-    onProgress('Refining answers...', currentAgentStates, work);
+    if (initialDrafts.length === 0) {
+      throw new Error('Cannot regenerate refinement without initial drafts');
+    }
 
-    // Prepare base content
+    const { systemInstruction, userTurn, mainChatHistory } = this.prepareRefinement(context, agentIndex, initialDrafts as string[]);
+
+    // Capture debug info for regeneration
+    if (context.work.debugInfo && context.work.debugInfo['refinement_step']) {
+        context.work.debugInfo['refinement_step'][agentIndex] = {
+            systemInstruction,
+            history: mainChatHistory,
+            userTurn: userTurn
+        };
+    }
+
+    const { text: fullText } = await this.runModelStream(
+      {
+        ai, settings, model: settings.model,
+        contents: [...mainChatHistory, userTurn],
+        systemInstruction,
+        tools: [{googleSearch: {}}],
+        signal,
+        agentIndex
+      },
+      {
+        onChunk: (text, thought, usage) => {
+          this.handleStreamChunk(context, agentIndex, text, thought, usage, {
+            isFirstChunk: false
+          });
+        }
+      }
+    );
+    return fullText;
+  }
+
+  private prepareRefinement(context: StepContext, index: number, initialDrafts: string[]) {
+    const { settings, history, userInput, image, imageFile } = context;
     const { history: mainChatHistory, baseApiParts } = prepareGeminiContent(history, userInput, image, imageFile);
+    
+    // Improved filtering using stepConfig utility
+    const peerDrafts = initialDrafts
+      .map((text: string, i: number) => ({ text, id: i + 1 }))
+      .filter((_, i) => i !== index)
+      .filter((a) => !hasStepContentError(a.text, 'initial_step'))
+      .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
+      .join('\n\n');
 
-    // Execute agents
-    const agentPromises = initialDrafts.map(async (initialAnswer: string, index: number) => {
-      const peerDrafts = initialDrafts
-        .map((text: string, i: number) => ({ text, id: i + 1 }))
-        .filter((_, i) => i !== index)
-        .filter((a) => !a.text.trim().startsWith('[System:')) // Filter out failed agents
-        .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
-        .join('\n\n');
-
-      const refinementContext = `
+    const refinementContext = `
 # INPUT DATA
 <context_data>
 <original_query>
@@ -60,7 +91,7 @@ ${userInput || "(See attached image/content)"}
 </original_query>
 
 <my_draft>
-${initialAnswer}
+${initialDrafts[index]}
 </my_draft>
 
 <peer_drafts>
@@ -74,144 +105,14 @@ ${peerDrafts}
 2. Provide a new, improved response to <original_query>.
 3. [CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!
 </instruction>`;
-      
-      const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
-      
-      const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
-      
-      // Add role-specific instruction if dynamic roles are enabled
-      let roleInstruction = '';
-      if (settings.dynamicAgentRoles) {
-          const role = getAgentRole(index, settings, 'criticRoles');
-          if (role.instruction) {
-              roleInstruction = `\n\n<role_assignment>\n${role.instruction}\n</role_assignment>`;
-          }
-      }
-
-      const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.refinementInstruction}</mission>${roleInstruction}\n</system_instruction>`;
-
-      // Capture debug info
-      this.ensureDebugInfo(work, 'refinement_step');
-      work.debugInfo['refinement_step'][index] = {
-          systemInstruction,
-          history: mainChatHistory,
-          userTurn: refinementTurn
-      };
-
-      const { text: fullText } = await this.runModelStream(
-        {
-          ai, settings, model: settings.model,
-          contents: [...mainChatHistory, refinementTurn],
-          systemInstruction,
-          tools: [{googleSearch: {}}],
-          signal,
-          agentIndex: index,
-        },
-        {
-          onChunk: (text, thought, usage) => {
-            results[index] = text;
-            thoughts[index] = thought;
-            
-            work.results['refinement_step'] = [...results];
-            work.results['refinement_step_thoughts'] = [...thoughts];
-
-            if (usage) {
-              this.ensureStepUsage(work, 'refinement_step', settings.numAgents);
-              work.results['refinement_step_usage'][index] = usage;
-            }
-
-            onProgress('Refining answers...', currentAgentStates, { ...work });
-          }
-        }
-      );
-
-      currentAgentStates = this.updateAgentState(currentAgentStates, index, { status: 'done', label: 'Refined', stepId: 'refinement_step' });
-      onProgress('Refining answers...', currentAgentStates, { ...work });
-      return fullText;
-    });
-
-    const outcomes = await Promise.allSettled(agentPromises);
-
-    const failures: unknown[] = [];
-    outcomes.forEach((outcome, i) => {
-      if (outcome.status === 'rejected') {
-        failures.push(outcome.reason);
-        console.error(`Critic ${i + 1} failed refinement:`, outcome.reason);
-        const errorMessage = `\n\n[System: Critic failed to refine. ${outcome.reason instanceof Error ? outcome.reason.message : 'Unknown error'}]`;
-        
-        results[i] += errorMessage;
-        
-        // Determine appropriate error label using BaseStep utility
-        const errorLabel = this.getErrorLabel(outcome.reason, 'Refinement Failed');
-        currentAgentStates = this.updateAgentState(currentAgentStates, i, { status: 'error', label: errorLabel, stepId: 'refinement_step' });
-      }
-    });
-
-    // Check global rate limit using BaseStep utility
-    if (this.checkGlobalRateLimitFailure(failures, settings.numAgents)) {
-        work.results['refinement_step'] = [...results];
-        onProgress('Rate limit reached', currentAgentStates, { ...work });
-        throw failures[0];
-    }
-
-    work.results['refinement_step'] = [...results];
-    onProgress('Refinement completed', currentAgentStates, { ...work });
-
-    return results;
-  }
-
-  async regenerate(context: StepContext, agentIndex: number): Promise<string> {
-    const { ai, settings, history, userInput, image, imageFile, work, signal } = context;
-    if (!ai) throw new Error("API Key not found");
-
-    const initialDrafts = getStepResults(work, 'initial_step');
     
-    if (initialDrafts.length === 0) {
-      throw new Error('Cannot regenerate refinement without initial drafts');
-    }
-
-    // Prepare content
-    const { history: mainChatHistory, baseApiParts } = prepareGeminiContent(history, userInput, image, imageFile);
-
-    const initialAnswer = initialDrafts[agentIndex];
-    const peerDrafts = initialDrafts
-      .map((text: string, i: number) => ({ text, id: i + 1 }))
-      .filter((_, i) => i !== agentIndex)
-      .filter((a) => !a.text.trim().startsWith('[System:')) // Filter out failed agents
-      .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
-      .join('\n\n');
-
-    const refinementContext = `
-# INPUT DATA
-<context_data>
-<original_query>
-${userInput || "(See attached image/content)"}
-</original_query>
-
-<my_draft>
-${initialAnswer}
-</my_draft>
-
-<peer_drafts>
-${peerDrafts}
-</peer_drafts>
-</context_data>
-
-# YOUR TASK
-<instruction>
-Critically re-evaluate <my_draft> considering insights from <peer_drafts>.
-Provide a new, improved response to <original_query>.
-ALWAYS use the googleSearch tool to verify facts and find additional information if needed.
-</instruction>`;
-    
-    const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
+    const userTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
     
     const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
     
-    // Add role-specific instruction if dynamic roles are enabled
     let roleInstruction = '';
     if (settings.dynamicAgentRoles) {
-        const role = getAgentRole(agentIndex, settings, 'criticRoles');
+        const role = getAgentRole(index, settings, 'criticRoles');
         if (role.instruction) {
             roleInstruction = `\n\n<role_assignment>\n${role.instruction}\n</role_assignment>`;
         }
@@ -219,45 +120,6 @@ ALWAYS use the googleSearch tool to verify facts and find additional information
 
     const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.refinementInstruction}</mission>${roleInstruction}\n</system_instruction>`;
 
-    // Capture debug info for regeneration
-    if (context.work.debugInfo && context.work.debugInfo['refinement_step']) {
-        context.work.debugInfo['refinement_step'][agentIndex] = {
-            systemInstruction,
-            history: mainChatHistory,
-            userTurn: refinementTurn
-        };
-    }
-
-    const { text: fullText } = await this.runModelStream(
-      {
-        ai, settings, model: settings.model,
-        contents: [...mainChatHistory, refinementTurn],
-        systemInstruction,
-        tools: [{googleSearch: {}}],
-        signal,
-        agentIndex
-      },
-      {
-        onChunk: (text, thought, usage) => {
-          if (context.work.results) {
-            if (!context.work.results['refinement_step_thoughts']) {
-                context.work.results['refinement_step_thoughts'] = [];
-            }
-            context.work.results['refinement_step_thoughts'][agentIndex] = thought;
-    
-            if (usage) {
-                this.ensureStepUsage(context.work, 'refinement_step', 1);
-                context.work.results['refinement_step_usage'][agentIndex] = usage;
-            }
-          }
-    
-          // Only update message display when there is actual text content (not just thinking)
-          if (text.length > 0) {
-            context.onMessageUpdate(text, false);
-          }
-        }
-      }
-    );
-    return fullText;
+    return { systemInstruction, userTurn, mainChatHistory };
   }
 }

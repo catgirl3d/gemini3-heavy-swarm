@@ -1,5 +1,6 @@
 import React, { FC, ReactNode, useState } from 'react';
 import './CodeBlock.css';
+import { Logger } from '@/utils/logger';
 
 export const CodeBlock: FC<{ children?: ReactNode, className?: string }> = ({ children, className }) => {
   const [copied, setCopied] = useState(false);
@@ -14,7 +15,7 @@ export const CodeBlock: FC<{ children?: ReactNode, className?: string }> = ({ ch
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy text: ', err);
+      new Logger('CodeBlock').error('Failed to copy text: ', err);
     }
   };
 

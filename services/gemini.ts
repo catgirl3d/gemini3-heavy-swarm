@@ -9,14 +9,10 @@ import { InitialStep } from '@/services/steps/InitialStep';
 import { RefinementStep } from '@/services/steps/RefinementStep';
 import { SynthesisStep } from '@/services/steps/SynthesisStep';
 import { StepContext, StepDescriptor, StepId } from '@/types/steps';
-import { getAgentRole } from '@/services/steps/utils/roleUtils';
+import { getUpdatedAgentName } from '@/utils/agentHelpers';
+import { Logger } from '@/utils/logger';
 
-const debug = (settings: AppSettings, ...args: unknown[]) => {
-  if (settings.debugMode) {
-    // Centralized debug hook for swarm internals
-    console.debug('[GeminiSwarm]', ...args);
-  }
-};
+const getLogger = (settings: AppSettings) => new Logger('GeminiSwarm', settings.debugMode);
 
 
 export class GeminiService {
@@ -52,31 +48,20 @@ export class GeminiService {
   ): Promise<{ text: string; sources?: Source[]; work: Work }> {
     
     // Initialize AI client with user key if provided, otherwise fall back to env key
-    // Initialize AI client with user key if provided, otherwise fall back to env key
-    const apiKey = getDirectApiKey(settings.apiKey);
-    if (apiKey) {
-        console.log("Using direct API key from settings/env");
-        this.ai = new GoogleGenAI({ apiKey });
-    } else {
-        // Fallback to proxy if no key is provided OR if IS_FORCED_PROXY is enabled
-        console.log(`Using ProxyGenAI${IS_FORCED_PROXY ? " (FORCED)" : ""}`);
-        this.ai = new ProxyGenAI();
-    }
+    this.initAiClient(settings.apiKey);
 
     const liveWork: Work = {
       results: {},
       stepMetadata: [],
-      agentNames: Array.from({ length: settings.numAgents }, (_, i) => {
-        const role = settings.dynamicAgentRoles ? getAgentRole(i, settings, 'roles').name : null;
-        return role ? `Agent ${i + 1} (${role})` : `Agent ${i + 1}`;
-      }),
-      criticNames: Array.from({ length: settings.numAgents }, (_, i) => {
-        const role = settings.dynamicAgentRoles ? getAgentRole(i, settings, 'criticRoles').name : null;
-        return role ? `Critic ${i + 1} (${role})` : `Critic ${i + 1}`;
-      })
+      agentNames: Array.from({ length: settings.numAgents }, (_, i) => 
+        getUpdatedAgentName(i, 'initial_step', settings)
+      ),
+      criticNames: Array.from({ length: settings.numAgents }, (_, i) => 
+        getUpdatedAgentName(i, 'refinement_step', settings)
+      )
     };
 
-    debug(settings, 'runSwarm start', {
+    getLogger(settings).debug('runSwarm start', {
       model: settings.model,
       numAgents: settings.numAgents,
       devMode: settings.devMode,
@@ -123,15 +108,7 @@ export class GeminiService {
     signal: AbortSignal
   ): Promise<string | { text: string; sources?: Source[] }> {
     // Ensure AI client is updated with the latest key from settings
-    // Ensure AI client is updated with the latest key from settings
-    const apiKey = getDirectApiKey(settings.apiKey);
-    if (apiKey) {
-        console.log("Using direct API key from settings/env (regeneration)");
-        this.ai = new GoogleGenAI({ apiKey });
-    } else {
-        console.log(`Using ProxyGenAI${IS_FORCED_PROXY ? " (FORCED)" : ""} (regeneration)`);
-        this.ai = new ProxyGenAI();
-    }
+    this.initAiClient(settings.apiKey);
 
     // Find the step
     const step = this.steps.find(s => s.id === stepId);
@@ -160,5 +137,14 @@ export class GeminiService {
     };
 
     return step.regenerate(context, agentIndex) as Promise<string | { text: string; sources?: Source[] }>;
+  }
+
+  private initAiClient(providedKey?: string) {
+    const apiKey = getDirectApiKey(providedKey);
+    if (apiKey) {
+      this.ai = new GoogleGenAI({ apiKey });
+    } else {
+      this.ai = new ProxyGenAI();
+    }
   }
 }

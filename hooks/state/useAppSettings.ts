@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { AppSettings } from '@/types';
 import { DEFAULT_SETTINGS } from '@/constants';
 import { migrateSettings } from '@/services/settingsMigration';
+import { Logger } from '@/utils/logger';
 
 export function useAppSettings() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -16,7 +17,7 @@ export function useAppSettings() {
         const migrated = migrateSettings(parsed);
         setSettings(migrated);
       } catch (error) {
-        console.error('Failed to parse saved settings:', error);
+        new Logger('AppSettings').error('Failed to parse saved settings:', error);
       }
     }
     setSettingsLoaded(true);

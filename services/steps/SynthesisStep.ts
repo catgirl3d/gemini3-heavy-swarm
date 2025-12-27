@@ -4,14 +4,17 @@ import { AgentState, Source } from '@/types';
 import { prepareGeminiContent } from '@/services/contentUtils';
 import { BaseStep } from '@/services/steps/BaseStep';
 import { getStepResults } from '@/utils/workHelpers';
+import { getStepConfig } from '@/utils/stepConfig';
+import { Logger } from '@/utils/logger';
 
 export class SynthesisStep extends BaseStep {
   id: StepId = 'synthesis_step';
-  name = 'Synthesis Step';
-  description = 'Synthesizes all refined responses into a final answer.';
+  name = getStepConfig('synthesis_step').name;
+  description = getStepConfig('synthesis_step').description;
   ui = {
     visibleInModal: false, // Synthesis result is the main message text, not shown in "Show Work"
-    regenerateLabel: 'Regenerate Final Answer'
+    regenerateLabel: 'Regenerate Final Answer',
+    allowPause: false
   };
 
   async execute(context: StepContext): Promise<{ text: string; sources?: Source[] }> {
@@ -30,14 +33,19 @@ export class SynthesisStep extends BaseStep {
     const refinedAgents = this.createAgentStates(numAgents, settings, {
       stepId: 'refinement_step',
       status: 'done',
-      statusLabel: 'Refined'
+      statusLabel: getStepConfig('refinement_step').labels.done
     });
 
+    // Check if this is a regeneration after error
+    const existingSynthesisResult = work.results?.['synthesis_step'];
+    const hadError = typeof existingSynthesisResult === 'object' && existingSynthesisResult?.error === true;
+    
+    const config = getStepConfig(this.id);
     const synthesizerState: AgentState = {
       id: 'synthesizer_agent',
       name: 'Synthesizer Agent',
-      status: 'working',
-      label: 'Synthesizing...',
+      status: hadError ? 'error' : 'working', // Keep error status until first chunk arrives
+      label: hadError ? 'Retrying synthesis...' : config.labels.working,
       stepId: 'synthesis_step'
     };
     
@@ -46,19 +54,110 @@ export class SynthesisStep extends BaseStep {
     // Initialize generic storage
     this.ensureResults(work);
     
-    onProgress('Synthesizing final response...', currentAgentStates, work);
+    const logger = new Logger(this.id, settings.debugMode);
+    
+    logger.debug('Starting synthesis', { numRefinedDrafts: refinedDrafts.length, isRegeneration: hadError });
+    onProgress(config.progressMsg, currentAgentStates, work);
 
     try {
-      const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
-      const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.synthesizerInstruction}</mission>\n</system_instruction>`;
+      const { systemInstruction, synthesizerTurn, mainChatHistory } = this.prepareSynthesis(context, refinedDrafts);
 
-      const { history: mainChatHistory, baseApiParts } = prepareGeminiContent(history, userInput, image, imageFile);
+      // Simulation mode for testing error UI (controlled via settings)
+      if (settings.simulateSynthesisError && settings.simulateSynthesisError !== 'none') {
+        const synthesisResult = work.results?.['synthesis_step'] as any;
+        const isFirstAttempt = !synthesisResult || (!synthesisResult.text && !synthesisResult.error);
+        if (isFirstAttempt) {
+          logger.debug(`SIMULATION: Throwing simulated ${settings.simulateSynthesisError} error for testing`);
+          throw new Error(`${settings.simulateSynthesisError} Simulated error`);
+        }
+      }
 
-      const agentDrafts = refinedDrafts
-        .map((answer: string, i: number) => `    <draft id="agent_${i + 1}">\n${answer}\n    </draft>`)
-        .join('\n\n');
+      logger.debug('Starting model stream');
 
-      const synthesizerContext = `
+      let isFirstTextChunk = true;
+      const { text: finalResponseText, groundingChunks } = await this.runModelStream(
+        {
+          ai, settings, model: settings.model,
+          contents: [...mainChatHistory, synthesizerTurn],
+          systemInstruction,
+          tools: [{googleSearch: {}}],
+          signal,
+        },
+        {
+          onChunk: (text, thought, usage) => {
+            if (text.length > 0 && isFirstTextChunk) {
+              if (hadError) {
+                currentAgentStates = this.updateAgentStatus(currentAgentStates, numAgents, 'working');
+              }
+            }
+
+            this.handleStreamChunk(context, -1, text, thought, usage, {
+              isFirstChunk: isFirstTextChunk,
+              streamToMessage: true,
+              agentStates: currentAgentStates,
+              statusMsg: config.progressMsg
+            });
+            
+            if (text.length > 0) isFirstTextChunk = false;
+          }
+        }
+      );
+
+      const sources = this.extractSources(groundingChunks);
+
+      logger.debug('Synthesis complete', { 
+        textLength: finalResponseText.length, 
+        sourcesCount: sources?.length || 0 
+      });
+
+      // Update generic results map
+      work.results['synthesis_step'] = { text: finalResponseText, sources };
+
+      // Mark synthesizer as completed
+      currentAgentStates = this.updateAgentStatus(currentAgentStates, numAgents, 'done');
+      onProgress(config.progressMsg, currentAgentStates, work);
+
+      return { text: finalResponseText, sources };
+    } catch (error) {
+      logger.debug('SYNTHESIS FAILED', { 
+        error: error instanceof Error ? error.message : String(error),
+        thoughtLength: work.results?.['synthesis_step_thought']?.length || 0
+      });
+      logger.debug('SYNTHESIS ERROR (will be logged at top level)', { error });
+      
+      // Determine appropriate error label using BaseStep utility
+      const errorLabel = this.getErrorLabel(error, config.labels.error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Save error info to results for UI display
+      work.results['synthesis_step'] = { 
+        text: this.formatExecuteError(error),
+        error: true,
+        errorMessage 
+      };
+      
+      currentAgentStates = this.updateAgentStatus(currentAgentStates, numAgents, 'error', errorLabel);
+      onProgress(config.progressMsg, currentAgentStates, { ...work });
+      throw error;
+    }
+  }
+
+  async regenerate(context: StepContext): Promise<{ text: string; sources?: Source[] }> {
+    return this.execute(context);
+  }
+
+  private prepareSynthesis(context: StepContext, refinedDrafts: string[]) {
+    const { settings, history, userInput, image, imageFile, work } = context;
+    const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
+    const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.synthesizerInstruction}</mission>\n</system_instruction>`;
+
+    const { history: mainChatHistory, baseApiParts } = prepareGeminiContent(history, userInput, image, imageFile);
+
+    const agentDrafts = refinedDrafts
+      .map((answer: string, i: number) => `    <draft id="agent_${i + 1}">\n${answer}\n    </draft>`)
+      .join('\n\n');
+
+    const synthesizerContext = `
 # INPUT DATA
 <context_data>
 <original_query>
@@ -79,74 +178,16 @@ As defined in <mission> synthesize the best single, final answer from <agent_dra
 4. [CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!
 </instruction>`;
 
-      const synthesizerTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}`}] };
+    const synthesizerTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}`}] };
 
-      // Capture debug info
-      this.ensureDebugInfo(work, 'synthesis_step', false);
-      work.debugInfo['synthesis_step'] = {
-          systemInstruction,
-          history: mainChatHistory,
-          userTurn: synthesizerTurn
-      };
+    // Capture debug info
+    this.ensureDebugInfo(work, 'synthesis_step', false);
+    work.debugInfo['synthesis_step'] = {
+        systemInstruction,
+        history: mainChatHistory,
+        userTurn: synthesizerTurn
+    };
 
-      let isFirstChunk = true;
-      const { text: finalResponseText, groundingChunks } = await this.runModelStream(
-        {
-          ai, settings, model: settings.model,
-          contents: [...mainChatHistory, synthesizerTurn],
-          systemInstruction,
-          tools: [{googleSearch: {}}],
-          signal,
-        },
-        {
-          onChunk: (text, thought, usage) => {
-            work.results['synthesis_step_thought'] = thought;
-
-            if (usage) {
-              work.results['synthesis_step_usage'] = usage;
-            }
-
-            // Only update message display when there is actual text content (not just thinking)
-            if (text.length > 0) {
-                onMessageUpdate(text, isFirstChunk);
-                isFirstChunk = false;
-            }
-          }
-        }
-      );
-
-      const sources = this.extractSources(groundingChunks);
-
-      // Update generic results map
-      work.results['synthesis_step'] = { text: finalResponseText, sources };
-
-      // Mark synthesizer as completed
-      currentAgentStates = this.updateAgentStateById(currentAgentStates, 'synthesizer_agent', { status: 'done', label: 'Synthesized' });
-      onProgress('Synthesis completed', currentAgentStates, work);
-
-      return { text: finalResponseText, sources };
-    } catch (error) {
-      console.error('Synthesis failed:', error);
-      
-      // Determine appropriate error label using BaseStep utility
-      const errorLabel = this.getErrorLabel(error, 'Synthesis Failed');
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      // Save error info to results for UI display
-      work.results['synthesis_step'] = { 
-        text: `[System: Synthesis failed. ${errorMessage}]`,
-        error: true,
-        errorMessage 
-      };
-      
-      currentAgentStates = this.updateAgentStateById(currentAgentStates, 'synthesizer_agent', { status: 'error', label: errorLabel, stepId: 'synthesis_step' });
-      onProgress('Synthesis failed', currentAgentStates, { ...work });
-      throw error;
-    }
-  }
-
-  async regenerate(context: StepContext): Promise<{ text: string; sources?: Source[] }> {
-    // execute already handles token usage update
-    return this.execute(context);
+    return { systemInstruction, synthesizerTurn, mainChatHistory };
   }
 }

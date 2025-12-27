@@ -1,4 +1,4 @@
-import React, { FC, useState, useRef, useCallback, useMemo } from 'react';
+import React, { FC, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ShowWorkProps, WorkModalData, DebugModalData, ThoughtModalData, DisplayStatus } from '@/components/ShowWork/types';
 import { StepId } from '@/types/steps';
 import { WorkModal } from '@/components/ShowWork/components/WorkModal';
@@ -6,6 +6,7 @@ import { DebugModal } from '@/components/ShowWork/components/DebugModal';
 import { WorkCard, CardActionType } from '@/components/ShowWork/components/WorkCard';
 import { ArrowDownIcon, TokenIcon } from '@/components/ShowWork/icons';
 import { getStepResults, getStepThoughts, getStepUsage, getSynthesisThought, getSynthesisUsage, getSynthesisResult } from '@/utils/workHelpers';
+import { getStepConfig, hasStepContentError } from '@/utils/stepConfig';
 import './ShowWork.css';
 
 // Card metadata for stable callback resolution
@@ -23,9 +24,20 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
   const [debugModalData, setDebugModalData] = useState<DebugModalData | null>(null);
   const [thoughtModalData, setThoughtModalData] = useState<ThoughtModalData | null>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
+  const prevSynthesizerStatusRef = useRef<string | undefined>(undefined);
 
   const effectiveAgentStates = (isLive && liveAgentStates ? liveAgentStates : work.agentStates);
   const synthesizerState = effectiveAgentStates?.find(a => a.id === 'synthesizer_agent');
+
+  // Auto-collapse when synthesis starts in live mode
+  useEffect(() => {
+    if (isLive && synthesizerState?.status === 'working' && prevSynthesizerStatusRef.current !== 'working') {
+      if (detailsRef.current) {
+        detailsRef.current.open = false;
+      }
+    }
+    prevSynthesizerStatusRef.current = synthesizerState?.status;
+  }, [isLive, synthesizerState?.status]);
   
   const synthesisResult = getSynthesisResult(work);
   
@@ -55,7 +67,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
         index: i,
         title: `${name} - Initial Draft`,
         content: resp,
-        thought: getStepThoughts(work, 'initial_step')[i],
+        thought: initialThoughts[i],
         debugInfo: work.debugInfo?.['initial_step']?.[i] as Record<string, unknown> | undefined
       });
     });
@@ -68,7 +80,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
         index: i,
         title: `${name} - Refined Response`,
         content: resp,
-        thought: getStepThoughts(work, 'refinement_step')[i],
+        thought: refinedThoughts[i],
         debugInfo: work.debugInfo?.['refinement_step']?.[i] as Record<string, unknown> | undefined
       });
     });
@@ -84,7 +96,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
     });
     
     return map;
-  }, [work, initialResults, refinedResults, synthesisText]);
+  }, [work, initialResults, refinedResults, synthesisText, initialThoughts, refinedThoughts]);
 
   // Unified stable callback for all card actions
   const handleCardAction = useCallback((cardId: string, action: CardActionType) => {
@@ -135,49 +147,31 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
   }, [initialUsages, refinedUsages, work]);
 
   const getCardStatus = (step: StepId, index: number): { status: DisplayStatus, label: string } => {
-    const currentState = step === 'synthesis_step' ? synthesizerState : effectiveAgentStates?.[index];
+    const config = getStepConfig(step);
     
-    if (step === 'initial_step') {
-        // Use status + stepId for robust working detection (not fragile label string matching)
-        const isWorking = currentState?.status === 'working' && (currentState?.stepId === 'initial_step' || currentState?.stepId === undefined);
-        const hasContentError = initialResults[index]?.includes('[System: Agent failed to complete.');
-        // Check if agentState has error status for THIS step
-        const isInitialError = currentState?.status === 'error' && currentState?.stepId === 'initial_step';
-        const hasError = hasContentError || isInitialError;
-        const isDone = !!initialResults[index] && !hasError;
-
-        if (isWorking) return { status: 'working', label: currentState?.label || 'Drafting...' };
-        if (hasError) return { status: 'error', label: currentState?.label || 'Draft Failed' };
-        if (isDone) return { status: 'done', label: 'Drafted' };
-        return { status: 'waiting', label: 'Waiting...' };
-    }
-
-    if (step === 'refinement_step') {
-        // Use status + stepId for robust working detection (not fragile label string matching)
-        const isWorking = currentState?.status === 'working' && currentState?.stepId === 'refinement_step';
-        const hasContentError = refinedResults[index]?.includes('[System: Agent failed to refine.');
-        // Check if agentState has error status for THIS step
-        const isRefinedError = currentState?.status === 'error' && currentState?.stepId === 'refinement_step';
-        const hasError = hasContentError || isRefinedError;
-        const isDone = !!refinedResults[index] && !hasError;
-
-        if (isWorking) return { status: 'working', label: currentState?.label || 'Refining...' };
-        if (hasError) return { status: 'error', label: currentState?.label || 'Refinement Failed' };
-        if (isDone) return { status: 'done', label: 'Refined' };
-        return { status: 'waiting', label: 'Waiting...' };
-    }
-
-    // Synthesis
-    const isWorking = synthesizerState?.status === 'working';
-    const hasContentError = typeof synthesisResult === 'object' && synthesisResult !== null && 'error' in synthesisResult && synthesisResult.error === true;
-    const hasStateError = synthesizerState?.status === 'error';
+    // Get the appropriate agent state and results based on step type
+    const currentState = step === 'synthesis_step' ? synthesizerState : effectiveAgentStates?.[index];
+    const results = step === 'initial_step' ? initialResults : step === 'refinement_step' ? refinedResults : null;
+    const result = results?.[index];
+    
+    // Determine status using unified logic
+    const isWorking = currentState?.status === 'working' && 
+      (currentState?.stepId === step || (step === 'initial_step' && currentState?.stepId === undefined));
+    
+    const hasContentError = step === 'synthesis_step'
+      ? (typeof synthesisResult === 'object' && synthesisResult !== null && 'error' in synthesisResult && synthesisResult.error === true)
+      : hasStepContentError(result, step);
+    
+    const hasStateError = currentState?.status === 'error' && currentState?.stepId === step;
     const hasError = hasContentError || hasStateError;
-    const isDone = !!synthesisText && !hasError;
+    
+    const content = step === 'synthesis_step' ? synthesisText : result;
+    const isDone = !!content && !hasError;
 
-    if (isWorking) return { status: 'working', label: synthesizerState?.label || 'Synthesizing...' };
-    if (hasError) return { status: 'error', label: synthesizerState?.label || 'Synthesis Failed' };
-    if (isDone) return { status: 'done', label: synthesizerState?.label || 'Synthesized' };
-    return { status: 'waiting', label: synthesizerState?.label || 'Waiting...' };
+    if (isWorking) return { status: 'working', label: currentState?.label || config.labels.working };
+    if (hasError) return { status: 'error', label: currentState?.label || config.labels.error };
+    if (isDone) return { status: 'done', label: currentState?.label || config.labels.done };
+    return { status: 'waiting', label: currentState?.label || config.labels.waiting };
   };
 
   return (

@@ -164,6 +164,25 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                         Debug Logging (Console)
                     </label>
                 </div>
+
+                <div className="modal-form-group">
+                    <label className="modal-label">Synthesis Error Simulation</label>
+                    <select
+                        name="simulateSynthesisError"
+                        value={localSettings.simulateSynthesisError || 'none'}
+                        onChange={handleChange}
+                        className="modal-input"
+                    >
+                        <option value="none">None (Normal Operation)</option>
+                        <option value="429">429 - Rate Limit Exceeded</option>
+                        <option value="500">500 - Internal Server Error</option>
+                        <option value="503">503 - Service Unavailable</option>
+                        <option value="timeout">Request Timeout</option>
+                    </select>
+                    <p className="modal-help-text">
+                        Simulate errors on first synthesis attempt for testing error UI.
+                    </p>
+                </div>
             </div>
         </div>
     );

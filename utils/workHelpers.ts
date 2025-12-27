@@ -1,5 +1,6 @@
 import { Work, TokenUsage, AgentState } from '@/types';
 import { StepId } from '@/types/steps';
+import { getStepConfig } from '@/utils/stepConfig';
 
 /**
  * Safely extracts array-based results for a specific step from the Work object.
@@ -136,6 +137,67 @@ export function updateStepResult(
     results: {
       ...currentResults,
       [stepId]: updatedStepData
+    }
+  };
+}
+
+/**
+ * Creates error result data for a specific step.
+ * For synthesis_step, returns an object with error flag.
+ * For array-based steps (initial/refinement), returns updated array with error message at agentIndex.
+ * 
+ * @param currentResults - Current work results
+ * @param stepId - The step identifier
+ * @param agentIndex - Agent index (used for array-based steps)
+ * @param errorMessage - The friendly error message to include
+ * @returns The error result data for the step
+ */
+function createStepErrorData(
+  currentResults: NonNullable<Work['results']>,
+  stepId: StepId,
+  agentIndex: number,
+  errorMessage: string
+): unknown {
+  const config = getStepConfig(stepId);
+  
+  if (stepId === 'synthesis_step') {
+    return {
+      text: `[System: ${config.errorPrefix}. ${errorMessage}]`,
+      error: true,
+      errorMessage
+    };
+  }
+  
+  const currentArray = (currentResults[stepId] as string[] | undefined) ?? [];
+  const newArray = [...currentArray];
+  newArray[agentIndex] = `[System: ${config.errorPrefix}. ${errorMessage}]`;
+  return newArray;
+}
+
+/**
+ * Returns a new Work object with an error recorded for the specified step.
+ * Pure function - does not mutate the input.
+ * 
+ * @param work - The source Work object (not modified)
+ * @param stepId - The step identifier
+ * @param agentIndex - Agent index (used for array-based steps, ignored for synthesis)
+ * @param errorMessage - The friendly error message to include
+ * @returns New Work object with error results
+ */
+export function updateStepWithError(
+  work: Work,
+  stepId: StepId,
+  agentIndex: number,
+  errorMessage: string
+): Work {
+  const currentResults = work.results ?? {};
+  const errorData = createStepErrorData(currentResults, stepId, agentIndex, errorMessage);
+
+  return {
+    ...work,
+    results: {
+      ...currentResults,
+      [stepId]: errorData
     }
   };
 }

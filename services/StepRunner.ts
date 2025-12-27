@@ -1,12 +1,10 @@
 import { MutableRefObject } from 'react';
 import { StepDescriptor, StepContext } from '@/types/steps';
 import { Work, AppSettings, AgentState } from '@/types';
+import { getStepConfig } from '@/utils/stepConfig';
+import { Logger } from '@/utils/logger';
 
-const debug = (settings: AppSettings, ...args: unknown[]) => {
-  if (settings.debugMode) {
-    console.debug('[StepRunner]', ...args);
-  }
-};
+const getLogger = (settings: AppSettings) => new Logger('StepRunner', settings.debugMode);
 
 export class StepRunner {
   constructor(private steps: StepDescriptor[]) {}
@@ -28,7 +26,7 @@ export class StepRunner {
     const runnerContext = { ...context, onProgress };
 
     for (const step of this.steps) {
-      debug(settings, `Starting step: ${step.id}`);
+      getLogger(settings).debug(`Starting step: ${step.id}`);
 
       // 1. Update Status
       // We need to construct a meaningful status update. 
@@ -59,13 +57,13 @@ export class StepRunner {
         }
 
       } catch (error) {
-        console.error(`Error in step ${step.id}:`, error);
-        throw error;
+        getLogger(settings).debug(`Error in step ${step.id}:`, error);
+        throw error; // Re-throw - top-level handler will log
       }
 
       // 4. Handle Pause Logic
       if (this.shouldPauseAfter(step, settings)) {
-        debug(settings, `Pausing after step: ${step.id}`);
+        getLogger(settings).debug(`Pausing after step: ${step.id}`);
         
         // We need to reconstruct the current agent states for the pause UI
         // This is a bit tricky since the step just finished. 
@@ -83,7 +81,7 @@ export class StepRunner {
           pauseResolverRef.current = resolve;
         });
         
-        debug(settings, `Resumed after step: ${step.id}`);
+        getLogger(settings).debug(`Resumed after step: ${step.id}`);
       }
     }
 
@@ -91,10 +89,9 @@ export class StepRunner {
   }
 
   private shouldPauseAfter(step: StepDescriptor, settings: AppSettings): boolean {
-    // Map legacy settings to step IDs
-    // In the future, this could be driven by a more generic configuration
-    if (step.id === 'initial_step' && settings.pauseAfterInitial) return true;
-    if (step.id === 'refinement_step' && settings.pauseAfterRefinement) return true;
-    return false;
+    const config = getStepConfig(step.id);
+    if (!config?.allowPause || !config.pauseSettingKey) return false;
+
+    return !!settings[config.pauseSettingKey];
   }
 }

@@ -1,0 +1,40 @@
+/**
+ * Simple Logger class for unified debug logging.
+ * Prefixes messages with a context and only logs if debugMode is enabled.
+ */
+export class Logger {
+  constructor(
+    private context: string,
+    private debugMode: boolean = false
+  ) {}
+
+  /**
+   * Logs a debug message with optional data.
+   */
+  debug(message: string, data?: any) {
+    if (this.debugMode) {
+      console.log(`[DEBUG:${this.context}] ${message}`, data ?? '');
+    }
+  }
+
+  /**
+   * Logs an error message to console.error regardless of debugMode.
+   */
+  error(message: string, error?: any) {
+    console.error(`[ERROR:${this.context}] ${message}`, error ?? '');
+  }
+
+  /**
+   * Logs an info message to console.log regardless of debugMode.
+   */
+  info(message: string, data?: any) {
+    console.log(`[INFO:${this.context}] ${message}`, data ?? '');
+  }
+
+  /**
+   * Logs a warning message to console.warn regardless of debugMode.
+   */
+  warn(message: string, data?: any) {
+    console.warn(`[WARN:${this.context}] ${message}`, data ?? '');
+  }
+}

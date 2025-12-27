@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { ServerStatus } from '@/types';
+import { Logger } from '@/utils/logger';
 
 export function useServerStatus() {
   const [serverStatus, setServerStatus] = useState<ServerStatus>({
@@ -47,7 +48,7 @@ export function useServerStatus() {
       .catch(err => {
         clearTimeout(loadingTimer);
         setShouldShowLoadingBanner(false);
-        console.debug('Server status check failed (running client-only?):', err);
+        new Logger('ServerStatus').debug('Server status check failed (running client-only?):', err);
         isLoadedRef.current = true;
         setServerStatus(prev => ({ ...prev, isLoaded: true }));
       });

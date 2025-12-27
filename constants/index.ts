@@ -471,6 +471,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   model: DEFAULT_MODEL,
   devMode: false,
   debugMode: false,
+  simulateSynthesisError: 'none',
   pauseAfterInitial: false,
   pauseAfterRefinement: false,
   activeProfileId: 'default',

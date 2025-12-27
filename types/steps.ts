@@ -81,3 +81,14 @@ export interface StepDescriptor {
     agentIndex: number
   ) => Promise<unknown>;
 }
+
+export interface AgentInstruction {
+  systemInstruction: string;
+  userTurn: Content;
+  mainChatHistory: Content[];
+}
+
+export interface MultiAgentConfig {
+  prepareAgent: (index: number) => AgentInstruction;
+  tools?: Tool[];
+}

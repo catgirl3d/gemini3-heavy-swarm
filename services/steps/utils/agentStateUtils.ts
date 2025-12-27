@@ -1,5 +1,5 @@
 import { AppSettings, AgentState, StepId } from '@/types';
-import { getAgentRole } from '@/services/steps/utils/roleUtils';
+import { getUpdatedAgentName } from '@/utils/agentHelpers';
 
 interface AgentStateConfig {
   stepId: StepId;  // Technical step identifier
@@ -15,14 +15,10 @@ export const createAgentStates = (
   settings: AppSettings,
   config: AgentStateConfig
 ): AgentState[] => {
-  const roleType = config.stepId === 'refinement_step' ? 'criticRoles' : 'roles';
-  const namePrefix = config.stepId === 'refinement_step' ? 'Critic' : 'Agent';
-
   return Array.from({ length: numAgents }, (_, i) => {
-    const role = settings.dynamicAgentRoles ? getAgentRole(i, settings, roleType).name : null;
     return {
       id: `agent-${i}`,
-      name: role ? `${namePrefix} ${i + 1} (${role})` : `${namePrefix} ${i + 1}`,
+      name: getUpdatedAgentName(i, config.stepId, settings),
       status: config.status,
       label: config.statusLabel,
       stepId: config.stepId

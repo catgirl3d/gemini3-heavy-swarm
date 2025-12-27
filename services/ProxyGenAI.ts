@@ -1,5 +1,8 @@
 import { GenerationConfig, Content } from '@google/genai';
 import { API_SECRET } from '@/constants';
+import { Logger } from '@/utils/logger';
+
+const logger = new Logger('ProxyGenAI');
 
 // Minimal interface matching what the steps use from the Google SDK
 export class ProxyGenAI {
@@ -141,7 +144,7 @@ class ProxyGenerativeModel {
                                         return parsed.candidates[0].content.parts.map((p: { text?: string }) => p.text || '').join('');
                                     }
                                 } catch (e) {
-                                    console.warn('Error extracting text from chunk:', e);
+                                    logger.warn('Error extracting text from chunk:', e);
                                 }
                                 return '';
                             },
@@ -149,19 +152,19 @@ class ProxyGenerativeModel {
                             usageMetadata: parsed.usageMetadata
                         };
                     } catch (e) {
-                        console.warn('Failed to parse extracted JSON chunk:', e);
-                        // We continue the loop to find next valid JSON object
+                        logger.warn('Failed to parse extracted JSON chunk:', e);
+                                                            // We continue the loop to find next valid JSON object
                     }
                 } else {
                     // Incomplete object
                     if (done) {
-                        console.warn('Stream ended with incomplete JSON object');
+                        logger.warn('Stream ended with incomplete JSON object');
                         buffer = '';
                     }
                     break; // Wait for more data
                 }
             } catch (error) {
-                console.error('Error in ProxyGenAI stream processing logic:', error);
+                logger.error('Error in ProxyGenAI stream processing logic:', error);
                 // Clear buffer and stop this iteration to avoid infinite loop on same error
                 buffer = '';
                 break;

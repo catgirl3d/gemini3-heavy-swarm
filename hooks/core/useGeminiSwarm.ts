@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { AppSettings, Message, AgentState, Work } from '@/types';
 import { StepId } from '@/types/steps';
+import { Logger } from '@/utils/logger';
 
 import { GeminiService } from '@/services/gemini';
-import { updateStepResult, withEnsuredResults } from '@/utils/workHelpers';
+import { updateStepResult, withEnsuredResults, updateStepWithError } from '@/utils/workHelpers';
 import { generateUUID } from '@/utils/uuid';
+import { getStepConfig } from '@/utils/stepConfig';
 import { 
   updateMessageParts 
 } from '@/utils/messageHelpers';
@@ -102,9 +104,18 @@ export const useGeminiSwarm = () => {
             setIsPaused(isPaused);
           }
         },
-        (text, isFinal) => {
-          if (isFinal) {
+        (text, isFirstChunk) => {
+          if (isFirstChunk) {
+            /** 
+             * SYNTHESIS JUMP BEHAVIOR
+             * As soon as the first chunk of synthesis text arrives, we transition the UI:
+             * 1. Hide the LoadingIndicator and agent status cards (setIsLoading(false))
+             * 2. Clear any pause state (setIsPaused(false))
+             * This shifts the focus immediately to the streaming model message for a 
+             * more responsive and less cluttered final answer experience.
+             */
             setIsLoading(false);
+            setIsPaused(false);
           }
           setMessages(prev => {
             const newMessages = [...prev];
@@ -140,14 +151,15 @@ export const useGeminiSwarm = () => {
       setIsLoading(false);
 
     } catch (error) {
+      const logger = new Logger('Swarm', settings.debugMode);
       if (error instanceof Error && error.message === 'Aborted') {
-        console.log('Generation aborted by user');
+        logger.info('Generation aborted by user');
         setIsLoading(false);
         setLoadingStatus('Stopped by user');
         return;
       }
 
-      console.error('Error in agentic workflow:', error);
+      logger.error('Error in agentic workflow:', error);
 
       const errorMessage = getFriendlyErrorMessage(error);
 
@@ -185,6 +197,8 @@ export const useGeminiSwarm = () => {
   };
 
   const regenerateAgentResponse = async (messageIndex: number, stepId: StepId, agentIndex: number) => {
+    const logger = new Logger('Synthesis', settings.debugMode);
+    logger.debug('regenerateAgentResponse start:', { messageIndex, stepId, agentIndex });
     if (!lastInput) return;
 
     const targetMessage = messages[messageIndex];
@@ -196,13 +210,25 @@ export const useGeminiSwarm = () => {
 
     const controller = regenAbort.create();
 
-    // Start loading state
-    setIsLoading(true);
-    setIsPaused(false);
+
+    // Start loading state (but NOT for synthesis - it will hide on first chunk)
+    if (stepId !== 'synthesis_step') {
+      setIsLoading(true);
+    }
+    // For synthesis: keep cards visible until first chunk arrives
+    // The onSynthesisStart callback will handle hiding them
+    if (stepId !== 'synthesis_step') {
+      setIsPaused(false);
+    }
+
 
     try {
       const labels = getStepLabels(stepId);
-      syncStatus('working', labels.regenerating);
+      // Only set working status immediately for non-synthesis steps
+      // For synthesis, this will be done in onSynthesisStart to maintain cards visibility
+      if (stepId !== 'synthesis_step') {
+        syncStatus('working', labels.regenerating);
+      }
       const history = messages.slice(0, messageIndex);
 
       const result = await geminiServiceRef.current.regenerateResponse(
@@ -223,8 +249,18 @@ export const useGeminiSwarm = () => {
             workContext,
             text,
             settings,
+            isFirstChunk,
             () => {
-              // Note: synthesize-specific side effects can go here if needed
+              /** 
+               * SYNTHESIS JUMP BEHAVIOR (Regeneration)
+               * Replicates the jump logic during regeneration. Hides the LoadingIndicator 
+               * and agent cards immediately when synthesis text starts streaming, 
+               * ensuring the user sees the final answer appearing in the message list.
+               * Also sets the synthesizer to 'working' status at this moment.
+               */
+              syncStatus('working', getStepConfig('synthesis_step').labels.working);
+              setIsLoading(false);
+              setIsPaused(false);
             }
           );
 
@@ -291,12 +327,45 @@ export const useGeminiSwarm = () => {
       syncStatus('done', labels.done);
 
       if (stepId === 'synthesis_step') {
+        const logger = new Logger('Synthesis', settings.debugMode);
+        logger.debug('Synthesis regeneration logic complete');
         finalizeSynthesisState(labels.done);
       }
 
     } catch (error) {
-      console.error("Regeneration failed:", error);
-      syncStatus('error', getErrorLabel(error, 'Regeneration Failed'));
+      const logger = new Logger('Regeneration', settings.debugMode);
+      logger.error("Regeneration failed:", error);
+      const errorLabel = getErrorLabel(error, 'Regeneration Failed');
+      syncStatus('error', errorLabel);
+      
+      const errorMessage = getFriendlyErrorMessage(error);
+      
+      // Update messages with error
+      setMessages(prev => {
+        const newMessages = [...prev];
+        let targetIndex = messageIndex;
+        
+        // Find the target message (could be at messageIndex or messageIndex + 1 for synthesis)
+        let msg = newMessages[targetIndex];
+        if (stepId === 'synthesis_step' && (!msg || msg.role !== 'model')) {
+          msg = newMessages[targetIndex + 1];
+          targetIndex = targetIndex + 1;
+        }
+        
+        if (msg && msg.role === 'model' && msg.work) {
+          newMessages[targetIndex] = {
+            ...msg,
+            work: updateStepWithError(msg.work, stepId, agentIndex, errorMessage)
+          };
+        }
+        
+        return newMessages;
+      });
+      
+      // Update currentWork for live display
+      setCurrentWork(prev => 
+        prev ? updateStepWithError(prev, stepId, agentIndex, errorMessage) : prev
+      );
     } finally {
       regenAbort.ref.current = null;
       setIsLoading(false);

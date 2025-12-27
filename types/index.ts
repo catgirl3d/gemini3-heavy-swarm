@@ -51,6 +51,7 @@ export interface AppSettings {
   profiles: PromptProfile[];
   devMode: boolean;
   debugMode: boolean;
+  simulateSynthesisError: 'none' | '429' | '500' | '503' | 'timeout'; // Error simulation for testing
   pauseAfterInitial: boolean;
   pauseAfterRefinement: boolean;
   temperature: number;

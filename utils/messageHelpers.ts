@@ -1,6 +1,8 @@
-import { Message, Work } from '@/types';
+import { Message, Work, AppSettings } from '@/types';
 import { StepId } from '@/types/steps';
 import { generateUUID } from '@/utils/uuid';
+import { setWorkName } from '@/utils/stepConfig';
+import { Logger } from '@/utils/logger';
 
 /**
  * Immutably updates the text of the first part of a message.
@@ -17,16 +19,7 @@ export function updateMessageParts(message: Message, text: string): Message {
  * Immutably updates agent or critic names in a Work object based on the step.
  */
 export function updateWorkAgentNames(work: Work, stepId: StepId, agentIndex: number, newName: string): Work {
-  if (stepId === 'initial_step' && work.agentNames) {
-    const newAgentNames = [...work.agentNames];
-    newAgentNames[agentIndex] = newName;
-    return { ...work, agentNames: newAgentNames };
-  } else if (stepId === 'refinement_step' && work.criticNames) {
-    const newCriticNames = [...work.criticNames];
-    newCriticNames[agentIndex] = newName;
-    return { ...work, criticNames: newCriticNames };
-  }
-  return work;
+  return setWorkName(work, stepId, agentIndex, newName);
 }
 
 /**
@@ -54,22 +47,29 @@ export function ensureModelMessageForSynthesis(
   messages: Message[],
   messageIndex: number,
   workContext: Work | undefined,
-  text: string
+  text: string,
+  settings?: AppSettings
 ): { message: Message; index: number; wasCreated: boolean } {
   const msg = messages[messageIndex];
   
+  const logger = new Logger('Synthesis', settings?.debugMode);
+
   // Check if target is already a model message
   if (msg && msg.role === 'model') {
     return { message: msg, index: messageIndex, wasCreated: false };
   }
   
+  logger.debug('Target msg is not model:', { msgRole: msg?.role, messageIndex });
+  
   // Check if there's a model message at the next index
   const nextMsg = messages[messageIndex + 1];
   if (nextMsg && nextMsg.role === 'model') {
+    logger.debug('Found existing model message at index', messageIndex + 1);
     return { message: nextMsg, index: messageIndex + 1, wasCreated: false };
   }
   
   // Create new model message
+  logger.debug('Creating NEW model message');
   const newMsg = createRegeneratedModelMessage(workContext, text);
   return { message: newMsg, index: messages.length, wasCreated: true };
 }

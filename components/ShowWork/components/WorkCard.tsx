@@ -188,7 +188,7 @@ const WorkCardComponent: FC<WorkCardProps> = ({
   ], [thought, debugInfo, content, canRegenerate, status, handleShowThought, handleShowDebug, handleRegenerate, downloadFilename]);
 
   return (
-    <div className={`work-card ${className} ${status === 'error' ? 'error' : ''}`}>
+    <div className={`work-card ${className} ${status}`}>
       <div className="modal-header work-card-header">
         <div className="work-card-title-group">
           <div className={`work-card-icon ${status}`}>
