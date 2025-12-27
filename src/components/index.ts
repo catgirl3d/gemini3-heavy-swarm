@@ -1,3 +1,6 @@
+// Error Boundary
+export * from './error';
+
 // UI primitives
 export * from './ui';
 

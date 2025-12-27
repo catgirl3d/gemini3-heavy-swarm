@@ -1,0 +1,121 @@
+.error-boundary-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  width: 100%;
+  background-color: rgb(var(--background-rgb));
+  padding: 2rem;
+  font-family: var(--font-family);
+}
+
+.error-boundary-content {
+  max-width: 600px;
+  width: 100%;
+  background-color: var(--app-background);
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  box-shadow: 
+    0 20px 25px -5px rgba(0, 0, 0, 0.1), 
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--model-message-border);
+}
+
+.error-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1.5rem;
+  color: var(--toast-error-edge);
+  background-color: var(--toast-error-bg);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.error-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.error-boundary-content h1 {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.error-boundary-content p {
+  margin: 0 0 2rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.error-details {
+  text-align: left;
+  background-color: var(--model-message-bg);
+  border: 1px solid var(--model-message-border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 2rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.error-details summary {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+}
+
+.error-details pre {
+  font-family: var(--code-font-family);
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+  color: var(--toast-error-text);
+}
+
+.error-details pre.error-stack {
+  margin-top: 0.5rem;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--model-message-border);
+  padding-top: 0.5rem;
+}
+
+.error-reset-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.error-reset-button:hover {
+  background-color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 10px rgba(0,0,0,0.15);
+}
+
+.error-reset-button:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 640px) {
+  .error-boundary-content {
+    padding: 2rem 1.5rem;
+  }
+  
+  .error-boundary-content h1 {
+    font-size: 1.25rem;
+  }
+}
