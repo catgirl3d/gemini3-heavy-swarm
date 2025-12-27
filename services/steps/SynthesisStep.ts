@@ -74,7 +74,8 @@ export class SynthesisStep extends BaseStep {
           systemInstruction,
           tools: [{googleSearch: {}}],
           signal,
-          simulateError: settings.simulateSynthesisError
+          // Only simulate errors on first execution, not on regeneration
+          simulateError: hadError ? undefined : settings.simulateSynthesisError
         },
         {
           onChunk: (text, thought, usage) => {

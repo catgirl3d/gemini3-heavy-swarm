@@ -365,8 +365,18 @@ export const useGeminiSwarm = () => {
         
         let msg = newMessages[targetIndex];
         if (stepId === STEPS.SYNTHESIS && (!msg || msg.role !== 'model')) {
-          msg = newMessages[targetIndex + 1];
-          targetIndex = targetIndex + 1;
+          const nextMsg = newMessages[targetIndex + 1];
+          if (nextMsg && nextMsg.role === 'model') {
+            msg = nextMsg;
+            targetIndex = targetIndex + 1;
+          } else {
+            // Fallback to last message if it's a model message
+            const lastIdx = newMessages.length - 1;
+            if (lastIdx >= 0 && newMessages[lastIdx].role === 'model') {
+              targetIndex = lastIdx;
+              msg = newMessages[targetIndex];
+            }
+          }
         }
         
         if (msg && msg.role === 'model') {
@@ -389,10 +399,12 @@ export const useGeminiSwarm = () => {
         prev ? updateStepWithError(prev, stepId, agentIndex, errorMessage) : prev
       );
     } finally {
-      
-      // RESTORE STATE LOGIC
-      setIsLoading(initialLoading);
-      setIsPaused(initialPaused);
+      // RESTORE STATE LOGIC (only for non-synthesis steps)
+      // Synthesis manages its own state via onSynthesisStart callback
+      if (stepId !== STEPS.SYNTHESIS) {
+        setIsLoading(initialLoading);
+        setIsPaused(initialPaused);
+      }
     }
   };
 
