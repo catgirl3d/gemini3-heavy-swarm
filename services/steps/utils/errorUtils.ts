@@ -1,5 +1,26 @@
 /**
- * Determines a user-friendly error label based on the error type.
+ * Determines a user-friendly error message for the full UI error display.
+ */
+export const getFriendlyErrorMessage = (error: unknown): string => {
+  if (!(error instanceof Error)) return 'An unexpected error occurred.';
+  
+  const errStr = (error.message + (error.stack || '')).toUpperCase();
+  
+  if (errStr.includes('429') || errStr.includes('RATE LIMIT') || errStr.includes('RESOURCE_EXHAUSTED')) {
+    return 'Too many requests (429). Please wait a moment and try again.';
+  }
+  if (errStr.includes('503') || errStr.includes('OVERLOADED') || errStr.includes('TRANSIENT')) {
+    return 'Service temporarily unavailable (503). Please try again later.';
+  }
+  if (errStr.includes('SAFETY')) {
+    return 'Response blocked due to safety settings.';
+  }
+  
+  return `Error: ${error.message}`;
+};
+
+/**
+ * Determines a user-friendly error label (short) based on the error type.
  */
 export const getErrorLabel = (error: unknown, defaultLabel: string): string => {
   if (!(error instanceof Error)) return defaultLabel;

@@ -22,6 +22,7 @@ import { useAgentStateSync } from '@/hooks/swarm/useAgentStateSync';
 import { useAutoScroll } from '@/hooks/ui/useAutoScroll';
 import { useModalGlobalHandlers } from '@/hooks/ui/useModalGlobalHandlers';
 import { useServerStatus } from '@/hooks/network/useServerStatus';
+import { getFriendlyErrorMessage, getErrorLabel } from '@/services/steps/utils/errorUtils';
 
 export const useGeminiSwarm = () => {
   // 1. Compose Hooks
@@ -154,19 +155,7 @@ export const useGeminiSwarm = () => {
 
       console.error('Error in agentic workflow:', error);
 
-      let errorMessage = 'An unexpected error occurred.';
-      if (error instanceof Error) {
-        const errorStr = error.message + (error.stack || '');
-        if (errorStr.includes('429')) {
-          errorMessage = 'Too many requests (429). Please wait a moment and try again.';
-        } else if (errorStr.includes('503')) {
-          errorMessage = 'Service temporarily unavailable (503). Please try again later.';
-        } else if (errorStr.includes('SAFETY')) {
-          errorMessage = 'Response blocked due to safety settings.';
-        } else {
-          errorMessage = `Error: ${error.message}`;
-        }
-      }
+      const errorMessage = getFriendlyErrorMessage(error);
 
       const initialResults = latestWork?.results?.['initial_step'];
       const refinementResults = latestWork?.results?.['refinement_step'];
@@ -332,15 +321,7 @@ export const useGeminiSwarm = () => {
 
     } catch (error) {
       console.error("Regeneration failed:", error);
-      let errorLabel = 'Regeneration Failed';
-      if (error instanceof Error) {
-        const errorStr = error.message.toLowerCase();
-        if (errorStr.includes('429') || errorStr.includes('rate limit')) {
-          errorLabel = 'Rate Limited - Try Later';
-        } else if (errorStr.includes('503')) {
-          errorLabel = 'Service Unavailable';
-        }
-      }
+      const errorLabel = getErrorLabel(error, 'Regeneration Failed');
       syncStatus('error', errorLabel);
       return; 
     }
