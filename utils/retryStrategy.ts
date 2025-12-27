@@ -1,4 +1,4 @@
-import { AppError, ErrorCode } from './errors/AppError';
+import { AppError, ErrorCode } from '@/utils/errors/AppError';
 
 export interface RetryOptions {
   maxRetries: number;

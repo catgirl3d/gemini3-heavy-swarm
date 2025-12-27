@@ -6,14 +6,10 @@ import { getModelDisplayName } from '@/utils/modelUtils';
 import { isUsingProxy as checkProxyUsage } from '@/services/proxyUtils';
 import { Logger } from '@/utils/logger';
 
-import { StatusBanner } from '@/components/StatusBanner/StatusBanner';
-import { Header } from '@/components/Header/Header';
-import { MessageList } from '@/components/MessageList/MessageList';
-import { InputArea } from '@/components/InputArea/InputArea';
-import { ScrollToBottomButton } from '@/components/ScrollToBottomButton';
-import { SettingsModal } from '@/components/SettingsModal/SettingsModal';
-import { InfoModal } from '@/components/InfoModal';
-import { Toast, ToastType } from '@/components/Toast/Toast';
+import { StatusBanner, Header, Toast, ToastType } from '@/components/layout';
+import { MessageList, InputArea } from '@/components/chat';
+import { ScrollToBottomButton } from '@/components/ui';
+import { SettingsModal, InfoModal } from '@/components/modals';
 import { StepId, STEPS } from '@/types/steps';
 
 export const App: FC = () => {

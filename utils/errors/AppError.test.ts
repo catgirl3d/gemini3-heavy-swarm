@@ -1,4 +1,4 @@
-import { AppError, ErrorCode } from './AppError';
+import { AppError, ErrorCode } from '@/utils/errors/AppError';
 
 /**
  * Unit tests for AppError classification logic.
