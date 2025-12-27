@@ -42,7 +42,7 @@ export class GeminiService {
     imageFile: File | null,
     history: Message[],
     onProgress: (status: string, agents: AgentState[], work: Work, isPaused?: boolean) => void,
-    onMessageUpdate: (text: string, isFinal: boolean) => void,
+    onMessageUpdate: (text: string, isFirstChunk: boolean) => void,
     signal: AbortSignal,
     pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>
   ): Promise<{ text: string; sources?: Source[]; work: Work }> {

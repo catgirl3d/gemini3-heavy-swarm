@@ -1,5 +1,5 @@
 import { Message, Work, AppSettings } from '@/types';
-import { StepId } from '@/types/steps';
+import { StepId, STEPS } from '@/types/steps';
 import { generateUUID } from '@/utils/common/uuid';
 import { setWorkName } from '@/utils/swarm/stepConstants';
 import { Logger } from '@/utils/common/logger';
@@ -50,26 +50,48 @@ export function ensureModelMessageForSynthesis(
   text: string,
   settings?: AppSettings
 ): { message: Message; index: number; wasCreated: boolean } {
-  const msg = messages[messageIndex];
-  
   const logger = new Logger('Synthesis', settings?.debugMode);
-
-  // Check if target is already a model message
-  if (msg && msg.role === 'model') {
-    return { message: msg, index: messageIndex, wasCreated: false };
-  }
   
-  logger.debug('Target msg is not model:', { msgRole: msg?.role, messageIndex });
+  const targetIndex = findTargetMessageIndex(messages, messageIndex, STEPS.SYNTHESIS);
   
-  // Check if there's a model message at the next index
-  const nextMsg = messages[messageIndex + 1];
-  if (nextMsg && nextMsg.role === 'model') {
-    logger.debug('Found existing model message at index', messageIndex + 1);
-    return { message: nextMsg, index: messageIndex + 1, wasCreated: false };
+  if (targetIndex !== null) {
+    logger.debug('Found existing model message at index', targetIndex);
+    return { message: messages[targetIndex], index: targetIndex, wasCreated: false };
   }
   
   // Create new model message
   logger.debug('Creating NEW model message');
   const newMsg = createRegeneratedModelMessage(workContext, text);
   return { message: newMsg, index: messages.length, wasCreated: true };
+}
+
+/**
+ * Finds the index of the target message for updates during regeneration.
+ * Handles logic for finding the correct model message to update.
+ * 
+ * @returns Index of target message, or null if not found
+ */
+export function findTargetMessageIndex(
+  messages: Message[],
+  messageIndex: number,
+  stepId: StepId
+): number | null {
+  const msg = messages[messageIndex];
+  if (msg?.role === 'model') {
+    return messageIndex;
+  }
+  
+  const nextMsg = messages[messageIndex + 1];
+  if (nextMsg?.role === 'model') {
+    return messageIndex + 1;
+  }
+  
+  if (stepId === STEPS.SYNTHESIS) {
+    const lastIdx = messages.length - 1;
+    if (lastIdx >= 0 && messages[lastIdx]?.role === 'model') {
+      return lastIdx;
+    }
+  }
+  
+  return null;
 }
