@@ -3,7 +3,7 @@ import { AppSettings, Message, AgentState, Work } from '@/types';
 import { StepId, STEPS } from '@/types/steps';
 import { Logger } from '@/utils/logger';
 
-import { GeminiService } from '@/services/gemini';
+import { GeminiService } from '@/services/swarm/GeminiService';
 import { updateStepResult, withEnsuredResults, updateStepWithError } from '@/utils/workHelpers';
 import { generateUUID } from '@/utils/uuid';
 import { getStepConfig } from '@/utils/stepConstants';
@@ -25,7 +25,7 @@ import { useAgentStateSync } from '@/hooks/swarm/useAgentStateSync';
 import { useAutoScroll } from '@/hooks/ui/useAutoScroll';
 import { useModalGlobalHandlers } from '@/hooks/ui/useModalGlobalHandlers';
 import { useServerStatus } from '@/hooks/network/useServerStatus';
-import { getFriendlyErrorMessage, getErrorLabel } from '@/services/steps/utils/errorUtils';
+import { getFriendlyErrorMessage, getErrorLabel } from '@/services/swarm/steps/utils/errorUtils';
 
 export const useGeminiSwarm = () => {
   // 1. Compose Hooks

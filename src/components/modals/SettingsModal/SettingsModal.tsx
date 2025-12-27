@@ -1,7 +1,7 @@
 import React, { FC, useState, useEffect, useMemo } from 'react';
 import { AppSettings, PROMPT_TYPES } from '@/types';
 import { DEFAULT_SETTINGS, IS_FORCED_PROXY } from '@/constants';
-import { isUsingProxy as checkProxyUsage } from '@/services/proxyUtils';
+import { isUsingProxy as checkProxyUsage } from '@/services/proxy/proxyUtils';
 
 import { RoleAndPromptConfigModal, BaseModal, ConfirmationModal } from '@/components/modals';
 

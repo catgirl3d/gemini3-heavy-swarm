@@ -1,9 +1,9 @@
 import { Content } from '@google/genai';
 import { StepContext, StepId, STEPS } from '@/types/steps';
 import { AgentState } from '@/types';
-import { prepareGeminiContent } from '@/services/contentUtils';
+import { prepareGeminiContent } from '../contentUtils';
 import { getAgentRole } from '@/utils/roleUtils';
-import { BaseStep } from '@/services/steps/BaseStep';
+import { BaseStep } from './BaseStep';
 import { getStepConfig } from '@/utils/stepConstants';
 
 export class InitialStep extends BaseStep {

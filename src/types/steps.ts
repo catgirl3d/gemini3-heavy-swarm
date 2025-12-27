@@ -2,7 +2,7 @@ import { AppSettings, Message, AgentState, Work, StepId, TokenUsage, STEPS, Simu
 export type { StepId };
 export { STEPS };
 import { GoogleGenAI, Content, Tool, GroundingChunk } from '@google/genai';
-import { ProxyGenAI } from '@/services/ProxyGenAI';
+import { ProxyGenAI } from '@/services/proxy/ProxyGenAI';
 import type { AppError } from '@/utils/errors/AppError';
 
 export interface StreamConfig {

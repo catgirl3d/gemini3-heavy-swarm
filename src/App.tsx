@@ -3,7 +3,7 @@ import { useGeminiSwarm } from '@/hooks/core/useGeminiSwarm';
 import { useServerStatus } from '@/hooks/network/useServerStatus';
 import { useAutoScroll } from '@/hooks/ui/useAutoScroll';
 import { getModelDisplayName } from '@/utils/modelUtils';
-import { isUsingProxy as checkProxyUsage } from '@/services/proxyUtils';
+import { isUsingProxy as checkProxyUsage } from '@/services/proxy/proxyUtils';
 import { Logger } from '@/utils/logger';
 
 import { StatusBanner, Header, Toast, ToastType } from '@/components/layout';

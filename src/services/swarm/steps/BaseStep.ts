@@ -2,11 +2,11 @@ import { StepDescriptor, StepContext, StepId, STEPS, StreamConfig, StreamCallbac
 import { Tool } from '@google/genai';
 import { getStepConfig, StepConfig } from '@/utils/stepConstants';
 import { AgentState } from '@/types';
-import { createAgentStates, updateAgentState, updateAgentStateById } from '@/services/steps/utils/agentStateUtils';
-import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from '@/services/steps/utils/devModeUtils';
-import { extractTextFromParts, extractTokenUsage } from '@/services/steps/utils/streamUtils';
-import { getErrorLabel, checkGlobalRateLimitFailure, checkGlobalStepFailure } from '@/services/steps/utils/errorUtils';
-import { getGenerationConfig } from '@/services/geminiConfig';
+import { createAgentStates, updateAgentState, updateAgentStateById } from './utils/agentStateUtils';
+import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from './utils/devModeUtils';
+import { extractTextFromParts, extractTokenUsage } from './utils/streamUtils';
+import { getErrorLabel, checkGlobalRateLimitFailure, checkGlobalStepFailure } from './utils/errorUtils';
+import { getGenerationConfig } from '@/services/proxy/geminiConfig';
 import { GroundingChunk } from '@google/genai';
 import { Logger } from '@/utils/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AppSettings } from '@/types';
 import { DEFAULT_SETTINGS } from '@/constants';
-import { migrateSettings } from '@/services/settingsMigration';
+import { migrateSettings } from '@/services/settings/settingsMigration';
 import { Logger } from '@/utils/logger';
 
 export function useAppSettings() {

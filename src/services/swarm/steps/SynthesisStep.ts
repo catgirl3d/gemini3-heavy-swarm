@@ -1,8 +1,8 @@
 import { Content } from '@google/genai';
 import { StepContext, StepId, STEPS } from '@/types/steps';
 import { AgentState, Source } from '@/types';
-import { prepareGeminiContent } from '@/services/contentUtils';
-import { BaseStep } from '@/services/steps/BaseStep';
+import { prepareGeminiContent } from '../contentUtils';
+import { BaseStep } from './BaseStep';
 import { getStepResults } from '@/utils/workHelpers';
 import { getStepConfig } from '@/utils/stepConstants';
 import { Logger } from '@/utils/logger';
