@@ -1,5 +1,11 @@
 import { StepId } from '@/types';
 
+export const DEV_MODE_DURATIONS = {
+  initial_step: 10000,
+  refinement_step: 100,
+  synthesis_step: 2000
+} as const;
+
 /**
  * Simulates streaming text word by word.
  */

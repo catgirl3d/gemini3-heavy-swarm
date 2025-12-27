@@ -2,7 +2,6 @@ import { Content } from '@google/genai';
 import { StepContext, StepId } from '@/types/steps';
 import { AgentState } from '@/types';
 import { prepareGeminiContent } from '@/services/contentUtils';
-import { getGenerationConfig } from '@/services/geminiConfig';
 import { getAgentRole } from '@/services/steps/utils/roleUtils';
 import { BaseStep } from '@/services/steps/BaseStep';
 import { getStepResults } from '@/utils/workHelpers';
@@ -30,7 +29,7 @@ export class RefinementStep extends BaseStep {
     const thoughts: string[] = Array(settings.numAgents).fill('');
     
     // Initialize generic storage if needed
-    if (!work.results) work.results = {};
+    this.ensureResults(work);
 
     // Initialize agent states using BaseStep utility
     let currentAgentStates: AgentState[] = this.createAgentStates(settings.numAgents, settings, {
@@ -46,41 +45,14 @@ export class RefinementStep extends BaseStep {
 
     // Execute agents
     const agentPromises = initialDrafts.map(async (initialAnswer: string, index: number) => {
-      if (settings.devMode) {
-        // DEV MODE SIMULATION using BaseStep utility
-        const dummyText = this.getDevModeText('refinement_step', index);
-        
-        const currentText = await this.simulateDevMode(
-            dummyText,
-            signal,
-            (chunk) => {
-                 results[index] = chunk;
-                 
-                 // Update generic results map
-                 if (!work.results) work.results = {};
-                 work.results['refinement_step'] = [...results];
-       
-                 onProgress('Refining answers (DEV MODE)...', currentAgentStates, { ...work });
-            },
-           100 // Fast simulation for refinement
-        );
-        
-        currentAgentStates = this.updateAgentState(currentAgentStates, index, { status: 'done', label: 'Refined', stepId: 'refinement_step' });
-        onProgress('Refining answers (DEV MODE)...', currentAgentStates, { ...work });
-        return currentText;
+      const peerDrafts = initialDrafts
+        .map((text: string, i: number) => ({ text, id: i + 1 }))
+        .filter((_, i) => i !== index)
+        .filter((a) => !a.text.trim().startsWith('[System:')) // Filter out failed agents
+        .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
+        .join('\n\n');
 
-      } else {
-        // PROD MODE
-        if (!ai) throw new Error("API Key not found");
-
-        const peerDrafts = initialDrafts
-          .map((text: string, i: number) => ({ text, id: i + 1 }))
-          .filter((_, i) => i !== index)
-          .filter((a) => !a.text.trim().startsWith('[System:')) // Filter out failed agents
-          .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
-          .join('\n\n');
-
-        const refinementContext = `
+      const refinementContext = `
 # INPUT DATA
 <context_data>
 <original_query>
@@ -102,74 +74,60 @@ ${peerDrafts}
 2. Provide a new, improved response to <original_query>.
 3. [CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!
 </instruction>`;
-        
-        const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
-        
-        const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
-        
-        // Add role-specific instruction if dynamic roles are enabled
-        let roleInstruction = '';
-        if (settings.dynamicAgentRoles) {
-            const role = getAgentRole(index, settings, 'criticRoles');
-            if (role.instruction) {
-                roleInstruction = `\n\n<role_assignment>\n${role.instruction}\n</role_assignment>`;
-            }
-        }
-
-        const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.refinementInstruction}</mission>${roleInstruction}\n</system_instruction>`;
-
-        // Capture debug info
-        if (!work.debugInfo) work.debugInfo = {};
-        if (!work.debugInfo['refinement_step']) work.debugInfo['refinement_step'] = [];
-        work.debugInfo['refinement_step'][index] = {
-            systemInstruction,
-            history: mainChatHistory,
-            userTurn: refinementTurn
-        };
-
-        const stream = await ai.models.generateContentStream({
-          model: settings.model,
-          contents: [...mainChatHistory, refinementTurn],
-          config: {
-            ...getGenerationConfig(settings.model, settings.temperature, settings.unsafeTemperature),
-            systemInstruction,
-            tools: [{googleSearch: {}}],
-          },
-        });
-
-        let fullText = '';
-        let fullThought = '';
-        for await (const chunk of stream) {
-          if (signal.aborted) throw new Error('Aborted');
-          
-          const { text, thought } = this.extractStreamContent(chunk.candidates?.[0]?.content?.parts);
-          fullText += text;
-          fullThought += thought;
-          
-          // Update storage
-          results[index] = fullText;
-          thoughts[index] = fullThought;
-          
-          // Update generic results map
-          if (!work.results) work.results = {};
-          work.results['refinement_step'] = [...results];
-          work.results['refinement_step_thoughts'] = [...thoughts];
-
-          const usage = this.extractTokenUsage(chunk.usageMetadata);
-          if (usage) {
-            if (!work.results['refinement_step_usage']) {
-                work.results['refinement_step_usage'] = Array(settings.numAgents).fill(null);
-            }
-            work.results['refinement_step_usage'][index] = usage;
+      
+      const refinementTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
+      
+      const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
+      
+      // Add role-specific instruction if dynamic roles are enabled
+      let roleInstruction = '';
+      if (settings.dynamicAgentRoles) {
+          const role = getAgentRole(index, settings, 'criticRoles');
+          if (role.instruction) {
+              roleInstruction = `\n\n<role_assignment>\n${role.instruction}\n</role_assignment>`;
           }
-
-          onProgress('Refining answers...', currentAgentStates, { ...work });
-        }
-
-        currentAgentStates = this.updateAgentState(currentAgentStates, index, { status: 'done', label: 'Refined', stepId: 'refinement_step' });
-        onProgress('Refining answers...', currentAgentStates, { ...work });
-        return fullText;
       }
+
+      const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.refinementInstruction}</mission>${roleInstruction}\n</system_instruction>`;
+
+      // Capture debug info
+      this.ensureDebugInfo(work, 'refinement_step');
+      work.debugInfo['refinement_step'][index] = {
+          systemInstruction,
+          history: mainChatHistory,
+          userTurn: refinementTurn
+      };
+
+      const { text: fullText } = await this.runModelStream(
+        {
+          ai, settings, model: settings.model,
+          contents: [...mainChatHistory, refinementTurn],
+          systemInstruction,
+          tools: [{googleSearch: {}}],
+          signal,
+          agentIndex: index,
+        },
+        {
+          onChunk: (text, thought, usage) => {
+            results[index] = text;
+            thoughts[index] = thought;
+            
+            work.results['refinement_step'] = [...results];
+            work.results['refinement_step_thoughts'] = [...thoughts];
+
+            if (usage) {
+              this.ensureStepUsage(work, 'refinement_step', settings.numAgents);
+              work.results['refinement_step_usage'][index] = usage;
+            }
+
+            onProgress('Refining answers...', currentAgentStates, { ...work });
+          }
+        }
+      );
+
+      currentAgentStates = this.updateAgentState(currentAgentStates, index, { status: 'done', label: 'Refined', stepId: 'refinement_step' });
+      onProgress('Refining answers...', currentAgentStates, { ...work });
+      return fullText;
     });
 
     const outcomes = await Promise.allSettled(agentPromises);
@@ -191,13 +149,11 @@ ${peerDrafts}
 
     // Check global rate limit using BaseStep utility
     if (this.checkGlobalRateLimitFailure(failures, settings.numAgents)) {
-        if (!work.results) work.results = {};
         work.results['refinement_step'] = [...results];
         onProgress('Rate limit reached', currentAgentStates, { ...work });
         throw failures[0];
     }
 
-    if (!work.results) work.results = {};
     work.results['refinement_step'] = [...results];
     onProgress('Refinement completed', currentAgentStates, { ...work });
 
@@ -272,45 +228,36 @@ ALWAYS use the googleSearch tool to verify facts and find additional information
         };
     }
 
-    const stream = await ai.models.generateContentStream({
-      model: settings.model,
-      contents: [...mainChatHistory, refinementTurn],
-      config: {
-        ...getGenerationConfig(settings.model, settings.temperature, settings.unsafeTemperature),
+    const { text: fullText } = await this.runModelStream(
+      {
+        ai, settings, model: settings.model,
+        contents: [...mainChatHistory, refinementTurn],
         systemInstruction,
         tools: [{googleSearch: {}}],
+        signal,
+        agentIndex
       },
-    });
-
-    let fullText = '';
-    let fullThought = '';
-    for await (const chunk of stream) {
-      if (signal.aborted) throw new Error('Aborted');
-      
-      const { text, thought } = this.extractStreamContent(chunk.candidates?.[0]?.content?.parts);
-      fullText += text;
-      fullThought += thought;
-
-      if (context.work.results) {
-        if (!context.work.results['refinement_step_thoughts']) {
-            context.work.results['refinement_step_thoughts'] = [];
-        }
-        context.work.results['refinement_step_thoughts'][agentIndex] = fullThought;
-
-        const usage = this.extractTokenUsage(chunk.usageMetadata);
-        if (usage) {
-            if (!context.work.results['refinement_step_usage']) {
-                context.work.results['refinement_step_usage'] = [];
+      {
+        onChunk: (text, thought, usage) => {
+          if (context.work.results) {
+            if (!context.work.results['refinement_step_thoughts']) {
+                context.work.results['refinement_step_thoughts'] = [];
             }
-            context.work.results['refinement_step_usage'][agentIndex] = usage;
+            context.work.results['refinement_step_thoughts'][agentIndex] = thought;
+    
+            if (usage) {
+                this.ensureStepUsage(context.work, 'refinement_step', 1);
+                context.work.results['refinement_step_usage'][agentIndex] = usage;
+            }
+          }
+    
+          // Only update message display when there is actual text content (not just thinking)
+          if (text.length > 0) {
+            context.onMessageUpdate(text, false);
+          }
         }
       }
-
-      // Only update message display when there is actual text content (not just thinking)
-      if (fullText.length > 0) {
-        context.onMessageUpdate(fullText, false);
-      }
-    }
+    );
     return fullText;
   }
 }

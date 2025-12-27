@@ -1,7 +1,30 @@
-import { AppSettings, Message, AgentState, Work, StepId } from '@/types/index';
+import { AppSettings, Message, AgentState, Work, StepId, TokenUsage } from '@/types/index';
 export type { StepId };
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Content, Tool, GroundingChunk } from '@google/genai';
 import { ProxyGenAI } from '@/services/ProxyGenAI';
+
+export interface StreamConfig {
+  ai: GoogleGenAI | ProxyGenAI | null;
+  settings: AppSettings;
+  model: string;
+  contents: Content[];
+  systemInstruction: string;
+  tools?: Tool[];
+  signal: AbortSignal;
+  agentIndex?: number;
+  /** Duration in milliseconds for dev mode simulation. Default: 1000ms */
+  devModeDuration?: number;
+}
+
+export interface StreamCallbacks {
+  onChunk: (text: string, thought: string, usage: TokenUsage | null) => void;
+}
+
+export interface StreamResult {
+  text: string;
+  thought: string;
+  groundingChunks: GroundingChunk[];
+}
 
 /** Pipeline step identifiers. Note: 'refinement_step' is distinct from 'refinement_prompt' InstructionType */
 

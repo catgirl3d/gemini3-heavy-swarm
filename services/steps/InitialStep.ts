@@ -2,7 +2,6 @@ import { Content } from '@google/genai';
 import { StepContext, StepId } from '@/types/steps';
 import { AgentState } from '@/types';
 import { prepareGeminiContent } from '@/services/contentUtils';
-import { getGenerationConfig } from '@/services/geminiConfig';
 import { getAgentRole } from '@/services/steps/utils/roleUtils';
 import { BaseStep } from '@/services/steps/BaseStep';
 
@@ -23,7 +22,7 @@ export class InitialStep extends BaseStep {
     const thoughts: string[] = Array(settings.numAgents).fill('');
     
     // Initialize generic storage if needed
-    if (!work.results) work.results = {};
+    this.ensureResults(work);
 
     // Initialize agent states using BaseStep utility
     let currentAgentStates: AgentState[] = this.createAgentStates(
@@ -44,101 +43,59 @@ export class InitialStep extends BaseStep {
 
     // Execute agents
     const agentPromises = Array(settings.numAgents).fill(0).map(async (_, i) => {
-      if (settings.devMode) {
-        // DEV MODE SIMULATION using BaseStep utility
-        const dummyText = this.getDevModeText('initial_step', i);
-        
-        const currentText = await this.simulateDevMode(
-          dummyText,
-          signal,
-          (chunk) => {
-             // Update storage
-             results[i] = chunk;
-             
-             // Update generic results map
-             if (!work.results) work.results = {};
-             work.results['initial_step'] = [...results];
- 
-             onProgress('Initializing agents (DEV MODE)...', currentAgentStates, { ...work });
-          },
-          10000 // 10 seconds duration
-        );
-        
-        currentAgentStates = this.updateAgentState(currentAgentStates, i, { status: 'done', label: 'Drafted', stepId: 'initial_step' });
-        onProgress('Initializing agents (DEV MODE)...', currentAgentStates, { ...work });
-        return currentText;
+      const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
+      let systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.initialInstruction}</mission>`;
+      let userTurn = currentUserTurn;
 
-      } else {
-        // PROD MODE
-        if (!ai) throw new Error("API Key not found");
-
-        const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
-        let systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.initialInstruction}</mission>`;
-        let userTurn = currentUserTurn;
-
-        if (settings.dynamicAgentRoles) {
-          const perspective = getAgentRole(i, settings, 'roles');
-          systemInstruction += `\n<role>${perspective.name}</role>\n<role_instruction>${perspective.instruction}</role_instruction>`;
-          const roleReminder = `\n\n<system_note>\nRemember your assigned role: ${perspective.name}\n</system_note>`;
-          userTurn = {
-            role: 'user',
-            parts: [...currentUserTurn.parts, { text: roleReminder }]
-          };
-        }
-        systemInstruction += `\n</system_instruction>`;
-
-        // Capture debug info
-        if (!work.debugInfo) work.debugInfo = {};
-        if (!work.debugInfo['initial_step']) work.debugInfo['initial_step'] = [];
-        work.debugInfo['initial_step'][i] = {
-            systemInstruction,
-            history: mainChatHistory,
-            userTurn
+      if (settings.dynamicAgentRoles) {
+        const perspective = getAgentRole(i, settings, 'roles');
+        systemInstruction += `\n<role>${perspective.name}</role>\n<role_instruction>${perspective.instruction}</role_instruction>`;
+        const roleReminder = `\n\n<system_note>\nRemember your assigned role: ${perspective.name}\n</system_note>`;
+        userTurn = {
+          role: 'user',
+          parts: [...currentUserTurn.parts, { text: roleReminder }]
         };
-
-        const stream = await ai.models.generateContentStream({
-          model: settings.model,
-          contents: [...mainChatHistory, userTurn],
-          config: {
-            ...getGenerationConfig(settings.model, settings.temperature, settings.unsafeTemperature),
-            systemInstruction: systemInstruction,
-            tools: [{googleSearch: {}}],
-          },
-        });
-
-        let fullText = '';
-        let fullThought = '';
-        for await (const chunk of stream) {
-          if (signal.aborted) throw new Error('Aborted');
-          
-          const { text, thought } = this.extractStreamContent(chunk.candidates?.[0]?.content?.parts);
-          fullText += text;
-          fullThought += thought;
-          
-          // Update storage
-          results[i] = fullText;
-          thoughts[i] = fullThought;
-          
-          // Update generic results map
-          if (!work.results) work.results = {};
-          work.results['initial_step'] = [...results];
-          work.results['initial_step_thoughts'] = [...thoughts];
-
-          const usage = this.extractTokenUsage(chunk.usageMetadata);
-          if (usage) {
-            if (!work.results['initial_step_usage']) {
-                work.results['initial_step_usage'] = Array(settings.numAgents).fill(null);
-            }
-            work.results['initial_step_usage'][i] = usage;
-          }
-
-          onProgress('Initializing agents...', currentAgentStates, { ...work });
-        }
-
-        currentAgentStates = this.updateAgentState(currentAgentStates, i, { status: 'done', label: 'Drafted', stepId: 'initial_step' });
-        onProgress('Initializing agents...', currentAgentStates, { ...work });
-        return fullText;
       }
+      systemInstruction += `\n</system_instruction>`;
+
+      // Capture debug info
+      this.ensureDebugInfo(work, 'initial_step');
+      work.debugInfo['initial_step'][i] = {
+          systemInstruction,
+          history: mainChatHistory,
+          userTurn
+      };
+
+      const { text: fullText } = await this.runModelStream(
+        {
+          ai, settings, model: settings.model,
+          contents: [...mainChatHistory, userTurn],
+          systemInstruction,
+          tools: [{googleSearch: {}}],
+          signal,
+          agentIndex: i,
+        },
+        {
+          onChunk: (text, thought, usage) => {
+            results[i] = text;
+            thoughts[i] = thought;
+            
+            work.results['initial_step'] = [...results];
+            work.results['initial_step_thoughts'] = [...thoughts];
+
+            if (usage) {
+              this.ensureStepUsage(work, 'initial_step', settings.numAgents);
+              work.results['initial_step_usage'][i] = usage;
+            }
+
+            onProgress('Initializing agents...', currentAgentStates, { ...work });
+          }
+        }
+      );
+
+      currentAgentStates = this.updateAgentState(currentAgentStates, i, { status: 'done', label: 'Drafted', stepId: 'initial_step' });
+      onProgress('Initializing agents...', currentAgentStates, { ...work });
+      return fullText;
     });
 
     const outcomes = await Promise.allSettled(agentPromises);
@@ -163,13 +120,11 @@ export class InitialStep extends BaseStep {
     // Other errors (e.g., transient network issues) might be recoverable.
     if (this.checkGlobalRateLimitFailure(failures, settings.numAgents)) {
         // Update work and notify UI BEFORE throwing so the error states are visible
-        if (!work.results) work.results = {};
         work.results['initial_step'] = [...results];
         onProgress('Rate limit reached', currentAgentStates, { ...work });
         throw failures[0];
     }
 
-    if (!work.results) work.results = {};
     work.results['initial_step'] = [...results];
     onProgress('Agents completed', currentAgentStates, { ...work });
 
@@ -207,46 +162,36 @@ export class InitialStep extends BaseStep {
         };
     }
 
-    const stream = await ai.models.generateContentStream({
-      model: settings.model,
-      contents: [...mainChatHistory, userTurn],
-      config: {
-        ...getGenerationConfig(settings.model, settings.temperature, settings.unsafeTemperature),
-        systemInstruction: systemInstruction,
+    const { text: fullText } = await this.runModelStream(
+      {
+        ai, settings, model: settings.model,
+        contents: [...mainChatHistory, userTurn],
+        systemInstruction,
         tools: [{googleSearch: {}}],
+        signal,
+        agentIndex
       },
-    });
-
-    let fullText = '';
-    let fullThought = '';
-    
-    for await (const chunk of stream) {
-      if (signal.aborted) throw new Error('Aborted');
-      
-      const { text, thought } = this.extractStreamContent(chunk.candidates?.[0]?.content?.parts);
-      fullText += text;
-      fullThought += thought;
-
-      if (context.work.results) {
-        if (!context.work.results['initial_step_thoughts']) {
-            context.work.results['initial_step_thoughts'] = [];
-        }
-        context.work.results['initial_step_thoughts'][agentIndex] = fullThought;
-
-        const usage = this.extractTokenUsage(chunk.usageMetadata);
-        if (usage) {
-            if (!context.work.results['initial_step_usage']) {
-                context.work.results['initial_step_usage'] = [];
+      {
+        onChunk: (text, thought, usage) => {
+          if (context.work.results) {
+            if (!context.work.results['initial_step_thoughts']) {
+                context.work.results['initial_step_thoughts'] = [];
             }
-            context.work.results['initial_step_usage'][agentIndex] = usage;
+            context.work.results['initial_step_thoughts'][agentIndex] = thought;
+    
+            if (usage) {
+                this.ensureStepUsage(context.work, 'initial_step', 1);
+                context.work.results['initial_step_usage'][agentIndex] = usage;
+            }
+          }
+    
+          // Only update message display when there is actual text content (not just thinking)
+          if (text.length > 0) {
+            context.onMessageUpdate(text, false);
+          }
         }
       }
-
-      // Only update message display when there is actual text content (not just thinking)
-      if (fullText.length > 0) {
-        context.onMessageUpdate(fullText, false);
-      }
-    }
+    );
     return fullText;
   }
 }
