@@ -1,19 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import { AppSettings, Message, AgentState, Work } from '@/types';
 import { StepId, STEPS } from '@/types/steps';
-import { Logger } from '@/utils/logger';
+import { Logger } from '@/utils/common/logger';
 
 import { GeminiService } from '@/services/swarm/GeminiService';
-import { updateStepResult, withEnsuredResults, updateStepWithError } from '@/utils/workHelpers';
-import { generateUUID } from '@/utils/uuid';
-import { getStepConfig } from '@/utils/stepConstants';
+import { updateStepResult, withEnsuredResults, updateStepWithError } from '@/utils/swarm/workHelpers';
+import { generateUUID } from '@/utils/common/uuid';
+import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { 
   updateMessageParts 
-} from '@/utils/messageHelpers';
+} from '@/utils/chat/messageHelpers';
 import { 
   getStepLabels,
   calculateUpdatedStateForRegeneration
-} from '@/utils/regenerationHelpers';
+} from '@/utils/swarm/regenerationHelpers';
 
 import { useAppSettings } from '@/hooks/state/useAppSettings';
 import { useSwarmStatus } from '@/hooks/swarm/useSwarmStatus';

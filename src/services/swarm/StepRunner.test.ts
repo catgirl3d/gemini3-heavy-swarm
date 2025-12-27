@@ -4,7 +4,7 @@ import { StepDescriptor, StepContext } from '@/types/steps';
 import { Work, AppSettings, AgentState } from '@/types';
 
 // Mock getStepConfig to control pause logic in tests
-vi.mock('@/utils/stepConstants', () => ({
+vi.mock('@/utils/swarm/stepConstants', () => ({
   getStepConfig: vi.fn((id: string) => {
     if (id === 'pausable-step') {
       return { allowPause: true, pauseSettingKey: 'pauseAfterInitial' };
@@ -14,7 +14,7 @@ vi.mock('@/utils/stepConstants', () => ({
 }));
 
 // Mock Logger to avoid console noise
-vi.mock('@/utils/logger', () => {
+vi.mock('@/utils/common/logger', () => {
   return {
     Logger: class {
       debug = vi.fn();

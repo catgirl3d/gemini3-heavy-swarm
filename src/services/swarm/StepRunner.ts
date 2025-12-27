@@ -1,8 +1,8 @@
 import { MutableRefObject } from 'react';
 import { StepDescriptor, StepContext } from '@/types/steps';
 import { Work, AppSettings, AgentState } from '@/types';
-import { getStepConfig } from '@/utils/stepConstants';
-import { Logger } from '@/utils/logger';
+import { getStepConfig } from '@/utils/swarm/stepConstants';
+import { Logger } from '@/utils/common/logger';
 
 const getLogger = (settings: AppSettings) => new Logger('StepRunner', settings.debugMode);
 

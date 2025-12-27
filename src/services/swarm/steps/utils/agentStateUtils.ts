@@ -1,5 +1,5 @@
 import { AppSettings, AgentState, StepId } from '@/types';
-import { getUpdatedAgentName } from '@/utils/agentHelpers';
+import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
 
 interface AgentStateConfig {
   stepId: StepId;  // Technical step identifier

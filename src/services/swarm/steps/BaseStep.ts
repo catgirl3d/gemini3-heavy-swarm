@@ -1,6 +1,6 @@
 import { StepDescriptor, StepContext, StepId, STEPS, StreamConfig, StreamCallbacks, StreamResult, AgentInstruction, MultiAgentConfig } from '@/types/steps';
 import { Tool } from '@google/genai';
-import { getStepConfig, StepConfig } from '@/utils/stepConstants';
+import { getStepConfig, StepConfig } from '@/utils/swarm/stepConstants';
 import { AgentState } from '@/types';
 import { createAgentStates, updateAgentState, updateAgentStateById } from './utils/agentStateUtils';
 import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from './utils/devModeUtils';
@@ -8,9 +8,9 @@ import { extractTextFromParts, extractTokenUsage } from './utils/streamUtils';
 import { getErrorLabel, checkGlobalRateLimitFailure, checkGlobalStepFailure } from './utils/errorUtils';
 import { getGenerationConfig } from '@/services/proxy/geminiConfig';
 import { GroundingChunk } from '@google/genai';
-import { Logger } from '@/utils/logger';
+import { Logger } from '@/utils/common/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
-import { withRetry } from '@/utils/retryStrategy';
+import { withRetry } from '@/utils/common/retryStrategy';
 
 export abstract class BaseStep implements StepDescriptor {
   abstract id: StepId;

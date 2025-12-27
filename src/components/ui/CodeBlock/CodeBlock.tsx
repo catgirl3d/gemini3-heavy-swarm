@@ -1,6 +1,6 @@
 import React, { FC, ReactNode, useState } from 'react';
 import './CodeBlock.css';
-import { Logger } from '@/utils/logger';
+import { Logger } from '@/utils/common/logger';
 
 export const CodeBlock: FC<{ children?: ReactNode, className?: string }> = ({ children, className }) => {
   const [copied, setCopied] = useState(false);

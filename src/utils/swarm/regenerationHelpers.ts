@@ -1,10 +1,10 @@
 import { StepId, STEPS } from '@/types/steps';
-import { getStepConfig } from '@/utils/stepConstants';
+import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { AppSettings, Message, Work } from '@/types';
-import { ensureModelMessageForSynthesis, updateMessageParts, updateWorkAgentNames } from '@/utils/messageHelpers';
-import { getUpdatedAgentName } from '@/utils/agentHelpers';
-import { updateStepResult } from '@/utils/workHelpers';
-import { Logger } from '@/utils/logger';
+import { ensureModelMessageForSynthesis, updateMessageParts, updateWorkAgentNames } from '@/utils/chat/messageHelpers';
+import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
+import { updateStepResult } from '@/utils/swarm/workHelpers';
+import { Logger } from '@/utils/common/logger';
 
 /**
  * Returns consistent UI labels for regeneration steps.

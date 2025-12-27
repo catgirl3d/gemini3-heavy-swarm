@@ -1,8 +1,8 @@
 import { Message, Work, AppSettings } from '@/types';
 import { StepId } from '@/types/steps';
-import { generateUUID } from '@/utils/uuid';
-import { setWorkName } from '@/utils/stepConstants';
-import { Logger } from '@/utils/logger';
+import { generateUUID } from '@/utils/common/uuid';
+import { setWorkName } from '@/utils/swarm/stepConstants';
+import { Logger } from '@/utils/common/logger';
 
 /**
  * Immutably updates the text of the first part of a message.

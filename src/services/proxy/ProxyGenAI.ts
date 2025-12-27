@@ -1,6 +1,6 @@
 import { GenerationConfig, Content } from '@google/genai';
 import { API_SECRET } from '@/constants';
-import { Logger } from '@/utils/logger';
+import { Logger } from '@/utils/common/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
 
 const logger = new Logger('ProxyGenAI');

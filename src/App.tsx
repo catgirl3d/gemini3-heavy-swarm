@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef, useCallback, FormEvent, FC } from '
 import { useGeminiSwarm } from '@/hooks/core/useGeminiSwarm';
 import { useServerStatus } from '@/hooks/network/useServerStatus';
 import { useAutoScroll } from '@/hooks/ui/useAutoScroll';
-import { getModelDisplayName } from '@/utils/modelUtils';
+import { getModelDisplayName } from '@/utils/common/modelUtils';
 import { isUsingProxy as checkProxyUsage } from '@/services/proxy/proxyUtils';
-import { Logger } from '@/utils/logger';
+import { Logger } from '@/utils/common/logger';
 
 import { StatusBanner, Header, Toast, ToastType } from '@/components/layout';
 import { MessageList, InputArea } from '@/components/chat';
