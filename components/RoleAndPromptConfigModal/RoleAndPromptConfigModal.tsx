@@ -1,6 +1,6 @@
 import React, { FC, useState, useRef, useEffect } from 'react';
 import { BaseModal } from '@/components/BaseModal';
-import { RoleAndPromptConfigModalProps } from './types';
+import { RoleAndPromptConfigModalProps } from '@/components/RoleAndPromptConfigModal/types';
 import { PortalDropdown } from '@/components/PortalDropdown/PortalDropdown';
 
 // Stable reference to prevent click listener churn

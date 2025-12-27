@@ -1,5 +1,5 @@
 import React, { FC, useState, useRef, useEffect, ReactNode } from 'react';
-import { MoreActionsIcon } from '../icons';
+import { MoreActionsIcon } from '@/components/ShowWork/icons';
 
 interface Action {
   label: string;

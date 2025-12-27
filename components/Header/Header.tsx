@@ -1,5 +1,5 @@
 import React, { FC } from 'react';
-import geminiIcon from '../../assets/Google-gemini-icon.png';
+import geminiIcon from '@/assets/Google-gemini-icon.png';
 
 interface HeaderProps {
   modelDisplayName: string;

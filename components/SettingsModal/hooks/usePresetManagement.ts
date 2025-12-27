@@ -1,7 +1,7 @@
 import React from 'react';
-import { AppSettings, PromptProfile, RoleProfile } from '../../../types';
-import { DEFAULT_SETTINGS } from '../../../constants';
-import { InstructionType } from '../types';
+import { AppSettings, PromptProfile, RoleProfile } from '@/types';
+import { DEFAULT_SETTINGS } from '@/constants';
+import { InstructionType } from '@/components/SettingsModal/types';
 
 export function usePresetManagement(
     localSettings: AppSettings,

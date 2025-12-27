@@ -1,6 +1,6 @@
-import { Message, Work } from '../types';
-import { StepId } from '../types/steps';
-import { generateUUID } from './uuid';
+import { Message, Work } from '@/types';
+import { StepId } from '@/types/steps';
+import { generateUUID } from '@/utils/uuid';
 
 /**
  * Immutably updates the text of the first part of a message.

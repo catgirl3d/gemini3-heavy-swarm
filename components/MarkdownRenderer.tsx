@@ -1,7 +1,7 @@
 import React, { FC } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { CodeBlock } from './CodeBlock';
+import { CodeBlock } from '@/components/CodeBlock';
 import './MarkdownRenderer.css';
 
 export const MarkdownRenderer: FC<{ content: string }> = ({ content }) => (

@@ -1,4 +1,4 @@
-import { IS_FORCED_PROXY } from '../constants';
+import { IS_FORCED_PROXY } from '@/constants';
 
 /**
  * Determines if requests should be routed through the proxy.

@@ -1,8 +1,8 @@
 import React, { FC, ChangeEvent } from 'react';
-import { AppSettings } from '../../../types';
-import { StepperControl } from '../components/StepperControl';
-import { TemperatureBanner } from '../components/TemperatureBanner';
-import { AVAILABLE_MODELS } from '../constants';
+import { AppSettings } from '@/types';
+import { StepperControl } from '@/components/SettingsModal/components/StepperControl';
+import { TemperatureBanner } from '@/components/SettingsModal/components/TemperatureBanner';
+import { AVAILABLE_MODELS } from '@/components/SettingsModal/constants';
 
 interface GeneralSettingsTabProps {
     localSettings: AppSettings;

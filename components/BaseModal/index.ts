@@ -1,2 +1,2 @@
-export * from './BaseModal';
-export * from './types';
+export * from '@/components/BaseModal/BaseModal';
+export * from '@/components/BaseModal/types';

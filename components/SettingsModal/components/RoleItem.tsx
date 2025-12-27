@@ -1,5 +1,5 @@
 import React, { FC } from 'react';
-import { ArrowUpIcon, ArrowDownIcon, ConfigIcon, TrashIcon } from '../icons';
+import { ArrowUpIcon, ArrowDownIcon, ConfigIcon, TrashIcon } from '@/components/SettingsModal/icons';
 
 interface RoleItemProps {
     index: number;

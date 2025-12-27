@@ -1,20 +1,20 @@
 import React, { FC, useState, useEffect, useMemo } from 'react';
-import { AppSettings } from '../../types';
-import { DEFAULT_SETTINGS, IS_FORCED_PROXY } from '../../constants';
-import { isUsingProxy as checkProxyUsage } from '../../services/proxyUtils';
+import { AppSettings } from '@/types';
+import { DEFAULT_SETTINGS, IS_FORCED_PROXY } from '@/constants';
+import { isUsingProxy as checkProxyUsage } from '@/services/proxyUtils';
 
-import { RoleAndPromptConfigModal } from '../RoleAndPromptConfigModal';
-import { BaseModal } from '../BaseModal';
-import { ConfirmationModal } from '../ConfirmationModal';
+import { RoleAndPromptConfigModal } from '@/components/RoleAndPromptConfigModal';
+import { BaseModal } from '@/components/BaseModal';
+import { ConfirmationModal } from '@/components/ConfirmationModal';
 
 // Local parts
-import { SettingsModalProps, InstructionType } from './types';
-import { useProfileManagement } from './hooks/useProfileManagement';
-import { useRoleManagement } from './hooks/useRoleManagement';
-import { usePresetManagement } from './hooks/usePresetManagement';
-import { GeneralSettingsTab } from './tabs/GeneralSettingsTab';
-import { PromptsTab } from './tabs/PromptsTab';
-import { RolesTab } from './tabs/RolesTab';
+import { SettingsModalProps, InstructionType } from '@/components/SettingsModal/types';
+import { useProfileManagement } from '@/components/SettingsModal/hooks/useProfileManagement';
+import { useRoleManagement } from '@/components/SettingsModal/hooks/useRoleManagement';
+import { usePresetManagement } from '@/components/SettingsModal/hooks/usePresetManagement';
+import { GeneralSettingsTab } from '@/components/SettingsModal/tabs/GeneralSettingsTab';
+import { PromptsTab } from '@/components/SettingsModal/tabs/PromptsTab';
+import { RolesTab } from '@/components/SettingsModal/tabs/RolesTab';
 
 import './SettingsModal.css';
 

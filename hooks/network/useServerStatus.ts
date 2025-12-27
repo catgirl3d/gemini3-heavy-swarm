@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ServerStatus } from '../types';
+import { ServerStatus } from '@/types';
 
 export function useServerStatus() {
   const [serverStatus, setServerStatus] = useState<ServerStatus>({

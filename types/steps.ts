@@ -1,7 +1,7 @@
-import { AppSettings, Message, AgentState, Work, StepId } from './index';
+import { AppSettings, Message, AgentState, Work, StepId } from '@/types/index';
 export type { StepId };
 import { GoogleGenAI } from '@google/genai';
-import { ProxyGenAI } from '../services/ProxyGenAI';
+import { ProxyGenAI } from '@/services/ProxyGenAI';
 
 /** Pipeline step identifiers. Note: 'refinement_step' is distinct from 'refinement_prompt' InstructionType */
 

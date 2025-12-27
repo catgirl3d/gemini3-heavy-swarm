@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback, FormEvent, FC } from 'react';
-import { useGeminiSwarm } from './hooks/useGeminiSwarm';
-import { useServerStatus } from './hooks/useServerStatus';
-import { useAutoScroll } from './hooks/useAutoScroll';
-import { getModelDisplayName } from './utils/modelUtils';
-import { isUsingProxy as checkProxyUsage } from './services/proxyUtils';
+import { useGeminiSwarm } from '@/hooks/core/useGeminiSwarm';
+import { useServerStatus } from '@/hooks/network/useServerStatus';
+import { useAutoScroll } from '@/hooks/ui/useAutoScroll';
+import { getModelDisplayName } from '@/utils/modelUtils';
+import { isUsingProxy as checkProxyUsage } from '@/services/proxyUtils';
 
-import { StatusBanner } from './components/StatusBanner/StatusBanner';
-import { Header } from './components/Header/Header';
-import { MessageList } from './components/MessageList/MessageList';
-import { InputArea } from './components/InputArea/InputArea';
-import { ScrollToBottomButton } from './components/ScrollToBottomButton';
-import { SettingsModal } from './components/SettingsModal';
-import { InfoModal } from './components/InfoModal';
-import { Toast, ToastType } from './components/Toast/Toast';
-import { StepId } from './types/steps';
+import { StatusBanner } from '@/components/StatusBanner/StatusBanner';
+import { Header } from '@/components/Header/Header';
+import { MessageList } from '@/components/MessageList/MessageList';
+import { InputArea } from '@/components/InputArea/InputArea';
+import { ScrollToBottomButton } from '@/components/ScrollToBottomButton';
+import { SettingsModal } from '@/components/SettingsModal/SettingsModal';
+import { InfoModal } from '@/components/InfoModal';
+import { Toast, ToastType } from '@/components/Toast/Toast';
+import { StepId } from '@/types/steps';
 
 export const App: FC = () => {
   const {

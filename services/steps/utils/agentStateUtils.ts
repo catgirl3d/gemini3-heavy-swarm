@@ -1,5 +1,5 @@
-import { AppSettings, AgentState, StepId } from '../../../types';
-import { getAgentRole } from './roleUtils';
+import { AppSettings, AgentState, StepId } from '@/types';
+import { getAgentRole } from '@/services/steps/utils/roleUtils';
 
 interface AgentStateConfig {
   stepId: StepId;  // Technical step identifier

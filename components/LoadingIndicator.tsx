@@ -1,8 +1,8 @@
 import React, { FC } from 'react';
-import { AgentState, Work } from '../types';
-import { StepId } from '../types/steps';
-import { AgentAvatar } from './AgentAvatar';
-import { ShowWork } from './ShowWork';
+import { AgentState, Work } from '@/types';
+import { StepId } from '@/types/steps';
+import { AgentAvatar } from '@/components/AgentAvatar';
+import { ShowWork } from '@/components/ShowWork/ShowWork';
 import './LoadingIndicator.css';
 
 export const LoadingIndicator: FC<{

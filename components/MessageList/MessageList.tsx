@@ -1,12 +1,12 @@
 import React, { FC, RefObject, memo } from 'react';
-import { AgentAvatar } from '../AgentAvatar';
-import { EmptyState } from '../EmptyState';
-import { MarkdownRenderer } from '../MarkdownRenderer';
-import { ShowWork } from '../ShowWork';
-import { LoadingIndicator } from '../LoadingIndicator';
-import { Sources } from '../Sources';
-import { Message, AgentState, Work } from '../../types';
-import { StepId } from '../../types/steps';
+import { AgentAvatar } from '@/components/AgentAvatar';
+import { EmptyState } from '@/components/EmptyState';
+import { MarkdownRenderer } from '@/components/MarkdownRenderer';
+import { ShowWork } from '@/components/ShowWork';
+import { LoadingIndicator } from '@/components/LoadingIndicator';
+import { Sources } from '@/components/Sources';
+import { Message, AgentState, Work } from '@/types';
+import { StepId } from '@/types/steps';
 
 interface MessageListProps {
   messages: Message[];

@@ -1,11 +1,11 @@
 import { Content } from '@google/genai';
-import { StepContext, StepId } from '../../types/steps';
-import { AgentState } from '../../types';
-import { prepareGeminiContent } from '../contentUtils';
-import { getGenerationConfig } from '../geminiConfig';
-import { getAgentRole } from './utils/roleUtils';
-import { BaseStep } from './BaseStep';
-import { getStepResults } from '../../utils/workHelpers';
+import { StepContext, StepId } from '@/types/steps';
+import { AgentState } from '@/types';
+import { prepareGeminiContent } from '@/services/contentUtils';
+import { getGenerationConfig } from '@/services/geminiConfig';
+import { getAgentRole } from '@/services/steps/utils/roleUtils';
+import { BaseStep } from '@/services/steps/BaseStep';
+import { getStepResults } from '@/utils/workHelpers';
 
 export class RefinementStep extends BaseStep {
   id: StepId = 'refinement_step';

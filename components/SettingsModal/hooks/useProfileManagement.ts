@@ -1,6 +1,6 @@
 import React from 'react';
-import { AppSettings, PromptProfile, RoleProfile } from '../../../types';
-import { DEFAULT_SETTINGS } from '../../../constants';
+import { AppSettings, PromptProfile, RoleProfile } from '@/types';
+import { DEFAULT_SETTINGS } from '@/constants';
 
 export function useProfileManagement(
     localSettings: AppSettings,

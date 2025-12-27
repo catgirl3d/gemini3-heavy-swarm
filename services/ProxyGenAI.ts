@@ -1,5 +1,5 @@
 import { GenerationConfig, Content } from '@google/genai';
-import { API_SECRET } from '../constants';
+import { API_SECRET } from '@/constants';
 
 // Minimal interface matching what the steps use from the Google SDK
 export class ProxyGenAI {

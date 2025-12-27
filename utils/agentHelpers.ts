@@ -1,5 +1,5 @@
-import { AppSettings } from '../types';
-import { StepId } from '../types/steps';
+import { AppSettings } from '@/types';
+import { StepId } from '@/types/steps';
 
 /**
  * Returns a descriptive name for an agent based on the current step and settings.

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { AppSettings } from '../types';
-import { DEFAULT_SETTINGS } from '../constants';
-import { migrateSettings } from '../services/settingsMigration';
+import { AppSettings } from '@/types';
+import { DEFAULT_SETTINGS } from '@/constants';
+import { migrateSettings } from '@/services/settingsMigration';
 
 export function useAppSettings() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);

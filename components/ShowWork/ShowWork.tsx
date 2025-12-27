@@ -1,11 +1,11 @@
 import React, { FC, useState, useRef, useCallback, useMemo } from 'react';
-import { ShowWorkProps, WorkModalData, DebugModalData, ThoughtModalData, DisplayStatus } from './types';
-import { StepId } from '../../types/steps';
-import { WorkModal } from './components/WorkModal';
-import { DebugModal } from './components/DebugModal';
-import { WorkCard, CardActionType } from './components/WorkCard';
-import { ArrowDownIcon, TokenIcon } from './icons';
-import { getStepResults, getStepThoughts, getStepUsage, getSynthesisThought, getSynthesisUsage, getSynthesisResult } from '../../utils/workHelpers';
+import { ShowWorkProps, WorkModalData, DebugModalData, ThoughtModalData, DisplayStatus } from '@/components/ShowWork/types';
+import { StepId } from '@/types/steps';
+import { WorkModal } from '@/components/ShowWork/components/WorkModal';
+import { DebugModal } from '@/components/ShowWork/components/DebugModal';
+import { WorkCard, CardActionType } from '@/components/ShowWork/components/WorkCard';
+import { ArrowDownIcon, TokenIcon } from '@/components/ShowWork/icons';
+import { getStepResults, getStepThoughts, getStepUsage, getSynthesisThought, getSynthesisUsage, getSynthesisResult } from '@/utils/workHelpers';
 import './ShowWork.css';
 
 // Card metadata for stable callback resolution

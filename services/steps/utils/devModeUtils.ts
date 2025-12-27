@@ -1,4 +1,4 @@
-import { StepId } from '../../../types';
+import { StepId } from '@/types';
 
 /**
  * Simulates streaming text word by word.

@@ -3,7 +3,7 @@
  * Validates origin against whitelist and generates appropriate headers
  */
 
-import { DEFAULT_ALLOWED_ORIGINS, isProductionEnvironment } from '../constants/security.js';
+import { DEFAULT_ALLOWED_ORIGINS, isProductionEnvironment } from '@/constants/security.js';
 
 
 /**

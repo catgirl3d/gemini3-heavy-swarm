@@ -1,4 +1,4 @@
-import { AppSettings, AgentRole } from '../../../types';
+import { AppSettings, AgentRole } from '@/types';
 
 type RoleType = 'roles' | 'criticRoles';
 

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
-import { AgentState, Message, Work, AppSettings } from '../types';
-import { StepId } from '../types/steps';
-import { getUpdatedAgentName } from '../utils/agentHelpers';
+import { AgentState, Message, Work, AppSettings } from '@/types';
+import { StepId } from '@/types/steps';
+import { getUpdatedAgentName } from '@/utils/agentHelpers';
 
 /**
  * Hook to synchronize agent status updates across:

@@ -1,1 +1,1 @@
-export { SettingsModal } from './SettingsModal';
+export { SettingsModal } from '@/components/SettingsModal/SettingsModal';

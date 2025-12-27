@@ -1,5 +1,5 @@
 import { Content, Part } from '@google/genai';
-import { Message } from '../types';
+import { Message } from '@/types';
 
 export const prepareGeminiContent = (
   history: Message[],

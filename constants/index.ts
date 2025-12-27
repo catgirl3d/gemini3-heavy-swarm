@@ -1,4 +1,4 @@
-import { AppSettings, PromptProfile, AgentRole, RoleProfile } from '../types';
+import { AppSettings, PromptProfile, AgentRole, RoleProfile } from '@/types';
 
 // This value is injected at build time from the .env or environment variables.
 // In development, Vite takes this from .env.local

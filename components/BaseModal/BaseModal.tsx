@@ -1,12 +1,12 @@
 import React, { FC } from 'react';
 import { createPortal } from 'react-dom';
-import { useModalGlobalHandlers } from '@/hooks/useModalGlobalHandlers';
+import { useModalGlobalHandlers } from '@/hooks/ui/useModalGlobalHandlers';
 import { 
     BaseModalProps, 
     BaseModalHeaderProps, 
     BaseModalBodyProps, 
     BaseModalFooterProps 
-} from './types';
+} from '@/components/BaseModal/types';
 import '../Modal.css';
 
 const EMPTY_SELECTORS: string[] = [];

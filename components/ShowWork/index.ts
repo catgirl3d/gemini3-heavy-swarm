@@ -1,2 +1,2 @@
-export * from './ShowWork';
-export * from './types';
+export * from '@/components/ShowWork/ShowWork';
+export * from '@/components/ShowWork/types';

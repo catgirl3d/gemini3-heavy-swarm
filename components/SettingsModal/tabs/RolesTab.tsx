@@ -1,8 +1,8 @@
 import React, { FC, ChangeEvent } from 'react';
-import { AppSettings, RoleProfile } from '../../../types';
-import { ProfileHeader } from '../components/ProfileHeader';
-import { RoleItem } from '../components/RoleItem';
-import { InfoIcon, WarningIcon } from '../icons';
+import { AppSettings, RoleProfile } from '@/types';
+import { ProfileHeader } from '@/components/SettingsModal/components/ProfileHeader';
+import { RoleItem } from '@/components/SettingsModal/components/RoleItem';
+import { InfoIcon, WarningIcon } from '@/components/SettingsModal/icons';
 
 interface RolesTabProps {
     localSettings: AppSettings;

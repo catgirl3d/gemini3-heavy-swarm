@@ -1,5 +1,5 @@
-import { AppSettings, RoleProfile, SavedInstruction, LegacySavedInstruction, AgentRole } from '../types';
-import { DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES } from '../constants';
+import { AppSettings, RoleProfile, SavedInstruction, LegacySavedInstruction, AgentRole } from '@/types';
+import { DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES } from '@/constants';
 
 /**
  * Represents settings from older versions of the application for migration purposes.

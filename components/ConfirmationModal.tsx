@@ -1,5 +1,5 @@
 import React, { FC } from 'react';
-import { BaseModal } from './BaseModal';
+import { BaseModal } from '@/components/BaseModal/BaseModal';
 
 interface ConfirmationModalProps {
     isOpen: boolean;

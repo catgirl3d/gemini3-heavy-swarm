@@ -1,5 +1,5 @@
 import React, { FC } from 'react';
-import { EditIcon } from '../icons';
+import { EditIcon } from '@/components/SettingsModal/icons';
 
 interface ProfileHeaderProps {
     label: string;

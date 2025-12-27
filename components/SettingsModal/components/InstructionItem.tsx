@@ -1,5 +1,5 @@
 import React, { FC } from 'react';
-import { ConfigIcon } from '../icons';
+import { ConfigIcon } from '@/components/SettingsModal/icons';
 
 interface InstructionItemProps {
     index: number;

@@ -1,24 +1,27 @@
 import { useState, useRef, useEffect } from 'react';
-import { AppSettings, Message, AgentState, Work } from '../types';
-import { StepId } from '../types/steps';
+import { AppSettings, Message, AgentState, Work } from '@/types';
+import { StepId } from '@/types/steps';
 
-import { GeminiService } from '../services/gemini';
-import { updateStepResult, withEnsuredResults } from '../utils/workHelpers';
-import { getUpdatedAgentName } from '../utils/agentHelpers';
-import { generateUUID } from '../utils/uuid';
+import { GeminiService } from '@/services/gemini';
+import { updateStepResult, withEnsuredResults } from '@/utils/workHelpers';
+import { getUpdatedAgentName } from '@/utils/agentHelpers';
+import { generateUUID } from '@/utils/uuid';
 import { 
   updateMessageParts, 
   updateWorkAgentNames, 
   ensureModelMessageForSynthesis 
-} from '../utils/messageHelpers';
+} from '@/utils/messageHelpers';
 
-import { useAppSettings } from './useAppSettings';
-import { useSwarmStatus } from './useSwarmStatus';
-import { useSwarmWork } from './useSwarmWork';
-import { useSwarmTimer } from './useSwarmTimer';
-import { useMessages } from './useMessages';
-import { useAbortController } from './useAbortController';
-import { useAgentStateSync } from './useAgentStateSync';
+import { useAppSettings } from '@/hooks/state/useAppSettings';
+import { useSwarmStatus } from '@/hooks/swarm/useSwarmStatus';
+import { useSwarmWork } from '@/hooks/swarm/useSwarmWork';
+import { useSwarmTimer } from '@/hooks/swarm/useSwarmTimer';
+import { useMessages } from '@/hooks/state/useMessages';
+import { useAbortController } from '@/hooks/network/useAbortController';
+import { useAgentStateSync } from '@/hooks/swarm/useAgentStateSync';
+import { useAutoScroll } from '@/hooks/ui/useAutoScroll';
+import { useModalGlobalHandlers } from '@/hooks/ui/useModalGlobalHandlers';
+import { useServerStatus } from '@/hooks/network/useServerStatus';
 
 export const useGeminiSwarm = () => {
   // 1. Compose Hooks

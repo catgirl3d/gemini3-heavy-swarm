@@ -1,7 +1,7 @@
 import React, { FC, useState } from 'react';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { BaseModal } from '@/components/BaseModal';
-import { formatDebugInfo } from '../utils';
+import { formatDebugInfo } from '@/components/ShowWork/utils';
 
 export const DebugModal: FC<{ title: string; debugInfo: unknown; onClose: () => void }> = ({ title, debugInfo, onClose }) => {
     const [viewMode, setViewMode] = useState<'formatted' | 'raw'>('formatted');

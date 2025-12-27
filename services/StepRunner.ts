@@ -1,6 +1,6 @@
 import { MutableRefObject } from 'react';
-import { StepDescriptor, StepContext } from '../types/steps';
-import { Work, AppSettings, AgentState } from '../types';
+import { StepDescriptor, StepContext } from '@/types/steps';
+import { Work, AppSettings, AgentState } from '@/types';
 
 const debug = (settings: AppSettings, ...args: unknown[]) => {
   if (settings.debugMode) {

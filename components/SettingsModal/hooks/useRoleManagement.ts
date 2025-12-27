@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppSettings, RoleProfile } from '../../../types';
+import { AppSettings, RoleProfile } from '@/types';
 
 export function useRoleManagement(
     localSettings: AppSettings,

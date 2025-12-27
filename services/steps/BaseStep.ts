@@ -1,9 +1,9 @@
-import { StepDescriptor, StepContext, StepId } from '../../types/steps';
-import { AgentState } from '../../types';
-import { createAgentStates, updateAgentState, updateAgentStateById } from './utils/agentStateUtils';
-import { simulateStreaming, getDevModeText } from './utils/devModeUtils';
-import { extractTextFromParts, extractTokenUsage } from './utils/streamUtils';
-import { getErrorLabel, checkGlobalRateLimitFailure } from './utils/errorUtils';
+import { StepDescriptor, StepContext, StepId } from '@/types/steps';
+import { AgentState } from '@/types';
+import { createAgentStates, updateAgentState, updateAgentStateById } from '@/services/steps/utils/agentStateUtils';
+import { simulateStreaming, getDevModeText } from '@/services/steps/utils/devModeUtils';
+import { extractTextFromParts, extractTokenUsage } from '@/services/steps/utils/streamUtils';
+import { getErrorLabel, checkGlobalRateLimitFailure } from '@/services/steps/utils/errorUtils';
 
 export abstract class BaseStep implements StepDescriptor {
   abstract id: StepId;

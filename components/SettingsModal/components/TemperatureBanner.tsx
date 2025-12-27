@@ -1,5 +1,5 @@
 import React, { FC } from 'react';
-import { WarningIcon } from '../icons';
+import { WarningIcon } from '@/components/SettingsModal/icons';
 
 interface TemperatureBannerProps {
     isActive: boolean;

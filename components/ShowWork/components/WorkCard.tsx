@@ -1,10 +1,10 @@
 import React, { FC, ReactNode, memo, useCallback, useMemo } from 'react';
 import { TokenUsage as TokenUsageType } from '@/types';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
-import { SpinnerIcon, ErrorIcon, CheckIcon, ExpandIcon, ThoughtIcon, DebugIcon, DownloadIcon, RegenerateIcon } from '../icons';
-import { ActionMenu } from './ActionMenu';
-import { TokenUsage } from './TokenUsage';
-import { downloadContent } from '../utils';
+import { SpinnerIcon, ErrorIcon, CheckIcon, ExpandIcon, ThoughtIcon, DebugIcon, DownloadIcon, RegenerateIcon } from '@/components/ShowWork/icons';
+import { ActionMenu } from '@/components/ShowWork/components/ActionMenu';
+import { TokenUsage } from '@/components/ShowWork/components/TokenUsage';
+import { downloadContent } from '@/components/ShowWork/utils';
 
 export type CardActionType = 'expand' | 'showThought' | 'showDebug' | 'regenerate';
 

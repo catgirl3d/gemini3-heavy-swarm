@@ -1,15 +1,15 @@
 import { GoogleGenAI } from '@google/genai';
-import { ProxyGenAI } from './ProxyGenAI';
-import { IS_FORCED_PROXY } from '../constants';
-import { getDirectApiKey } from './proxyUtils';
-import { AppSettings, Work, AgentState, Message, Source } from '../types';
+import { ProxyGenAI } from '@/services/ProxyGenAI';
+import { IS_FORCED_PROXY } from '@/constants';
+import { getDirectApiKey } from '@/services/proxyUtils';
+import { AppSettings, Work, AgentState, Message, Source } from '@/types';
 import type { MutableRefObject } from 'react';
-import { StepRunner } from './StepRunner';
-import { InitialStep } from './steps/InitialStep';
-import { RefinementStep } from './steps/RefinementStep';
-import { SynthesisStep } from './steps/SynthesisStep';
-import { StepContext, StepDescriptor, StepId } from '../types/steps';
-import { getAgentRole } from './steps/utils/roleUtils';
+import { StepRunner } from '@/services/StepRunner';
+import { InitialStep } from '@/services/steps/InitialStep';
+import { RefinementStep } from '@/services/steps/RefinementStep';
+import { SynthesisStep } from '@/services/steps/SynthesisStep';
+import { StepContext, StepDescriptor, StepId } from '@/types/steps';
+import { getAgentRole } from '@/services/steps/utils/roleUtils';
 
 const debug = (settings: AppSettings, ...args: unknown[]) => {
   if (settings.debugMode) {

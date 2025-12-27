@@ -1,5 +1,5 @@
 import React, { FC } from 'react';
-import { ServerStatus } from '../../types';
+import { ServerStatus } from '@/types';
 
 interface StatusBannerProps {
   serverStatus: ServerStatus;

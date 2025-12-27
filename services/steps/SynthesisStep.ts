@@ -1,10 +1,10 @@
 import { Content, GroundingChunk } from '@google/genai';
-import { StepContext, StepId } from '../../types/steps';
-import { AgentState, Source } from '../../types';
-import { prepareGeminiContent } from '../contentUtils';
-import { getGenerationConfig } from '../geminiConfig';
-import { BaseStep } from './BaseStep';
-import { getStepResults } from '../../utils/workHelpers';
+import { StepContext, StepId } from '@/types/steps';
+import { AgentState, Source } from '@/types';
+import { prepareGeminiContent } from '@/services/contentUtils';
+import { getGenerationConfig } from '@/services/geminiConfig';
+import { BaseStep } from '@/services/steps/BaseStep';
+import { getStepResults } from '@/utils/workHelpers';
 
 export class SynthesisStep extends BaseStep {
   id: StepId = 'synthesis_step';
