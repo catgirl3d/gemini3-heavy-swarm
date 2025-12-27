@@ -3,7 +3,7 @@
  * Implements Rate Limiting and Secret Header validation
  */
 
-import { RATE_LIMIT_PER_MINUTE } from "@/constants/security.js";
+import { RATE_LIMIT_PER_MINUTE } from "@/constants/security/security.js";
 
 /**
  * Validate X-API-Secret header

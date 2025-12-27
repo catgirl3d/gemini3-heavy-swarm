@@ -2,8 +2,8 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { RATE_LIMIT_PER_MINUTE, DEFAULT_ALLOWED_ORIGINS, ALLOWED_MODELS, MAX_REQUEST_SIZE, MAX_CONTENT_CHARS, isProductionEnvironment } from '../src/constants/security.js';
-import { validateContents, validateContentSize, getTargetModel, buildGeminiUrl } from '../src/constants/geminiValidation.js';
+import { RATE_LIMIT_PER_MINUTE, DEFAULT_ALLOWED_ORIGINS, ALLOWED_MODELS, MAX_REQUEST_SIZE, MAX_CONTENT_CHARS, isProductionEnvironment } from '../src/constants/security/security.js';
+import { validateContents, validateContentSize, getTargetModel, buildGeminiUrl } from '../src/constants/validation/geminiValidation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

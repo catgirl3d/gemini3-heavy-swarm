@@ -2,8 +2,8 @@ import type { PagesFunction } from "@cloudflare/workers-types";
 import type { Env, GeminiRequest } from "@/functions/_types";
 import { handleCorsPreflight, getCorsHeaders } from "@/functions/_cors";
 import { validateSecretHeader, checkRateLimit } from "@/functions/_security";
-import { ALLOWED_MODELS, MAX_REQUEST_SIZE, MAX_CONTENT_CHARS } from "@/constants/security.js";
-import { validateContents, validateContentSize, getTargetModel, buildGeminiUrl } from "@/constants/geminiValidation.js";
+import { ALLOWED_MODELS, MAX_REQUEST_SIZE, MAX_CONTENT_CHARS } from "@/constants/security/security.js";
+import { validateContents, validateContentSize, getTargetModel, buildGeminiUrl } from "@/constants/validation/geminiValidation.js";
 
 export const onRequestPost = (async (context) => {
   const { request, env } = context;
