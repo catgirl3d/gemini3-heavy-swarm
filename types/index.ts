@@ -26,6 +26,17 @@ export interface SavedInstruction {
     content: string;
 }
 
+/**
+ * Legacy instruction format from older versions of the application.
+ * Used during migration to properly type-cast old data.
+ */
+export interface LegacySavedInstruction {
+    id: string;
+    name: string;
+    type: 'initial' | 'refinement' | 'synthesizer'; // Old type names
+    content: string;
+}
+
 export interface SavedRole {
     id: string;
     name: string;

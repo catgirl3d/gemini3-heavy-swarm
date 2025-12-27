@@ -1,4 +1,4 @@
-import { Work, TokenUsage } from '../types';
+import { Work, TokenUsage, AgentState } from '../types';
 import { StepId } from '../types/steps';
 
 /**
@@ -83,4 +83,59 @@ export function getSynthesisResult(work: Work): { text?: string; error?: boolean
     return raw as { text?: string; error?: boolean };
   }
   return null;
+}
+
+/**
+ * Returns a Work object with guaranteed initialized results.
+ * Pure function - does not mutate the input.
+ * 
+ * @param work - The source Work object
+ * @returns Work object with initialized results (may be the same object if results already exist)
+ */
+export function withEnsuredResults(work: Work): Work & { results: NonNullable<Work['results']> } {
+  if (work.results) return work as Work & { results: NonNullable<Work['results']> };
+  return { ...work, results: {} };
+}
+
+/**
+ * Returns a new Work object with updated step result.
+ * Pure function - does not mutate the input.
+ * 
+ * @param work - The source Work object (not modified)
+ * @param stepId - The step identifier
+ * @param agentIndex - Agent index (ignored for synthesis_step)
+ * @param text - The text content to store
+ * @returns New Work object with updated results
+ */
+export function updateStepResult(
+  work: Work,
+  stepId: StepId,
+  agentIndex: number,
+  text: string
+): Work {
+  const currentResults = work.results ?? {};
+  
+  let updatedStepData: unknown;
+  
+  if (stepId === 'synthesis_step') {
+    const existing = currentResults[stepId];
+    // Explicit array check prevents incorrect spreading if existing is an array (legacy bug)
+    const base = existing && typeof existing === 'object' && !Array.isArray(existing) 
+      ? (existing as Record<string, unknown>) 
+      : {};
+    updatedStepData = { ...base, text };
+  } else {
+    const currentArray = (currentResults[stepId] as string[] | undefined) ?? [];
+    const newArray = [...currentArray];
+    newArray[agentIndex] = text;
+    updatedStepData = newArray;
+  }
+
+  return {
+    ...work,
+    results: {
+      ...currentResults,
+      [stepId]: updatedStepData
+    }
+  };
 }
