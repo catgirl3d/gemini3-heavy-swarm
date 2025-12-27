@@ -1,8 +1,9 @@
-import { AppSettings, Message, AgentState, Work, StepId, TokenUsage, STEPS } from '@/types/index';
+import { AppSettings, Message, AgentState, Work, StepId, TokenUsage, STEPS, SimulateError } from '@/types/index';
 export type { StepId };
 export { STEPS };
 import { GoogleGenAI, Content, Tool, GroundingChunk } from '@google/genai';
 import { ProxyGenAI } from '@/services/ProxyGenAI';
+import type { AppError } from '@/utils/errors/AppError';
 
 export interface StreamConfig {
   ai: GoogleGenAI | ProxyGenAI | null;
@@ -15,10 +16,13 @@ export interface StreamConfig {
   agentIndex?: number;
   /** Duration in milliseconds for dev mode simulation. Default: 1000ms */
   devModeDuration?: number;
+  /** Optional error message to throw inside the retry block for testing */
+  simulateError?: SimulateError;
 }
 
 export interface StreamCallbacks {
   onChunk: (text: string, thought: string, usage: TokenUsage | null) => void;
+  onRetry?: (attempt: number, error: AppError) => void;
 }
 
 export interface StreamResult {

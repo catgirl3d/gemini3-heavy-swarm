@@ -31,8 +31,7 @@ export class RefinementStep extends BaseStep {
   }
 
   async regenerate(context: StepContext, agentIndex: number): Promise<string> {
-    const { ai, settings, work, signal } = context;
-    if (!ai) throw new Error("API Key not found");
+    const { work } = context;
 
     const initialDrafts = getStepResults(work, STEPS.INITIAL);
     
@@ -41,34 +40,7 @@ export class RefinementStep extends BaseStep {
     }
 
     const { systemInstruction, userTurn, mainChatHistory } = this.prepareRefinement(context, agentIndex, initialDrafts as string[]);
-
-    // Capture debug info for regeneration
-    if (context.work.debugInfo && context.work.debugInfo[STEPS.REFINEMENT]) {
-        (context.work.debugInfo[STEPS.REFINEMENT] as any)[agentIndex] = {
-            systemInstruction,
-            history: mainChatHistory,
-            userTurn: userTurn
-        };
-    }
-
-    const { text: fullText } = await this.runModelStream(
-      {
-        ai, settings, model: settings.model,
-        contents: [...mainChatHistory, userTurn],
-        systemInstruction,
-        tools: [{googleSearch: {}}],
-        signal,
-        agentIndex
-      },
-      {
-        onChunk: (text, thought, usage) => {
-          this.handleStreamChunk(context, agentIndex, text, thought, usage, {
-            isFirstChunk: false
-          });
-        }
-      }
-    );
-    return fullText;
+    return this.runAgentRegeneration(context, agentIndex, { systemInstruction, userTurn, mainChatHistory });
   }
 
   private prepareRefinement(context: StepContext, index: number, initialDrafts: string[]) {

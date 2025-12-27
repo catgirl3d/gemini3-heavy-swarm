@@ -44,8 +44,10 @@ export class SynthesisStep extends BaseStep {
     const synthesizerState: AgentState = {
       id: 'synthesizer_agent',
       name: 'Synthesizer Agent',
-      status: hadError ? 'error' : 'working', // Keep error status until first chunk arrives
-      label: hadError ? 'Retrying synthesis...' : config.labels.working,
+      // Keep error status if regenerating, otherwise start as waiting
+      // until first chunk arrives to prevent premature card collapse.
+      status: hadError ? 'error' : 'waiting',
+      label: hadError ? 'Retrying synthesis...' : config.labels.waiting,
       stepId: STEPS.SYNTHESIS
     };
     
@@ -62,16 +64,6 @@ export class SynthesisStep extends BaseStep {
     try {
       const { systemInstruction, synthesizerTurn, mainChatHistory } = this.prepareSynthesis(context, refinedDrafts);
 
-      // Simulation mode for testing error UI (controlled via settings)
-      if (settings.simulateSynthesisError && settings.simulateSynthesisError !== 'none') {
-        const synthesisResult = work.results?.[STEPS.SYNTHESIS] as any;
-        const isFirstAttempt = !synthesisResult || (!synthesisResult.text && !synthesisResult.error);
-        if (isFirstAttempt) {
-          logger.debug(`SIMULATION: Throwing simulated ${settings.simulateSynthesisError} error for testing`);
-          throw new Error(`${settings.simulateSynthesisError} Simulated error`);
-        }
-      }
-
       logger.debug('Starting model stream');
 
       let isFirstTextChunk = true;
@@ -82,13 +74,13 @@ export class SynthesisStep extends BaseStep {
           systemInstruction,
           tools: [{googleSearch: {}}],
           signal,
+          simulateError: settings.simulateSynthesisError
         },
         {
           onChunk: (text, thought, usage) => {
             if (text.length > 0 && isFirstTextChunk) {
-              if (hadError) {
-                currentAgentStates = this.updateAgentStatus(currentAgentStates, numAgents, 'working');
-              }
+              // Transition to working status on first text chunk (initiates Synthesis Jump)
+              currentAgentStates = this.updateAgentStatus(currentAgentStates, numAgents, 'working');
             }
 
             this.handleStreamChunk(context, -1, text, thought, usage, {
@@ -99,6 +91,11 @@ export class SynthesisStep extends BaseStep {
             });
             
             if (text.length > 0) isFirstTextChunk = false;
+          },
+          onRetry: (attempt) => {
+            // Reset jump trigger flag so it can fire again on the next successful attempt
+            isFirstTextChunk = true;
+            currentAgentStates = this.handleRetryProgress(context, numAgents, attempt, currentAgentStates);
           }
         }
       );
@@ -110,7 +107,7 @@ export class SynthesisStep extends BaseStep {
         sourcesCount: sources?.length || 0 
       });
 
-      // Update generic results map
+      // Update generic results map (already an object due to handleStreamChunk, but ensuring it here)
       work.results[STEPS.SYNTHESIS] = { text: finalResponseText, sources };
 
       // Mark synthesizer as completed

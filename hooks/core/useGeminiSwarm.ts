@@ -211,21 +211,27 @@ export const useGeminiSwarm = () => {
     const controller = regenAbort.create();
 
 
+    // Capture initial state to restore later if needed
+    const initialLoading = isLoading;
+    const initialPaused = isPaused;
+
     // Start loading state (but NOT for synthesis - it will hide on first chunk)
     if (stepId !== STEPS.SYNTHESIS) {
       setIsLoading(true);
     }
-    // For synthesis: keep cards visible until first chunk arrives
-    // The onSynthesisStart callback will handle hiding them
+    // For synthesis: keeps cards visible until first chunk arrives (handled by onSynthesisStart)
+    
+    // Unpause to allow work to proceed
     if (stepId !== STEPS.SYNTHESIS) {
       setIsPaused(false);
     }
 
+    // Capture latest agent states from progress updates to use in finalization
+    let latestAgentStates: AgentState[] = agentStates || [];
 
-    try {
+    try {      
       const labels = getStepLabels(stepId);
       // Only set working status immediately for non-synthesis steps
-      // For synthesis, this will be done in onSynthesisStart to maintain cards visibility
       if (stepId !== STEPS.SYNTHESIS) {
         syncStatus('working', labels.regenerating);
       }
@@ -251,13 +257,7 @@ export const useGeminiSwarm = () => {
             settings,
             isFirstChunk,
             () => {
-              /** 
-               * SYNTHESIS JUMP BEHAVIOR (Regeneration)
-               * Replicates the jump logic during regeneration. Hides the LoadingIndicator 
-               * and agent cards immediately when synthesis text starts streaming, 
-               * ensuring the user sees the final answer appearing in the message list.
-               * Also sets the synthesizer to 'working' status at this moment.
-               */
+               // Synthesis jump behavior
               syncStatus('working', getStepConfig(STEPS.SYNTHESIS).labels.working);
               setIsLoading(false);
               setIsPaused(false);
@@ -270,6 +270,7 @@ export const useGeminiSwarm = () => {
           }
         },
         (status, agents, work) => {
+          latestAgentStates = agents; // Capture latest agents
           setLoadingStatus(status);
           setAgentStates(agents);
           setCurrentWork({ ...work, agentStates: agents });
@@ -277,29 +278,28 @@ export const useGeminiSwarm = () => {
         controller.signal
       );
 
-      // Handle final result (sources and work updates)
+      // Handle final result
       if (typeof result === 'object' && result !== null && 'sources' in result) {
-        setMessages(prev => {
+         setMessages(prev => {
           const newMessages = [...prev];
           let targetIndex = messageIndex;
           let msg = newMessages[targetIndex];
           
-          // Improved lookup for model message
           if (!msg || msg.role !== 'model') {
             const nextMsg = newMessages[messageIndex + 1];
             if (nextMsg && nextMsg.role === 'model') {
               msg = nextMsg;
               targetIndex = messageIndex + 1;
             } else if (stepId === STEPS.SYNTHESIS) {
-              // Fallback for synthesis messages pushed to the end
               targetIndex = newMessages.length - 1;
               msg = newMessages[targetIndex];
             }
           }
           
           if (msg && msg.role === 'model') {
-            const updatedWork = msg.work ? (() => {
-              const ensuredWork = withEnsuredResults(msg.work!);
+            const workToUpdate = msg.work || workContext || currentWork;
+            const updatedWork = workToUpdate ? (() => {
+              const ensuredWork = withEnsuredResults(workToUpdate);
               return {
                 ...ensuredWork,
                 results: { ...ensuredWork.results, [stepId]: result }
@@ -329,73 +329,71 @@ export const useGeminiSwarm = () => {
       if (stepId === STEPS.SYNTHESIS) {
         const logger = new Logger('Synthesis', settings.debugMode);
         logger.debug('Synthesis regeneration logic complete');
-        finalizeSynthesisState(labels.done);
+        
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMsgIndex = newMessages.length - 1;
+          const lastMsg = newMessages[lastMsgIndex];
+          
+          if (lastMsg && lastMsg.role === 'model') {
+            const workToUse = lastMsg.work || currentWork;
+            if (workToUse) {
+              const updatedAgentStates = (latestAgentStates || workToUse.agentStates || agentStates || []).map(agent => {
+                if (agent.id === 'synthesizer_agent') {
+                  return { ...agent, status: 'done' as const, label: labels.done, stepId: STEPS.SYNTHESIS as StepId };
+                }
+                return agent;
+              });
+              newMessages[lastMsgIndex] = { ...lastMsg, work: { ...workToUse, agentStates: updatedAgentStates } };
+            }
+          }
+          return newMessages;
+        });
+        setCurrentWork(undefined);
       }
-
     } catch (error) {
-      const logger = new Logger('Regeneration', settings.debugMode);
+       const logger = new Logger('Regeneration', settings.debugMode);
       logger.error("Regeneration failed:", error);
       const errorLabel = getErrorLabel(error, 'Regeneration Failed');
       syncStatus('error', errorLabel);
       
       const errorMessage = getFriendlyErrorMessage(error);
       
-      // Update messages with error
       setMessages(prev => {
         const newMessages = [...prev];
         let targetIndex = messageIndex;
         
-        // Find the target message (could be at messageIndex or messageIndex + 1 for synthesis)
         let msg = newMessages[targetIndex];
         if (stepId === STEPS.SYNTHESIS && (!msg || msg.role !== 'model')) {
           msg = newMessages[targetIndex + 1];
           targetIndex = targetIndex + 1;
         }
         
-        if (msg && msg.role === 'model' && msg.work) {
+        if (msg && msg.role === 'model') {
+          const workToUpdate = msg.work || workContext || currentWork;
+          const updatedWork = workToUpdate ? updateStepWithError(workToUpdate, stepId, agentIndex, errorMessage) : undefined;
+          const config = getStepConfig(stepId);
+          const errorText = `[System: ${config.errorPrefix}. ${errorMessage}]`;
+          
           newMessages[targetIndex] = {
             ...msg,
-            work: updateStepWithError(msg.work, stepId, agentIndex, errorMessage)
+            parts: [{ text: errorText }],
+            work: updatedWork
           };
         }
         
         return newMessages;
       });
       
-      // Update currentWork for live display
       setCurrentWork(prev => 
         prev ? updateStepWithError(prev, stepId, agentIndex, errorMessage) : prev
       );
     } finally {
-      regenAbort.ref.current = null;
-      setIsLoading(false);
-    }
-  };
-
-  /**
-   * Finalizes the state after a successful synthesis regeneration.
-   */
-  const finalizeSynthesisState = (doneLabel: string) => {
-    setMessages(prev => {
-      const newMessages = [...prev];
-      const lastMsgIndex = newMessages.length - 1;
-      const lastMsg = newMessages[lastMsgIndex];
       
-      if (lastMsg && lastMsg.role === 'model') {
-        const workToUse = lastMsg.work || currentWork;
-        if (workToUse) {
-          const updatedAgentStates = (workToUse.agentStates || agentStates || []).map(agent => {
-            if (agent.id === 'synthesizer_agent') {
-              return { ...agent, status: 'done' as const, label: doneLabel, stepId: STEPS.SYNTHESIS as StepId };
-            }
-            return agent;
-          });
-          newMessages[lastMsgIndex] = { ...lastMsg, work: { ...workToUse, agentStates: updatedAgentStates } };
-        }
-      }
-      return newMessages;
-    });
-    setCurrentWork(undefined);
+      // RESTORE STATE LOGIC
+      setIsLoading(initialLoading);
+      setIsPaused(initialPaused);
+    }
   };
 
   return {

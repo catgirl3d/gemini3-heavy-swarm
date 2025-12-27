@@ -64,6 +64,8 @@ export interface SavedRole {
     instruction: string;
 }
 
+export type SimulateError = 'none' | '429' | '500' | '503' | 'timeout';
+
 export interface AppSettings {
   numAgents: number;
   apiKey?: string;
@@ -72,7 +74,7 @@ export interface AppSettings {
   profiles: PromptProfile[];
   devMode: boolean;
   debugMode: boolean;
-  simulateSynthesisError: 'none' | '429' | '500' | '503' | 'timeout'; // Error simulation for testing
+  simulateSynthesisError: SimulateError; // Error simulation for testing
   pauseAfterInitial: boolean;
   pauseAfterRefinement: boolean;
   temperature: number;
@@ -115,7 +117,7 @@ export interface Work {
   results?: {
     [STEPS.INITIAL]?: (string | null)[];
     [STEPS.REFINEMENT]?: (string | null)[];
-    [STEPS.SYNTHESIS]?: { text?: string; error?: boolean; errorMessage?: string; sources?: Source[] } | string;
+    [STEPS.SYNTHESIS]?: { text?: string; error?: boolean; errorMessage?: string; sources?: Source[] };
     
     // Unified step metadata (thoughts, token usage, etc.)
     initial_step_thoughts?: (string | null)[];

@@ -23,39 +23,8 @@ export class InitialStep extends BaseStep {
   }
 
   async regenerate(context: StepContext, agentIndex: number): Promise<string> {
-    const { ai, settings, signal } = context;
-    if (!ai) throw new Error("API Key not found");
-
-    // Prepare content (similar to execute but for single agent)
     const { systemInstruction, userTurn, mainChatHistory } = this.prepareInstruction(context, agentIndex);
-
-    // Capture debug info for regeneration
-    if (context.work.debugInfo && context.work.debugInfo[STEPS.INITIAL]) {
-        (context.work.debugInfo[STEPS.INITIAL] as any)[agentIndex] = {
-            systemInstruction,
-            history: mainChatHistory,
-            userTurn
-        };
-    }
-
-    const { text: fullText } = await this.runModelStream(
-      {
-        ai, settings, model: settings.model,
-        contents: [...mainChatHistory, userTurn],
-        systemInstruction,
-        tools: [{googleSearch: {}}],
-        signal,
-        agentIndex
-      },
-      {
-        onChunk: (text, thought, usage) => {
-          this.handleStreamChunk(context, agentIndex, text, thought, usage, {
-            isFirstChunk: false // handled by model stream anyway
-          });
-        }
-      }
-    );
-    return fullText;
+    return this.runAgentRegeneration(context, agentIndex, { systemInstruction, userTurn, mainChatHistory });
   }
 
   private prepareInstruction(context: StepContext, index: number) {

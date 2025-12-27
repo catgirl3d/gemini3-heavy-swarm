@@ -1,4 +1,5 @@
-import { StepDescriptor, StepContext, StepId, StreamConfig, StreamCallbacks, StreamResult, AgentInstruction, MultiAgentConfig } from '@/types/steps';
+import { StepDescriptor, StepContext, StepId, STEPS, StreamConfig, StreamCallbacks, StreamResult, AgentInstruction, MultiAgentConfig } from '@/types/steps';
+import { Tool } from '@google/genai';
 import { getStepConfig, StepConfig } from '@/utils/stepConfig';
 import { AgentState } from '@/types';
 import { createAgentStates, updateAgentState, updateAgentStateById } from '@/services/steps/utils/agentStateUtils';
@@ -8,6 +9,8 @@ import { getErrorLabel, checkGlobalRateLimitFailure } from '@/services/steps/uti
 import { getGenerationConfig } from '@/services/geminiConfig';
 import { GroundingChunk } from '@google/genai';
 import { Logger } from '@/utils/logger';
+import { AppError, ErrorCode } from '@/utils/errors/AppError';
+import { withRetry } from '@/utils/retryStrategy';
 
 export abstract class BaseStep implements StepDescriptor {
   abstract id: StepId;
@@ -101,14 +104,21 @@ export abstract class BaseStep implements StepDescriptor {
       const current = work.results[stepId];
       if (index === -1) {
           // Synthesis/Single agent
-          if (typeof current === 'object' && !Array.isArray(current)) {
-              (work.results[stepId] as any) = { ...(current as any), text };
+          // Always maintain object shape for synthesis - { text, sources? }
+          if (typeof current === 'object' && !Array.isArray(current) && current !== null) {
+              (work.results[stepId] as any) = { ...current, text };
           } else {
-              (work.results[stepId] as any) = text;
+              // Initialize as object from first chunk
+              (work.results[stepId] as any) = { text };
           }
-      } else if (Array.isArray(current)) {
+      } else {
           // Multi-agent array
-          const newArray = [...current];
+          const newArray = Array.isArray(current) ? [...current] : Array(settings.numAgents).fill('');
+          // Ensure array is large enough (e.g. if numAgents changed or migration)
+          if (newArray.length < settings.numAgents) {
+            const padding = Array(settings.numAgents - newArray.length).fill('');
+            newArray.push(...padding);
+          }
           newArray[index] = text;
           work.results[stepId] = newArray;
       }
@@ -166,6 +176,22 @@ export abstract class BaseStep implements StepDescriptor {
       label: customLabel ?? config.labels[status], 
       stepId: this.id 
     });
+  }
+
+  /**
+   * Updates an agent's state for a retry attempt and notifies progress.
+   * Returns the updated states array.
+   */
+  protected handleRetryProgress(context: StepContext, index: number, attempt: number, states: AgentState[]): AgentState[] {
+    const config = getStepConfig(this.id);
+    
+    // Maintain current status for synthesis to prevent UI flickering during retries.
+    const currentStatus = states[index]?.status || 'working';
+    const nextStatus = this.id === STEPS.SYNTHESIS ? currentStatus : 'working';
+
+    const updated = this.updateAgentStatus(states, index, nextStatus, `Retrying (Attempt ${attempt})...`);
+    context.onProgress(config.progressMsg, updated, { ...context.work });
+    return updated;
   }
 
   /**
@@ -340,6 +366,9 @@ export abstract class BaseStep implements StepDescriptor {
               agentStates: currentAgentStates,
               localResults: results
             });
+          },
+          onRetry: (attempt) => {
+            currentAgentStates = this.handleRetryProgress(context, i, attempt, currentAgentStates);
           }
         }
       );
@@ -361,7 +390,7 @@ export abstract class BaseStep implements StepDescriptor {
     config: StreamConfig,
     callbacks: StreamCallbacks
   ): Promise<StreamResult> {
-    const { ai, settings, model, contents, systemInstruction, tools, signal, agentIndex, devModeDuration } = config;
+    const { ai, settings, model, contents, systemInstruction, tools, signal, agentIndex, devModeDuration, simulateError } = config;
     const logger = new Logger(`${this.id}${agentIndex !== undefined ? `:Agent${agentIndex}` : ''}`, settings.debugMode);
 
     let fullText = '';
@@ -383,51 +412,96 @@ export abstract class BaseStep implements StepDescriptor {
       );
       logger.debug('DEV MODE complete', { textLength: fullText.length });
     } else {
-      if (!ai) throw new Error("API Key not found");
+      if (!ai) throw new AppError("API Key not found", ErrorCode.INVALID_SETTINGS);
 
       logger.debug('Starting API stream request');
-      let chunkCount = 0;
-      const stream = await ai.models.generateContentStream({
-        model,
-        contents,
-        config: {
-          ...getGenerationConfig(model, settings.temperature, settings.unsafeTemperature),
-          systemInstruction,
-          tools,
-        },
-      });
+      
+      try {
+        await withRetry(async (attempt) => {
+          // Simulation mode for testing error UI (controlled via config/settings)
+          if (simulateError && simulateError !== 'none') {
+            // By default, we only throw on first attempt to test recovery.
+            // But for a "maximally realistic" simulation, we throw an AppError that
+            // precisely matches the expected failure pattern.
+            if (attempt === 1) {
+              logger.debug(`SIMULATION: Throwing simulated ${simulateError} error for testing (Attempt ${attempt})`);
+              
+              switch (simulateError) {
+                case '429':
+                  throw new AppError('Resource has been exhausted (e.g. check quota). (429)', ErrorCode.RATE_LIMIT, null, 429);
+                case '503':
+                  throw new AppError('The service is currently overloaded. (503)', ErrorCode.SERVICE_OVERLOADED, null, 503);
+                case '500':
+                  throw new AppError('Internal error encountered. (500)', ErrorCode.PROXY_ERROR, null, 500);
+                case 'timeout':
+                  throw new AppError('Network request failed: fetch timed out', ErrorCode.NETWORK_ERROR);
+                default:
+                  throw new Error(`${simulateError} Simulated error`);
+              }
+            }
+          }
 
-      for await (const chunk of stream) {
-        if (signal.aborted) {
-          logger.debug('Aborted by signal');
-          throw new Error('Aborted');
-        }
+          // Reset accumulators for each attempt to ensure clean regeneration if retried
+          fullText = '';
+          fullThought = '';
+          allGroundingChunks.length = 0;
+          let chunkCount = 0;
 
-        chunkCount++;
-        const { text, thought } = this.extractStreamContent(chunk.candidates?.[0]?.content?.parts);
-        fullText += text;
-        fullThought += thought;
-
-        // Log first chunk details or when thought content appears
-        if (chunkCount === 1 || (thought && !fullThought.includes(thought))) {
-          logger.debug(`Chunk #${chunkCount}`, { 
-            textLen: fullText.length, 
-            thoughtLen: fullThought.length,
-            hasText: text.length > 0,
-            hasThought: thought.length > 0
+          const stream = await ai.models.generateContentStream({
+            model,
+            contents,
+            config: {
+              ...getGenerationConfig(model, settings.temperature, settings.unsafeTemperature),
+              systemInstruction,
+              tools,
+            },
           });
-        }
 
-        const usage = this.extractTokenUsage(chunk.usageMetadata);
-        
-        const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
-        if (groundingChunks) {
-          allGroundingChunks.push(...groundingChunks);
-        }
+          for await (const chunk of stream) {
+            if (signal.aborted) {
+              logger.debug('Aborted by signal');
+              throw new Error('Aborted');
+            }
 
-        callbacks.onChunk(fullText, fullThought, usage);
+            chunkCount++;
+            const { text, thought } = this.extractStreamContent(chunk.candidates?.[0]?.content?.parts);
+            
+            // Log first chunk details or when thought content appears
+            const isFirstThought = thought && !fullThought;
+            if (chunkCount === 1 || isFirstThought) {
+              logger.debug(`Chunk #${chunkCount}`, { 
+                textLen: text.length, 
+                thoughtLen: thought.length,
+                hasText: text.length > 0,
+                hasThought: thought.length > 0,
+                isFirstThought
+              });
+            }
+
+            fullText += text;
+            fullThought += thought;
+
+            const usage = this.extractTokenUsage(chunk.usageMetadata);
+            
+            const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+            if (groundingChunks) {
+              allGroundingChunks.push(...groundingChunks);
+            }
+
+            callbacks.onChunk(fullText, fullThought, usage);
+          }
+        }, {
+          onRetry: (err, attempt, delay) => {
+            logger.warn(`Retry attempt ${attempt} for agent ${agentIndex ?? 'main'} after ${delay}ms due to: ${err.message}`);
+            callbacks.onRetry?.(attempt, err);
+          },
+          signal
+        });
+      } catch (err) {
+        throw AppError.from(err);
       }
-      logger.debug('Stream complete', { totalChunks: chunkCount, textLength: fullText.length, thoughtLength: fullThought.length });
+      
+      logger.debug('Stream complete', { textLength: fullText.length, thoughtLength: fullThought.length });
     }
 
     return { 
@@ -435,5 +509,54 @@ export abstract class BaseStep implements StepDescriptor {
       thought: fullThought, 
       groundingChunks: allGroundingChunks 
     };
+  }
+
+  /**
+   * Shared regeneration logic for multi-agent steps (Initial, Refinement).
+   * Handles debug info capture, streaming, and retry progress updates.
+   */
+  protected async runAgentRegeneration(
+    context: StepContext,
+    agentIndex: number,
+    instruction: AgentInstruction,
+    tools?: Tool[]
+  ): Promise<string> {
+    const { ai, settings, work, signal } = context;
+    if (!ai) throw new AppError("API Key not found", ErrorCode.INVALID_SETTINGS);
+
+    const { systemInstruction, userTurn, mainChatHistory } = instruction;
+
+    // Capture debug info for regeneration
+    this.ensureDebugInfo(work, this.id);
+    (work.debugInfo[this.id] as any)[agentIndex] = {
+      systemInstruction,
+      history: mainChatHistory,
+      userTurn
+    };
+
+    const { text: fullText } = await this.runModelStream(
+      {
+        ai, settings, model: settings.model,
+        contents: [...mainChatHistory, userTurn],
+        systemInstruction,
+        tools: tools ?? [{ googleSearch: {} }],
+        signal,
+        agentIndex,
+      },
+      {
+        onChunk: (text, thought, usage) => {
+          this.handleStreamChunk(context, agentIndex, text, thought, usage, {
+            isFirstChunk: false
+          });
+        },
+        onRetry: (attempt) => {
+          if (work.agentStates) {
+            work.agentStates = this.handleRetryProgress(context, agentIndex, attempt, work.agentStates);
+          }
+        }
+      }
+    );
+    
+    return fullText;
   }
 }

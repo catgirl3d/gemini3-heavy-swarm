@@ -109,8 +109,12 @@ export function calculateUpdatedStateForRegeneration(
   }
 
   const msg = updatedMsgs[targetIdx];
-  if (msg && msg.work) {
-    const updatedWork = updateWorkForStep(msg.work, stepId, agentIndex, text, settings);
+  // CRITICAL FIX: Use workContext as fallback if msg.work is missing.
+  // This ensures we don't fail to update the message just because the work property used to be undefined.
+  const workToUse = msg?.work || workContext;
+  
+  if (msg && workToUse) {
+    const updatedWork = updateWorkForStep(workToUse, stepId, agentIndex, text, settings);
     updatedMsgs[targetIdx] = { ...msg, work: updatedWork };
   }
 

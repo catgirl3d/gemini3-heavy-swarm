@@ -1,6 +1,7 @@
 import { GenerationConfig, Content } from '@google/genai';
 import { API_SECRET } from '@/constants';
 import { Logger } from '@/utils/logger';
+import { AppError, ErrorCode } from '@/utils/errors/AppError';
 
 const logger = new Logger('ProxyGenAI');
 
@@ -48,28 +49,35 @@ class ProxyGenerativeModel {
   ) {}
 
   async generateContentStream(request: { contents: Content[] }) {
-    const response = await fetch('/api/gemini', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Secret': API_SECRET,
-      },
-      body: JSON.stringify({
-        model: this.model,
-        contents: request.contents,
-        generationConfig: this.generationConfig,
-        systemInstruction: this.systemInstruction,
-        tools: this.tools
-      })
-    });
-
+    let response: Response;
+    try {
+      response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Secret': API_SECRET,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          contents: request.contents,
+          generationConfig: this.generationConfig,
+          systemInstruction: this.systemInstruction,
+          tools: this.tools
+        })
+      });
+    } catch (fetchError: any) {
+      if (fetchError instanceof AppError) throw fetchError;
+      throw new AppError(`Network or connection error: ${fetchError.message}`, ErrorCode.NETWORK_ERROR, fetchError);
+    }
+    
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Proxy error: ${response.status} ${response.statusText} - ${errorText}`);
+      // Use centralized error classification
+      throw AppError.from(new Error(`Proxy error (${response.status}): ${errorText}`), response.status);
     }
 
     if (!response.body) {
-      throw new Error('No response body from proxy');
+      throw new AppError('No response body from proxy', ErrorCode.PROXY_ERROR);
     }
 
     const reader = response.body.getReader();

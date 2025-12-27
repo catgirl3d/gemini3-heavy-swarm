@@ -1,61 +1,41 @@
+import { AppError, ErrorCode } from '@/utils/errors/AppError';
+
 /**
  * Determines a user-friendly error message for the full UI error display.
  */
 export const getFriendlyErrorMessage = (error: unknown): string => {
-  if (!(error instanceof Error)) return 'An unexpected error occurred.';
-  
-  const errStr = (error.message + (error.stack || '')).toUpperCase();
-  
-  if (errStr.includes('429') || errStr.includes('RATE LIMIT') || errStr.includes('RESOURCE_EXHAUSTED')) {
-    return 'Too many requests (429). Please wait a moment and try again.';
-  }
-  if (errStr.includes('503') || errStr.includes('OVERLOADED') || errStr.includes('TRANSIENT')) {
-    return 'Service temporarily unavailable (503). Please try again later.';
-  }
-  if (errStr.includes('SAFETY')) {
-    return 'Response blocked due to safety settings.';
-  }
-  
-  return `Error: ${error.message}`;
+  const appError = AppError.from(error);
+  return appError.toFriendlyMessage();
 };
 
 /**
  * Determines a user-friendly error label (short) based on the error type.
  */
 export const getErrorLabel = (error: unknown, defaultLabel: string): string => {
-  if (!(error instanceof Error)) return defaultLabel;
+  const appErr = AppError.from(error);
   
-  const errStr = (error.message + (error.stack || '')).toLowerCase();
-  
-  if (errStr.includes('429') || errStr.includes('rate limit') || errStr.includes('too many requests') || errStr.includes('resource_exhausted')) {
-    return 'Rate Limited - Try Later';
+  switch (appErr.code) {
+    case ErrorCode.RATE_LIMIT:
+      return 'Rate Limited - Try Later';
+    case ErrorCode.SERVICE_OVERLOADED:
+      return 'Service Overloaded';
+    case ErrorCode.SAFETY_BLOCK:
+      return 'Blocked by Safety';
+    case ErrorCode.INVALID_SETTINGS:
+      return 'Check Settings';
+    case ErrorCode.NETWORK_ERROR:
+      return 'Network Error';
+    default:
+      return defaultLabel;
   }
-  if (errStr.includes('503') || errStr.includes('overloaded') || errStr.includes('transient')) {
-    return 'Service Overloaded';
-  }
-  if (errStr.includes('safety') || errStr.includes('block') || errStr.includes('finish_reason_safety')) {
-    return 'Blocked by Safety';
-  }
-  if (errStr.includes('quota')) {
-    return 'Quota Exceeded';
-  }
-  
-  return defaultLabel;
 };
 
 /**
  * Checks if the error is a rate limit error.
  */
 export const isRateLimitError = (error: unknown): boolean => {
-  const msg = (error instanceof Error 
-    ? (error.message + (error.stack || '')) 
-    : String(error)
-  ).toLowerCase();
-  
-  return msg.includes('429') || 
-         msg.includes('rate limit') || 
-         msg.includes('too many requests') ||
-         msg.includes('resource_exhausted');
+  const appErr = AppError.from(error);
+  return appErr.code === ErrorCode.RATE_LIMIT;
 };
 
 /**

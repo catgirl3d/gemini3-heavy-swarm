@@ -5,6 +5,7 @@ import { SpinnerIcon, ErrorIcon, CheckIcon, ExpandIcon, ThoughtIcon, DebugIcon, 
 import { ActionMenu } from '@/components/ShowWork/components/ActionMenu';
 import { TokenUsage } from '@/components/ShowWork/components/TokenUsage';
 import { downloadContent } from '@/components/ShowWork/utils';
+import { AppError } from '@/utils/errors/AppError';
 
 export type CardActionType = 'expand' | 'showThought' | 'showDebug' | 'regenerate';
 
@@ -38,6 +39,12 @@ function useThrottledContent(content: string | null, status: string, throttleMs:
   const [throttledContent, setThrottledContent] = useState(content);
   const lastUpdateRef = useRef<number>(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const contentRef = useRef(content);
+
+  // Always keep ref up to date
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
 
   useEffect(() => {
     // If status is not 'working', update immediately
@@ -60,7 +67,8 @@ function useThrottledContent(content: string | null, status: string, throttleMs:
       // Schedule an update for the remainder of the throttle period
       if (!timerRef.current) {
         timerRef.current = setTimeout(() => {
-          setThrottledContent(content);
+          // Use current ref value to avoid stale closure
+          setThrottledContent(contentRef.current);
           lastUpdateRef.current = Date.now();
           timerRef.current = null;
         }, throttleMs - timeSinceLastUpdate);
@@ -128,27 +136,18 @@ const WorkCardComponent: FC<WorkCardProps> = ({
     }
   }, [cardId, onCardAction, onRegenerate]);
   const renderContent = (content: string | null) => {
-    if (content === null) return <div className="pending-work">Waiting for agent output...</div>;
-    if (content === '') return <div className="pending-work">Thinking...</div>;
+    // Check for system error messages in content, or fallback to status-based error display if content is missing.
+    const contentToAnalyze = content || '';
     
-    // Check if this is an error message from the system
-    const errorMatch = content.match(/\[System: (.+?)\]/);
-    if (errorMatch && status === 'error') {
-      const errorMessage = errorMatch[1];
-      // Extract human-readable error
-      const is429 = errorMessage.includes('429') || errorMessage.toLowerCase().includes('rate limit');
-      const is503 = errorMessage.includes('503');
+    const errorMatch = contentToAnalyze.match(/\[System: (.+?)\]/);
+    if ((errorMatch && status === 'error') || (status === 'error' && content === null)) {
+      const errorMessage = errorMatch ? errorMatch[1] : 'An error occurred during generation.';
+      const appError = AppError.from(errorMessage);
+      const displayMessage = appError.toFriendlyMessage();
       
-      let displayMessage = errorMessage;
-      let errorType = 'Error';
-      
-      if (is429) {
-        errorType = 'Rate Limit';
-        displayMessage = 'Too many requests. The API is temporarily blocked. Please wait a moment and try again.';
-      } else if (is503) {
-        errorType = 'Service Unavailable';
-        displayMessage = 'The server is temporarily unavailable. Please try again later.';
-      }
+      // Map error codes to section labels if helpful
+      const errorType = appError.code.replace(/_/g, ' ').toLowerCase()
+        .replace(/\b\w/g, c => c.toUpperCase());
       
       return (
         <div className="agent-error-display">
@@ -157,6 +156,9 @@ const WorkCardComponent: FC<WorkCardProps> = ({
         </div>
       );
     }
+
+    if (content === null) return <div className="pending-work">Waiting for agent output...</div>;
+    if (content === '') return <div className="pending-work">Thinking...</div>;
     
     return <MarkdownRenderer content={content} />;
   };
@@ -204,19 +206,21 @@ const WorkCardComponent: FC<WorkCardProps> = ({
             </span>
           </div>
         </div>
-        {content && (
+        {(content || status === 'error') && (
           <div className="work-card-actions">
-            <button
-              className="modal-icon-btn expand-work-button"
-              onClick={(e) => {
-                e.preventDefault();
-                handleExpand();
-              }}
-              title="Expand Response"
-              aria-label="Expand Response"
-            >
-              <ExpandIcon />
-            </button>
+            {content && (
+              <button
+                className="modal-icon-btn expand-work-button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleExpand();
+                }}
+                title="Expand Response"
+                aria-label="Expand Response"
+              >
+                <ExpandIcon />
+              </button>
+            )}
             <ActionMenu actions={actions} />
           </div>
         )}
