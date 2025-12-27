@@ -136,42 +136,8 @@ export class GeminiService {
     // Find the step
     const step = this.steps.find(s => s.id === stepId);
     
-    // Compatibility layer for legacy calls
     if (!step) {
-        if (stepId === 'initial_step') {
-            const initialStep = this.steps.find(s => s.id === 'initial_step');
-            if (initialStep && initialStep.regenerate) {
-                 return initialStep.regenerate({
-                    ai: this.ai,
-                    settings,
-                    userInput,
-                    image,
-                    imageFile,
-                    history,
-                    work: workContext,
-                    onProgress: () => {}, // No-op for regeneration
-                    onMessageUpdate: (text, isFirstChunk) => onUpdate(text, isFirstChunk),
-                    signal
-                }, agentIndex) as Promise<string>;
-            }
-        } else if (stepId === 'refinement_step') {
-             const refinedStep = this.steps.find(s => s.id === 'refinement_step');
-             if (refinedStep && refinedStep.regenerate) {
-                 return refinedStep.regenerate({
-                    ai: this.ai,
-                    settings,
-                    userInput,
-                    image,
-                    imageFile,
-                    history,
-                    work: workContext,
-                    onProgress: () => {}, // No-op for regeneration
-                    onMessageUpdate: (text, isFirstChunk) => onUpdate(text, isFirstChunk),
-                    signal
-                }, agentIndex) as Promise<string>;
-             }
-        }
-        throw new Error(`Step ${stepId} not found or does not support regeneration`);
+        throw new Error(`Step ${stepId} not found`);
     }
 
     if (!step.regenerate) {
