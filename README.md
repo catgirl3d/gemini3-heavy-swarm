@@ -28,8 +28,15 @@ An advanced AI swarm interface powered by Google's **Gemini 3 Pro Preview** mode
    npm install
    ```
 3. Set up your environment variables. Create a `.env.local` file:
+
+> [!IMPORTANT]
+> `API_SECRET` and `VITE_API_SECRET` **must be identical**. They are the same key used for the handshake between client and server.
+> **Note:** This is a value you create yourself (any string). It is NOT something you get from Google or any other service.
+
    ```env
    GEMINI_API_KEY=your_api_key_here
+   
+   # These two MUST be the same value (create any random string yourself)
    API_SECRET=your-secret-here
    VITE_API_SECRET=your-secret-here
    ```
@@ -87,8 +94,8 @@ The application uses multiple environment variables for configuration. Here's a 
 |----------|----------|--------------|---------|---------------|
 | **Core Configuration** |
 | `GEMINI_API_KEY` | ✅ Yes | Backend (`.env.local`, Cloudflare, Cloud Run) | Google Gemini API key for making requests | `AIzaSy...` |
-| `API_SECRET` | ✅ Yes | Backend (`.env.local`, Cloudflare, Cloud Run) | Secret for anti-abuse protection (must match `VITE_API_SECRET`) | `your-complex-secret-123` |
-| `VITE_API_SECRET` | ✅ Yes | Frontend (`.env.local`, build environment) | Client-side secret (visible in browser) | `your-complex-secret-123` |
+| `API_SECRET` | ✅ Yes | Backend (`.env.local`, Cloudflare, Cloud Run) | **User-defined** secret for anti-abuse (must match `VITE_API_SECRET`) | `any-random-string` |
+| `VITE_API_SECRET` | ✅ Yes | Frontend (`.env.local`, build environment) | **User-defined** client secret (must match `API_SECRET`) | `any-random-string` |
 | **Security & CORS** |
 | `ALLOWED_ORIGINS` | ⚠️ Recommended | Backend (Cloudflare, Cloud Run) | Comma-separated list of allowed origins for CORS | `https://example.com,https://app.example.com` |
 | **Proxy Configuration** |
@@ -103,6 +110,8 @@ The application uses multiple environment variables for configuration. Here's a 
 ```env
 # Required
 GEMINI_API_KEY=your_api_key_here
+
+# These two MUST be the same value (create any random string yourself)
 API_SECRET=your-secret-here
 VITE_API_SECRET=your-secret-here
 
