@@ -4,7 +4,8 @@ This directory contains infrastructure and deployment configuration files.
 
 ## Files
 
-- `Dockerfile`: Multi-stage build for production. It builds the React frontend and serves it via a Node.js Express proxy (`scripts/server.js`).
+- `Dockerfile`: Multi-stage build for production. It builds the React frontend and bundles the TypeScript server using `esbuild`. The final image runs a self-contained Node.js bundle from `server-build/server.js`.
+  - **Note:** The `shared/` directory is automatically bundled into `server-build/server.js` by esbuild during the build stage. The production image only needs the final bundle, not the source files.
 - `nginx.conf`: Example Nginx configuration for reverse proxying (alternative to the Express server).
 - `deploy.ps1`: PowerShell script for automated deployment to Google Cloud Run.
 

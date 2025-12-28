@@ -1,11 +1,11 @@
 import { Content } from '@google/genai';
 import { StepContext, StepId, STEPS } from '@/types/steps';
 import { AgentState, Source } from '@/types';
-import { prepareGeminiContent } from '../contentUtils';
+import { prepareGeminiContent } from '@/services/swarm/contentUtils';
 import { BaseStep } from './BaseStep';
 import { getStepResults } from '@/utils/swarm/workHelpers';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
-import { Logger } from '@/utils/common/logger';
+import { Logger } from '@shared/utils/logger';
 
 export class SynthesisStep extends BaseStep {
   id: StepId = STEPS.SYNTHESIS;

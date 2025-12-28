@@ -1,19 +1,38 @@
 /**
  * Shared validation and utility functions for Gemini API proxy
- * Used by both server.js (Express) and functions/api/gemini.ts (Cloudflare)
+ * Used by both server.ts (Express) and functions/api/gemini.ts (Cloudflare)
  */
+
+export interface ValidationResult {
+  valid: boolean;
+  error?: string;
+  statusCode?: number;
+}
+
+export interface GeminiContentPart {
+  text?: string;
+  inlineData?: {
+    mimeType: string;
+    data: string;
+  };
+}
+
+export interface GeminiContent {
+  role?: string;
+  parts: GeminiContentPart[];
+}
 
 /**
  * Validates the contents array structure
- * @param {any} contents - The contents to validate
- * @returns {{ valid: boolean; error?: string }}
+ * @param contents - The contents to validate
+ * @returns Validation result
  */
-export function validateContents(contents) {
+export function validateContents(contents: any): ValidationResult {
   if (!contents || !Array.isArray(contents) || contents.length === 0) {
     return { valid: false, error: 'Missing or invalid "contents" in request body' };
   }
   
-  const isValid = contents.every(item =>
+  const isValid = contents.every((item: any) =>
     item && 
     typeof item === 'object' && 
     Array.isArray(item.parts) && 
@@ -32,11 +51,11 @@ export function validateContents(contents) {
 
 /**
  * Validates content size to prevent DoS
- * @param {any} contents - The contents to validate
- * @param {number} maxChars - Maximum allowed characters
- * @returns {{ valid: boolean; error?: string; statusCode?: number }}
+ * @param contents - The contents to validate
+ * @param maxChars - Maximum allowed characters
+ * @returns Validation result
  */
-export function validateContentSize(contents, maxChars) {
+export function validateContentSize(contents: any, maxChars: number): ValidationResult {
   try {
     const contentString = JSON.stringify(contents);
     if (contentString.length > maxChars) {
@@ -51,20 +70,20 @@ export function validateContentSize(contents, maxChars) {
 
 /**
  * Determines target model based on proxy mode
- * @param {string} requestedModel - Model requested by client
- * @param {boolean} isPrivateMode - Whether proxy is in private mode
- * @returns {string} The model to use
+ * @param requestedModel - Model requested by client
+ * @param isPrivateMode - Whether proxy is in private mode
+ * @returns The model to use
  */
-export function getTargetModel(requestedModel, isPrivateMode) {
+export function getTargetModel(requestedModel: string | undefined | null, isPrivateMode: boolean): string {
   const defaultModel = 'gemini-2.5-flash-lite';
   return isPrivateMode ? (requestedModel || defaultModel) : defaultModel;
 }
 
 /**
  * Builds Gemini API URL for streaming
- * @param {string} model - Model name
- * @returns {string} Full API URL
+ * @param model - Model name
+ * @returns Full API URL
  */
-export function buildGeminiUrl(model) {
+export function buildGeminiUrl(model: string): string {
   return `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent`;
 }

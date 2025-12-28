@@ -2,7 +2,7 @@
 docs/internal
 docs/temp
 temp/*
-
+server-build/*
 
 # Logs
 logs
@@ -16,7 +16,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-.env
+*.env
 *.local
 *.bak
 
@@ -31,4 +31,4 @@ dist-ssr
 *.sln
 *.sw?
 
-#deploy.ps1
+

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { ServerStatus } from '@/types';
-import { Logger } from '@/utils/common/logger';
+import { Logger } from '@shared/utils/logger';
 
 export function useServerStatus() {
   const [serverStatus, setServerStatus] = useState<ServerStatus>({

@@ -14,7 +14,7 @@ This project implements a "Secret Handshake" (anti-abuse measure) for API endpoi
    - Vite injects the `VITE_API_SECRET` during the build process.
 
 2. **Server-Side (Backend):**
-   - **Express (`server.js`)**: An inline middleware validates the header for all `/api/` POST requests.
+   - **Express (`server/server.ts`)**: An inline middleware validates the header for all `/api/` POST requests.
    - **Cloudflare Functions**: The `validateSecretHeader()` function in `functions/_security.ts` (called by `functions/api/gemini.ts`) performs the validation.
 
 3. **Outcome:**
@@ -30,7 +30,7 @@ To enable this system, you must configure the secrets in all deployment environm
 Add the following lines to your file:
 
 ```bash
-# For the backend (server.js)
+# For the backend (server/server.ts)
 API_SECRET=your_complex_secret_here
 
 # For the frontend (Vite)
@@ -65,13 +65,13 @@ To rotate your key, simply update the environment variables on the server and re
 
 ## 🚦 Rate Limiting
 
-The backend (both `server.js` and Cloudflare Functions) implements a rate limiting system to prevent abuse and manage costs.
+The backend (both `server/server.ts` and Cloudflare Functions) implements a rate limiting system to prevent abuse and manage costs.
 
 ### 🛡️ Implementation Details
 
 - **Targeted Protection:** Rate limiting is **only applied** to the model generation endpoint (`POST /api/gemini`).
 - **Excluded Requests:** Static files (HTML/JS/CSS), CORS preflight (`OPTIONS`), and health checks (`/api/status`) are **not** rate-limited to ensure smooth application loading.
-- **Limit:** Defined by `RATE_LIMIT_PER_MINUTE` in `constants/security.js`.
+- **Limit:** Defined by `RATE_LIMIT_PER_MINUTE` in `shared/security/security.ts`.
 - **Behavior:** If the limit is exceeded, the server returns a `429 Too Many Requests` error.
 - **Proxy Support:** The Express server uses `trust proxy: true` to correctly identify client IPs when running behind reverse proxies (Cloud Run Load Balancer, nginx, Cloudflare). Without this, all requests would appear to come from the proxy's IP, breaking per-user rate limiting.
 
@@ -79,7 +79,7 @@ The backend (both `server.js` and Cloudflare Functions) implements a rate limiti
 
 ## 🛡️ Security Headers
 
-The Express server (`server.js`) applies several security headers to protect against common web vulnerabilities.
+The Express server (`server/server.ts`) applies several security headers to protect against common web vulnerabilities.
 
 ### 📋 Applied Headers
 
@@ -111,7 +111,7 @@ The Express server (`server.js`) applies several security headers to protect aga
   > **Automatic Detection:**  
   > Production environment is auto-detected based on request origin/hostname. No need to manually set `NODE_ENV`!
   > 
-  > Production domains are defined in `PRODUCTION_ORIGINS` in `constants/security.js`:
+  > Production domains are defined in `PRODUCTION_ORIGINS` in `shared/security/security.ts`:
   > - `https://gemini3-heavy-swarm.pages.dev`
   > - `https://ai-swarm.lisova-minds.pro`
   

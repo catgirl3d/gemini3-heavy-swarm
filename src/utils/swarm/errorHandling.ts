@@ -1,7 +1,7 @@
 import { AppSettings, Work } from '@/types';
 import { STEPS } from '@/types/steps';
 import { getFriendlyErrorMessage } from '@/services/swarm/steps/utils/errorUtils';
-import { Logger } from '@/utils/common/logger';
+import { Logger } from '@shared/utils/logger';
 
 /**
  * Checks if a Work object contains any successful (non-system error) responses

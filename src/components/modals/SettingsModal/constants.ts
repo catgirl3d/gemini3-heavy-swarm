@@ -1,5 +1,5 @@
 import { InstructionType, ProfileMetadata } from '@/components/modals/SettingsModal/types';
-import { AVAILABLE_MODELS as SHARED_MODELS } from '@/constants/security/security.js';
+import { AVAILABLE_MODELS as SHARED_MODELS } from '@shared/security/security';
 import { PROMPT_TYPES } from '@/types';
 
 export const INSTRUCTION_METADATA: Record<InstructionType, ProfileMetadata> = {

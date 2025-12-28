@@ -1,6 +1,6 @@
 import { AppSettings, Message, AgentState, Work } from '@/types';
 import { StepId, STEPS } from '@/types/steps';
-import { Logger } from '@/utils/common/logger';
+import { Logger } from '@shared/utils/logger';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { findTargetMessageIndex } from '@/utils/chat/messageHelpers';
 import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
@@ -27,7 +27,7 @@ interface RegenerationDependencies {
   setIsPaused: (b: boolean) => void;
   setLoadingStatus: (s: string) => void;
   setAgentStates: (a: AgentState[]) => void;
-  setCurrentWork: (w: Work | undefined) => void;
+  setCurrentWork: React.Dispatch<React.SetStateAction<Work | undefined>>;
   updateAgentStatus: (
     messageIndex: number,
     stepId: StepId,

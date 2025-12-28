@@ -14,7 +14,7 @@ vi.mock('@/utils/swarm/stepConstants', () => ({
 }));
 
 // Mock Logger to avoid console noise
-vi.mock('@/utils/common/logger', () => {
+vi.mock('@shared/utils/logger', () => {
   return {
     Logger: class {
       debug = vi.fn();
@@ -51,12 +51,12 @@ describe('StepRunner', () => {
 
   it('should execute steps in sequence and store results', async () => {
     const step1: StepDescriptor = {
-      id: 'step1',
+      id: 'step1' as any,
       name: 'Step 1',
       execute: vi.fn().mockResolvedValue('result1')
     };
     const step2: StepDescriptor = {
-      id: 'step2',
+      id: 'step2' as any,
       name: 'Step 2',
       execute: vi.fn().mockResolvedValue('result2')
     };
@@ -83,7 +83,7 @@ describe('StepRunner', () => {
 
   it('should handle pause logic when enabled', async () => {
     const pausableStep: StepDescriptor = {
-      id: 'pausable-step',
+      id: 'pausable-step' as any,
       name: 'Pausable Step',
       execute: vi.fn().mockResolvedValue('done')
     };
@@ -122,7 +122,7 @@ describe('StepRunner', () => {
 
   it('should throw if a step fails', async () => {
     const failingStep: StepDescriptor = {
-      id: 'fail',
+      id: 'fail' as any,
       name: 'Fail',
       execute: vi.fn().mockRejectedValue(new Error('Step failed'))
     };

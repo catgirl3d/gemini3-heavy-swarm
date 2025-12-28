@@ -4,7 +4,7 @@ import { useServerStatus } from '@/hooks/network/useServerStatus';
 import { useAutoScroll } from '@/hooks/ui/useAutoScroll';
 import { getModelDisplayName } from '@/utils/common/modelUtils';
 import { isUsingProxy as checkProxyUsage } from '@/services/proxy/proxyUtils';
-import { Logger } from '@/utils/common/logger';
+import { Logger } from '@shared/utils/logger';
 
 import { StatusBanner, Header, Toast, ToastType } from '@/components/layout';
 import { MessageList, InputArea } from '@/components/chat';

@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { Logger } from '@/utils/common/logger';
+import { Logger } from '@shared/utils/logger';
 import './ErrorBoundary.css';
 
 interface Props {

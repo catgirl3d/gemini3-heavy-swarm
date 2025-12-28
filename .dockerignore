@@ -3,6 +3,7 @@ tests
 docs
 dist
 dist-ssr
+server-build
 .git
 .gitignore
 .env

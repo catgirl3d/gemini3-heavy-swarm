@@ -10,7 +10,7 @@ import { RefinementStep } from './steps/RefinementStep';
 import { SynthesisStep } from './steps/SynthesisStep';
 import { StepContext, StepDescriptor, StepId, STEPS } from '@/types/steps';
 import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
-import { Logger } from '@/utils/common/logger';
+import { Logger } from '@shared/utils/logger';
 
 const getLogger = (settings: AppSettings) => new Logger('GeminiSwarm', settings.debugMode);
 

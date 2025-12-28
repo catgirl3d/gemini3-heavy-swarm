@@ -1,26 +1,34 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import type { Env } from '@/functions/_types';
-import { handleCorsPreflight, getCorsHeaders } from '@/functions/_cors';
+// Note: Using relative paths instead of aliases (@shared, @functions)
+// because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
+import type { Env } from '../_types';
+import { getAllowedOrigins } from '../../shared/api/cors.core';
+
+import {
+  isCloudflareProduction,
+  buildUnifiedHeaders,
+  handleCorsPreflightIfNeeded
+} from "../../shared/api/adapters/cloudflare.adapter";
 
 export const onRequestGet = (async (context) => {
   const { request, env } = context;
   
-  // Handle CORS preflight
-  const preflightResponse = handleCorsPreflight(request, env);
-  if (preflightResponse) {
-    return preflightResponse;
-  }
+  const isProduction = isCloudflareProduction(request);
+  const origin = request.headers.get("Origin");
+  const allowedOrigins = getAllowedOrigins(env.ALLOWED_ORIGINS);
 
-  // Get CORS headers
-  const corsHeaders = getCorsHeaders(request, env);
-  
-  corsHeaders.set('Content-Type', 'application/json');
+  // Build headers
+  const headers = buildUnifiedHeaders(origin, allowedOrigins, isProduction);
+
+  // Handle preflight
+  const preflightResponse = handleCorsPreflightIfNeeded(request, origin, allowedOrigins, headers);
+  if (preflightResponse) return preflightResponse;
+
   return new Response(JSON.stringify({
     hasServerKey: !!env.GEMINI_API_KEY,
     hasKV: !!env.RATE_LIMIT_KV,
     proxyMode: env.GEMINI_PROXY_MODE || 'demo'
   }), {
-    headers: corsHeaders
+    headers
   });
 }) as unknown as PagesFunction<Env>;
-

@@ -41,9 +41,54 @@ An advanced AI swarm interface powered by Google's **Gemini 3 Pro Preview** mode
    VITE_API_SECRET=your-secret-here
    ```
 
+### Running the Application
+
+#### Development Mode (Recommended for Local Testing)
+
+To run the full stack (frontend + backend proxy server):
+
+```bash
+npm run dev:all
+```
+
+This will start:
+- **Backend Server** on `http://localhost:8080` (handles API proxy requests)
+- **Frontend (Vite)** on `http://localhost:3000` (serves the React application)
+
+Open your browser and navigate to `http://localhost:3000`.
+
+#### Alternative Development Commands
+
+If you need to run components separately:
+
+```bash
+# Run only the backend proxy server
+npm run dev:proxy
+
+# Run only the frontend (in a new terminal)
+npm run dev
+```
+
+#### Production Mode
+
+To build and run the production server:
+
+```bash
+# 1. Build the frontend
+npm run build
+
+# 2. Build the backend server
+npm run build:server
+
+# 3. Start the production server
+npm run start:server
+```
+
+The production server will serve both the built frontend and handle API requests on the same port (default: 8080).
+
 ### Server Configuration (Proxy Mode)
 
-The application includes a proxy server (`server.js` for local, `functions/api/gemini.ts` for Cloudflare) to handle API requests securely.
+The application includes a proxy server (`server/server.ts` for local, `functions/api/gemini.ts` for Cloudflare) to handle API requests securely.
 
 **Proxy Modes:**
 
@@ -61,7 +106,7 @@ You can configure the proxy behavior using the `GEMINI_PROXY_MODE` environment v
 
 ### Local Testing (Force Proxy)
 
-In development mode (`npm run dev`), the application **forces all requests through the local proxy server** (`server.js`) by default. This allows you to test server-side logic (rate limits, security headers, etc.) even if you have a `GEMINI_API_KEY` set in your `.env.local`.
+In development mode (e.g. via `npm run dev:all`), the application **forces all requests through the local proxy server** (`server/server.ts`) by default. This allows you to test server-side logic (rate limits, security headers, etc.) even if you have a `GEMINI_API_KEY` set in your `.env.local`.
 
 - **To bypass the forced proxy in dev**:
   Set `VITE_FORCE_PROXY_OFF=true` in your `.env.local`. This will allow the client to use a direct API key if one is provided in the UI settings or environment.
@@ -146,13 +191,17 @@ VITE_API_SECRET=your-secret-here npm run build
 
 For detailed security information, see [docs/API_SECURITY.md](./docs/API_SECURITY.md).
 
-### Build & Deploy
+### Deployment Scripts
 
-Build for production:
-
-```bash
-npm run build
-```
+| Command | Description |
+|---------|-------------|
+| `npm run build` | Builds the React frontend into `dist/`. |
+| `npm run build:server` | Bundles the TypeScript server into `server-build/server.js`. |
+| `npm run start:server` | Runs the compiled production-ready server. |
+| `npm run dev:all` | **Recommended:** Runs both backend and frontend concurrently. |
+| `npm run dev:proxy` | Runs the server in development mode (using `tsx`). |
+| `npm run typecheck` | Validates TypeScript types across the project. |
+| `npm run deploy` | Builds the frontend and deploys to Cloudflare Pages. |
 
 Deploy to Cloudflare Pages (requires Wrangler):
 

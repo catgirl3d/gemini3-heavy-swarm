@@ -1,9 +1,11 @@
 import { GenerationConfig, Content } from '@google/genai';
 import { API_SECRET } from '@/constants';
-import { Logger } from '@/utils/common/logger';
+import { Logger } from '@shared/utils/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
 
 const logger = new Logger('ProxyGenAI');
+
+const STREAM_READ_TIMEOUT_MS = 10000; // 10 seconds
 
 // Minimal interface matching what the steps use from the Google SDK
 export class ProxyGenAI {
@@ -80,110 +82,107 @@ class ProxyGenerativeModel {
       throw new AppError('No response body from proxy', ErrorCode.PROXY_ERROR);
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+    const decoder = new TextDecoderStream();
+    const stream = response.body.pipeThrough(decoder).getReader();
 
-    const stream = (async function* () {
+    const resultStream = (async function* () {
       let buffer = '';
+      const MAX_BUFFER_SIZE = 5 * 1024 * 1024; // 5MB safety limit
       
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done && buffer.length === 0) break;
-
-        if (value) {
-            buffer += decoder.decode(value, { stream: true });
-        }
-
-        // Process buffer for complete JSON objects
+      try {
         while (true) {
+          // Add timeout to prevent hanging if the server stops sending data but keeps connection open
+          const readPromise = stream.read();
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new AppError('Stream read timeout', ErrorCode.NETWORK_ERROR)), STREAM_READ_TIMEOUT_MS)
+          );
+
+          const { done, value } = await Promise.race([readPromise, timeoutPromise]);
+          if (done) break;
+
+          buffer += value;
+          
+          if (buffer.length > MAX_BUFFER_SIZE) {
+            logger.error('Stream buffer size exceeded limit');
+            throw new AppError('Response stream buffer overflow', ErrorCode.PROXY_ERROR);
+          }
+
+          // Gemini streaming REST API returns a JSON array that is progressively filled:
+          // [
+          //   {...},
+          //   {...}
+          // ]
+          // Individual chunks might contain ",", "[", "]" or parts of objects.
+          
+          while (true) {
             const openBraceIndex = buffer.indexOf('{');
-            if (openBraceIndex === -1) {
-                // No start of object found
-                if (done) {
-                    buffer = ''; // Clear buffer to exit loop
-                }
-                break;
-            }
+            if (openBraceIndex === -1) break;
 
-            try {
-                // We have a '{'. Now find the matching '}'.
-                let braceCount = 0;
-                let inString = false;
-                let escape = false;
-                let endIndex = -1;
+            let braceCount = 0;
+            let found = false;
+            let inString = false;
+            let escaped = false;
 
-                for (let i = openBraceIndex; i < buffer.length; i++) {
-                    const char = buffer[i];
-                    
-                    if (inString) {
-                        if (escape) {
-                            escape = false;
-                        } else if (char === '\\') {
-                            escape = true;
-                        } else if (char === '"') {
-                            inString = false;
+            for (let i = openBraceIndex; i < buffer.length; i++) {
+              const char = buffer[i];
+              
+              if (escaped) {
+                escaped = false;
+                continue;
+              }
+              if (char === '\\') {
+                escaped = true;
+                continue;
+              }
+              if (char === '"') {
+                inString = !inString;
+                continue;
+              }
+              
+              if (!inString) {
+                if (char === '{') braceCount++;
+                else if (char === '}') braceCount--;
+
+                if (braceCount === 0) {
+                  const potentialJson = buffer.substring(openBraceIndex, i + 1);
+                  try {
+                    const parsed = JSON.parse(potentialJson);
+                    yield {
+                      text: () => {
+                        try {
+                          if (parsed.candidates?.[0]?.content?.parts) {
+                            return parsed.candidates[0].content.parts.map((p: any) => p.text || '').join('');
+                          }
+                        } catch (e) {
+                          logger.warn('Error extracting text from chunk:', e);
                         }
-                    } else {
-                        if (char === '"') {
-                            inString = true;
-                        } else if (char === '{') {
-                            braceCount++;
-                        } else if (char === '}') {
-                            braceCount--;
-                            if (braceCount === 0) {
-                                endIndex = i;
-                                break;
-                            }
-                        }
-                    }
+                        return '';
+                      },
+                      candidates: parsed.candidates,
+                      usageMetadata: parsed.usageMetadata
+                    };
+                    buffer = buffer.substring(i + 1);
+                    found = true;
+                    break;
+                  } catch (e) {
+                    // If JSON.parse fails despite balanced braces, it might be an invalid fragment or nested structure not handled by simple counting
+                    // We let it continue to see if more data fixes it
+                  }
                 }
-
-                if (endIndex !== -1) {
-                    // Found a complete object
-                    const jsonStr = buffer.substring(openBraceIndex, endIndex + 1);
-                    buffer = buffer.substring(endIndex + 1); // Advance buffer
-                    
-                    try {
-                        const parsed = JSON.parse(jsonStr);
-                        yield {
-                            text: () => {
-                                try {
-                                    if (parsed.candidates && parsed.candidates[0] && parsed.candidates[0].content && Array.isArray(parsed.candidates[0].content.parts)) {
-                                        return parsed.candidates[0].content.parts.map((p: { text?: string }) => p.text || '').join('');
-                                    }
-                                } catch (e) {
-                                    logger.warn('Error extracting text from chunk:', e);
-                                }
-                                return '';
-                            },
-                            candidates: parsed.candidates,
-                            usageMetadata: parsed.usageMetadata
-                        };
-                    } catch (e) {
-                        logger.warn('Failed to parse extracted JSON chunk:', e);
-                                                            // We continue the loop to find next valid JSON object
-                    }
-                } else {
-                    // Incomplete object
-                    if (done) {
-                        logger.warn('Stream ended with incomplete JSON object');
-                        buffer = '';
-                    }
-                    break; // Wait for more data
-                }
-            } catch (error) {
-                logger.error('Error in ProxyGenAI stream processing logic:', error);
-                // Clear buffer and stop this iteration to avoid infinite loop on same error
-                buffer = '';
-                break;
+              }
             }
+            if (!found) break;
+          }
         }
+      } catch (error) {
+        logger.error('Stream processing error:', error);
+        throw error;
       }
     })();
 
     return {
-      stream,
-      [Symbol.asyncIterator]: function() { return stream; }
+      stream: resultStream,
+      [Symbol.asyncIterator]: function() { return resultStream; }
     };
   }
 }

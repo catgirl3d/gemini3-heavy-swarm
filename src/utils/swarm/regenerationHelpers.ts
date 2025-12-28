@@ -4,7 +4,7 @@ import { AppSettings, Message, Work } from '@/types';
 import { ensureModelMessageForSynthesis, updateMessageParts, updateWorkAgentNames } from '@/utils/chat/messageHelpers';
 import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
 import { updateStepResult } from '@/utils/swarm/workHelpers';
-import { Logger } from '@/utils/common/logger';
+import { Logger } from '@shared/utils/logger';
 
 /**
  * Returns consistent UI labels for regeneration steps.

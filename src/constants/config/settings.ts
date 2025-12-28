@@ -1,7 +1,7 @@
 import { AppSettings } from '@/types';
 import { IS_FORCED_PROXY } from './env';
-import { DEFAULT_ROLE_PROFILES } from '../roles';
-import { DEFAULT_PROFILES } from '../prompts';
+import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
+import { DEFAULT_PROFILES } from '@/constants/prompts';
 
 // Determine default model based on environment (Proxy vs Direct)
 // If proxy is forced, we default to flash-lite (demo mode)

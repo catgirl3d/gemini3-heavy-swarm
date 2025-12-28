@@ -1,17 +1,11 @@
-import type { Content, GenerationConfig, Tool } from '@google/genai';
+import type { GeminiRequest, KVNamespaceSubset } from '../shared/api/types';
 
 export interface Env {
   GEMINI_API_KEY: string;
   GEMINI_PROXY_MODE?: string;
   ALLOWED_ORIGINS?: string; // Comma-separated list of allowed origins
   API_SECRET?: string;         // Secret key for X-API-Secret
-  RATE_LIMIT_KV?: unknown;         // KVNamespace for rate limiting
+  RATE_LIMIT_KV?: KVNamespaceSubset;         // KVNamespace for rate limiting
 }
 
-export interface GeminiRequest {
-  model?: string;
-  contents: Content[];
-  generationConfig?: GenerationConfig;
-  systemInstruction?: Content;
-  tools?: Tool[];
-}
+export type { GeminiRequest };

@@ -8,7 +8,7 @@ import { extractTextFromParts, extractTokenUsage } from './utils/streamUtils';
 import { getErrorLabel, checkGlobalRateLimitFailure, checkGlobalStepFailure } from './utils/errorUtils';
 import { getGenerationConfig } from '@/services/proxy/geminiConfig';
 import { GroundingChunk } from '@google/genai';
-import { Logger } from '@/utils/common/logger';
+import { Logger } from '@shared/utils/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
 import { withRetry } from '@/utils/common/retryStrategy';
 
