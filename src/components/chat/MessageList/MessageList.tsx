@@ -1,4 +1,4 @@
-import React, { FC, RefObject, memo } from 'react';
+import React, { FC, RefObject, memo, useEffect } from 'react';
 import { AgentAvatar } from '@/components/chat/AgentAvatar';
 import { EmptyState } from '@/components/chat/EmptyState';
 import { MarkdownRenderer, LoadingIndicator } from '@/components/ui';
@@ -6,6 +6,9 @@ import { ShowWork } from '@/components/chat/ShowWork';
 import { Sources } from '@/components/chat/Sources';
 import { Message, AgentState, Work } from '@/types';
 import { StepId } from '@/types/steps';
+import { Logger } from '@shared/utils/logger';
+
+const logger = new Logger('MessageList', true);
 
 interface MessageListProps {
   messages: Message[];

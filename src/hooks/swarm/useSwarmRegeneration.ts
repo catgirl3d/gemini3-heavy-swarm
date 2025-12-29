@@ -14,6 +14,8 @@ import { getFriendlyErrorMessage, getErrorLabel } from '@/services/swarm/steps/u
 import { GeminiService } from '@/services/swarm/GeminiService';
 import { useAbortController } from '@/hooks/network/useAbortController';
 
+const regenLogger = new Logger('Regeneration', true);
+
 interface RegenerationDependencies {
   settings: AppSettings;
   messages: Message[];
@@ -63,24 +65,40 @@ export function useSwarmRegeneration({
 
   const regenerateAgentResponse = async (messageIndex: number, stepId: StepId, agentIndex: number) => {
     const logger = new Logger('Synthesis', settings.debugMode);
-    logger.debug('regenerateAgentResponse start:', { messageIndex, stepId, agentIndex });
-    if (!lastInput) return;
+    regenLogger.info('regenerateAgentResponse START', { messageIndex, stepId, agentIndex });
+    if (!lastInput) {
+      regenLogger.warn('No lastInput, aborting regeneration');
+      return;
+    }
 
     const targetMessage = messages[messageIndex];
     let workContext = targetMessage?.work || currentWork;
-    if (!workContext) return;
+    if (!workContext) {
+      regenLogger.warn('No workContext, aborting regeneration');
+      return;
+    }
 
-    const syncStatus = (status: AgentState['status'], label: string) => 
+    regenLogger.debug('Regeneration context', { 
+      hasTargetMessage: !!targetMessage,
+      workResultsKeys: Object.keys(workContext.results || {}),
+      currentAgentStatesCount: agentStates?.length
+    });
+
+    const syncStatus = (status: AgentState['status'], label: string) => {
+      regenLogger.debug(`syncStatus called: ${status} - ${label}`);
       updateAgentStatus(messageIndex, stepId, agentIndex, status, label, settings);
+    };
 
     const controller = regenAbort.create();
 
     // Capture initial state to restore later if needed
     const initialLoading = isLoading;
     const initialPaused = isPaused;
+    regenLogger.debug('Captured initial state', { initialLoading, initialPaused });
 
     // Start loading state (but NOT for synthesis - it will hide on first chunk)
     if (stepId !== STEPS.SYNTHESIS) {
+      regenLogger.debug('Setting isLoading=true for non-synthesis step');
       setIsLoading(true);
     }
     
@@ -177,10 +195,12 @@ export function useSwarmRegeneration({
       }
 
       syncStatus('done', labels.done);
+      regenLogger.info('Regeneration SUCCESS', { stepId, agentIndex });
 
       if (stepId === STEPS.SYNTHESIS) {
         const logger = new Logger('Synthesis', settings.debugMode);
         logger.debug('Synthesis regeneration logic complete');
+        regenLogger.debug('Finalizing synthesis regeneration');
         
         setMessages(prev => {
           const newMessages = [...prev];
@@ -202,6 +222,7 @@ export function useSwarmRegeneration({
           
           return newMessages;
         });
+        regenLogger.debug('Clearing currentWork after synthesis');
         setCurrentWork(undefined);
       }
     } catch (error) {
@@ -231,7 +252,9 @@ export function useSwarmRegeneration({
       );
     } finally {
       // RESTORE STATE LOGIC (only for non-synthesis steps)
+      regenLogger.debug('FINALLY block', { stepId, initialLoading, initialPaused });
       if (stepId !== STEPS.SYNTHESIS) {
+        regenLogger.debug('Restoring initial loading state for non-synthesis step');
         setIsLoading(initialLoading);
         setIsPaused(initialPaused);
       }

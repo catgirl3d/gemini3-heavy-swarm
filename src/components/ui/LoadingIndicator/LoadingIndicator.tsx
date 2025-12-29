@@ -1,9 +1,12 @@
-import React, { FC } from 'react';
+import React, { FC, useEffect } from 'react';
 import { AgentState, Work } from '@/types';
 import { StepId, STEPS } from '@/types/steps';
 import { AgentAvatar, ShowWork } from '@/components/chat';
 import { TimerDisplay } from '@/components/ui/TimerDisplay';
+import { Logger } from '@shared/utils/logger';
 import './LoadingIndicator.css';
+
+const logger = new Logger('LoadingIndicator', true);
 
 export const LoadingIndicator: FC<{
     status: string;
@@ -29,6 +32,18 @@ export const LoadingIndicator: FC<{
 
   // Determine button text based on context
   const continueButtonText = isSynthesizerError ? 'Retry Synthesis' : 'Continue';
+
+  useEffect(() => {
+    logger.debug('Component mounted', { status, agentStatesCount: agentStates.length });
+    return () => {
+      logger.warn('Component UNMOUNTED', { 
+        lastStatus: status, 
+        isPaused, 
+        hasWork: !!currentWork,
+        agentStates: agentStates.map(a => ({ id: a.id, status: a.status }))
+      });
+    };
+  }, []);
 
   return (
   <div className="message-wrapper model loading-state">

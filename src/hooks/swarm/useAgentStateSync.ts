@@ -2,6 +2,9 @@ import { useCallback } from 'react';
 import { AgentState, Message, Work, AppSettings } from '@/types';
 import { StepId, STEPS } from '@/types/steps';
 import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
+import { Logger } from '@shared/utils/logger';
+
+const logger = new Logger('AgentStateSync', true);
 
 /**
  * Hook to synchronize agent status updates across:
@@ -41,6 +44,7 @@ export function useAgentStateSync(
       return copy;
     };
 
+    logger.debug('updateAgentStatus', { messageIndex, stepId, agentIndex, status, label });
     setAgentStates(prev => updateStates(prev) ?? prev);
 
     setMessages(prev => {

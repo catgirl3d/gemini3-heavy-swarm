@@ -8,6 +8,9 @@ import { handleSendMessageError } from '@/utils/swarm/errorHandling';
 import { handleSynthesisJump } from '@/utils/swarm/synthesisHelpers';
 import { GeminiService } from '@/services/swarm/GeminiService';
 import { useAbortController } from '@/hooks/network/useAbortController';
+import { Logger } from '@shared/utils/logger';
+
+const logger = new Logger('Orchestration', true);
 
 interface OrchestrationDependencies {
   settings: AppSettings;
@@ -41,6 +44,7 @@ export function useSwarmOrchestration({
   const [lastInput, setLastInput] = useState<{ text: string, image: string | null, imageFile: File | null } | null>(null);
 
   const continueGeneration = () => {
+    logger.debug('continueGeneration called', { hasPauseResolver: !!pauseResolverRef.current });
     if (pauseResolverRef.current) {
       pauseResolverRef.current();
       pauseResolverRef.current = null;
@@ -49,6 +53,7 @@ export function useSwarmOrchestration({
   };
 
   const stopGeneration = () => {
+    logger.debug('stopGeneration called');
     mainAbort.abort();
     setIsLoading(false);
     setIsPaused(false);
@@ -63,6 +68,8 @@ export function useSwarmOrchestration({
       setLastInput({ text: userInput, image, imageFile });
     }
 
+    logger.info('sendMessage START', { userInput: userInput.substring(0, 50), isRetry, hasImage: !!image });
+
     // Build history synchronously to avoid race condition with React's async state updates
     let historyForSwarm = messagesRef.current;
     if (!isRetry) {
@@ -71,6 +78,7 @@ export function useSwarmOrchestration({
       setMessages(historyForSwarm);
     }
 
+    logger.debug('Setting initial loading state', { isLoading: true, isPaused: false });
     setIsLoading(true);
     setIsPaused(false);
     setAgentStates([]);
@@ -125,6 +133,7 @@ export function useSwarmOrchestration({
         pauseResolverRef
       );
 
+      logger.info('sendMessage SUCCESS - setting final state', { sourcesCount: result.sources?.length });
       setMessages(prev => {
         const updated = updateTargetMessage(prev, prev.length - 1, STEPS.SYNTHESIS, {
           sources: result.sources,
@@ -134,10 +143,12 @@ export function useSwarmOrchestration({
         return updated ?? prev;
       });
 
+      logger.debug('Clearing loading state after success');
       setCurrentWork(undefined);
       setIsLoading(false);
 
     } catch (error) {
+      logger.error('sendMessage CATCH - handling error', { error });
       const wasAborted = handleSendMessageError(
         error,
         latestWork,
@@ -150,9 +161,11 @@ export function useSwarmOrchestration({
       );
       
       if (wasAborted) {
+        logger.debug('Error was user abort, returning early');
         return; // User-initiated abort, no further error handling needed
       }
     } finally {
+      logger.debug('sendMessage FINALLY - cleanup');
       mainAbort.ref.current = null;
     }
   };

@@ -1,5 +1,8 @@
 import { STEPS } from '@/types/steps';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
+import { Logger } from '@shared/utils/logger';
+
+const logger = new Logger('SynthesisJump', true);
 
 /**
  * Shared logic for the "Synthesis Jump" behavior.
@@ -14,6 +17,7 @@ export function handleSynthesisJump(
   setIsPaused: (b: boolean) => void,
   onJump?: () => void
 ) {
+  logger.info('SYNTHESIS JUMP - First chunk received, hiding LoadingIndicator');
   setIsLoading(false);
   setIsPaused(false);
   onJump?.();

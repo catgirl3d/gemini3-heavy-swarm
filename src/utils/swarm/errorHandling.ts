@@ -43,7 +43,7 @@ export function handleSendMessageError(
     (error instanceof Error && error.message === 'Aborted') ||
     (error instanceof DOMException && error.name === 'AbortError')
   ) {
-    logger.info('Generation aborted by user');
+    logger.info('Generation aborted by user - clearing loading state');
     setIsLoading(false);
     setLoadingStatus('Stopped by user');
     return true;
@@ -55,10 +55,17 @@ export function handleSendMessageError(
 
   if (hasPartialWorkResults(latestWork)) {
     // Keep results visible and mark as paused so user can retry or see what failed
+    logger.info('Partial results detected, pausing instead of unmounting', { 
+        status: `Error: ${errorMessage}` 
+    });
     setLoadingStatus(`Error: ${errorMessage}`);
     setIsPaused(true);
   } else {
     // Total failure, clean up UI
+    logger.error('Total failure (no partial results), unmounting LoadingIndicator', { 
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : 'No stack'
+    });
     setIsLoading(false);
     setCurrentWork(undefined);
     setError(errorMessage);
