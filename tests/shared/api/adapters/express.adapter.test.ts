@@ -3,7 +3,7 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 // Use fake timers to control Date.now() during tests
 vi.useFakeTimers();
 
-import { checkRateLimit, _rateLimits, cleanupRateLimits } from './express.adapter';
+import { checkRateLimit, _rateLimits, cleanupRateLimits } from '@shared/api/adapters/express.adapter';
 
 describe('Express Rate Limiter Cleanup', () => {
   beforeEach(() => {

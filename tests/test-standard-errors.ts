@@ -1,6 +1,6 @@
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
-import { withRetry } from '@/utils/retryStrategy';
-import { Logger } from '@/utils/logger';
+import { withRetry } from '@/utils/common/retryStrategy';
+import { Logger } from '@shared/utils/logger';
 
 const logger = new Logger('TestError', true);
 

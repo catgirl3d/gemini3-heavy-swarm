@@ -49,7 +49,10 @@ function useThrottledContent(content: string | null, status: string, throttleMs:
   useEffect(() => {
     // If status is not 'working', update immediately
     if (status !== 'working') {
-      if (timerRef.current) clearTimeout(timerRef.current);
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
       setThrottledContent(content);
       lastUpdateRef.current = Date.now();
       return;
@@ -60,12 +63,15 @@ function useThrottledContent(content: string | null, status: string, throttleMs:
 
     if (timeSinceLastUpdate >= throttleMs) {
       // Enough time has passed, update now
-      if (timerRef.current) clearTimeout(timerRef.current);
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
       setThrottledContent(content);
       lastUpdateRef.current = now;
     } else {
-      // Schedule an update for the remainder of the throttle period
-      if (!timerRef.current) {
+      // Schedule an update for the remainder of the throttle period if one isn't already running
+      if (timerRef.current === null) {
         timerRef.current = setTimeout(() => {
           // Use current ref value to avoid stale closure
           setThrottledContent(contentRef.current);
@@ -76,9 +82,20 @@ function useThrottledContent(content: string | null, status: string, throttleMs:
     }
 
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
+      // CRITICAL: We should only clear timer on unmount OR when status changes
+      // In a throttler, we usually DON'T want to clear the timer on every dependency change 
     };
   }, [content, status, throttleMs]);
+
+  // Separate effect specifically for cleanup on unmount or status change
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [status]);
 
   return throttledContent;
 }
@@ -140,10 +157,23 @@ const WorkCardComponent: FC<WorkCardProps> = ({
     const contentToAnalyze = content || '';
     
     const errorMatch = contentToAnalyze.match(/\[System: (.+?)\]/);
-    if ((errorMatch && status === 'error') || (status === 'error' && content === null)) {
-      const errorMessage = errorMatch ? errorMatch[1] : 'An error occurred during generation.';
+    if ((errorMatch && status === 'error') || (status === 'error' && (content === null || content === ''))) {
+      // Use error message from content, or fallback to statusLabel for better error classification
+      let errorMessage = errorMatch ? errorMatch[1] : statusLabel;
+      
+      // If statusLabel doesn't help, use generic fallback
+      if (errorMessage === statusLabel && (statusLabel.includes('Failed') || statusLabel.includes('Error'))) {
+        // statusLabel is too generic, use fallback
+        errorMessage = 'An error occurred during generation.';
+      }
+      
+      // DEBUG: Log error parsing
+
+      
       const appError = AppError.from(errorMessage);
       const displayMessage = appError.toFriendlyMessage();
+      
+
       
       // Map error codes to section labels if helpful
       const errorType = appError.code.replace(/_/g, ' ').toLowerCase()

@@ -1,6 +1,13 @@
 import { useRef, useCallback, useEffect } from 'react';
 
-export function useAbortController() {
+export type AbortControllerHook = {
+  ref: React.MutableRefObject<AbortController | null>;
+  create: () => AbortController;
+  abort: () => void;
+  signal: AbortSignal | undefined;
+};
+
+export function useAbortController(): AbortControllerHook {
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const create = useCallback(() => {

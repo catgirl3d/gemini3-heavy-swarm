@@ -41,27 +41,34 @@ export class GeminiService {
     image: string | null,
     imageFile: File | null,
     history: Message[],
-    onProgress: (status: string, agents: AgentState[], work: Work, isPaused?: boolean) => void,
+    messageId: string,
     onMessageUpdate: (text: string, isFirstChunk: boolean) => void,
     signal: AbortSignal,
-    pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>
+    pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>,
+    onPause?: () => void,
+    onStatusUpdate?: (status: string) => void,
+    existingWork?: Work
   ): Promise<{ text: string; sources?: Source[]; work: Work }> {
     
     // Initialize AI client with user key if provided, otherwise fall back to env key
     this.initAiClient(settings.apiKey);
 
-    const liveWork: Work = {
-      results: {},
+    const liveWork: Work = existingWork || {
+      results: {
+        [STEPS.INITIAL]: new Array(settings.numAgents).fill(''),
+        [STEPS.REFINEMENT]: new Array(settings.numAgents).fill(''),
+        [STEPS.SYNTHESIS]: {}
+      },
       stepMetadata: [],
-      agentNames: Array.from({ length: settings.numAgents }, (_, i) => 
+      agentNames: Array.from({ length: settings.numAgents }, (_, i) =>
         getUpdatedAgentName(i, STEPS.INITIAL, settings)
       ),
-      criticNames: Array.from({ length: settings.numAgents }, (_, i) => 
+      criticNames: Array.from({ length: settings.numAgents }, (_, i) =>
         getUpdatedAgentName(i, STEPS.REFINEMENT, settings)
       )
     };
 
-    getLogger(settings).debug('runSwarm start', {
+    getLogger(settings).debug(existingWork ? 'resumeSwarm start' : 'runSwarm start', {
       model: settings.model,
       numAgents: settings.numAgents,
       devMode: settings.devMode,
@@ -76,13 +83,13 @@ export class GeminiService {
       imageFile,
       history,
       work: liveWork,
-      onProgress,
       onMessageUpdate,
-      signal
+      signal,
+      messageId
     };
 
     const runner = new StepRunner(this.steps);
-    const finalWork = await runner.run(context, pauseResolverRef);
+    const finalWork = await runner.run(context, pauseResolverRef, onPause, onStatusUpdate);
 
     // Extract final result from synthesis step
     const synthesisResult = finalWork.results?.[STEPS.SYNTHESIS] as { text?: string; sources?: Source[] } | undefined;
@@ -100,12 +107,15 @@ export class GeminiService {
     image: string | null,
     imageFile: File | null,
     history: Message[],
+    messageId: string,
     agentIndex: number,
     stepId: StepId, // Use formal StepId type
     workContext: Work,
+    agentStates: AgentState[],
     onUpdate: (text: string, isFirstChunk: boolean) => void,
-    onProgress: (status: string, agents: AgentState[], work: Work) => void,
-    signal: AbortSignal
+    signal: AbortSignal,
+    pauseResolverRef?: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>,
+    onPause?: () => void
   ): Promise<string | { text: string; sources?: Source[] }> {
     // Ensure AI client is updated with the latest key from settings
     this.initAiClient(settings.apiKey);
@@ -131,12 +141,14 @@ export class GeminiService {
         imageFile,
         history,
         work: workContext,
-        onProgress,
         onMessageUpdate: (text, isFirstChunk) => onUpdate(text, isFirstChunk), // Map message update to the callback
-        signal
+        signal,
+        messageId,
+        pauseResolverRef,
+        onPause
     };
 
-    return step.regenerate(context, agentIndex) as Promise<string | { text: string; sources?: Source[] }>;
+    return step.regenerate(context, agentIndex, agentStates) as Promise<string | { text: string; sources?: Source[] }>;
   }
 
   private initAiClient(providedKey?: string) {

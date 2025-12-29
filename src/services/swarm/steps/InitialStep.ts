@@ -22,9 +22,9 @@ export class InitialStep extends BaseStep {
     });
   }
 
-  async regenerate(context: StepContext, agentIndex: number): Promise<string> {
+  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<string> {
     const { systemInstruction, userTurn, mainChatHistory } = this.prepareInstruction(context, agentIndex);
-    return this.runAgentRegeneration(context, agentIndex, { systemInstruction, userTurn, mainChatHistory });
+    return this.runAgentRegeneration(context, agentIndex, { systemInstruction, userTurn, mainChatHistory }, agentStates);
   }
 
   private prepareInstruction(context: StepContext, index: number) {

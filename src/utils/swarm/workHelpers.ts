@@ -201,3 +201,22 @@ export function updateStepWithError(
     }
   };
 }
+
+/**
+ * Deeply clones a Work object to prevent accidental mutations of state.
+ * Specifically ensures that nested objects like 'results' and 'debugInfo' are new references.
+ *
+ * @param work - The source Work object
+ * @returns A new Work object with cloned nested structures
+ */
+export function cloneWork(work: Work): Work {
+  return {
+    ...work,
+    results: work.results ? { ...work.results } : undefined,
+    debugInfo: work.debugInfo ? { ...work.debugInfo } : undefined,
+    agentStates: work.agentStates ? [...work.agentStates] : undefined,
+    stepMetadata: work.stepMetadata ? [...work.stepMetadata] : undefined,
+    agentNames: work.agentNames ? [...work.agentNames] : undefined,
+    criticNames: work.criticNames ? [...work.criticNames] : undefined,
+  };
+}

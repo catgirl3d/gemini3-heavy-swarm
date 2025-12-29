@@ -29,6 +29,7 @@ export interface StreamResult {
   text: string;
   thought: string;
   groundingChunks: GroundingChunk[];
+  usage: TokenUsage | null;
 }
 
 /** Pipeline step identifiers. Note: 'refinement_step' is distinct from 'refinement_prompt' InstructionType */
@@ -45,11 +46,22 @@ export interface StepContext {
   work: Work;
   
   // Callbacks for side effects
-  onProgress: (status: string, agents: AgentState[], work: Work, isPaused?: boolean) => void;
+  /**
+   * Update the final message stream.
+   * @param text - The latest text chunk or full text
+   * @param isFirstChunk - Whether this is the first chunk of the stream
+   */
   onMessageUpdate: (text: string, isFirstChunk: boolean) => void;
   
   // Signal to abort execution
   signal: AbortSignal;
+
+  // Unique identifier for the message being processed
+  messageId: string;
+
+  // Optional pause support (for regeneration flows)
+  pauseResolverRef?: import('react').MutableRefObject<((value: void | PromiseLike<void>) => void) | null>;
+  onPause?: () => void;
 }
 
 export interface StepDescriptor {
@@ -83,7 +95,8 @@ export interface StepDescriptor {
    */
   regenerate?: (
     context: StepContext,
-    agentIndex: number
+    agentIndex: number,
+    agentStates: AgentState[]
   ) => Promise<unknown>;
 }
 

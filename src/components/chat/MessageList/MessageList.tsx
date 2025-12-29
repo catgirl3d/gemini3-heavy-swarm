@@ -1,4 +1,4 @@
-import React, { FC, RefObject, memo, useEffect } from 'react';
+import React, { FC, RefObject, memo } from 'react';
 import { AgentAvatar } from '@/components/chat/AgentAvatar';
 import { EmptyState } from '@/components/chat/EmptyState';
 import { MarkdownRenderer, LoadingIndicator } from '@/components/ui';
@@ -6,9 +6,6 @@ import { ShowWork } from '@/components/chat/ShowWork';
 import { Sources } from '@/components/chat/Sources';
 import { Message, AgentState, Work } from '@/types';
 import { StepId } from '@/types/steps';
-import { Logger } from '@shared/utils/logger';
-
-const logger = new Logger('MessageList', true);
 
 interface MessageListProps {
   messages: Message[];
@@ -20,10 +17,11 @@ interface MessageListProps {
   currentWork: Work | undefined;
   modelDisplayName: string;
   messageListRef: RefObject<HTMLDivElement>;
+  messageId?: string; // ID of the message currently being generated
   onPromptClick: (prompt: string) => void;
   onContinue: () => void;
   onRetry: () => void;
-  onRegenerate: (msgIndex: number, phase: StepId, agentIndex: number) => void;
+  onRegenerate: (messageId: string, phase: StepId, agentIndex: number) => void;
 }
 
 const MessageListComponent: FC<MessageListProps> = ({
@@ -36,46 +34,114 @@ const MessageListComponent: FC<MessageListProps> = ({
   currentWork,
   modelDisplayName,
   messageListRef,
+  messageId,
   onPromptClick,
   onContinue,
   onRetry,
   onRegenerate
 }) => {
+
   return (
     <div className="message-list" ref={messageListRef}>
       {messages.length === 0 && !isLoading ? (
         <EmptyState onPromptClick={onPromptClick} modelDisplayName={modelDisplayName} />
       ) : (
-        messages.map((msg, index) => (
-          <div key={msg.id} className={`message-wrapper ${msg.role}`}>
-            <AgentAvatar type={msg.role} />
-            <div className={`message ${msg.role}`}>
-              {msg.role === 'model' && <div className="agent-label-header"><span className="agent-label">Synthesizer Agent</span></div>}
-              {msg.image && <img src={msg.image} alt="User upload" className="message-image" />}
-              {msg.parts?.[0]?.text && (
-                msg.role === 'user' ? msg.parts[0].text : <MarkdownRenderer content={msg.parts[0].text} />
-              )}
-              {msg.work && (
-                  <ShowWork
-                      work={msg.work}
-                      onRegenerate={(phase, agentIndex) => onRegenerate(index, phase as StepId, agentIndex)}
-                  />
-              )}
-              {msg.sources && <Sources sources={msg.sources} />}
+        messages.map((msg) => {
+          const hasText = !!msg.parts?.[0]?.text;
+          // Check if message has valid work content OR active agents (even if results are empty/error)
+          // preventing the message from being hidden if it only contains error states
+          const hasWork = !!msg.work && (
+            (!!msg.work.results && Object.values(msg.work.results).some(v => 
+              Array.isArray(v) ? v.some(item => !!item) : !!v
+            )) || 
+            (!!msg.work.agentStates && msg.work.agentStates.length > 0)
+          );
+          
+          // Determine if this message is actively being generated/regenerated
+          const isActiveGeneration = isLoading && msg.id === messageId;
+          
+          // Skip empty model messages ONLY if not currently loading
+          if (msg.role === 'model' && !hasText && !hasWork && !isActiveGeneration) {
+            return null;
+          }
+          
+          return (
+            <div key={msg.id} className={`message-wrapper ${msg.role}`}>
+              <AgentAvatar type={msg.role} />
+              <div className={`message ${msg.role}`}>
+                {msg.role === 'model' && msg.parts?.[0]?.text && (
+                  <div className="agent-label-header">
+                    <span className="agent-label">Synthesizer Agent</span>
+                  </div>
+                )}
+                {msg.image && <img src={msg.image} alt="User upload" className="message-image" />}
+                {msg.parts?.[0]?.text && (
+                  msg.role === 'user' ? msg.parts[0].text : <MarkdownRenderer content={msg.parts[0].text} />
+                )}
+                
+                {/* Model messages: Show work if available, otherwise show loading indicator if actively generating */}
+                {msg.role === 'model' && (
+                  <>
+                    {/* 1. Progress/Status Header (Live only) */}
+                    {isActiveGeneration && (
+                      <LoadingIndicator
+                        noWrapper
+                        status={loadingStatus}
+                        agentStates={agentStates}
+                        isPaused={isPaused}
+                        messageId={messageId}
+                        onContinue={onContinue}
+                        onRegenerate={(phase, agentIndex) => onRegenerate(msg.id, phase as StepId, agentIndex)}
+                      />
+                    )}
+
+                    {/* 2. Work Content (Live or History) */}
+                    {(msg.work || (isActiveGeneration && currentWork)) && (
+                      <ShowWork
+                        work={msg.work || currentWork!}
+                        messageId={msg.id}
+                        isLive={isActiveGeneration}
+                        onRegenerate={(phase, agentIndex) => onRegenerate(msg.id, phase as StepId, agentIndex)}
+                      />
+                    )}
+                  </>
+                )}
+                
+                {msg.sources && <Sources sources={msg.sources} />}
+              </div>
             </div>
-          </div>
-        ))
+          );
+        })
       )}
-      {isLoading && (
-          <LoadingIndicator
+      
+      {/* Show loading indicator at bottom only if generating a NEW message not yet in the list */}
+      {isLoading && !messages.some(m => m.id === messageId) && (
+        <div className="message-wrapper model loading-state">
+          <AgentAvatar type="model" />
+          <div className="loading-container-wrapper">
+            <LoadingIndicator
+              noWrapper
               status={loadingStatus}
               agentStates={agentStates}
-              currentWork={currentWork}
               isPaused={isPaused}
+              messageId={messageId}
               onContinue={onContinue}
-              onRegenerate={(phase, agentIndex) => onRegenerate(messages.length - 1, phase as StepId, agentIndex)}
-          />
+              onRegenerate={messageId ? (phase, agentIndex) => onRegenerate(messageId, phase as StepId, agentIndex) : undefined}
+            />
+            {currentWork && (
+              <div className="show-work-wrapper">
+                <ShowWork
+                  work={currentWork}
+                  isLive={true}
+                  messageId={messageId}
+                  onRegenerate={messageId && isPaused ? (phase, agentIndex) => onRegenerate(messageId, phase as StepId, agentIndex) : undefined}
+                />
+              </div>
+            )}
+          </div>
+        </div>
       )}
+      
       {error && (
         <div className="error-container">
           <div className="error-message">

@@ -28,7 +28,8 @@ export const App: FC = () => {
     stopGeneration,
     retry,
     continueGeneration,
-    regenerateAgentResponse
+    regenerateAgentResponse,
+    currentMessageId
   } = useGeminiSwarm();
 
   const {
@@ -116,13 +117,13 @@ export const App: FC = () => {
   }, [userInput, image, imageFile, sendMessage]);
 
   // Memoized handler for regeneration to prevent MessageList re-renders
-  const handleRegenerate = useCallback((msgIndex: number, phase: StepId, agentIndex: number) => {
+  const handleRegenerate = useCallback((messageId: string, phase: StepId, agentIndex: number) => {
     if (phase === STEPS.SYNTHESIS) {
       setShouldAutoScroll(true);
       // Force jump to bottom immediately
       setTimeout(() => scrollToBottom(), 0);
     }
-    regenerateAgentResponse(msgIndex, phase, agentIndex);
+    regenerateAgentResponse(messageId, phase, agentIndex);
   }, [setShouldAutoScroll, scrollToBottom, regenerateAgentResponse]);
 
   // Enforce model restrictions based on server status
@@ -170,6 +171,7 @@ export const App: FC = () => {
         currentWork={currentWork}
         modelDisplayName={modelDisplayName}
         messageListRef={messageListRef}
+        messageId={currentMessageId}
         onPromptClick={handlePromptClick}
         onContinue={continueGeneration}
         onRetry={retry}

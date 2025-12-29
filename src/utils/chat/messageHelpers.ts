@@ -25,7 +25,7 @@ export function updateWorkAgentNames(work: Work, stepId: StepId, agentIndex: num
 /**
  * Creates a new model message for synthesis regeneration.
  */
-export function createRegeneratedModelMessage(workContext: Work | undefined, text: string): Message {
+function createRegeneratedModelMessage(workContext: Work | undefined, text: string): Message {
   return {
     id: generateUUID(),
     role: 'model',

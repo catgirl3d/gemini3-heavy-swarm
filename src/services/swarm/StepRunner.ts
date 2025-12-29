@@ -1,8 +1,9 @@
 import { MutableRefObject } from 'react';
 import { StepDescriptor, StepContext } from '@/types/steps';
-import { Work, AppSettings, AgentState } from '@/types';
+import { Work, AppSettings } from '@/types';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { Logger } from '@shared/utils/logger';
+import { useAgentStore } from '@/stores/agentStore';
 
 const getLogger = (settings: AppSettings) => new Logger('StepRunner', settings.debugMode);
 
@@ -11,72 +12,58 @@ export class StepRunner {
 
   async run(
     context: StepContext,
-    pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>
+    pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>,
+    onPause?: () => void,
+    onStatusUpdate?: (status: string) => void
   ): Promise<Work> {
-    const { settings, onProgress: originalOnProgress } = context;
-    let currentWork = context.work;
-
-    // Wrap onProgress to keep currentWork.agentStates in sync
-    const onProgress = (status: string, agents: AgentState[], work: Work, isPaused?: boolean) => {
-      currentWork.agentStates = agents;
-      originalOnProgress(status, agents, work, isPaused);
-    };
-
-    // Reconstruct context with wrapped onProgress
-    const runnerContext = { ...context, onProgress };
+    const { settings, work } = context;
 
     for (const step of this.steps) {
-      getLogger(settings).debug(`Starting step: ${step.id}`);
+      // Skip steps that are already completed (Resume logic)
+      const isDone = work.stepMetadata?.find(m => m.id === step.id)?.status === 'done';
+      if (isDone) {
+        getLogger(settings).debug(`Skipping completed step: ${step.id}`);
+        continue;
+      }
 
-      // 1. Update Status
-      // We need to construct a meaningful status update. 
-      // Since we don't know the exact agent states at the start of a generic step,
-      // we rely on the step implementation to call onProgress with detailed states.
-      // However, we can send a high-level "Starting..." update.
+      getLogger(settings).debug(`Starting step: ${step.id}`);
       
-      // 2. Execute Step
+      // Update UI status
+      const config = getStepConfig(step.id);
+      if (onStatusUpdate) {
+        onStatusUpdate(config.progressMsg || step.name);
+      }
+      
       try {
-        const stepResult = await step.execute({
-          ...runnerContext,
-          work: currentWork // Pass the latest work
-        });
+        const stepResult = await step.execute(context);
 
         // 3. Store Results (Generic)
-        // Note: `as any` is required here because StepRunner is generic and stepResult is unknown.
-        // Type safety is ensured by step implementations returning correct types.
-        if (!currentWork.results) currentWork.results = {};
-        (currentWork.results as any)[step.id] = stepResult;
+        if (!work.results) work.results = {};
+        (work.results as any)[step.id] = stepResult;
 
         // Update metadata
-        if (!currentWork.stepMetadata) currentWork.stepMetadata = [];
-        const existingMetaIndex = currentWork.stepMetadata.findIndex(m => m.id === step.id);
+        if (!work.stepMetadata) work.stepMetadata = [];
+        const existingMetaIndex = work.stepMetadata.findIndex(m => m.id === step.id);
         if (existingMetaIndex >= 0) {
-            currentWork.stepMetadata[existingMetaIndex].status = 'done';
+            work.stepMetadata[existingMetaIndex].status = 'done';
         } else {
-            currentWork.stepMetadata.push({ id: step.id, status: 'done', label: step.name });
+            work.stepMetadata.push({ id: step.id, status: 'done', label: step.name });
         }
 
+        // SYNC: Update global work state to reflect 'done' status immediately (stops timer)
+        useAgentStore.getState().setCurrentWork({ ...work });
       } catch (error) {
         getLogger(settings).debug(`Error in step ${step.id}:`, error);
-        throw error; // Re-throw - top-level handler will log
+        throw error;
       }
 
       // 4. Handle Pause Logic
       if (this.shouldPauseAfter(step, settings)) {
         getLogger(settings).debug(`Pausing after step: ${step.id}`);
         
-        // We need to reconstruct the current agent states for the pause UI
-        // This is a bit tricky since the step just finished. 
-        // We'll use the agentStates from the work object if available, or generate a default "Done" state.
-        const pauseStates: AgentState[] = currentWork.agentStates || Array.from({ length: settings.numAgents }, (_, i) => ({
-            id: `agent-${i}`,
-            name: `Agent ${i + 1}`,
-            status: 'done',
-            label: 'Paused'
-        }));
+        // Notify UI that we are entering pause state
+        if (onPause) onPause();
 
-        onProgress('Paused. Waiting for user confirmation...', pauseStates, currentWork, true); // isPaused = true
-        
         await new Promise<void>(resolve => {
           pauseResolverRef.current = resolve;
         });
@@ -85,7 +72,7 @@ export class StepRunner {
       }
     }
 
-    return currentWork;
+    return work;
   }
 
   private shouldPauseAfter(step: StepDescriptor, settings: AppSettings): boolean {

@@ -1,9 +1,9 @@
 import React, { FC } from 'react';
-import { Work, AgentState, TokenUsage } from '@/types';
+import { Work, TokenUsage } from '@/types';
 import { StepId } from '@/types/steps';
 import { WorkCard, CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
-import { useCardStatus } from '@/components/chat/ShowWork/hooks/useCardStatus';
-import { PrecalculatedResults } from '@/components/chat/ShowWork/types';
+import { useResolvedAgentState } from '@/hooks/swarm/useResolvedSwarmState';
+import { getStepConfig, hasStepContentError } from '@/utils/swarm/stepConstants';
 
 interface StatusAwareWorkCardProps {
   // Card identification
@@ -13,11 +13,9 @@ interface StatusAwareWorkCardProps {
   work: Work;
   step: StepId;
   index: number;
-  effectiveAgentStates: AgentState[] | undefined;
-  synthesizerState: AgentState | undefined;
   
-  // Optimization: Pre-calculated results to avoid redundant work object parsing
-  precalculatedResults?: PrecalculatedResults;
+  // Message ID for scoping
+  messageId?: string;
   
   // Card display props
   title: string;
@@ -32,21 +30,15 @@ interface StatusAwareWorkCardProps {
   onCardAction: (cardId: string, action: CardActionType) => void;
 }
 
-/**
- * StatusAwareWorkCard - A wrapper component that handles the useCardStatus hook call
- * at the component level, avoiding Rules of Hooks violations.
- * 
- * This component isolates the hook logic from the parent's .map() loops,
- * ensuring hooks are always called at the top level of a component.
- */
+export type DisplayStatus = 'waiting' | 'working' | 'done' | 'error';
+
+// StatusAwareWorkCard - Simplified wrapper with inline Zustand-based status logic.
 export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
   cardId,
   work,
   step,
   index,
-  effectiveAgentStates,
-  synthesizerState,
-  precalculatedResults,
+  messageId,
   title,
   content,
   tokenUsage,
@@ -56,16 +48,20 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
   className,
   onCardAction
 }) => {
-  // ✅ LEGAL: Hook called at the top level of a component
-  const { status, label } = useCardStatus(
-    work,
-    step,
-    index,
-    effectiveAgentStates,
-    synthesizerState,
-    precalculatedResults
-  );
+  const config = getStepConfig(step);
+  
+  // Resolve agent state from either live store or historical snapshot
+  const agent = useResolvedAgentState(messageId, step, index, work);
+  const hasError = hasStepContentError(content, step);
+  const status: DisplayStatus = 
+    agent ? (agent.status as DisplayStatus) :
+    hasError ? 'error' :
+    content ? 'done' :
+    'waiting';
+  
+  const label = agent?.label || config.labels[status];
 
+  // DEBUG: Log final status
   return (
     <WorkCard
       cardId={cardId}

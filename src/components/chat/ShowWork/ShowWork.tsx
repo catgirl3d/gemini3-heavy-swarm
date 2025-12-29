@@ -7,6 +7,7 @@ import { StatusAwareWorkCard } from '@/components/chat/ShowWork/components/Statu
 import { CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
 import { ArrowDownIcon, TokenIcon } from '@/components/chat/ShowWork/icons';
 import { getStepResults, getStepThoughts, getStepUsage, getSynthesisThought, getSynthesisUsage, getSynthesisResult } from '@/utils/swarm/workHelpers';
+import { useResolvedSwarmState } from '@/hooks/swarm/useResolvedSwarmState';
 import './ShowWork.css';
 
 // Card metadata for stable callback resolution
@@ -19,36 +20,40 @@ interface CardMeta {
   debugInfo: Record<string, unknown> | undefined;
 }
 
-export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentStates, onRegenerate }) => {
+export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, onRegenerate }) => {
   const [modalData, setModalData] = useState<WorkModalData | null>(null);
   const [debugModalData, setDebugModalData] = useState<DebugModalData | null>(null);
   const [thoughtModalData, setThoughtModalData] = useState<ThoughtModalData | null>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const prevSynthesizerStatusRef = useRef<string | undefined>(undefined);
 
-  const effectiveAgentStates = (isLive && liveAgentStates ? liveAgentStates : work.agentStates);
-  const synthesizerState = effectiveAgentStates?.find(a => a.id === 'synthesizer_agent');
+  // Resolve swarm states from either live store or historical snapshot
+  const {
+    synthesizerState,
+    refinementStarted,
+    isEarlyStageWorking
+  } = useResolvedSwarmState(messageId, work);
 
-  // Auto-collapse when synthesis starts in live mode
+  // Auto-collapse when synthesis starts in live mode OR during synthesis regeneration
   useEffect(() => {
-    if (isLive && synthesizerState?.status === 'working' && prevSynthesizerStatusRef.current !== 'working') {
+    // Prevent premature collapse during early stages or regeneration
+    const isTransitionToWorking = synthesizerState?.status === 'working' && prevSynthesizerStatusRef.current !== 'working';
+    const isOurMessage = synthesizerState?.messageId === messageId;
+    
+    // Collapse cards when synthesizer starts working - works for both:
+    // 1. Normal flow (isLive = true)
+    // 2. Regeneration (isLive may be false, but isOurMessage is true)
+    if ((isLive || isOurMessage) && isTransitionToWorking && !isEarlyStageWorking) {
       if (detailsRef.current) {
         detailsRef.current.open = false;
       }
     }
     prevSynthesizerStatusRef.current = synthesizerState?.status;
-  }, [isLive, synthesizerState?.status]);
+  }, [isLive, messageId, synthesizerState?.status, synthesizerState?.messageId, isEarlyStageWorking]);
   
   const synthesisResult = useMemo(() => getSynthesisResult(work), [work]);
   const initialResults = useMemo(() => getStepResults(work, STEPS.INITIAL), [work]);
   const refinedResults = useMemo(() => getStepResults(work, STEPS.REFINEMENT), [work]);
-
-  // Unified results object for optimization
-  const precalculatedResults = useMemo(() => ({
-    initial: initialResults,
-    refined: refinedResults,
-    synthesis: synthesisResult
-  }), [initialResults, refinedResults, synthesisResult]);
 
   // Cache helper results to avoid repeated calls in .map()
   const initialUsages = useMemo(() => getStepUsage(work, STEPS.INITIAL), [work]);
@@ -173,9 +178,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
                   work={work}
                   step={STEPS.INITIAL}
                   index={i}
-                  effectiveAgentStates={effectiveAgentStates}
-                  synthesizerState={synthesizerState}
-                  precalculatedResults={precalculatedResults}
+                  messageId={messageId}
                   onCardAction={handleCardAction}
                   title={name}
                   content={resp}
@@ -189,37 +192,38 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
           </div>
         </div>
 
-        <div className="work-category">
-          <h4 className="work-category-title">Critiques & Refinements</h4>
-          <div className={`work-grid ${refinedResults.length === 1 ? 'single-column' : ''}`}>
-            {refinedResults.map((resp, i) => {
-              const name = work.criticNames?.[i] || `Critic ${i + 1}`;
-              const cardId = `refined-${i}`;
-              return (
-                <StatusAwareWorkCard
-                  key={cardId}
-                  cardId={cardId}
-                  work={work}
-                  step={STEPS.REFINEMENT}
-                  index={i}
-                  effectiveAgentStates={effectiveAgentStates}
-                  synthesizerState={synthesizerState}
-                  precalculatedResults={precalculatedResults}
-                  onCardAction={handleCardAction}
-                  className="refinement-step"
-                  title={name}
-                  content={resp}
-                  tokenUsage={refinedUsages[i] ?? undefined}
-                  thought={refinedThoughts[i] ?? undefined}
-                  debugInfo={work.debugInfo?.[STEPS.REFINEMENT]?.[i]}
-                  downloadFilename={`${name.replace(/\s+/g, '-')}-Refined_Response.md`}
-                />
-              );
-            })}
+        {/* Only show refinement section if step has started OR if we have historical data */}
+        {(refinementStarted || refinedResults.some(r => r)) && (
+          <div className="work-category">
+            <h4 className="work-category-title">Critiques & Refinements</h4>
+            <div className={`work-grid ${refinedResults.length === 1 ? 'single-column' : ''}`}>
+              {refinedResults.map((resp, i) => {
+                const name = work.criticNames?.[i] || `Critic ${i + 1}`;
+                const cardId = `refined-${i}`;
+                return (
+                  <StatusAwareWorkCard
+                    key={cardId}
+                    cardId={cardId}
+                    work={work}
+                    step={STEPS.REFINEMENT}
+                    index={i}
+                    messageId={messageId}
+                    onCardAction={handleCardAction}
+                    className="refinement-step"
+                    title={name}
+                    content={resp}
+                    tokenUsage={refinedUsages[i] ?? undefined}
+                    thought={refinedThoughts[i] ?? undefined}
+                    debugInfo={work.debugInfo?.[STEPS.REFINEMENT]?.[i]}
+                    downloadFilename={`${name.replace(/\s+/g, '-')}-Refined_Response.md`}
+                  />
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
-        {synthesizerState && (
+        {(synthesizerState || synthesisText) && (
             <div className="work-category">
                 <h4 className="work-category-title">Final Synthesis</h4>
                 <StatusAwareWorkCard
@@ -227,9 +231,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, liveAgentSta
                     work={work}
                     step={STEPS.SYNTHESIS}
                     index={0}
-                    effectiveAgentStates={effectiveAgentStates}
-                    synthesizerState={synthesizerState}
-                    precalculatedResults={precalculatedResults}
+                    messageId={messageId}
                     onCardAction={handleCardAction}
                     className={STEPS.SYNTHESIS}
                     title="Synthesizer"

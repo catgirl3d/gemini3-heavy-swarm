@@ -1,7 +1,7 @@
 import { StepDescriptor, StepContext, StepId, STEPS, StreamConfig, StreamCallbacks, StreamResult, AgentInstruction, MultiAgentConfig } from '@/types/steps';
 import { Tool } from '@google/genai';
 import { getStepConfig, StepConfig } from '@/utils/swarm/stepConstants';
-import { AgentState } from '@/types';
+import { AgentState, Source, TokenUsage } from '@/types';
 import { createAgentStates, updateAgentState, updateAgentStateById } from './utils/agentStateUtils';
 import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from './utils/devModeUtils';
 import { extractTextFromParts, extractTokenUsage } from './utils/streamUtils';
@@ -11,6 +11,7 @@ import { GroundingChunk } from '@google/genai';
 import { Logger } from '@shared/utils/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
 import { withRetry } from '@/utils/common/retryStrategy';
+import { useAgentStore } from '@/stores/agentStore';
 
 export abstract class BaseStep implements StepDescriptor {
   abstract id: StepId;
@@ -20,14 +21,14 @@ export abstract class BaseStep implements StepDescriptor {
   abstract ui: { visibleInModal: boolean; regenerateLabel?: string };
 
   abstract execute(context: StepContext): Promise<unknown>;
-  abstract regenerate?(context: StepContext, agentIndex: number): Promise<unknown>;
+  abstract regenerate?(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<unknown>;
 
   // --- Shared utility methods ---
 
   protected createAgentStates(
     numAgents: number,
     settings: StepContext['settings'],
-    config: { stepId: StepId; status: AgentState['status']; statusLabel: string }
+    config: { stepId: StepId; status: AgentState['status']; statusLabel: string; messageId?: string }
   ): AgentState[] {
     return createAgentStates(numAgents, settings, config);
   }
@@ -74,7 +75,7 @@ export abstract class BaseStep implements StepDescriptor {
 
   /**
    * Centralized stream chunk handler for execute and regenerate.
-   * Updates results, thoughts, usage, and UI (onProgress/onMessageUpdate) consistently.
+   * Updates results, thoughts, usage, and UI consistently.
    */
   protected handleStreamChunk(
     context: StepContext,
@@ -90,7 +91,7 @@ export abstract class BaseStep implements StepDescriptor {
       streamToMessage?: boolean;
     }
   ) {
-    const { work, onProgress, onMessageUpdate, settings } = context;
+    const { work, onMessageUpdate, settings } = context;
     const stepId = this.id;
 
     // Ensure storage is ready
@@ -150,16 +151,32 @@ export abstract class BaseStep implements StepDescriptor {
     }
 
     // Optional UI updates
-    if (options.statusMsg && options.agentStates) {
-      onProgress(options.statusMsg, options.agentStates, { ...work });
-    } else if (work.agentStates) {
-      // In regeneration, if we have agentStates in work, update progress to trigger UI refresh
-      const config = getStepConfig(this.id);
-      onProgress(options.statusMsg ?? config.progressMsg, work.agentStates, { ...work });
-    }
-    if (text.length > 0 && onMessageUpdate && options.streamToMessage) {
-      onMessageUpdate(text, options.isFirstChunk ?? false);
-    }
+     if (options.statusMsg) {
+        const store = useAgentStore.getState();
+        const targetIndex = index === -1 ? 0 : index;
+        const existing = store.agents.find(a => 
+            a.stepId === stepId && 
+            a.agentIndex === targetIndex && 
+            a.messageId === context.messageId
+        );
+        
+        if (!existing || existing.status !== 'working' || existing.label !== options.statusMsg) {
+             store.updateAgent(
+               stepId,
+               targetIndex,
+               'working',
+               options.statusMsg,
+               context.messageId
+             );
+        }
+     }
+
+     // SYNC: Ensure work results are updated in the global store for live streaming visibility
+     useAgentStore.getState().setCurrentWork({ ...work });
+
+     if (text.length > 0 && onMessageUpdate && options.streamToMessage) {
+       onMessageUpdate(text, options.isFirstChunk ?? false);
+     }
   }
 
   /**
@@ -173,9 +190,10 @@ export abstract class BaseStep implements StepDescriptor {
   ): AgentState[] {
     const config = getStepConfig(this.id);
     return this.updateAgentState(states, index, { 
-      status, 
-      label: customLabel ?? config.labels[status], 
-      stepId: this.id 
+      status,
+      label: customLabel ?? config.labels[status],
+      stepId: this.id,
+      messageId: states[index]?.messageId
     });
   }
 
@@ -184,14 +202,24 @@ export abstract class BaseStep implements StepDescriptor {
    * Returns the updated states array.
    */
   protected handleRetryProgress(context: StepContext, index: number, attempt: number, states: AgentState[]): AgentState[] {
-    const config = getStepConfig(this.id);
-    
     // Maintain current status for synthesis to prevent UI flickering during retries.
     const currentStatus = states[index]?.status || 'working';
     const nextStatus = this.id === STEPS.SYNTHESIS ? currentStatus : 'working';
+    const label = `Retrying (Attempt ${attempt})...`;
 
-    const updated = this.updateAgentStatus(states, index, nextStatus, `Retrying (Attempt ${attempt})...`);
-    context.onProgress(config.progressMsg, updated, { ...context.work });
+    const updated = this.updateAgentStatus(states, index, nextStatus, label);
+    
+    // CRITICAL: Restore loading indicator when any retry starts
+    useAgentStore.getState().setIsLoading(true);
+
+    useAgentStore.getState().updateAgent(
+      this.id,
+      index,
+      nextStatus as any,
+      label,
+      context.messageId
+    );
+
     return updated;
   }
 
@@ -199,16 +227,28 @@ export abstract class BaseStep implements StepDescriptor {
    * Standardized initialization of agent states and first progress update.
    */
   protected initializeAgentStates(context: StepContext): AgentState[] {
-    const { settings, onProgress, work } = context;
+    const { settings, messageId } = context;
     const config = getStepConfig(this.id);
     
     const states = this.createAgentStates(settings.numAgents, settings, {
       stepId: this.id,
       status: 'working',
-      statusLabel: config.labels.working
+      statusLabel: config.labels.working,
+      messageId
     });
     
-    onProgress(config.progressMsg, states, work);
+    // Initialize ALL agents in the store
+    states.forEach((s, i) => {
+      useAgentStore.getState().updateAgent(
+        this.id,
+        i,
+        'working',
+        config.labels.working,
+        messageId,
+        s.name
+      );
+    });
+
     return states;
   }
 
@@ -242,10 +282,20 @@ export abstract class BaseStep implements StepDescriptor {
         
         const errorLabel = this.getErrorLabel(reason, getStepConfig(this.id).labels.error);
         updatedStates = this.updateAgentState(updatedStates, i, { 
-          status: 'error', 
-          label: errorLabel, 
-          stepId: this.id 
+          status: 'error',
+          label: errorLabel,
+          stepId: this.id,
+          messageId: updatedStates[i]?.messageId
         });
+
+        // Update Store
+        useAgentStore.getState().updateAgent(
+          this.id,
+          i,
+          'error',
+          errorLabel,
+          context.messageId
+        );
       }
     });
 
@@ -261,23 +311,19 @@ export abstract class BaseStep implements StepDescriptor {
     agentStates: AgentState[],
     failures: unknown[]
   ): string[] {
-    const { work, onProgress, settings } = context;
+    const { work, settings } = context;
     
     if (this.checkGlobalRateLimitFailure(failures, settings.numAgents)) {
         work.results[this.id] = [...results];
-        onProgress('Rate limit reached', agentStates, { ...work });
         throw failures[0];
     }
 
     if (this.checkGlobalStepFailure(failures, settings.numAgents)) {
       work.results[this.id] = [...results];
-      const config = getStepConfig(this.id);
-      onProgress(`${config.name} failed`, agentStates, { ...work });
       throw failures[0];
     }
 
     work.results[this.id] = [...results];
-    onProgress('Step completed', agentStates, { ...work });
     
     return results;
   }
@@ -286,15 +332,21 @@ export abstract class BaseStep implements StepDescriptor {
    * Extracts unique sources from grounding chunks.
    * Returns undefined if no valid sources are found.
    */
-  protected extractSources(groundingChunks: GroundingChunk[]): { uri: string; title: string }[] | undefined {
-    if (groundingChunks.length === 0) return undefined;
+  protected extractSources(groundingChunks: GroundingChunk[]): Source[] | undefined {
+    if (!groundingChunks || groundingChunks.length === 0) return undefined;
     
-    const sources = groundingChunks
-      .map((chunk) => chunk.web)
-      .filter((web): web is { uri: string; title: string } => !!web && !!web.uri)
-      .filter((web, index, self) => index === self.findIndex(w => w.uri === web.uri));
+    const uniqueSources = new Map<string, Source>();
     
-    return sources.length > 0 ? sources : undefined;
+    groundingChunks.forEach(chunk => {
+      if (chunk.web?.uri) {
+        uniqueSources.set(chunk.web.uri, {
+          uri: chunk.web.uri,
+          title: chunk.web.title || chunk.web.uri
+        });
+      }
+    });
+
+    return uniqueSources.size > 0 ? Array.from(uniqueSources.values()) : undefined;
   }
 
   /**
@@ -339,7 +391,7 @@ export abstract class BaseStep implements StepDescriptor {
     context: StepContext,
     config: MultiAgentConfig
   ): Promise<string[]> {
-    const { ai, settings, work, onProgress, signal } = context;
+    const { ai, settings, work, signal } = context;
     const stepId = this.id;
 
     // Initialize results array
@@ -382,7 +434,15 @@ export abstract class BaseStep implements StepDescriptor {
       );
 
       currentAgentStates = this.updateAgentStatus(currentAgentStates, i, 'done');
-      onProgress(stepConfig.progressMsg, currentAgentStates, { ...work });
+      
+      useAgentStore.getState().updateAgent(
+        this.id,
+        i,
+        'done',
+        getStepConfig(this.id).labels.done,
+        context.messageId
+      );
+
       return fullText;
     });
 
@@ -404,6 +464,7 @@ export abstract class BaseStep implements StepDescriptor {
     let fullText = '';
     let fullThought = '';
     const allGroundingChunks: GroundingChunk[] = [];
+    let lastUsage: TokenUsage | null = null;
 
     logger.debug('Starting model stream', { model, devMode: settings.devMode });
 
@@ -428,9 +489,7 @@ export abstract class BaseStep implements StepDescriptor {
         await withRetry(async (attempt) => {
           // Simulation mode for testing error UI (controlled via config/settings)
           if (simulateError && simulateError !== 'none') {
-            // By default, we only throw on first attempt to test recovery.
-            // But for a "maximally realistic" simulation, we throw an AppError that
-            // precisely matches the expected failure pattern.
+            // Throw simulated error on first attempt to test recovery UI
             if (attempt === 1) {
               logger.debug(`SIMULATION: Throwing simulated ${simulateError} error for testing (Attempt ${attempt})`);
               
@@ -453,6 +512,7 @@ export abstract class BaseStep implements StepDescriptor {
           fullText = '';
           fullThought = '';
           allGroundingChunks.length = 0;
+          lastUsage = null;
           let chunkCount = 0;
 
           const stream = await ai.models.generateContentStream({
@@ -490,6 +550,9 @@ export abstract class BaseStep implements StepDescriptor {
             fullThought += thought;
 
             const usage = this.extractTokenUsage(chunk.usageMetadata);
+            if (usage) {
+              lastUsage = usage;
+            }
             
             const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
             if (groundingChunks) {
@@ -515,7 +578,8 @@ export abstract class BaseStep implements StepDescriptor {
     return { 
       text: fullText, 
       thought: fullThought, 
-      groundingChunks: allGroundingChunks 
+      groundingChunks: allGroundingChunks,
+      usage: lastUsage
     };
   }
 
@@ -527,12 +591,14 @@ export abstract class BaseStep implements StepDescriptor {
     context: StepContext,
     agentIndex: number,
     instruction: AgentInstruction,
+    agentStates: AgentState[],
     tools?: Tool[]
   ): Promise<string> {
     const { ai, settings, work, signal } = context;
     if (!ai) throw new AppError("API Key not found", ErrorCode.INVALID_SETTINGS);
 
     const { systemInstruction, userTurn, mainChatHistory } = instruction;
+    let currentAgentStates = agentStates;
 
     // Capture debug info for regeneration
     this.ensureDebugInfo(work, this.id);
@@ -542,7 +608,9 @@ export abstract class BaseStep implements StepDescriptor {
       userTurn
     };
 
-    const { text: fullText } = await this.runModelStream(
+    const config = getStepConfig(this.id);
+    
+    const { text: fullText, usage: finalUsage } = await this.runModelStream(
       {
         ai, settings, model: settings.model,
         contents: [...mainChatHistory, userTurn],
@@ -554,16 +622,27 @@ export abstract class BaseStep implements StepDescriptor {
       {
         onChunk: (text, thought, usage) => {
           this.handleStreamChunk(context, agentIndex, text, thought, usage, {
-            isFirstChunk: false
+            isFirstChunk: false,
+            streamToMessage: true,
+            agentStates: currentAgentStates,
+            statusMsg: config.progressMsg // Sync status/thoughts/usage in store
           });
         },
         onRetry: (attempt) => {
-          if (work.agentStates) {
-            work.agentStates = this.handleRetryProgress(context, agentIndex, attempt, work.agentStates);
-          }
+          currentAgentStates = this.handleRetryProgress(context, agentIndex, attempt, currentAgentStates);
         }
       }
     );
+    
+    // CRITICAL: Save final usage after streaming completes
+    // This ensures token usage displays correctly for regenerated agents
+    if (finalUsage) {
+      this.ensureStepUsage(work, this.id, settings.numAgents);
+      (work.results[`${this.id}_usage`] as any[])[agentIndex] = finalUsage;
+      
+      // Also update the store for immediate UI update
+      useAgentStore.getState().setCurrentWork({ ...work });
+    }
     
     return fullText;
   }

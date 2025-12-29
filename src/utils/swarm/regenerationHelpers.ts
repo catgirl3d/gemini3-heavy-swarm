@@ -7,17 +7,6 @@ import { updateStepResult } from '@/utils/swarm/workHelpers';
 import { Logger } from '@shared/utils/logger';
 
 /**
- * Returns consistent UI labels for regeneration steps.
- */
-export function getStepLabels(stepId: StepId): { regenerating: string; done: string } {
-  const config = getStepConfig(stepId);
-  return { 
-    regenerating: config.labels.working, 
-    done: config.labels.done 
-  };
-}
-
-/**
  * Handles the logic for updating messages during synthesis regeneration chunk processing.
  */
 export function processSynthesisChunkUpdate(
@@ -82,8 +71,10 @@ export function updateWorkForStep(
 }
 
 /**
- * Encapsulates the complex logic for updating messages and work-context during regeneration.
+ * Encapsulates the logic for updating messages and work-context during regeneration.
  * Used inside the onUpdate callback of regenerateResponse.
+ * 
+ * NOTE: Agent states are managed globally in Zustand store, not in Work object during regeneration.
  */
 export function calculateUpdatedStateForRegeneration(
   messages: Message[],
@@ -109,11 +100,11 @@ export function calculateUpdatedStateForRegeneration(
   }
 
   const msg = updatedMsgs[targetIdx];
-  // CRITICAL FIX: Use workContext as fallback if msg.work is missing.
-  // This ensures we don't fail to update the message just because the work property used to be undefined.
+  // Use workContext as fallback if msg.work is missing
   const workToUse = msg?.work || workContext;
   
   if (msg && workToUse) {
+    // Update only the results (agentStates managed globally in Zustand)
     const updatedWork = updateWorkForStep(workToUse, stepId, agentIndex, text, settings);
     updatedMsgs[targetIdx] = { ...msg, work: updatedWork };
   }

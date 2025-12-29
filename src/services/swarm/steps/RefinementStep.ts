@@ -30,7 +30,7 @@ export class RefinementStep extends BaseStep {
     });
   }
 
-  async regenerate(context: StepContext, agentIndex: number): Promise<string> {
+  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<string> {
     const { work } = context;
 
     const initialDrafts = getStepResults(work, STEPS.INITIAL);
@@ -40,7 +40,7 @@ export class RefinementStep extends BaseStep {
     }
 
     const { systemInstruction, userTurn, mainChatHistory } = this.prepareRefinement(context, agentIndex, initialDrafts as string[]);
-    return this.runAgentRegeneration(context, agentIndex, { systemInstruction, userTurn, mainChatHistory });
+    return this.runAgentRegeneration(context, agentIndex, { systemInstruction, userTurn, mainChatHistory }, agentStates);
   }
 
   private prepareRefinement(context: StepContext, index: number, initialDrafts: string[]) {
@@ -55,6 +55,11 @@ export class RefinementStep extends BaseStep {
       .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
       .join('\n\n');
 
+    // Validate my draft. If it's an error, use empty string (no previous step before Initial)
+    const rawMyDraft = initialDrafts[index] ?? '';
+    const myDraftHasError = hasStepContentError(rawMyDraft, STEPS.INITIAL);
+    const myDraftForRefinement = myDraftHasError ? '' : rawMyDraft;
+
     const refinementContext = `
 # INPUT DATA
 <context_data>
@@ -63,7 +68,7 @@ ${userInput || "(See attached image/content)"}
 </original_query>
 
 <my_draft>
-${initialDrafts[index]}
+${myDraftForRefinement}
 </my_draft>
 
 <peer_drafts>

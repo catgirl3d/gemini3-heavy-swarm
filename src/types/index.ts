@@ -113,6 +113,10 @@ export type WorkResultKey =
   | `${typeof STEPS.SYNTHESIS}_usage`;
 
 export interface Work {
+  /**
+   * SNAPSHOT ONLY: content of message work.
+   * `agentStates` here creates a historical record. Live updates use global state.
+   */
   // Generic storage for step results. Keys match StepId (e.g., 'initial_step', 'refinement_step', 'synthesis_step')
   results?: {
     [STEPS.INITIAL]?: (string | null)[];
@@ -142,6 +146,10 @@ export interface Work {
 
   agentNames?: string[];
   criticNames?: string[];
+  /** 
+   * SNAPSHOT ONLY: Final agent states after a step/regeneration completes.
+   * Do NOT use this for live status updates in the UI (use global agentStates instead).
+   */
   agentStates?: AgentState[];
   debugInfo?: Record<string, unknown>;
 }
@@ -161,6 +169,8 @@ export interface AgentState {
   status: 'waiting' | 'working' | 'done' | 'error';
   label: string;
   stepId?: StepId; // Track which step this status belongs to
+  agentIndex?: number; // Track agent index within the step
+  messageId?: string; // Scope state to specific message to prevent global leakage
 }
 
 export interface ServerStatus {

@@ -63,6 +63,10 @@
   background: #16a34a;
   color: white;
 }
+.agent-icon.error {
+  background: #ef4444;
+  color: white;
+}
 .agent-icon svg {
   width: 18px;
   height: 18px;
@@ -112,6 +116,10 @@
 .agent-progress-fill.waiting {
   width: 0%;
   background-color: #cbd5e1;
+}
+.agent-progress-fill.error {
+  width: 100%;
+  background-color: #ef4444;
 }
 
 @keyframes shimmer {

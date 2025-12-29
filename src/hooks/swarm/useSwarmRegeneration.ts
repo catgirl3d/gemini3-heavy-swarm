@@ -1,46 +1,30 @@
+import { useRef, useEffect, RefObject, Dispatch, SetStateAction } from 'react';
 import { AppSettings, Message, AgentState, Work } from '@/types';
 import { StepId, STEPS } from '@/types/steps';
 import { Logger } from '@shared/utils/logger';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
-import { findTargetMessageIndex } from '@/utils/chat/messageHelpers';
+import { getMissingAgentsForMessage } from '@/utils/swarm/agentHelpers';
 import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
-import { handleSynthesisJump, getSynthesisWorkingLabel } from '@/utils/swarm/synthesisHelpers';
+import { handleSynthesisJump } from '@/utils/swarm/stepConstants';
 import {
-  getStepLabels, 
   calculateUpdatedStateForRegeneration 
 } from '@/utils/swarm/regenerationHelpers';
-import { withEnsuredResults, updateStepWithError } from '@/utils/swarm/workHelpers';
+import { withEnsuredResults, updateStepWithError, cloneWork } from '@/utils/swarm/workHelpers';
 import { getFriendlyErrorMessage, getErrorLabel } from '@/services/swarm/steps/utils/errorUtils';
 import { GeminiService } from '@/services/swarm/GeminiService';
-import { useAbortController } from '@/hooks/network/useAbortController';
+import { useAgentStore } from '@/stores/agentStore';
 
 const regenLogger = new Logger('Regeneration', true);
 
 interface RegenerationDependencies {
   settings: AppSettings;
   messages: Message[];
-  messagesRef: React.RefObject<Message[]>;
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
-  agentStates: AgentState[];
+  messagesRef: RefObject<Message[]>;
+  setMessages: Dispatch<SetStateAction<Message[]>>;
   currentWork: Work | undefined;
-  isLoading: boolean;
-  isPaused: boolean;
-  setIsLoading: (b: boolean) => void;
-  setIsPaused: (b: boolean) => void;
-  setLoadingStatus: (s: string) => void;
-  setAgentStates: (a: AgentState[]) => void;
-  setCurrentWork: React.Dispatch<React.SetStateAction<Work | undefined>>;
-  updateAgentStatus: (
-    messageIndex: number,
-    stepId: StepId,
-    agentIndex: number,
-    status: AgentState['status'],
-    label: string,
-    settings: AppSettings
-  ) => void;
-  regenAbort: ReturnType<typeof useAbortController>;
-  geminiServiceRef: React.RefObject<GeminiService>;
+  geminiServiceRef: RefObject<GeminiService>;
   lastInput: { text: string, image: string | null, imageFile: File | null } | null;
+  pauseResolverRef: import('react').MutableRefObject<(() => void) | null>;
 }
 
 export function useSwarmRegeneration({
@@ -48,75 +32,93 @@ export function useSwarmRegeneration({
   messages,
   messagesRef,
   setMessages,
-  agentStates,
   currentWork,
-  isLoading,
-  isPaused,
-  setIsLoading,
-  setIsPaused,
-  setLoadingStatus,
-  setAgentStates,
-  setCurrentWork,
-  updateAgentStatus,
-  regenAbort,
   geminiServiceRef,
-  lastInput
+  lastInput,
+  pauseResolverRef
 }: RegenerationDependencies) {
 
-  const regenerateAgentResponse = async (messageIndex: number, stepId: StepId, agentIndex: number) => {
-    const logger = new Logger('Synthesis', settings.debugMode);
-    regenLogger.info('regenerateAgentResponse START', { messageIndex, stepId, agentIndex });
-    if (!lastInput) {
-      regenLogger.warn('No lastInput, aborting regeneration');
+  const controllersRef = useRef<Map<string, AbortController>>(new Map());
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      controllersRef.current.forEach(c => c.abort());
+      controllersRef.current.clear();
+    };
+  }, []);
+
+  const regenerateAgentResponse = async (messageId: string, stepId: StepId, agentIndex: number) => {
+    regenLogger.info('regenerateAgentResponse START', { messageId, stepId, agentIndex });
+    // Find the message by ID
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) {
+      regenLogger.warn('Message not found for regeneration', { messageId, messagesLength: messages.length });
       return;
     }
 
     const targetMessage = messages[messageIndex];
-    let workContext = targetMessage?.work || currentWork;
+    
+    // Regeneration preserves global flags to prevent UI remounting and state loss.
+
+    const baseWork = targetMessage?.work || currentWork;
+    const workContext = baseWork ? cloneWork(baseWork) : undefined;
+    
     if (!workContext) {
       regenLogger.warn('No workContext, aborting regeneration');
       return;
     }
 
-    regenLogger.debug('Regeneration context', { 
-      hasTargetMessage: !!targetMessage,
-      workResultsKeys: Object.keys(workContext.results || {}),
-      currentAgentStatesCount: agentStates?.length
-    });
+    // MINIMAL HYDRATION: Ensure agents exist for this message
+    // 1. Check if agents are already in store (active session)
+    const currentAgents = useAgentStore.getState().agents;
+    const hasAgentsForMessage = currentAgents.some(a => a.messageId === messageId);
+    
+    if (!hasAgentsForMessage) {
+      // 2. If not, try to recover them (Legacy/Reload support)
+      const missingAgents = getMissingAgentsForMessage(messageId, workContext, stepId);
+      
+      if (missingAgents.length > 0) {
+        regenLogger.debug('Restoring missing agents', { count: missingAgents.length, source: 'helper' });
+        useAgentStore.getState().hydrate([...currentAgents, ...missingAgents]);
+      }
+    }
 
     const syncStatus = (status: AgentState['status'], label: string) => {
-      regenLogger.debug(`syncStatus called: ${status} - ${label}`);
-      updateAgentStatus(messageIndex, stepId, agentIndex, status, label, settings);
+      useAgentStore.getState().updateAgent(stepId, agentIndex, status, label, messageId);
     };
 
-    const controller = regenAbort.create();
-
-    // Capture initial state to restore later if needed
-    const initialLoading = isLoading;
-    const initialPaused = isPaused;
-    regenLogger.debug('Captured initial state', { initialLoading, initialPaused });
-
-    // Start loading state (but NOT for synthesis - it will hide on first chunk)
-    if (stepId !== STEPS.SYNTHESIS) {
-      regenLogger.debug('Setting isLoading=true for non-synthesis step');
-      setIsLoading(true);
+    const controllerKey = `${messageIndex}-${stepId}-${agentIndex}`;
+    if (controllersRef.current.has(controllerKey)) {
+      controllersRef.current.get(controllerKey)?.abort();
     }
-    
-    // Unpause to allow work to proceed
-    if (stepId !== STEPS.SYNTHESIS) {
-      setIsPaused(false);
-    }
-
-    // Capture latest agent states from progress updates to use in finalization
-    let latestAgentStates: AgentState[] = agentStates || [];
+    const controller = new AbortController();
+    controllersRef.current.set(controllerKey, controller);
 
     try {      
-      const labels = getStepLabels(stepId);
-      // Only set working status immediately for non-synthesis steps
+      const config = getStepConfig(stepId);
+      // For SYNTHESIS, don't set working immediately - SynthesisStep manages this
+      // to prevent premature card collapse. It will set waiting first, then working on first chunk.
       if (stepId !== STEPS.SYNTHESIS) {
-        syncStatus('working', labels.regenerating);
+        syncStatus('working', config.labels.working);
       }
+      
       const history = messages.slice(0, messageIndex);
+      
+      // Find the user message that triggered this model response
+      const triggeringUserMessage = [...history].reverse().find(m => m.role === 'user');
+      if (!triggeringUserMessage) {
+        throw new Error('Could not find the original user prompt for regeneration');
+      }
+
+      const userInput = triggeringUserMessage.parts.map(p => p.text).join(' ');
+      const image = triggeringUserMessage.image || null;
+      
+      // Use imageFile from lastInput only if it matches the current prompt (to avoid using wrong file for old messages)
+      let imageFile: File | null = null;
+      if (lastInput && lastInput.text === userInput && lastInput.image === image) {
+        imageFile = lastInput.imageFile;
+      }
 
       if (!geminiServiceRef.current) {
         throw new Error('GeminiService not initialized');
@@ -124,45 +126,48 @@ export function useSwarmRegeneration({
 
       const result = await geminiServiceRef.current.regenerateResponse(
         settings,
-        lastInput.text,
-        lastInput.image,
-        lastInput.imageFile,
+        userInput,
+        image,
+        imageFile,
         history,
+        messageId,
         agentIndex,
         stepId,
         workContext,
+        useAgentStore.getState().agents, // Use store for current truth
         (text, isFirstChunk) => {
-          setMessages(prev => {
-            const { updatedMessages, updatedWork } = calculateUpdatedStateForRegeneration(
-              prev,
-              messageIndex,
-              stepId,
-              agentIndex,
-              workContext,
-              text,
-              settings,
-              isFirstChunk,
-              () => {
-                handleSynthesisJump(setIsLoading, setIsPaused, () => {
-                  syncStatus('working', getSynthesisWorkingLabel());
-                });
+          const baseMessages = messagesRef.current || [];
+          
+          const { updatedMessages } = calculateUpdatedStateForRegeneration(
+            baseMessages,
+            messageIndex,
+            stepId,
+            agentIndex,
+            workContext,
+            text,
+            settings,
+            isFirstChunk,
+            () => {
+              /**
+               * SYNTHESIS JUMP BEHAVIOR
+               * When first chunk arrives, hide loading indicators.
+               * Card collapse is handled automatically by ShowWork observing the agent status
+               * change that happened inside SynthesisStep.ts.
+               */
+              if (stepId === STEPS.SYNTHESIS) {
+                handleSynthesisJump(useAgentStore.getState().setIsLoading, useAgentStore.getState().setIsPaused);
               }
-            );
-
-            if (updatedWork) {
-              setCurrentWork(updatedWork);
             }
-            
-            return updatedMessages;
-          });
+          );
+
+          setMessages(updatedMessages);
         },
-        (status, agents, work) => {
-          latestAgentStates = agents; // Capture latest agents
-          setLoadingStatus(status);
-          setAgentStates(agents);
-          setCurrentWork({ ...work, agentStates: agents });
-        },
-        controller.signal
+        controller.signal,
+        pauseResolverRef,
+        () => {
+          useAgentStore.getState().setIsPaused(true);
+          useAgentStore.getState().setLoadingStatus('Paused. Waiting for user confirmation...');
+        }
       );
 
       // Handle final result
@@ -173,91 +178,78 @@ export function useSwarmRegeneration({
              const ensuredWork = withEnsuredResults(workToUpdate);
              return {
                ...ensuredWork,
-               results: { ...ensuredWork.results, [stepId]: result }
+               results: { ...ensuredWork.results, [stepId]: result },
+               // FINAL SNAPSHOT: Save latest global agentStates for HISTORY
+               agentStates: useAgentStore.getState().agents.filter(a => a.messageId === messageId)
              };
            })() : undefined;
            
            const updated = updateTargetMessage(prev, messageIndex, stepId, {
-             sources: result.sources,
+             sources: (result as any).sources,
              work: updatedWork
            }, { workContext, currentWork });
            
            return updated ?? prev;
          });
-
-        setCurrentWork(prev => {
-          if (!prev || !prev.results) return prev;
-          return {
-            ...prev,
-            results: { ...prev.results, [stepId]: result }
-          };
-        });
       }
 
-      syncStatus('done', labels.done);
+      syncStatus('done', config.labels.done);
       regenLogger.info('Regeneration SUCCESS', { stepId, agentIndex });
-
-      if (stepId === STEPS.SYNTHESIS) {
-        const logger = new Logger('Synthesis', settings.debugMode);
-        logger.debug('Synthesis regeneration logic complete');
-        regenLogger.debug('Finalizing synthesis regeneration');
-        
-        setMessages(prev => {
-          const newMessages = [...prev];
-          const lastMsgIndex = newMessages.length - 1;
-          const lastMsg = newMessages[lastMsgIndex];
-          
-          if (lastMsg && lastMsg.role === 'model') {
-            const workToUse = lastMsg.work || currentWork;
-            if (workToUse) {
-              const updatedAgentStates = (latestAgentStates || workToUse.agentStates || agentStates || []).map(agent => {
-                if (agent.id === 'synthesizer_agent') {
-                  return { ...agent, status: 'done' as const, label: labels.done, stepId: STEPS.SYNTHESIS as StepId };
-                }
-                return agent;
-              });
-              newMessages[lastMsgIndex] = { ...lastMsg, work: { ...workToUse, agentStates: updatedAgentStates } };
-            }
-          }
-          
-          return newMessages;
-        });
-        regenLogger.debug('Clearing currentWork after synthesis');
-        setCurrentWork(undefined);
-      }
-    } catch (error) {
-       const logger = new Logger('Regeneration', settings.debugMode);
-      logger.error(`Regeneration failed for step ${stepId}, agent ${agentIndex}:`, error);
-      const errorLabel = getErrorLabel(error, 'Regeneration Failed');
-      syncStatus('error', errorLabel);
+      controllersRef.current.delete(controllerKey);
       
+    } catch (error) {
+      // ABORT GUARD: If the error is due to user cancellation, don't treat it as a failure
+      if (
+        (error instanceof Error && error.message === 'Aborted') ||
+        (error instanceof DOMException && error.name === 'AbortError')
+      ) {
+        regenLogger.info('Regeneration aborted by user', { stepId, agentIndex });
+        controllersRef.current.delete(controllerKey);
+        return;
+      }
+
+      regenLogger.error(`Regeneration failed for step ${stepId}, agent ${agentIndex}:`, error);
+      const errorLabel = getErrorLabel(error, 'Regeneration Failed');
       const errorMessage = getFriendlyErrorMessage(error);
       
+      // Update global state via syncStatus
+      regenLogger.debug('Updating agent to error status', { stepId, agentIndex, messageId, errorLabel });
+      syncStatus('error', errorLabel);
+      
+      // Verify the update happened
+      const updatedAgent = useAgentStore.getState().agents.find(
+        a => a.stepId === stepId && a.agentIndex === agentIndex && a.messageId === messageId
+      );
+      regenLogger.debug('Agent after error update:', updatedAgent);
+      
+      // Update message with error
       setMessages(prev => {
         const workToUpdate = prev[messageIndex]?.work || workContext || currentWork;
-        const updatedWork = workToUpdate ? updateStepWithError(workToUpdate, stepId, agentIndex, errorMessage) : undefined;
+        let updatedWork = workToUpdate ? updateStepWithError(workToUpdate, stepId, agentIndex, errorMessage) : undefined;
+        
+        // FINAL SNAPSHOT: Save actual error state to work for history
+        if (updatedWork) {
+          updatedWork = { ...updatedWork, agentStates: useAgentStore.getState().agents.filter(a => a.messageId === messageId) };
+        }
+        
         const config = getStepConfig(stepId);
         const errorText = `[System: ${config.errorPrefix}. ${errorMessage}]`;
         
-        const updated = updateTargetMessage(prev, messageIndex, stepId, {
-          parts: [{ text: errorText }],
-          work: updatedWork
-        }, { workContext, currentWork });
+        // CRITICAL: Only update message parts (the main chat text) if we are regenerating the synthesis step.
+        // For initial/refinement steps, we only update the work object so the agent card shows the error.
+        const updates: any = { work: updatedWork };
+        if (stepId === STEPS.SYNTHESIS) {
+          updates.parts = [{ text: errorText }];
+        }
+
+        const updated = updateTargetMessage(prev, messageIndex, stepId, updates, { workContext, currentWork });
         
         return updated ?? prev;
       });
       
-      setCurrentWork(prev => 
-        prev ? updateStepWithError(prev, stepId, agentIndex, errorMessage) : prev
-      );
-    } finally {
-      // RESTORE STATE LOGIC (only for non-synthesis steps)
-      regenLogger.debug('FINALLY block', { stepId, initialLoading, initialPaused });
-      if (stepId !== STEPS.SYNTHESIS) {
-        regenLogger.debug('Restoring initial loading state for non-synthesis step');
-        setIsLoading(initialLoading);
-        setIsPaused(initialPaused);
-      }
+      controllersRef.current.delete(controllerKey);
+      // DON'T clear currentMessageId here - leave it set so error state remains visible
+      // It will be cleared when next regeneration/orchestration starts
     }
   };
 

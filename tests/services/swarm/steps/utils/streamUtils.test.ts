@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractTextFromParts, extractTokenUsage } from './streamUtils';
+import { extractTextFromParts, extractTokenUsage } from '@/services/swarm/steps/utils/streamUtils';
 
 describe('streamUtils', () => {
   describe('extractTextFromParts', () => {

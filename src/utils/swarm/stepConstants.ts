@@ -1,5 +1,8 @@
 import { StepId, STEPS } from '@/types/steps';
 import { Work } from '@/types';
+import { Logger } from '@shared/utils/logger';
+
+const logger = new Logger('SynthesisJump', true);
 
 /**
  * Centralized configuration for step-specific behavior.
@@ -24,7 +27,7 @@ export interface StepConfig {
   errorPrefix: string;
   /** Content error detection pattern */
   errorPattern: string;
-  /** Progress message for onProgress */
+  /** Status message for agent updates */
   progressMsg: string;
   /** Formal name of the step */
   name: string;
@@ -130,4 +133,24 @@ export function setWorkName(work: Work, stepId: StepId, index: number, name: str
 export function hasStepContentError(content: string | null | undefined, stepId: StepId): boolean {
   if (!content) return false;
   return content.includes(STEP_CONFIGS[stepId].errorPattern);
+}
+
+/**
+ * Shared logic for the "Synthesis Jump" behavior.
+ * This hides loading indicators and unpauses the UI when the first chunk of synthesis arrives.
+ * Consolidated from synthesisHelpers.ts.
+ * 
+ * @param setIsLoading - State setter for loading status
+ * @param setIsPaused - State setter for pause status
+ * @param onJump - Optional callback for additional jump logic (e.g., updating agent status)
+ */
+export function handleSynthesisJump(
+  setIsLoading: (b: boolean) => void,
+  setIsPaused: (b: boolean) => void,
+  onJump?: () => void
+) {
+  logger.info('SYNTHESIS JUMP - First chunk received, hiding LoadingIndicator');
+  setIsLoading(false);
+  setIsPaused(false);
+  onJump?.();
 }
