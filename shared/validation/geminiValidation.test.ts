@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateContents, validateContentSize, getTargetModel, buildGeminiUrl } from '@shared/validation/geminiValidation';
+import { validateContents, serializeRequestBody, getTargetModel, buildGeminiUrl } from '@shared/validation/geminiValidation';
 
 describe('geminiValidation', () => {
   describe('validateContents', () => {
@@ -20,17 +20,23 @@ describe('geminiValidation', () => {
     });
   });
 
-  describe('validateContentSize', () => {
+  describe('serializeRequestBody', () => {
     it('should pass for small content', () => {
       const contents = [{ parts: [{ text: 'small' }] }];
-      expect(validateContentSize(contents, 100).valid).toBe(true);
+      const result = serializeRequestBody(contents, undefined, undefined, undefined, 10000);
+      expect(result.valid).toBe(true);
+      if (result.valid) {
+        expect(result.serialized).toBeDefined();
+      }
     });
 
     it('should fail for oversized content', () => {
       const contents = [{ parts: [{ text: 'a'.repeat(200) }] }];
-      const result = validateContentSize(contents, 100);
+      const result = serializeRequestBody(contents, undefined, undefined, undefined, 100);
       expect(result.valid).toBe(false);
-      expect(result.statusCode).toBe(413);
+      if (result.valid === false) {
+        expect(result.statusCode).toBe(413);
+      }
     });
   });
 

@@ -1,6 +1,5 @@
 export const getModelDisplayName = (model: string): string => {
   const modelNames: Record<string, string> = {
-    'gemini-1.5-flash-8b': 'Gemini 1.5 Flash-8B Swarm',
     'gemini-2.5-flash-lite': 'Gemini 2.5 Flash-Lite Swarm',
     'gemini-2.5-flash': 'Gemini 2.5 Flash Swarm',
     'gemini-2.5-pro': 'Gemini 2.5 Pro Swarm',

@@ -5,7 +5,7 @@ import { Logger } from '@shared/utils/logger';
 export function useServerStatus() {
   const [serverStatus, setServerStatus] = useState<ServerStatus>({
     hasServerKey: false,
-    proxyMode: 'demo',
+    proxyMode: 'private',
     isLoaded: false
   });
   const [shouldShowLoadingBanner, setShouldShowLoadingBanner] = useState(false);
@@ -37,7 +37,7 @@ export function useServerStatus() {
           isLoadedRef.current = true;
           setServerStatus({
             hasServerKey: data.hasServerKey,
-            proxyMode: data.proxyMode || 'demo',
+            proxyMode: data.proxyMode || 'private',
             isLoaded: true
           });
         } else {

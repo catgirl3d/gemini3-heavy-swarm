@@ -8,8 +8,8 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import net from 'net';
 import { isProductionEnvironment, MAX_REQUEST_SIZE } from '../shared/security/security';
-import { getAllowedOrigins, isOriginAllowed, buildCorsHeaders, buildSecurityHeaders } from '../shared/api/cors.core';
-import { validateApiSecret } from '../shared/api/security.core';
+import { getAllowedOrigins, isOriginAllowed, buildCorsHeaders, buildSecurityHeaders, checkPreflightAllowed } from '../shared/api/cors.core';
+import { validateApiSecret, getProxyMode } from '../shared/api/security.core';
 import { validateAndPrepareProxy, executeGeminiRequest } from '../shared/api/geminiProxy.core';
 import { checkRateLimit, streamToExpress } from '../shared/api/adapters/express.adapter';
 import { getSafeGeminiError } from '../shared/api/errors';
@@ -110,8 +110,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 	}
 	
 	// Handle preflight requests
-	if (req.method === 'OPTIONS') {
-		if (isOriginAllowed(origin, allowedOrigins)) {
+	const preflight = checkPreflightAllowed(req.method, origin, allowedOrigins);
+	if (preflight.isPreflight) {
+		if (preflight.allowed) {
 			return res.status(204).end();
 		} else {
 			return res.status(403).json({ error: 'Origin not allowed' });
@@ -152,7 +153,7 @@ app.get('/api/status', (req: Request, res: Response) => {
 	res.json({
 		hasServerKey: !!process.env.GEMINI_API_KEY,
 		hasKV: true, // Local server uses in-memory rate limiting
-		proxyMode: process.env.GEMINI_PROXY_MODE || 'demo'
+		proxyMode: getProxyMode(process.env.GEMINI_PROXY_MODE)
 	});
 });
 
@@ -166,7 +167,7 @@ app.post('/api/gemini', async (req: Request, res: Response) => {
 		}
 
 		// Validation and preparation
-		const isPrivateMode = process.env.GEMINI_PROXY_MODE === 'private';
+		const isPrivateMode = getProxyMode(process.env.GEMINI_PROXY_MODE) === 'private';
 		const preparation = validateAndPrepareProxy(req.body, isPrivateMode);
 		
 		if (preparation.ok === false) {
@@ -211,7 +212,7 @@ async function startServer() {
 		app.listen(availablePort, () => {
 			logger.info(`✅ Server running on port ${availablePort}`);
 			logger.info(`Environment check: GEMINI_API_KEY is ${process.env.GEMINI_API_KEY ? 'SET' : 'NOT SET'}`)
-			logger.info(`Environment check: GEMINI_PROXY_MODE is ${process.env.GEMINI_PROXY_MODE || 'demo (default)'}`);
+			logger.info(`Environment check: GEMINI_PROXY_MODE is ${getProxyMode(process.env.GEMINI_PROXY_MODE)}`);
 			logger.info(`Environment check: API_SECRET is ${process.env.API_SECRET ? 'SET' : 'NOT SET'}`);
 			if (process.env.ALLOWED_ORIGINS) {
 				logger.info(`Environment check: ALLOWED_ORIGINS is SET`);

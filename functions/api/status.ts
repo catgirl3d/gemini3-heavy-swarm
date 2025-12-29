@@ -9,6 +9,7 @@ import {
   buildUnifiedHeaders,
   handleCorsPreflightIfNeeded
 } from "../../shared/api/adapters/cloudflare.adapter";
+import { getProxyMode } from '../../shared/api/security.core';
 
 export const onRequestGet = (async (context) => {
   const { request, env } = context;
@@ -27,7 +28,7 @@ export const onRequestGet = (async (context) => {
   return new Response(JSON.stringify({
     hasServerKey: !!env.GEMINI_API_KEY,
     hasKV: !!env.RATE_LIMIT_KV,
-    proxyMode: env.GEMINI_PROXY_MODE || 'demo'
+    proxyMode: getProxyMode(env.GEMINI_PROXY_MODE)
   }), {
     headers
   });

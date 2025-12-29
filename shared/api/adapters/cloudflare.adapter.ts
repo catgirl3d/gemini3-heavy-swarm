@@ -1,7 +1,7 @@
 // Note: Using relative paths instead of aliases (@shared)
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
 import { RATE_LIMIT_PER_MINUTE, isProductionEnvironment } from '../../security/security';
-import { getAllowedOrigins, isOriginAllowed, buildAllHeaders } from '../cors.core';
+import { getAllowedOrigins, isOriginAllowed, buildAllHeaders, checkPreflightAllowed } from '../cors.core';
 import { RateLimitResult, KVNamespaceSubset, GenericRequest } from '../types';
 import { Logger } from '../../utils/logger';
 
@@ -64,8 +64,9 @@ export function buildUnifiedHeaders(origin: string | null | undefined, allowedOr
  * @returns Response or null
  */
 export function handleCorsPreflightIfNeeded(request: any, origin: string | null | undefined, allowedOrigins: string[], headers: Headers): Response | null {
-  if (request.method === "OPTIONS") {
-    if (isOriginAllowed(origin, allowedOrigins)) {
+  const preflight = checkPreflightAllowed(request.method, origin, allowedOrigins);
+  if (preflight.isPreflight) {
+    if (preflight.allowed) {
       return new Response(null, { status: 204, headers });
     } else {
       return new Response(JSON.stringify({ error: "Origin not allowed" }), { status: 403, headers });

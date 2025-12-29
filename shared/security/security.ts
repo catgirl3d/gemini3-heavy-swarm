@@ -1,9 +1,30 @@
 // Note: Using relative paths instead of aliases (@shared)
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
 import { GenericRequest } from '../api/types';
-import { Logger } from '../utils/logger';
 
-const logger = new Logger('SecurityUtils');
+/**
+ * Safe environment utilities for cross-runtime compatibility
+ * Works in Node.js, Cloudflare Workers, and browser contexts
+ */
+
+/**
+ * Safely get NODE_ENV value
+ * @returns NODE_ENV value or undefined if not available
+ */
+export function getNodeEnv(): string | undefined {
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env.NODE_ENV;
+  }
+  return undefined;
+}
+
+/**
+ * Check if running in production based on NODE_ENV
+ * @returns true if NODE_ENV === 'production'
+ */
+export function isProductionByNodeEnv(): boolean {
+  return getNodeEnv() === 'production';
+}
 
 export const RATE_LIMIT_PER_MINUTE = 2; // Values Rate Limit system
 export const MAX_REQUEST_SIZE = 100 * 1024; // 100KB limit for the entire request
@@ -22,57 +43,34 @@ export const DEVELOPMENT_ORIGINS = [
   "http://localhost:3000",
 ];
 
-// Combined list based on environment
-// In Cloudflare Functions, set ALLOWED_ORIGINS env var for production to override
-export const DEFAULT_ALLOWED_ORIGINS =
-  typeof process !== "undefined" && (process as any).env?.NODE_ENV === "production"
-    ? PRODUCTION_ORIGINS
-    : [...PRODUCTION_ORIGINS, ...DEVELOPMENT_ORIGINS];
+// Default allowed origins - includes both production and development
+// Use getAllowedOrigins() from cors.core.ts to get the correct list based on environment
+export const DEFAULT_ALLOWED_ORIGINS = [...PRODUCTION_ORIGINS, ...DEVELOPMENT_ORIGINS];
 
 /**
  * Auto-detect if we're in production environment
  * Works in both Node.js (Express) and Cloudflare Workers
- * @param request - Optional request object (for Cloudflare)
+ * @param request - Optional request object (for Cloudflare Workers)
  * @returns boolean
  */
 export function isProductionEnvironment(request?: GenericRequest): boolean {
-  // 1. Node.js environment (e.g. Local Express Server, Google Cloud Run)
-  if (typeof process !== "undefined" && (process as any).env?.NODE_ENV === "production") {
+  // Node.js: check NODE_ENV
+  if (isProductionByNodeEnv()) {
     return true;
   }
   
-  // Cloudflare Workers - check request origin/host
-  if (request) {
-    // We use any for request to handle different implementations of Request object
-    const headers = request.headers;
-    const originValue = typeof headers.get === 'function' ? headers.get('Origin') : headers['origin'];
-    const hostValue = typeof headers.get === 'function' ? headers.get('Host') : headers['host'];
-    
-    // Normalize to string (handle string or string[])
-    const originStr = Array.isArray(originValue) ? originValue[0] : (typeof originValue === 'string' ? originValue : '');
-    const hostStr = Array.isArray(hostValue) ? hostValue[0] : (typeof hostValue === 'string' ? hostValue : '');
-    
-    const finalOrigin = originStr || hostStr || '';
-    const url = request.url || '';
-    
-    // Check if origin or URL matches production domains
+  // Cloudflare Workers: check if request URL matches production domain
+  // request.url contains the full URL of the Worker (e.g., https://your-worker.pages.dev/api/...)
+  // This is reliable because it's the actual URL being accessed, not a client-provided header
+  if (request?.url) {
     try {
-      const parsedUrl = url ? new URL(url) : null;
-      return PRODUCTION_ORIGINS.some(prod => {
-        const domain = prod.replace('https://', '');
-        return finalOrigin === prod ||
-               finalOrigin === domain ||
-               (parsedUrl && parsedUrl.origin === prod);
+      const url = new URL(request.url);
+      return PRODUCTION_ORIGINS.some(origin => {
+        const hostname = origin.replace(/^https?:\/\//, '');
+        return url.origin === origin || url.hostname === hostname;
       });
-    } catch (e) {
-      // Fallback to string checks if URL parsing fails
-      return PRODUCTION_ORIGINS.some(prodOrigin => {
-        const domain = prodOrigin.replace('https://', '');
-        return finalOrigin === prodOrigin ||
-               finalOrigin === domain ||
-               url === prodOrigin ||
-               url.startsWith(prodOrigin + '/');
-      });
+    } catch {
+      return false;
     }
   }
   
@@ -87,7 +85,6 @@ export interface ModelOption {
 
 // Whitelist of allowed models to prevent Path Injection and SSRF
 export const AVAILABLE_MODELS: ModelOption[] = [
-  { value: "gemini-1.5-flash-8b", label: "Gemini 1.5 Flash-8B" },
   { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite" },
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
   { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
@@ -96,3 +93,6 @@ export const AVAILABLE_MODELS: ModelOption[] = [
 ];
 
 export const ALLOWED_MODELS = AVAILABLE_MODELS.map((m) => m.value);
+
+// Default model used in demo mode and as fallback in private mode
+export const DEFAULT_MODEL = 'gemini-2.5-flash-lite';

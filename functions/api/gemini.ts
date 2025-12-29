@@ -3,7 +3,7 @@ import type { PagesFunction } from "@cloudflare/workers-types";
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
 import type { Env, GeminiRequest } from "../_types";
 import { getAllowedOrigins, isOriginAllowed } from "../../shared/api/cors.core";
-import { validateApiSecret } from "../../shared/api/security.core";
+import { validateApiSecret, getProxyMode } from "../../shared/api/security.core";
 import { validateAndPrepareProxy, executeGeminiRequest } from "../../shared/api/geminiProxy.core";
 import {
   checkRateLimit,
@@ -74,7 +74,7 @@ export const onRequestPost = (async (context) => {
     }
 
     // Validation and preparation
-    const isPrivateMode = env.GEMINI_PROXY_MODE === "private";
+    const isPrivateMode = getProxyMode(env.GEMINI_PROXY_MODE) === 'private';
     const preparation = validateAndPrepareProxy(body, isPrivateMode);
     
     if (preparation.ok === false) {

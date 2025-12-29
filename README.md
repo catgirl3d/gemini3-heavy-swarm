@@ -24,6 +24,7 @@ An advanced AI swarm interface powered by Google's **Gemini 3 Pro Preview** mode
 
 1. Clone the repository.
 2. Install dependencies:
+
    ```bash
    npm install
    ```
@@ -94,13 +95,13 @@ The application includes a proxy server (`server/server.ts` for local, `function
 
 You can configure the proxy behavior using the `GEMINI_PROXY_MODE` environment variable:
 
-- **Demo Mode (Default)**:
-  - Set `GEMINI_PROXY_MODE=demo` (or leave undefined).
+- **Demo Mode**:
+  - Set `GEMINI_PROXY_MODE=demo`.
   - Forces all requests to use the `gemini-2.5-flash-lite` model to prevent abuse and manage costs.
   - Useful for public deployments.
 
-- **Private Mode**:
-  - Set `GEMINI_PROXY_MODE=private`.
+- **Private Mode (Default)**:
+  - Set `GEMINI_PROXY_MODE=private` (or leave undefined).
   - Allows the client to request any available model (e.g., Gemini 3 Pro).
   - Use this for personal deployments where you want full access to all models via your server's API key.
 
@@ -115,8 +116,8 @@ In development mode (e.g. via `npm run dev:all`), the application **forces all r
   In production builds (`npm run build`), the forced proxy is automatically disabled. Users can either provide their own API key (direct route) or be routed through the proxy if no key is provided.
 
 **Model Enforcement:**
-- **Demo Mode**: When using the proxy in `demo` mode (default), the application automatically resets the model selection to `gemini-2.5-flash-lite` on page reload to prevent unauthorized access to premium models.
-- **Private Mode**: When the server is configured with `GEMINI_PROXY_MODE=private`, user model preferences are preserved across page reloads, allowing full access to all available models.
+- **Demo Mode**: When using the proxy in `demo` mode, the application automatically resets the model selection to `gemini-2.5-flash-lite` on page reload to prevent unauthorized access to premium models.
+- **Private Mode (Default)**: When the server is configured in `private` mode (default), user model preferences are preserved across page reloads, allowing full access to all available models.
 
 ### Security (X-API-Secret)
 
@@ -181,13 +182,13 @@ VITE_API_SECRET=your-secret-here npm run build
 
 > [!NOTE]
 > **Automatic Production Detection:**
-> - Production environment is **auto-detected** based on request origin/hostname
-> - HSTS is automatically enabled when requests come from production domains
-> - No need to manually set `NODE_ENV` in Cloudflare!
+> - **Node.js (Cloud Run/Express):** Uses `NODE_ENV === 'production'` (set in Dockerfile).
+> - **Cloudflare Workers:** Checks the actual `request.url` against production domains.
+> - HSTS is automatically enabled when running in production.
 > 
 > **Default Behaviors:**
-> - `ALLOWED_ORIGINS`: Defaults to production + localhost origins (see `constants/security.js`)
-> - `GEMINI_PROXY_MODE`: Defaults to `demo` (restricts to flash-lite model)
+> - `ALLOWED_ORIGINS`: Defaults to production + localhost origins (see `shared/security/security.ts`)
+> - `GEMINI_PROXY_MODE`: Defaults to `private` (allows all models)
 
 For detailed security information, see [docs/API_SECURITY.md](./docs/API_SECURITY.md).
 

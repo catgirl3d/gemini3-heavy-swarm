@@ -59,6 +59,7 @@ describe('geminiProxy.core', () => {
           'x-goog-api-key': 'key123',
         },
         body: '{"data":"test"}',
+        signal: expect.any(AbortSignal),
       });
     });
   });

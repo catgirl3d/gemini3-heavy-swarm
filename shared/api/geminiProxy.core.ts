@@ -1,7 +1,7 @@
 // Note: Using relative paths instead of aliases (@shared)
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
 import { ALLOWED_MODELS, MAX_CONTENT_CHARS } from '../security/security';
-import { validateContents, validateContentSize, getTargetModel, buildGeminiUrl } from '../validation/geminiValidation';
+import { validateContents, serializeRequestBody, getTargetModel, buildGeminiUrl } from '../validation/geminiValidation';
 import { GeminiRequest } from './types';
 import { Logger } from '../utils/logger';
 
@@ -31,55 +31,75 @@ export function validateAndPrepareProxy(requestBody: GeminiRequest, isPrivateMod
   
   // 1. Validate contents structure
   const validation = validateContents(contents);
-  if (!validation.valid) {
-    logger.warn(`Validation failed: ${validation.error}`);
-    return { ok: false, error: validation.error, statusCode: 400 };
+  if (validation.valid === false) {
+    const errorMsg = validation.error || 'Invalid contents structure';
+    logger.warn(`Validation failed: ${errorMsg}`);
+    return { ok: false, error: errorMsg, statusCode: 400 };
   }
 
-  // 2. Validate content size to prevent DoS
-  const sizeValidation = validateContentSize(contents, MAX_CONTENT_CHARS);
-  if (!sizeValidation.valid) {
-    logger.warn(`Size validation failed: ${sizeValidation.error}`);
-    return { ok: false, error: sizeValidation.error, statusCode: sizeValidation.statusCode || 413 };
-  }
-
-  // 3. Determine target model based on proxy mode
+  // 2. Determine target model based on proxy mode
   const targetModel = getTargetModel(model, isPrivateMode);
 
-  // 4. Validate model against whitelist
+  // 3. Validate model against whitelist
   if (!ALLOWED_MODELS.includes(targetModel)) {
     logger.warn(`Unauthorized model requested: ${targetModel}`);
     return { ok: false, error: 'Invalid or unauthorized model', statusCode: 400 };
   }
 
-  // 5. Build URL and Body
+  // 4. Serialize and validate size to prevent DoS (single serialization)
+  const serialization = serializeRequestBody(
+    contents,
+    generationConfig,
+    systemInstruction,
+    tools,
+    MAX_CONTENT_CHARS
+  );
+  
+  if (serialization.valid === false) {
+    logger.warn(`Serialization/size validation failed: ${serialization.error}`);
+    return { ok: false, error: serialization.error, statusCode: serialization.statusCode };
+  }
+
+  // 5. Build URL and return prepared request
   return {
     ok: true,
     targetUrl: buildGeminiUrl(targetModel),
     targetModel,
-    requestBody: JSON.stringify({ 
-      contents, 
-      generationConfig, 
-      systemInstruction, 
-      tools 
-    }),
+    requestBody: serialization.serialized,
   };
 }
 
+// Default timeout for Gemini API requests (60 seconds)
+const REQUEST_TIMEOUT_MS = 60000;
+
 /**
- * Executes a prepared Gemini API request
+ * Executes a prepared Gemini API request with timeout protection
  * @param url - Gemini API URL
  * @param body - Serialized request body
  * @param apiKey - Gemini API Key
+ * @param timeoutMs - Request timeout in milliseconds (default: 60s)
  * @returns Promise resolving to Response
  */
-export async function executeGeminiRequest(url: string, body: string, apiKey: string): Promise<Response> {
-  return fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey,
-    },
-    body,
-  });
+export async function executeGeminiRequest(
+  url: string, 
+  body: string, 
+  apiKey: string,
+  timeoutMs: number = REQUEST_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    return await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }

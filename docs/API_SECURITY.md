@@ -109,7 +109,9 @@ The Express server (`server/server.ts`) applies several security headers to prot
   
   > [!NOTE]  
   > **Automatic Detection:**  
-  > Production environment is auto-detected based on request origin/hostname. No need to manually set `NODE_ENV`!
+  > Production environment is auto-detected:
+  > - **Node.js (Cloud Run/Express):** Uses `NODE_ENV === 'production'`.
+  > - **Cloudflare Workers:** Checks the actual `request.url` against production domains.
   > 
   > Production domains are defined in `PRODUCTION_ORIGINS` in `shared/security/security.ts`:
   > - `https://gemini3-heavy-swarm.pages.dev`
