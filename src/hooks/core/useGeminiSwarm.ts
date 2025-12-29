@@ -51,8 +51,7 @@ export const useGeminiSwarm = () => {
     setMessages,
     currentWork,
     geminiServiceRef,
-    lastInput: orchestration.lastInput,
-    pauseResolverRef
+    lastInput: orchestration.lastInput
   });
 
   // 5. Unified API
@@ -75,6 +74,8 @@ export const useGeminiSwarm = () => {
     stopGeneration: orchestration.stopGeneration,
     retry: orchestration.retry,
     continueGeneration: orchestration.continueGeneration,
-    regenerateAgentResponse: regeneration.regenerateAgentResponse
+    // Bind pauseResolverRef to regenerateAgentResponse for cleaner API
+    regenerateAgentResponse: (messageId: string, stepId: import('@/types/steps').StepId, agentIndex: number) =>
+      regeneration.regenerateAgentResponse(messageId, stepId, agentIndex)
   };
 };

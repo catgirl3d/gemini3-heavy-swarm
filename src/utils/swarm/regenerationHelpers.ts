@@ -71,7 +71,7 @@ export function updateWorkForStep(
 }
 
 /**
- * Encapsulates the logic for updating messages and work-context during regeneration.
+ * Encapsulates the logic for updating messages during regeneration.
  * Used inside the onUpdate callback of regenerateResponse.
  * 
  * NOTE: Agent states are managed globally in Zustand store, not in Work object during regeneration.
@@ -86,7 +86,7 @@ export function calculateUpdatedStateForRegeneration(
   settings: AppSettings,
   isFirstChunk: boolean,
   onSynthesisStart?: () => void
-): { updatedMessages: Message[]; updatedWork: Work | undefined } {
+): Message[] {
   let targetIdx = messageIndex;
   let updatedMsgs = [...messages];
 
@@ -104,19 +104,10 @@ export function calculateUpdatedStateForRegeneration(
   const workToUse = msg?.work || workContext;
   
   if (msg && workToUse) {
-    // Update only the results (agentStates managed globally in Zustand)
+    // Update the work object in the message with new results
     const updatedWork = updateWorkForStep(workToUse, stepId, agentIndex, text, settings);
     updatedMsgs[targetIdx] = { ...msg, work: updatedWork };
   }
 
-  // 2. Handle Work context update (for currentWork)
-  let updatedWorkContext = workContext;
-  if (workContext) {
-    updatedWorkContext = updateWorkForStep(workContext, stepId, agentIndex, text, settings);
-  }
-
-  return { 
-    updatedMessages: updatedMsgs, 
-    updatedWork: updatedWorkContext 
-  };
+  return updatedMsgs;
 }

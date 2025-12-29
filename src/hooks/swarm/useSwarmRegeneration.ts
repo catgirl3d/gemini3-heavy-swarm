@@ -24,7 +24,6 @@ interface RegenerationDependencies {
   currentWork: Work | undefined;
   geminiServiceRef: RefObject<GeminiService>;
   lastInput: { text: string, image: string | null, imageFile: File | null } | null;
-  pauseResolverRef: import('react').MutableRefObject<(() => void) | null>;
 }
 
 export function useSwarmRegeneration({
@@ -34,8 +33,7 @@ export function useSwarmRegeneration({
   setMessages,
   currentWork,
   geminiServiceRef,
-  lastInput,
-  pauseResolverRef
+  lastInput
 }: RegenerationDependencies) {
 
   const controllersRef = useRef<Map<string, AbortController>>(new Map());
@@ -48,7 +46,12 @@ export function useSwarmRegeneration({
     };
   }, []);
 
-  const regenerateAgentResponse = async (messageId: string, stepId: StepId, agentIndex: number) => {
+  const regenerateAgentResponse = async (
+    messageId: string,
+    stepId: StepId,
+    agentIndex: number,
+    pauseResolverRef?: import('react').MutableRefObject<(() => void) | null>
+  ) => {
     regenLogger.info('regenerateAgentResponse START', { messageId, stepId, agentIndex });
     // Find the message by ID
     const messageIndex = messages.findIndex(m => m.id === messageId);
@@ -60,12 +63,15 @@ export function useSwarmRegeneration({
     const targetMessage = messages[messageIndex];
     
     // Regeneration preserves global flags to prevent UI remounting and state loss.
-
+    // Use message's work if available, otherwise fall back to currentWork for active sessions
     const baseWork = targetMessage?.work || currentWork;
     const workContext = baseWork ? cloneWork(baseWork) : undefined;
     
     if (!workContext) {
-      regenLogger.warn('No workContext, aborting regeneration');
+      regenLogger.warn('No workContext available for regeneration', { 
+        hasMessageWork: !!targetMessage?.work, 
+        hasCurrentWork: !!currentWork 
+      });
       return;
     }
 
@@ -114,11 +120,8 @@ export function useSwarmRegeneration({
       const userInput = triggeringUserMessage.parts.map(p => p.text).join(' ');
       const image = triggeringUserMessage.image || null;
       
-      // Use imageFile from lastInput only if it matches the current prompt (to avoid using wrong file for old messages)
-      let imageFile: File | null = null;
-      if (lastInput && lastInput.text === userInput && lastInput.image === image) {
-        imageFile = lastInput.imageFile;
-      }
+      // Use imageFile from lastInput only if it matches the current image
+      const imageFile = (lastInput?.image === image) ? lastInput.imageFile : null;
 
       if (!geminiServiceRef.current) {
         throw new Error('GeminiService not initialized');
@@ -138,7 +141,7 @@ export function useSwarmRegeneration({
         (text, isFirstChunk) => {
           const baseMessages = messagesRef.current || [];
           
-          const { updatedMessages } = calculateUpdatedStateForRegeneration(
+          const updatedMessages = calculateUpdatedStateForRegeneration(
             baseMessages,
             messageIndex,
             stepId,
@@ -173,7 +176,7 @@ export function useSwarmRegeneration({
       // Handle final result
       if (typeof result === 'object' && result !== null && 'sources' in result) {
          setMessages(prev => {
-           const workToUpdate = prev[messageIndex]?.work || workContext || currentWork;
+           const workToUpdate = prev[messageIndex]?.work || workContext;
            const updatedWork = workToUpdate ? (() => {
              const ensuredWork = withEnsuredResults(workToUpdate);
              return {
@@ -187,7 +190,7 @@ export function useSwarmRegeneration({
            const updated = updateTargetMessage(prev, messageIndex, stepId, {
              sources: (result as any).sources,
              work: updatedWork
-           }, { workContext, currentWork });
+           }, { workContext });
            
            return updated ?? prev;
          });
@@ -224,7 +227,7 @@ export function useSwarmRegeneration({
       
       // Update message with error
       setMessages(prev => {
-        const workToUpdate = prev[messageIndex]?.work || workContext || currentWork;
+        const workToUpdate = prev[messageIndex]?.work || workContext;
         let updatedWork = workToUpdate ? updateStepWithError(workToUpdate, stepId, agentIndex, errorMessage) : undefined;
         
         // FINAL SNAPSHOT: Save actual error state to work for history
@@ -242,7 +245,7 @@ export function useSwarmRegeneration({
           updates.parts = [{ text: errorText }];
         }
 
-        const updated = updateTargetMessage(prev, messageIndex, stepId, updates, { workContext, currentWork });
+        const updated = updateTargetMessage(prev, messageIndex, stepId, updates, { workContext });
         
         return updated ?? prev;
       });

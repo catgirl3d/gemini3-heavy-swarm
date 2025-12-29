@@ -13,7 +13,6 @@ export function updateTargetMessage<T extends Partial<Message>>(
   updates: T,
   options?: {
     workContext?: Work;
-    currentWork?: Work;
   }
 ): Message[] | null {
   const newMessages = [...messages];
@@ -31,8 +30,8 @@ export function updateTargetMessage<T extends Partial<Message>>(
   
   // Merge work if provided in updates
   let updatedWork = updates.work;
-  if (!updatedWork && (options?.workContext || options?.currentWork)) {
-    updatedWork = msg.work || options.workContext || options.currentWork;
+  if (!updatedWork && options?.workContext) {
+    updatedWork = msg.work || options.workContext;
   }
   
   // Apply updates

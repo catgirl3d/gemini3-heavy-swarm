@@ -75,11 +75,8 @@ export function useSwarmOrchestration({
     const userInput = triggeringUserMessage.parts.map(p => p.text).join(' ');
     const image = triggeringUserMessage.image || null;
     
-    // Use imageFile from lastInput if it matches
-    let imageFile: File | null = null;
-    if (lastInput && lastInput.text === userInput && lastInput.image === image) {
-      imageFile = lastInput.imageFile;
-    }
+    // Use imageFile from lastInput if it matches the current image
+    const imageFile = (lastInput?.image === image) ? lastInput.imageFile : null;
 
     logger.info('Resuming swarm execution', {
       messageId: lastModelMessage.id,
