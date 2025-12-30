@@ -9,8 +9,8 @@ import { handleSynthesisJump } from '@/utils/swarm/stepConstants';
 import {
   calculateUpdatedStateForRegeneration 
 } from '@/utils/swarm/regenerationHelpers';
-import { withEnsuredResults, updateStepWithError, cloneWork } from '@/utils/swarm/workHelpers';
-import { getFriendlyErrorMessage, getErrorLabel } from '@/services/swarm/steps/utils/errorUtils';
+import { withEnsuredResults, cloneWork } from '@/utils/swarm/workHelpers';
+import { getFriendlyErrorMessage } from '@/services/swarm/steps/utils/errorUtils';
 import { GeminiService } from '@/services/swarm/GeminiService';
 import { useAgentStore } from '@/stores/agentStore';
 
@@ -90,10 +90,6 @@ export function useSwarmRegeneration({
       }
     }
 
-    const syncStatus = (status: AgentState['status'], label: string) => {
-      useAgentStore.getState().updateAgent(stepId, agentIndex, status, label, messageId);
-    };
-
     const controllerKey = `${messageIndex}-${stepId}-${agentIndex}`;
     if (controllersRef.current.has(controllerKey)) {
       controllersRef.current.get(controllerKey)?.abort();
@@ -101,13 +97,9 @@ export function useSwarmRegeneration({
     const controller = new AbortController();
     controllersRef.current.set(controllerKey, controller);
 
-    try {      
-      const config = getStepConfig(stepId);
-      // For SYNTHESIS, don't set working immediately - SynthesisStep manages this
-      // to prevent premature card collapse. It will set waiting first, then working on first chunk.
-      if (stepId !== STEPS.SYNTHESIS) {
-        syncStatus('working', config.labels.working);
-      }
+    try {
+      // Steps now manage their own status lifecycle (working → done/error)
+      // No need to set 'working' here - Steps handle initialization themselves
       
       const history = messages.slice(0, messageIndex);
       
@@ -194,9 +186,9 @@ export function useSwarmRegeneration({
            
            return updated ?? prev;
          });
-      }
+       }
 
-      syncStatus('done', config.labels.done);
+      // Steps already set 'done' status - no need to duplicate here
       regenLogger.info('Regeneration SUCCESS', { stepId, agentIndex });
       controllersRef.current.delete(controllerKey);
       
@@ -212,28 +204,17 @@ export function useSwarmRegeneration({
       }
 
       regenLogger.error(`Regeneration failed for step ${stepId}, agent ${agentIndex}:`, error);
-      const errorLabel = getErrorLabel(error, 'Regeneration Failed');
       const errorMessage = getFriendlyErrorMessage(error);
       
-      // Update global state via syncStatus
-      regenLogger.debug('Updating agent to error status', { stepId, agentIndex, messageId, errorLabel });
-      syncStatus('error', errorLabel);
-      
-      // Verify the update happened
-      const updatedAgent = useAgentStore.getState().agents.find(
-        a => a.stepId === stepId && a.agentIndex === agentIndex && a.messageId === messageId
-      );
-      regenLogger.debug('Agent after error update:', updatedAgent);
-      
-      // Update message with error
+      // Steps already updated work.results and status - just save work snapshot and update message
       setMessages(prev => {
         const workToUpdate = prev[messageIndex]?.work || workContext;
-        let updatedWork = workToUpdate ? updateStepWithError(workToUpdate, stepId, agentIndex, errorMessage) : undefined;
         
-        // FINAL SNAPSHOT: Save actual error state to work for history
-        if (updatedWork) {
-          updatedWork = { ...updatedWork, agentStates: useAgentStore.getState().agents.filter(a => a.messageId === messageId) };
-        }
+        // Steps already updated work.results with error - just add agentStates snapshot
+        const updatedWork = workToUpdate ? {
+          ...workToUpdate,
+          agentStates: useAgentStore.getState().agents.filter(a => a.messageId === messageId)
+        } : undefined;
         
         const config = getStepConfig(stepId);
         const errorText = `[System: ${config.errorPrefix}. ${errorMessage}]`;

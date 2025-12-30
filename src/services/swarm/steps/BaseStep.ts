@@ -12,6 +12,7 @@ import { Logger } from '@shared/utils/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
 import { withRetry } from '@/utils/common/retryStrategy';
 import { useAgentStore } from '@/stores/agentStore';
+import { updateAgentStatus, updateAgentStatusIfChanged } from '@/utils/swarm/statusHelpers';
 
 export abstract class BaseStep implements StepDescriptor {
   abstract id: StepId;
@@ -152,23 +153,9 @@ export abstract class BaseStep implements StepDescriptor {
 
     // Optional UI updates
      if (options.statusMsg) {
-        const store = useAgentStore.getState();
         const targetIndex = index === -1 ? 0 : index;
-        const existing = store.agents.find(a => 
-            a.stepId === stepId && 
-            a.agentIndex === targetIndex && 
-            a.messageId === context.messageId
-        );
-        
-        if (!existing || existing.status !== 'working' || existing.label !== options.statusMsg) {
-             store.updateAgent(
-               stepId,
-               targetIndex,
-               'working',
-               options.statusMsg,
-               context.messageId
-             );
-        }
+        // Use conditional update to prevent redundant store updates during streaming
+        updateAgentStatusIfChanged(stepId, targetIndex, 'working', context.messageId, options.statusMsg);
      }
 
      // SYNC: Ensure work results are updated in the global store for live streaming visibility
@@ -212,12 +199,12 @@ export abstract class BaseStep implements StepDescriptor {
     // CRITICAL: Restore loading indicator when any retry starts
     useAgentStore.getState().setIsLoading(true);
 
-    useAgentStore.getState().updateAgent(
+    updateAgentStatus(
       this.id,
       index,
       nextStatus as any,
-      label,
-      context.messageId
+      context.messageId,
+      label
     );
 
     return updated;
@@ -239,12 +226,12 @@ export abstract class BaseStep implements StepDescriptor {
     
     // Initialize ALL agents in the store
     states.forEach((s, i) => {
-      useAgentStore.getState().updateAgent(
+      updateAgentStatus(
         this.id,
         i,
         'working',
-        config.labels.working,
         messageId,
+        config.labels.working,
         s.name
       );
     });
@@ -289,12 +276,12 @@ export abstract class BaseStep implements StepDescriptor {
         });
 
         // Update Store
-        useAgentStore.getState().updateAgent(
+        updateAgentStatus(
           this.id,
           i,
           'error',
-          errorLabel,
-          context.messageId
+          context.messageId,
+          errorLabel
         );
       }
     });
@@ -435,11 +422,10 @@ export abstract class BaseStep implements StepDescriptor {
 
       currentAgentStates = this.updateAgentStatus(currentAgentStates, i, 'done');
       
-      useAgentStore.getState().updateAgent(
+      updateAgentStatus(
         this.id,
         i,
         'done',
-        getStepConfig(this.id).labels.done,
         context.messageId
       );
 
@@ -585,7 +571,8 @@ export abstract class BaseStep implements StepDescriptor {
 
   /**
    * Shared regeneration logic for multi-agent steps (Initial, Refinement).
-   * Handles debug info capture, streaming, and retry progress updates.
+   * Handles complete lifecycle: status initialization, streaming, final status updates, and error handling.
+   * This method is fully self-contained - callers don't need to manage statuses externally.
    */
   protected async runAgentRegeneration(
     context: StepContext,
@@ -594,7 +581,7 @@ export abstract class BaseStep implements StepDescriptor {
     agentStates: AgentState[],
     tools?: Tool[]
   ): Promise<string> {
-    const { ai, settings, work, signal } = context;
+    const { ai, settings, work, signal, messageId } = context;
     if (!ai) throw new AppError("API Key not found", ErrorCode.INVALID_SETTINGS);
 
     const { systemInstruction, userTurn, mainChatHistory } = instruction;
@@ -610,40 +597,68 @@ export abstract class BaseStep implements StepDescriptor {
 
     const config = getStepConfig(this.id);
     
-    const { text: fullText, usage: finalUsage } = await this.runModelStream(
-      {
-        ai, settings, model: settings.model,
-        contents: [...mainChatHistory, userTurn],
-        systemInstruction,
-        tools: tools ?? [{ googleSearch: {} }],
-        signal,
-        agentIndex,
-      },
-      {
-        onChunk: (text, thought, usage) => {
-          this.handleStreamChunk(context, agentIndex, text, thought, usage, {
-            isFirstChunk: false,
-            streamToMessage: true,
-            agentStates: currentAgentStates,
-            statusMsg: config.progressMsg // Sync status/thoughts/usage in store
-          });
+    // Set initial 'working' status - Step manages its own lifecycle
+    updateAgentStatus(this.id, agentIndex, 'working', messageId);
+    
+    try {
+      const { text: fullText, usage: finalUsage } = await this.runModelStream(
+        {
+          ai, settings, model: settings.model,
+          contents: [...mainChatHistory, userTurn],
+          systemInstruction,
+          tools: tools ?? [{ googleSearch: {} }],
+          signal,
+          agentIndex,
         },
-        onRetry: (attempt) => {
-          currentAgentStates = this.handleRetryProgress(context, agentIndex, attempt, currentAgentStates);
+        {
+          onChunk: (text, thought, usage) => {
+            this.handleStreamChunk(context, agentIndex, text, thought, usage, {
+              isFirstChunk: false,
+              streamToMessage: true,
+              agentStates: currentAgentStates,
+              statusMsg: config.progressMsg // Sync status/thoughts/usage in store
+            });
+          },
+          onRetry: (attempt) => {
+            currentAgentStates = this.handleRetryProgress(context, agentIndex, attempt, currentAgentStates);
+          }
         }
-      }
-    );
-    
-    // CRITICAL: Save final usage after streaming completes
-    // This ensures token usage displays correctly for regenerated agents
-    if (finalUsage) {
-      this.ensureStepUsage(work, this.id, settings.numAgents);
-      (work.results[`${this.id}_usage`] as any[])[agentIndex] = finalUsage;
+      );
       
-      // Also update the store for immediate UI update
+      // CRITICAL: Save final usage after streaming completes
+      // This ensures token usage displays correctly for regenerated agents
+      if (finalUsage) {
+        this.ensureStepUsage(work, this.id, settings.numAgents);
+        (work.results[`${this.id}_usage`] as any[])[agentIndex] = finalUsage;
+        
+        // Also update the store for immediate UI update
+        useAgentStore.getState().setCurrentWork({ ...work });
+      }
+      
+      // Set final 'done' status after successful completion
+      updateAgentStatus(this.id, agentIndex, 'done', messageId);
+      
+      return fullText;
+    } catch (error) {
+      // Step fully owns error handling - set status AND update work.results
+      const errorLabel = this.getErrorLabel(error, config.labels.error);
+      updateAgentStatus(this.id, agentIndex, 'error', messageId, errorLabel);
+      
+      // Update work.results with error information
+      this.ensureResults(work);
+      const currentResults = Array.isArray(work.results[this.id]) 
+        ? [...(work.results[this.id] as string[])]
+        : Array(settings.numAgents).fill('');
+      
+      // Preserve any partial text that was streamed before error
+      currentResults[agentIndex] = (currentResults[agentIndex] || '') + this.formatExecuteError(error);
+      work.results[this.id] = currentResults;
+      
+      // Update store with error state
       useAgentStore.getState().setCurrentWork({ ...work });
+      
+      // Re-throw to let caller handle additional UI updates (e.g., message parts)
+      throw error;
     }
-    
-    return fullText;
   }
 }

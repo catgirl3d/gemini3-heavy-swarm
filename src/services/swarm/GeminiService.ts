@@ -92,10 +92,13 @@ export class GeminiService {
     const finalWork = await runner.run(context, pauseResolverRef, onPause, onStatusUpdate);
 
     // Extract final result from synthesis step
-    const synthesisResult = finalWork.results?.[STEPS.SYNTHESIS] as { text?: string; sources?: Source[] } | undefined;
+    const synthesisResult = finalWork.results?.[STEPS.SYNTHESIS] as { text?: string; sources?: Source[]; error?: boolean } | undefined;
+    
+    // If there was an error in synthesis, we don't want to show partial/error text as final result
+    const finalText = synthesisResult?.error ? '' : (synthesisResult?.text || '');
     
     return {
-      text: synthesisResult?.text || '',
+      text: finalText,
       sources: synthesisResult?.sources,
       work: finalWork
     };

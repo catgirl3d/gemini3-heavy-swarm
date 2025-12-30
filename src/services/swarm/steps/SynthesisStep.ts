@@ -7,6 +7,7 @@ import { getStepResults } from '@/utils/swarm/workHelpers';
 import { hasStepContentError, getStepConfig } from '@/utils/swarm/stepConstants';
 import { Logger } from '@shared/utils/logger';
 import { useAgentStore } from '@/stores/agentStore';
+import { updateAgentStatus } from '@/utils/swarm/statusHelpers';
 
 export class SynthesisStep extends BaseStep {
   id: StepId = STEPS.SYNTHESIS;
@@ -65,9 +66,9 @@ export class SynthesisStep extends BaseStep {
     
     // Initialize ALL agents in the store
     refinedAgents.forEach((s, i) => {
-      useAgentStore.getState().updateAgent(STEPS.INITIAL, i, 'done', getStepConfig(STEPS.INITIAL).labels.done, messageId, s.name);
+      updateAgentStatus(STEPS.INITIAL, i, 'done', messageId, getStepConfig(STEPS.INITIAL).labels.done, s.name);
     });
-    useAgentStore.getState().updateAgent(STEPS.SYNTHESIS, 0, synthesizerState.status, synthesizerState.label, messageId, synthesizerState.name);
+    updateAgentStatus(STEPS.SYNTHESIS, 0, synthesizerState.status, messageId, synthesizerState.label, synthesizerState.name);
 
     try {
       const { systemInstruction, synthesizerTurn, mainChatHistory } = this.prepareSynthesis(context, refinedDrafts);
@@ -96,7 +97,7 @@ export class SynthesisStep extends BaseStep {
                 messageId
               });
               
-              useAgentStore.getState().updateAgent(STEPS.SYNTHESIS, 0, 'working', config.labels.working, messageId);
+              updateAgentStatus(STEPS.SYNTHESIS, 0, 'working', messageId, config.labels.working);
             }
 
             this.handleStreamChunk(context, -1, text, thought, usage, {
@@ -136,7 +137,7 @@ export class SynthesisStep extends BaseStep {
         messageId
       });
       
-      useAgentStore.getState().updateAgent(STEPS.SYNTHESIS, 0, 'done', config.labels.done, messageId);
+      updateAgentStatus(STEPS.SYNTHESIS, 0, 'done', messageId, config.labels.done);
 
       return { text: finalResponseText, sources };
     } catch (error) {
@@ -150,9 +151,12 @@ export class SynthesisStep extends BaseStep {
       const errorLabel = this.getErrorLabel(error, config.labels.error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       
-      // Save error info to results for UI display
+      // Save error info for UI display in ShowWork card, but don't pollute the main text
+      // Preservation: if we had some partial text before error, keep it.
+      const currentText = (work.results[STEPS.SYNTHESIS] as any)?.text || '';
+      
       work.results[STEPS.SYNTHESIS] = { 
-        text: this.formatExecuteError(error),
+        text: currentText, // Don't add [System: Synthesis failed...] here
         error: true,
         errorMessage 
       };
@@ -164,7 +168,7 @@ export class SynthesisStep extends BaseStep {
         messageId
       });
       
-      useAgentStore.getState().updateAgent(STEPS.SYNTHESIS, 0, 'error', errorLabel, messageId);
+      updateAgentStatus(STEPS.SYNTHESIS, 0, 'error', messageId, errorLabel);
       
       throw error;
     }
