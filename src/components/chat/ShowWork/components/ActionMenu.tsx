@@ -6,6 +6,7 @@ interface Action {
   icon: ReactNode;
   onClick: () => void;
   danger?: boolean;
+  disabled?: boolean;
 }
 
 export const ActionMenu: FC<{ actions: Action[] }> = ({ actions }) => {
@@ -47,14 +48,16 @@ export const ActionMenu: FC<{ actions: Action[] }> = ({ actions }) => {
           {actions.map((action) => (
             <button
               key={action.label}
-              className={`action-menu-item ${action.danger ? 'danger' : ''}`}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                action.onClick();
-                setIsOpen(false);
-              }}
-            >
+               className={`action-menu-item ${action.danger ? 'danger' : ''}`}
+               disabled={action.disabled}
+               onClick={(e) => {
+                 if (action.disabled) return;
+                 e.preventDefault();
+                 e.stopPropagation();
+                 action.onClick();
+                 setIsOpen(false);
+               }}
+             >
               <span className="action-icon">{action.icon}</span>
               {action.label}
             </button>

@@ -5,7 +5,7 @@ import { AgentState, Source, TokenUsage } from '@/types';
 import { createAgentStates, updateAgentState, updateAgentStateById } from './utils/agentStateUtils';
 import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from './utils/devModeUtils';
 import { extractTextFromParts, extractTokenUsage } from './utils/streamUtils';
-import { getErrorLabel, checkGlobalRateLimitFailure, checkGlobalStepFailure } from './utils/errorUtils';
+import { getErrorLabel, checkGlobalRateLimitFailure, checkGlobalStepFailure, getFriendlyErrorMessage } from './utils/errorUtils';
 import { getGenerationConfig } from '@/services/proxy/geminiConfig';
 import { GroundingChunk } from '@google/genai';
 import { Logger } from '@shared/utils/logger';
@@ -58,14 +58,11 @@ export abstract class BaseStep implements StepDescriptor {
   protected extractStreamContent = extractTextFromParts;
   protected extractTokenUsage = extractTokenUsage;
   protected getErrorLabel = getErrorLabel;
+  protected getFriendlyErrorMessage = getFriendlyErrorMessage;
   protected checkGlobalRateLimitFailure = checkGlobalRateLimitFailure;
   protected checkGlobalStepFailure = checkGlobalStepFailure;
 
-  protected formatExecuteError(reason: unknown): string {
-    const config = getStepConfig(this.id);
-    const message = reason instanceof Error ? reason.message : 'Unknown error';
-    return `\n\n[System: ${config.errorPrefix}. ${message}]`;
-  }
+
 
   /**
    * Ensures work.results is initialized. Use this to avoid repeated null checks.
@@ -265,7 +262,7 @@ export abstract class BaseStep implements StepDescriptor {
           hasContent: (results[i]?.length || 0) > 0
         });
         
-        results[i] += this.formatExecuteError(reason);
+
         
         const errorLabel = this.getErrorLabel(reason, getStepConfig(this.id).labels.error);
         updatedStates = this.updateAgentState(updatedStates, i, { 
@@ -302,15 +299,18 @@ export abstract class BaseStep implements StepDescriptor {
     
     if (this.checkGlobalRateLimitFailure(failures, settings.numAgents)) {
         work.results[this.id] = [...results];
+        useAgentStore.getState().setCurrentWork({ ...work });
         throw failures[0];
     }
 
     if (this.checkGlobalStepFailure(failures, settings.numAgents)) {
       work.results[this.id] = [...results];
+      useAgentStore.getState().setCurrentWork({ ...work });
       throw failures[0];
     }
 
     work.results[this.id] = [...results];
+    useAgentStore.getState().setCurrentWork({ ...work });
     
     return results;
   }
@@ -651,7 +651,7 @@ export abstract class BaseStep implements StepDescriptor {
         : Array(settings.numAgents).fill('');
       
       // Preserve any partial text that was streamed before error
-      currentResults[agentIndex] = (currentResults[agentIndex] || '') + this.formatExecuteError(error);
+      // Preserve any partial text that was streamed before error
       work.results[this.id] = currentResults;
       
       // Update store with error state

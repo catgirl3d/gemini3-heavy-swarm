@@ -15,8 +15,7 @@ export function processSynthesisChunkUpdate(
   workContext: Work | undefined,
   text: string,
   settings: AppSettings,
-  isFirstChunk: boolean,
-  onSynthesisStart?: () => void
+  isFirstChunk: boolean
 ): { updatedMessages: Message[]; targetIndex: number } {
   const logger = new Logger('Synthesis', settings.debugMode);
   logger.debug('processSynthesisChunkUpdate:', { textLength: text.length, messageIndex });
@@ -28,14 +27,7 @@ export function processSynthesisChunkUpdate(
     newMessages, messageIndex, workContext, text, settings
   );
   
-  if (onSynthesisStart && isFirstChunk) {
-    logger.debug('First chunk detected - triggering onSynthesisStart (hiding loading UI)');
-    /**
-     * Trigger the 'jump' side-effect in the UI (e.g., hiding cards).
-     * This is called only on the first chunk to ensure the transition happens exactly once.
-     */
-    onSynthesisStart();
-  }
+
 
   let msg = foundMsg;
   let targetIndex = foundIndex;
@@ -84,16 +76,20 @@ export function calculateUpdatedStateForRegeneration(
   workContext: Work | undefined,
   text: string,
   settings: AppSettings,
-  isFirstChunk: boolean,
-  onSynthesisStart?: () => void
+  isFirstChunk: boolean
 ): Message[] {
   let targetIdx = messageIndex;
   let updatedMsgs = [...messages];
+  const logger = new Logger('RegenUpdate', settings.debugMode);
+
+  if (isFirstChunk) {
+    logger.debug('calculateUpdatedState: START', { stepId, agentIndex, messageIndex, hasWorkContext: !!workContext });
+  }
 
   // 1. Handle Message Updates
   if (stepId === STEPS.SYNTHESIS) {
     const { updatedMessages, targetIndex } = processSynthesisChunkUpdate(
-      messages, messageIndex, workContext, text, settings, isFirstChunk, onSynthesisStart
+      messages, messageIndex, workContext, text, settings, isFirstChunk
     );
     updatedMsgs = updatedMessages;
     targetIdx = targetIndex;
@@ -107,6 +103,12 @@ export function calculateUpdatedStateForRegeneration(
     // Update the work object in the message with new results
     const updatedWork = updateWorkForStep(workToUse, stepId, agentIndex, text, settings);
     updatedMsgs[targetIdx] = { ...msg, work: updatedWork };
+  } else if (isFirstChunk) {
+    logger.warn('calculateUpdatedState: Missing message or work', { 
+        hasMsg: !!msg, 
+        hasWorkToUse: !!workToUse, 
+        targetIdx 
+    });
   }
 
   return updatedMsgs;

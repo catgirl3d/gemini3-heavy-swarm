@@ -50,6 +50,7 @@ export const useGeminiSwarm = () => {
     messagesRef,
     setMessages,
     currentWork,
+    currentMessageId,
     geminiServiceRef,
     lastInput: orchestration.lastInput
   });

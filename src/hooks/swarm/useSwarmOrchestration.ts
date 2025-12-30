@@ -198,9 +198,7 @@ export function useSwarmOrchestration({
         historyForSwarm,
         modelMessageId,
         (text, isFirstChunk) => {
-          if (isFirstChunk) {
-            handleSynthesisJump(useAgentStore.getState().setIsLoading, useAgentStore.getState().setIsPaused);
-          }
+          // Message update callback - just update the message text
           setMessages(prev => {
             const newMessages = [...prev];
             const targetIndex = newMessages.findIndex(m => m.id === modelMessageId);
@@ -220,6 +218,10 @@ export function useSwarmOrchestration({
              useAgentStore.getState().setLoadingStatus('Paused. Waiting for user confirmation...');
         },
         useAgentStore.getState().setLoadingStatus, // onStatusUpdate: restore high-level status updates (e.g. "Initializing agents...")
+        () => {
+          // onSynthesisJump: Called when synthesis step starts streaming
+          handleSynthesisJump(useAgentStore.getState().setIsLoading, useAgentStore.getState().setIsPaused);
+        },
         existingWork
       );
 

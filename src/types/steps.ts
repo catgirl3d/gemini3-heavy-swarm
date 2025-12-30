@@ -53,6 +53,14 @@ export interface StepContext {
    */
   onMessageUpdate: (text: string, isFirstChunk: boolean) => void;
   
+  /**
+   * Optional: Called when synthesis step receives its first text chunk.
+   * Triggers UI updates like hiding loading indicators and unpausing.
+   * Note: Card collapse is handled automatically by ShowWork components 
+   * reacting to the synthesizer agent status change.
+   */
+  onSynthesisJump?: () => void;
+  
   // Signal to abort execution
   signal: AbortSignal;
 

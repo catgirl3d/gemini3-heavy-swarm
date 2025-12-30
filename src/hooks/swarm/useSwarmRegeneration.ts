@@ -5,7 +5,7 @@ import { Logger } from '@shared/utils/logger';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { getMissingAgentsForMessage } from '@/utils/swarm/agentHelpers';
 import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
-import { handleSynthesisJump } from '@/utils/swarm/stepConstants';
+
 import {
   calculateUpdatedStateForRegeneration 
 } from '@/utils/swarm/regenerationHelpers';
@@ -22,6 +22,7 @@ interface RegenerationDependencies {
   messagesRef: RefObject<Message[]>;
   setMessages: Dispatch<SetStateAction<Message[]>>;
   currentWork: Work | undefined;
+  currentMessageId: string | undefined;
   geminiServiceRef: RefObject<GeminiService>;
   lastInput: { text: string, image: string | null, imageFile: File | null } | null;
 }
@@ -32,17 +33,20 @@ export function useSwarmRegeneration({
   messagesRef,
   setMessages,
   currentWork,
+  currentMessageId,
   geminiServiceRef,
   lastInput
 }: RegenerationDependencies) {
 
   const controllersRef = useRef<Map<string, AbortController>>(new Map());
+  const activeRegenerationsRef = useRef<Set<string>>(new Set());
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       controllersRef.current.forEach(c => c.abort());
       controllersRef.current.clear();
+      activeRegenerationsRef.current.clear();
     };
   }, []);
 
@@ -53,25 +57,53 @@ export function useSwarmRegeneration({
     pauseResolverRef?: import('react').MutableRefObject<(() => void) | null>
   ) => {
     regenLogger.info('regenerateAgentResponse START', { messageId, stepId, agentIndex });
-    // Find the message by ID
-    const messageIndex = messages.findIndex(m => m.id === messageId);
+    
+    // FIX: Use messagesRef to avoid stale closure over messages array
+    const currentMessages = messagesRef.current || messages;
+    
+    // PROTECTION: Prevent parallel regenerations of the same agent
+    const regenerationKey = `${messageId}-${stepId}-${agentIndex}`;
+    if (activeRegenerationsRef.current.has(regenerationKey)) {
+      regenLogger.warn('Regeneration already in progress - aborting previous', { regenerationKey });
+      
+      // Abort the existing controller
+      const existingIndex = currentMessages.findIndex(m => m.id === messageId);
+      if (existingIndex !== -1) {
+        const existingControllerKey = `${existingIndex}-${stepId}-${agentIndex}`;
+        controllersRef.current.get(existingControllerKey)?.abort();
+        controllersRef.current.delete(existingControllerKey);
+      }
+      
+      // Small delay to allow cleanup of previous stream
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    // Mark as active
+    activeRegenerationsRef.current.add(regenerationKey);
+    
+    const messageIndex = currentMessages.findIndex(m => m.id === messageId);
+    
     if (messageIndex === -1) {
-      regenLogger.warn('Message not found for regeneration', { messageId, messagesLength: messages.length });
+      regenLogger.warn('Message not found for regeneration', { messageId, messagesLength: currentMessages.length });
+      activeRegenerationsRef.current.delete(regenerationKey);
       return;
     }
 
-    const targetMessage = messages[messageIndex];
+    const targetMessage = currentMessages[messageIndex];
     
     // Regeneration preserves global flags to prevent UI remounting and state loss.
-    // Use message's work if available, otherwise fall back to currentWork for active sessions
-    const baseWork = targetMessage?.work || currentWork;
+    // Use message's work if available. Fallback to currentWork ONLY if it belongs to the same message.
+    const baseWork = targetMessage?.work || (currentMessageId === messageId ? currentWork : undefined);
     const workContext = baseWork ? cloneWork(baseWork) : undefined;
     
     if (!workContext) {
-      regenLogger.warn('No workContext available for regeneration', { 
-        hasMessageWork: !!targetMessage?.work, 
-        hasCurrentWork: !!currentWork 
-      });
+      const errorMsg = `Cannot regenerate: No work context for message ${messageId}. ` +
+        `Source: message.work=${!!targetMessage?.work}, currentWork=${!!currentWork}, ` +
+        `currentMessageId match=${currentMessageId === messageId}`;
+      
+      regenLogger.error(errorMsg);
+      useAgentStore.getState().setError('Cannot regenerate this message. Please try again.');
+      activeRegenerationsRef.current.delete(regenerationKey);
       return;
     }
 
@@ -90,18 +122,17 @@ export function useSwarmRegeneration({
       }
     }
 
-    const controllerKey = `${messageIndex}-${stepId}-${agentIndex}`;
-    if (controllersRef.current.has(controllerKey)) {
-      controllersRef.current.get(controllerKey)?.abort();
-    }
+    // Create AbortController for this regeneration
     const controller = new AbortController();
+    const controllerKey = `${messageIndex}-${stepId}-${agentIndex}`;
     controllersRef.current.set(controllerKey, controller);
 
     try {
       // Steps now manage their own status lifecycle (working → done/error)
       // No need to set 'working' here - Steps handle initialization themselves
       
-      const history = messages.slice(0, messageIndex);
+      // FIX: Use currentMessages from messagesRef, not stale closure
+      const history = currentMessages.slice(0, messageIndex);
       
       // Find the user message that triggered this model response
       const triggeringUserMessage = [...history].reverse().find(m => m.role === 'user');
@@ -133,6 +164,7 @@ export function useSwarmRegeneration({
         (text, isFirstChunk) => {
           const baseMessages = messagesRef.current || [];
           
+          // No synthesis-specific logic needed - handled by SynthesisStep via onSynthesisJump callback
           const updatedMessages = calculateUpdatedStateForRegeneration(
             baseMessages,
             messageIndex,
@@ -141,18 +173,7 @@ export function useSwarmRegeneration({
             workContext,
             text,
             settings,
-            isFirstChunk,
-            () => {
-              /**
-               * SYNTHESIS JUMP BEHAVIOR
-               * When first chunk arrives, hide loading indicators.
-               * Card collapse is handled automatically by ShowWork observing the agent status
-               * change that happened inside SynthesisStep.ts.
-               */
-              if (stepId === STEPS.SYNTHESIS) {
-                handleSynthesisJump(useAgentStore.getState().setIsLoading, useAgentStore.getState().setIsPaused);
-              }
-            }
+            isFirstChunk
           );
 
           setMessages(updatedMessages);
@@ -162,6 +183,11 @@ export function useSwarmRegeneration({
         () => {
           useAgentStore.getState().setIsPaused(true);
           useAgentStore.getState().setLoadingStatus('Paused. Waiting for user confirmation...');
+        },
+        () => {
+          // Pass synthesis jump callback - invoked by SynthesisStep when it starts streaming
+          useAgentStore.getState().setIsLoading(false);
+          useAgentStore.getState().setIsPaused(false);
         }
       );
 
@@ -190,6 +216,9 @@ export function useSwarmRegeneration({
 
       // Steps already set 'done' status - no need to duplicate here
       regenLogger.info('Regeneration SUCCESS', { stepId, agentIndex });
+      
+      // Cleanup tracking
+      activeRegenerationsRef.current.delete(regenerationKey);
       controllersRef.current.delete(controllerKey);
       
     } catch (error) {
@@ -198,7 +227,12 @@ export function useSwarmRegeneration({
         (error instanceof Error && error.message === 'Aborted') ||
         (error instanceof DOMException && error.name === 'AbortError')
       ) {
-        regenLogger.info('Regeneration aborted by user', { stepId, agentIndex });
+        regenLogger.info('Regeneration aborted by user - cleanup', { stepId, agentIndex });
+        
+        // Simple cleanup: just clear loading state
+        useAgentStore.getState().setIsLoading(false);
+        
+        activeRegenerationsRef.current.delete(regenerationKey);
         controllersRef.current.delete(controllerKey);
         return;
       }
@@ -216,21 +250,18 @@ export function useSwarmRegeneration({
           agentStates: useAgentStore.getState().agents.filter(a => a.messageId === messageId)
         } : undefined;
         
-        const config = getStepConfig(stepId);
-        const errorText = `[System: ${config.errorPrefix}. ${errorMessage}]`;
-        
-        // CRITICAL: Only update message parts (the main chat text) if we are regenerating the synthesis step.
-        // For initial/refinement steps, we only update the work object so the agent card shows the error.
+        // We no longer update message parts with [System: ...] error text to avoid polluting the main UI.
+        // The error is already saved in work.results[stepId] and will be shown in the "Show Work" card.
         const updates: any = { work: updatedWork };
-        if (stepId === STEPS.SYNTHESIS) {
-          updates.parts = [{ text: errorText }];
-        }
 
         const updated = updateTargetMessage(prev, messageIndex, stepId, updates, { workContext });
         
         return updated ?? prev;
       });
       
+      // Cleanup tracking on error (but keep error updates in messages)
+      // Steps already updated work.results with error info
+      activeRegenerationsRef.current.delete(regenerationKey);
       controllersRef.current.delete(controllerKey);
       // DON'T clear currentMessageId here - leave it set so error state remains visible
       // It will be cleared when next regeneration/orchestration starts

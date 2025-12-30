@@ -47,6 +47,7 @@ export class GeminiService {
     pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>,
     onPause?: () => void,
     onStatusUpdate?: (status: string) => void,
+    onSynthesisJump?: () => void,
     existingWork?: Work
   ): Promise<{ text: string; sources?: Source[]; work: Work }> {
     
@@ -84,6 +85,7 @@ export class GeminiService {
       history,
       work: liveWork,
       onMessageUpdate,
+      onSynthesisJump,
       signal,
       messageId
     };
@@ -118,7 +120,8 @@ export class GeminiService {
     onUpdate: (text: string, isFirstChunk: boolean) => void,
     signal: AbortSignal,
     pauseResolverRef?: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>,
-    onPause?: () => void
+    onPause?: () => void,
+    onSynthesisJump?: () => void
   ): Promise<string | { text: string; sources?: Source[] }> {
     // Ensure AI client is updated with the latest key from settings
     this.initAiClient(settings.apiKey);
@@ -145,6 +148,7 @@ export class GeminiService {
         history,
         work: workContext,
         onMessageUpdate: (text, isFirstChunk) => onUpdate(text, isFirstChunk), // Map message update to the callback
+        onSynthesisJump,
         signal,
         messageId,
         pauseResolverRef,

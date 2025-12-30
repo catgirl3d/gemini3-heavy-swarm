@@ -211,7 +211,7 @@ const WorkCardComponent: FC<WorkCardProps> = ({
         icon: <DownloadIcon />,
         onClick: () => downloadContent(downloadFilename, content)
     }] : []),
-    ...(canRegenerate ? [{
+    ...(canRegenerate && status !== 'working' ? [{
         label: status === 'error' ? 'Retry' : 'Regenerate',
         icon: <RegenerateIcon />,
         onClick: handleRegenerate,

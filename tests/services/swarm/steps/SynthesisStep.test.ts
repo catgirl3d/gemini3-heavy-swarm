@@ -118,9 +118,10 @@ describe('SynthesisStep', () => {
     expect(updateAgentMock).toHaveBeenCalledWith(
         'synthesis_step', 
         0, 
-        'working', 
-        'Synthesis Progress', 
-        'msg-123'
+        'working',
+        'Synthesis Progress',
+        'msg-123',
+        undefined
     );
   });
 

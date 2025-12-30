@@ -86,6 +86,20 @@ export function getSynthesisResult(work: Work): { text?: string; error?: boolean
 }
 
 /**
+ * Safely extracts synthesis error message.
+ *
+ * @param work - The Work object containing synthesis results
+ * @returns The synthesis error message, or null if not available.
+ */
+export function getSynthesisErrorMessage(work: Work): string | null {
+  const raw = work.results?.[STEPS.SYNTHESIS as keyof NonNullable<Work['results']>];
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'errorMessage' in raw) {
+    return (raw as any).errorMessage as string;
+  }
+  return null;
+}
+
+/**
  * Returns a Work object with guaranteed initialized results.
  * Pure function - does not mutate the input.
  * 

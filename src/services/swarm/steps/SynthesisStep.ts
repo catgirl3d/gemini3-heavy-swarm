@@ -98,6 +98,14 @@ export class SynthesisStep extends BaseStep {
               });
               
               updateAgentStatus(STEPS.SYNTHESIS, 0, 'working', messageId, config.labels.working);
+              
+              /**
+               * SYNTHESIS JUMP BEHAVIOR
+               * When first chunk arrives, we trigger onSynthesisJump to hide loading indicators.
+               * Card collapse is handled automatically by ShowWork observing the agent status
+               * change (waiting -> working) that we just performed above.
+               */
+              context.onSynthesisJump?.();
             }
 
             this.handleStreamChunk(context, -1, text, thought, usage, {
@@ -149,7 +157,7 @@ export class SynthesisStep extends BaseStep {
       
       // Determine appropriate error label using BaseStep utility
       const errorLabel = this.getErrorLabel(error, config.labels.error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = this.getFriendlyErrorMessage(error);
       
       // Save error info for UI display in ShowWork card, but don't pollute the main text
       // Preservation: if we had some partial text before error, keep it.
@@ -169,6 +177,9 @@ export class SynthesisStep extends BaseStep {
       });
       
       updateAgentStatus(STEPS.SYNTHESIS, 0, 'error', messageId, errorLabel);
+      
+      // SYNC: Ensure work results (including error flag) are updated in the global store
+      useAgentStore.getState().setCurrentWork({ ...work });
       
       throw error;
     }
