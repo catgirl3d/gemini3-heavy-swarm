@@ -1,11 +1,11 @@
 import { Content } from '@google/genai';
 import { StepContext, StepId, STEPS } from '@/types/steps';
-import { AgentState } from '@/types';
+import { AgentState, Work } from '@/types';
 import { prepareGeminiContent } from '@/services/swarm/contentUtils';
 import { getAgentRole } from '@/utils/chat/roleUtils';
 import { BaseStep } from './BaseStep';
 import { getStepResults } from '@/utils/swarm/workHelpers';
-import { getStepConfig, hasStepContentError } from '@/utils/swarm/stepConstants';
+import { getStepConfig } from '@/utils/swarm/stepConstants';
 
 export class RefinementStep extends BaseStep {
   id: StepId = STEPS.REFINEMENT;
@@ -17,20 +17,25 @@ export class RefinementStep extends BaseStep {
   };
 
   async execute(context: StepContext): Promise<string[]> {
-    const { work } = context;
+    const { work, settings } = context;
     const initialDrafts = getStepResults(work, STEPS.INITIAL);
     
     if (initialDrafts.length === 0) {
       throw new Error('Cannot run refinement step without initial drafts');
     }
 
+    // Check for existing results to avoid infinite error loops
+    const agentStates = work.agentStates || [];
+    const hasPriorAttempt = agentStates.some(a => a.stepId === STEPS.REFINEMENT && a.status !== 'waiting');
+
     return this.executeMultiAgent(context, {
       prepareAgent: (i) => this.prepareRefinement(context, i, initialDrafts as string[]),
-      tools: [{ googleSearch: {} }]
+      tools: [{ googleSearch: {} }],
+      simulateError: hasPriorAttempt ? undefined : settings.simulateRefinementError
     });
   }
 
-  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<string> {
+  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<{ text: string; work: Work }> {
     const { work } = context;
 
     const initialDrafts = getStepResults(work, STEPS.INITIAL);
@@ -51,14 +56,13 @@ export class RefinementStep extends BaseStep {
     const peerDrafts = initialDrafts
       .map((text: string, i: number) => ({ text, id: i + 1 }))
       .filter((_, i) => i !== index)
-      .filter((a) => !hasStepContentError(a.text, STEPS.INITIAL))
+      .filter((a) => a.text && a.text.trim().length > 0) // Filter out empty drafts (waiting or errors)
       .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
       .join('\n\n');
 
-    // Validate my draft. If it's an error, use empty string (no previous step before Initial)
+    // Validate my draft. If it's empty (error/waiting), use empty string
     const rawMyDraft = initialDrafts[index] ?? '';
-    const myDraftHasError = hasStepContentError(rawMyDraft, STEPS.INITIAL);
-    const myDraftForRefinement = myDraftHasError ? '' : rawMyDraft;
+    const myDraftForRefinement = rawMyDraft;
 
     const refinementContext = `
 # INPUT DATA

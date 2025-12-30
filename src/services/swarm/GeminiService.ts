@@ -122,7 +122,7 @@ export class GeminiService {
     pauseResolverRef?: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>,
     onPause?: () => void,
     onSynthesisJump?: () => void
-  ): Promise<string | { text: string; sources?: Source[] }> {
+  ): Promise<{ text: string; sources?: Source[]; work: Work }> {
     // Ensure AI client is updated with the latest key from settings
     this.initAiClient(settings.apiKey);
 
@@ -155,7 +155,7 @@ export class GeminiService {
         onPause
     };
 
-    return step.regenerate(context, agentIndex, agentStates) as Promise<string | { text: string; sources?: Source[] }>;
+    return step.regenerate(context, agentIndex, agentStates) as Promise<{ text: string; sources?: Source[]; work: Work }>;
   }
 
   private initAiClient(providedKey?: string) {

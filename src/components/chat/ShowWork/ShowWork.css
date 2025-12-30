@@ -523,3 +523,16 @@
   line-height: 1.5;
   max-width: 280px;
 }
+
+.pending-work, .empty-work {
+  padding: 1.5rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.empty-work {
+  color: var(--text-secondary);
+  opacity: 0.7;
+}

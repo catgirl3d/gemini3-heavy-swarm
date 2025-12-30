@@ -89,8 +89,11 @@ export function useSwarmOrchestration({
 
   const stopGeneration = () => {
     logger.debug('stopGeneration called');
-    mainAbort.abort();
-    regenAbort.abort();
+    
+    // Centralized abort - stops ALL active processes (main + regenerations)
+    useAgentStore.getState().abortAll();
+    
+    // Clean up UI state
     useAgentStore.getState().setIsLoading(false);
     useAgentStore.getState().setIsPaused(false);
     useAgentStore.getState().setCurrentMessageId(undefined);
@@ -158,7 +161,13 @@ export function useSwarmOrchestration({
     // INITIALIZATION: Use the store directly
     if (existingWork && existingWork.agentStates) {
       // For resume, restore existing agent states to the store
-      useAgentStore.getState().hydrate(existingWork.agentStates);
+      // CUpdate messageId for reused agents to match the new retry message
+      // This ensures components like ShowWork can find the agents when filtering by the new messageId.
+      const rehydratedAgents = existingWork.agentStates.map(a => ({
+        ...a,
+        messageId: modelMessageId
+      }));
+      useAgentStore.getState().hydrate(rehydratedAgents);
     } else {
       const initialStates: AgentState[] = Array.from({ length: settings.numAgents }, (_, i) => ({
         id: `${STEPS.INITIAL}-agent-${i}`,
@@ -182,6 +191,10 @@ export function useSwarmOrchestration({
 
     const controller = mainAbort.create();
     const signal = controller.signal;
+    
+    // Register in centralized abort registry
+    const controllerKey = `main-${modelMessageId}`;
+    useAgentStore.getState().registerAbortController(controllerKey, controller);
 
     const lastUserMessageIndex = historyForSwarm.length - 1;
 
@@ -294,13 +307,21 @@ export function useSwarmOrchestration({
       }
     } finally {
       logger.debug('sendMessage FINALLY - cleanup');
+      const controllerKey = `main-${modelMessageId}`;
+      useAgentStore.getState().unregisterAbortController(controllerKey);
       mainAbort.ref.current = null;
     }
   };
 
   const retry = () => {
     if (lastInput) {
-      sendMessage(lastInput.text, lastInput.image, lastInput.imageFile, true);
+      // Retrieve failed work to prevent infinite simulation loops
+      // The step execution logic checks exiting work to decide if it's a retry
+      const messages = messagesRef.current || [];
+      const lastMsg = messages[messages.length - 1];
+      const failedWork = lastMsg?.role === 'model' ? lastMsg.work : undefined;
+
+      sendMessage(lastInput.text, lastInput.image, lastInput.imageFile, true, undefined, failedWork);
     }
   };
 

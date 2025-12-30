@@ -151,39 +151,82 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                         Development Mode (Simulation)
                     </label>
                 </div>
-
-                <div className="modal-form-group checkbox-group">
-                    <input
-                        type="checkbox"
-                        name="debugMode"
-                        id="debugMode"
-                        checked={localSettings.debugMode || false}
-                        onChange={handleChange}
-                    />
-                    <label htmlFor="debugMode" className="modal-label checkbox-label">
-                        Debug Logging (Console)
-                    </label>
-                </div>
-
-                <div className="modal-form-group">
-                    <label className="modal-label">Synthesis Error Simulation</label>
-                    <select
-                        name="simulateSynthesisError"
-                        value={localSettings.simulateSynthesisError || 'none'}
-                        onChange={handleChange}
-                        className="modal-input"
-                    >
-                        <option value="none">None (Normal Operation)</option>
-                        <option value="429">429 - Rate Limit Exceeded</option>
-                        <option value="500">500 - Internal Server Error</option>
-                        <option value="503">503 - Service Unavailable</option>
-                        <option value="timeout">Request Timeout</option>
-                    </select>
-                    <p className="modal-help-text">
-                        Simulate errors on first synthesis attempt for testing error UI.
-                    </p>
-                </div>
             </div>
+
+            {import.meta.env.DEV && (
+                <div className="modal-card">
+                    <span className="modal-card-title">Debug</span>
+                    <div className="modal-form-group checkbox-group">
+                        <input
+                            type="checkbox"
+                            name="debugMode"
+                            id="debugMode"
+                            checked={localSettings.debugMode || false}
+                            onChange={handleChange}
+                        />
+                        <label htmlFor="debugMode" className="modal-label checkbox-label">
+                            Debug Logging (Console)
+                        </label>
+                    </div>
+
+                    <div className="modal-form-group">
+                        <label className="modal-label">Initial Error Simulation</label>
+                        <select
+                            name="simulateInitialError"
+                            value={localSettings.simulateInitialError || 'none'}
+                            onChange={handleChange}
+                            className="modal-input"
+                        >
+                            <option value="none">None (Normal Operation)</option>
+                            <option value="429">429 - Rate Limit Exceeded</option>
+                            <option value="500">500 - Internal Server Error</option>
+                            <option value="503">503 - Service Unavailable</option>
+                            <option value="timeout">Request Timeout</option>
+                        </select>
+                        <p className="modal-help-text">
+                            Simulate errors on first initial attempt.
+                        </p>
+                    </div>
+
+                    <div className="modal-form-group">
+                        <label className="modal-label">Refinement Error Simulation</label>
+                        <select
+                            name="simulateRefinementError"
+                            value={localSettings.simulateRefinementError || 'none'}
+                            onChange={handleChange}
+                            className="modal-input"
+                        >
+                            <option value="none">None (Normal Operation)</option>
+                            <option value="429">429 - Rate Limit Exceeded</option>
+                            <option value="500">500 - Internal Server Error</option>
+                            <option value="503">503 - Service Unavailable</option>
+                            <option value="timeout">Request Timeout</option>
+                        </select>
+                        <p className="modal-help-text">
+                            Simulate errors on first refinement attempt.
+                        </p>
+                    </div>
+
+                    <div className="modal-form-group">
+                        <label className="modal-label">Synthesis Error Simulation</label>
+                        <select
+                            name="simulateSynthesisError"
+                            value={localSettings.simulateSynthesisError || 'none'}
+                            onChange={handleChange}
+                            className="modal-input"
+                        >
+                            <option value="none">None (Normal Operation)</option>
+                            <option value="429">429 - Rate Limit Exceeded</option>
+                            <option value="500">500 - Internal Server Error</option>
+                            <option value="503">503 - Service Unavailable</option>
+                            <option value="timeout">Request Timeout</option>
+                        </select>
+                        <p className="modal-help-text">
+                            Simulate errors on first synthesis attempt for testing error UI.
+                        </p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

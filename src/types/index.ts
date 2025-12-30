@@ -74,6 +74,8 @@ export interface AppSettings {
   profiles: PromptProfile[];
   devMode: boolean;
   debugMode: boolean;
+  simulateInitialError: SimulateError;
+  simulateRefinementError: SimulateError;
   simulateSynthesisError: SimulateError; // Error simulation for testing
   pauseAfterInitial: boolean;
   pauseAfterRefinement: boolean;
@@ -140,7 +142,7 @@ export interface Work {
   // Metadata about the steps that ran
   stepMetadata?: {
     id: string;
-    status: 'pending' | 'working' | 'done';
+    status: 'pending' | 'working' | 'done' | 'error';
     label?: string;
   }[];
 

@@ -6,7 +6,7 @@ import { DebugModal } from '@/components/chat/ShowWork/components/DebugModal';
 import { StatusAwareWorkCard } from '@/components/chat/ShowWork/components/StatusAwareWorkCard';
 import { CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
 import { ArrowDownIcon, TokenIcon } from '@/components/chat/ShowWork/icons';
-import { getStepResults, getStepThoughts, getStepUsage, getSynthesisThought, getSynthesisUsage, getSynthesisResult, getSynthesisErrorMessage } from '@/utils/swarm/workHelpers';
+import { getStepResults, getStepThoughts, getStepUsage, getSynthesisThought, getSynthesisUsage, getSynthesisResult } from '@/utils/swarm/workHelpers';
 import { useResolvedSwarmState } from '@/hooks/swarm/useResolvedSwarmState';
 import './ShowWork.css';
 
@@ -66,8 +66,6 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, o
       ? synthesisResult
       : synthesisResult?.text ?? null;
 
-  const synthesisError = useMemo(() => getSynthesisErrorMessage(work), [work]);
-
   // Build card metadata map for stable action resolution
   const cardMetaMap = useMemo(() => {
     const map = new Map<string, CardMeta>();
@@ -103,7 +101,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, o
       step: STEPS.SYNTHESIS,
       index: 0,
       title: 'Synthesizer - Final Response',
-      content: synthesisError ? `[System: Synthesis failed. ${synthesisError}]` : synthesisText,
+      content: synthesisText,
       thought: getSynthesisThought(work),
       debugInfo: work.debugInfo?.[STEPS.SYNTHESIS] as Record<string, unknown> | undefined
     });
@@ -237,7 +235,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, o
                     onCardAction={handleCardAction}
                     className={STEPS.SYNTHESIS}
                     title="Synthesizer"
-                    content={synthesisError ? `[System: Synthesis failed. ${synthesisError}]` : synthesisText}
+                    content={synthesisText}
                     tokenUsage={getSynthesisUsage(work) || undefined}
                     thought={getSynthesisThought(work) || undefined}
                     debugInfo={work.debugInfo?.[STEPS.SYNTHESIS]}

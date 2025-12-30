@@ -155,6 +155,69 @@ export function updateStepResult(
 }
 
 /**
+ * Perform an atomic update of multiple components of an agent's work (text, thought, usage).
+ * Pure function - returns a new Work object.
+ */
+export function updateAgentWork(
+  work: Work,
+  stepId: StepId,
+  agentIndex: number,
+  updates: {
+    text?: string;
+    thought?: string;
+    usage?: TokenUsage;
+  }
+): Work {
+  const nextWork = cloneWork(work);
+  if (!nextWork.results) nextWork.results = {};
+  
+  const results = nextWork.results;
+  const numAgents = Math.max(
+    (results[stepId] as any[])?.length || 0,
+    agentIndex + 1
+  );
+
+  // 1. Update Text
+  if (updates.text !== undefined) {
+    if (stepId === STEPS.SYNTHESIS) {
+      const existing = results[stepId] as Record<string, any> || {};
+      results[stepId] = { ...existing, text: updates.text };
+    } else {
+      const arr = Array.isArray(results[stepId]) ? [...results[stepId] as any[]] : Array(numAgents).fill('');
+      arr[agentIndex] = updates.text;
+      results[stepId] = arr;
+    }
+  }
+
+  // 2. Update Thoughts
+  if (updates.thought !== undefined) {
+    const key = stepId === STEPS.SYNTHESIS ? `${stepId}_thought` : `${stepId}_thoughts`;
+    if (stepId === STEPS.SYNTHESIS) {
+      results[key] = updates.thought;
+    } else {
+      const arr = Array.isArray(results[key]) ? [...results[key] as any[]] : Array(numAgents).fill('');
+      arr[agentIndex] = updates.thought;
+      results[key] = arr;
+    }
+  }
+
+  // 3. Update Usage
+  if (updates.usage !== undefined) {
+    const key = `${stepId}_usage`;
+    if (stepId === STEPS.SYNTHESIS) {
+      results[key] = updates.usage;
+    } else {
+      const arr = Array.isArray(results[key]) ? [...results[key] as any[]] : Array(numAgents).fill(null);
+      arr[agentIndex] = updates.usage;
+      results[key] = arr;
+    }
+  }
+
+  return nextWork;
+}
+
+
+/**
  * Deeply clones a Work object to prevent accidental mutations of state.
  * Specifically ensures that nested objects like 'results' and 'debugInfo' are new references.
  *

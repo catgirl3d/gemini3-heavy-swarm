@@ -1,10 +1,10 @@
 import { Content } from '@google/genai';
 import { StepContext, StepId, STEPS } from '@/types/steps';
-import { AgentState, Source } from '@/types';
+import { AgentState, Source, Work } from '@/types';
 import { prepareGeminiContent } from '@/services/swarm/contentUtils';
 import { BaseStep } from './BaseStep';
 import { getStepResults } from '@/utils/swarm/workHelpers';
-import { hasStepContentError, getStepConfig } from '@/utils/swarm/stepConstants';
+import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { Logger } from '@shared/utils/logger';
 import { useAgentStore } from '@/stores/agentStore';
 import { updateAgentStatus } from '@/utils/swarm/statusHelpers';
@@ -185,8 +185,16 @@ export class SynthesisStep extends BaseStep {
     }
   }
 
-  async regenerate(context: StepContext, _agentIndex: number, _agentStates: AgentState[]): Promise<{ text: string; sources?: Source[] }> {
-    return this.execute(context);
+  async regenerate(context: StepContext, _agentIndex: number, agentStates: AgentState[]): Promise<{ text: string; sources?: Source[]; work: Work }> {
+    const refinedDrafts = getStepResults(context.work, STEPS.REFINEMENT);
+    const { systemInstruction, synthesizerTurn, mainChatHistory } = this.prepareSynthesis(context, refinedDrafts);
+    
+    return this.runSynthesisRegeneration(
+      context,
+      { systemInstruction, userTurn: synthesizerTurn, mainChatHistory },
+      agentStates,
+      [{ googleSearch: {} }]
+    );
   }
 
   private prepareSynthesis(context: StepContext, refinedDrafts: string[]) {
@@ -200,15 +208,15 @@ export class SynthesisStep extends BaseStep {
 
     const agentDrafts = refinedDrafts
       .map((refinedText: string, i: number) => {
-        // Standard fallback: if refinement failed, use the initial draft for the SAME agent
-        const text = hasStepContentError(refinedText, STEPS.REFINEMENT)
+        // Standard fallback: if refinement failed (empty), use the initial draft for the SAME agent
+        const text = (!refinedText || refinedText.length === 0)
           ? (initialDrafts[i] || '')
           : refinedText;
         
         return { text, id: i + 1 };
       })
-      // Filter out any remaining system errors or empty strings
-      .filter((a) => a.text && !hasStepContentError(a.text, STEPS.INITIAL))
+      // Filter out any remaining empty strings
+      .filter((a) => a.text && a.text.length > 0)
       .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
       .join('\n\n');
 

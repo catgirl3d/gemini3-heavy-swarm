@@ -78,7 +78,10 @@ describe('InitialStep', () => {
   });
 
   it('should use the same instruction during regeneration', async () => {
-    const runRegenSpy = vi.spyOn(step as any, 'runAgentRegeneration').mockResolvedValue('new response');
+    const runRegenSpy = vi.spyOn(step as any, 'runAgentRegeneration').mockResolvedValue({ 
+      text: 'new response', 
+      work: mockContext.work 
+    });
     const agentStates: any[] = [];
     
     mockContext.userInput = 'Regenerate this';

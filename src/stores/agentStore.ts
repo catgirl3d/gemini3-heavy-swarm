@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { AgentState, Work } from '@/types';
 import { StepId } from '@/types/steps';
+import { updateAgentWork } from '@/utils/swarm/workHelpers';
 import { Logger } from '@shared/utils/logger';
 
 const logger = new Logger('AgentStore', true);
@@ -17,6 +18,12 @@ interface AgentStore {
   error: string | null;
   currentMessageId: string | undefined;
   
+  // Abort controller registry for centralized stop functionality
+  abortControllers: Map<string, AbortController>;
+  registerAbortController: (key: string, controller: AbortController) => void;
+  unregisterAbortController: (key: string) => void;
+  abortAll: () => void;
+  
   // Agent actions
   updateAgent: (stepId: StepId, agentIndex: number, status: AgentState['status'], label: string, messageId: string, name?: string) => void;
   hydrate: (agents: AgentState[]) => void;
@@ -24,6 +31,7 @@ interface AgentStore {
   
   // Work actions
   setCurrentWork: (work: Work | undefined) => void;
+  updateWorkResult: (stepId: StepId, agentIndex: number, updates: { text?: string; thought?: string; usage?: any }) => void;
   
   // Status actions
   setIsLoading: (value: boolean) => void;
@@ -43,6 +51,37 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   loadingStatus: '',
   error: null,
   currentMessageId: undefined,
+  abortControllers: new Map(),
+  
+  // Abort controller management
+  registerAbortController: (key, controller) => {
+    set(state => {
+      const newMap = new Map(state.abortControllers);
+      // If there's already a controller with this key, abort it first
+      const existing = newMap.get(key);
+      if (existing) existing.abort();
+      newMap.set(key, controller);
+      return { abortControllers: newMap };
+    });
+  },
+  
+  unregisterAbortController: (key) => {
+    set(state => {
+      const newMap = new Map(state.abortControllers);
+      newMap.delete(key);
+      return { abortControllers: newMap };
+    });
+  },
+  
+  abortAll: () => {
+    const state = get();
+    logger.debug('abortAll called', { count: state.abortControllers.size });
+    state.abortControllers.forEach((controller, key) => {
+      logger.debug(`Aborting controller: ${key}`);
+      controller.abort();
+    });
+    set({ abortControllers: new Map() });
+  },
   
   // Agent actions
   updateAgent: (stepId, agentIndex, status, label, messageId, name) => {
@@ -90,6 +129,15 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   
   // Work actions
   setCurrentWork: (work) => set({ currentWork: work }),
+  
+  updateWorkResult: (stepId, agentIndex, updates) => {
+    set(state => {
+      if (!state.currentWork) return state;
+      
+      const newWork = updateAgentWork(state.currentWork, stepId, agentIndex, updates);
+      return { currentWork: newWork };
+    });
+  },
   
   // Status actions
   setIsLoading: (value) => {

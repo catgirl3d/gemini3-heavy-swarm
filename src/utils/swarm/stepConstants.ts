@@ -25,8 +25,6 @@ export interface StepConfig {
   };
   /** Error message prefix for system messages */
   errorPrefix: string;
-  /** Content error detection pattern */
-  errorPattern: string;
   /** Status message for agent updates */
   progressMsg: string;
   /** Formal name of the step */
@@ -39,6 +37,8 @@ export interface StepConfig {
   allowPause?: boolean;
   /** Key in AppSettings that controls whether to pause after this step */
   pauseSettingKey?: 'pauseAfterInitial' | 'pauseAfterRefinement';
+  /** Pattern to identify system error messages in this step's output */
+  errorPattern?: string;
 }
 
 const STEP_CONFIGS: Record<StepId, StepConfig> = {
@@ -53,12 +53,12 @@ const STEP_CONFIGS: Record<StepId, StepConfig> = {
       waiting: 'Waiting...'
     },
     errorPrefix: 'Agent failed to complete',
-    errorPattern: '[System: Agent failed to complete.',
     progressMsg: 'Drafting initial responses...',
     name: 'Initial Step',
     description: 'Agents draft their initial responses based on the user query.',
     allowPause: true,
-    pauseSettingKey: 'pauseAfterInitial'
+    pauseSettingKey: 'pauseAfterInitial',
+    errorPattern: '[System: Initial Step Failed]'
   },
   [STEPS.REFINEMENT]: {
     namePrefix: 'Critic',
@@ -71,12 +71,12 @@ const STEP_CONFIGS: Record<StepId, StepConfig> = {
       waiting: 'Waiting...'
     },
     errorPrefix: 'Critic failed to refine',
-    errorPattern: '[System: Critic failed to refine.',
     progressMsg: 'Refining and critiquing answers...',
     name: 'Refinement Step',
     description: 'Agents critique and refine their responses based on other agents\' inputs.',
     allowPause: true,
-    pauseSettingKey: 'pauseAfterRefinement'
+    pauseSettingKey: 'pauseAfterRefinement',
+    errorPattern: '[System: Refinement Failed]'
   },
   [STEPS.SYNTHESIS]: {
     namePrefix: 'Synthesizer',
@@ -89,11 +89,11 @@ const STEP_CONFIGS: Record<StepId, StepConfig> = {
       waiting: 'Waiting...'
     },
     errorPrefix: 'Synthesis failed',
-    errorPattern: '[System: Synthesis failed.',
     progressMsg: 'Synthesizing final response...',
     name: 'Synthesis Step',
     description: 'Synthesizes all refined responses into a final answer.',
-    synthesisJump: true
+    synthesisJump: true,
+    errorPattern: '[System: Synthesis Failed]'
   }
 };
 
@@ -127,13 +127,7 @@ export function setWorkName(work: Work, stepId: StepId, index: number, name: str
   return { ...work, [config.namesKey]: newNames };
 }
 
-/**
- * Checks if content contains an error pattern for this step.
- */
-export function hasStepContentError(content: string | null | undefined, stepId: StepId): boolean {
-  if (!content) return false;
-  return content.includes(STEP_CONFIGS[stepId].errorPattern);
-}
+
 
 /**
  * Shared logic for the "Synthesis Jump" behavior.
@@ -153,4 +147,13 @@ export function handleSynthesisJump(
   setIsLoading(false);
   setIsPaused(false);
   onJump?.();
+}
+
+/**
+ * Checks if a step's result text contains a system error message.
+ */
+export function hasStepContentError(text: string | null | undefined, stepId: StepId): boolean {
+  if (!text) return false;
+  const config = STEP_CONFIGS[stepId];
+  return !!config.errorPattern && text.includes(config.errorPattern);
 }

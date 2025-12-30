@@ -18,10 +18,8 @@ interface WorkCardProps {
   tokenUsage?: TokenUsageType | null;
   thought?: string | null;
   debugInfo?: unknown;
-  /** Stable callback pattern: cardId + onCardAction instead of individual callbacks */
   cardId?: string;
   onCardAction?: (cardId: string, action: CardActionType) => void;
-  /** Legacy individual callbacks - will be deprecated */
   onExpand?: () => void;
   onShowThought?: () => void;
   onShowDebug?: () => void;
@@ -61,7 +59,11 @@ function useThrottledContent(content: string | null, status: string, throttleMs:
     const now = Date.now();
     const timeSinceLastUpdate = now - lastUpdateRef.current;
 
-    if (timeSinceLastUpdate >= throttleMs) {
+    // Force immediate update if we are transitioning from empty to non-empty content.
+    // This prevents the "Thinking..." state from hanging when the first chunk arrives.
+    const isFirstContent = (!throttledContent || throttledContent === '') && content && content.length > 0;
+
+    if (isFirstContent || timeSinceLastUpdate >= throttleMs) {
       // Enough time has passed, update now
       if (timerRef.current) {
         clearTimeout(timerRef.current);
@@ -83,7 +85,7 @@ function useThrottledContent(content: string | null, status: string, throttleMs:
 
     return () => {
       // CRITICAL: We should only clear timer on unmount OR when status changes
-      // In a throttler, we usually DON'T want to clear the timer on every dependency change 
+      // In a throttler, we DON'T want to clear the timer on every dependency change 
     };
   }, [content, status, throttleMs]);
 
@@ -156,24 +158,19 @@ const WorkCardComponent: FC<WorkCardProps> = ({
     // Check for system error messages in content, or fallback to status-based error display if content is missing.
     const contentToAnalyze = content || '';
     
-    const errorMatch = contentToAnalyze.match(/\[System: (.+?)\]/);
-    if ((errorMatch && status === 'error') || (status === 'error' && (content === null || content === ''))) {
-      // Use error message from content, or fallback to statusLabel for better error classification
-      let errorMessage = errorMatch ? errorMatch[1] : statusLabel;
+    // Check for error status
+    if (status === 'error') {
+      // Use statusLabel for error classification
+      let errorMessage = statusLabel;
       
       // If statusLabel doesn't help, use generic fallback
-      if (errorMessage === statusLabel && (statusLabel.includes('Failed') || statusLabel.includes('Error'))) {
+      if (statusLabel.includes('Failed') || statusLabel.includes('Error')) {
         // statusLabel is too generic, use fallback
         errorMessage = 'An error occurred during generation.';
       }
       
-      // DEBUG: Log error parsing
-
-      
       const appError = AppError.from(errorMessage);
       const displayMessage = appError.toFriendlyMessage();
-      
-
       
       // Map error codes to section labels if helpful
       const errorType = appError.code.replace(/_/g, ' ').toLowerCase()

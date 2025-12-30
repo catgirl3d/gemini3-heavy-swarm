@@ -6,10 +6,8 @@ import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { getMissingAgentsForMessage } from '@/utils/swarm/agentHelpers';
 import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
 
-import {
-  calculateUpdatedStateForRegeneration 
-} from '@/utils/swarm/regenerationHelpers';
-import { withEnsuredResults, cloneWork } from '@/utils/swarm/workHelpers';
+import { calculateUpdatedStateForRegeneration } from '@/utils/swarm/regenerationHelpers';
+import { withEnsuredResults, cloneWork, updateAgentWork } from '@/utils/swarm/workHelpers';
 import { getFriendlyErrorMessage } from '@/services/swarm/steps/utils/errorUtils';
 import { GeminiService } from '@/services/swarm/GeminiService';
 import { useAgentStore } from '@/stores/agentStore';
@@ -38,17 +36,16 @@ export function useSwarmRegeneration({
   lastInput
 }: RegenerationDependencies) {
 
-  const controllersRef = useRef<Map<string, AbortController>>(new Map());
   const activeRegenerationsRef = useRef<Set<string>>(new Set());
 
-  // Cleanup on unmount
+  // Cleanup on unmount - abort all registered controllers
   useEffect(() => {
     return () => {
-      controllersRef.current.forEach(c => c.abort());
-      controllersRef.current.clear();
+      // Controllers are in the centralized store, so abortAll will handle them
       activeRegenerationsRef.current.clear();
     };
   }, []);
+
 
   const regenerateAgentResponse = async (
     messageId: string,
@@ -69,9 +66,10 @@ export function useSwarmRegeneration({
       // Abort the existing controller
       const existingIndex = currentMessages.findIndex(m => m.id === messageId);
       if (existingIndex !== -1) {
-        const existingControllerKey = `${existingIndex}-${stepId}-${agentIndex}`;
-        controllersRef.current.get(existingControllerKey)?.abort();
-        controllersRef.current.delete(existingControllerKey);
+        const existingControllerKey = `regen-${messageId}-${stepId}-${agentIndex}`;
+        const existing = useAgentStore.getState().abortControllers.get(existingControllerKey);
+        existing?.abort();
+        useAgentStore.getState().unregisterAbortController(existingControllerKey);
       }
       
       // Small delay to allow cleanup of previous stream
@@ -122,10 +120,19 @@ export function useSwarmRegeneration({
       }
     }
 
-    // Create AbortController for this regeneration
+    // Create AbortController for this regeneration and register it centrally
     const controller = new AbortController();
-    const controllerKey = `${messageIndex}-${stepId}-${agentIndex}`;
-    controllersRef.current.set(controllerKey, controller);
+    const controllerKey = `regen-${messageId}-${stepId}-${agentIndex}`;
+    useAgentStore.getState().registerAbortController(controllerKey, controller);
+
+    const stepConfig = getStepConfig(stepId);
+    const store = useAgentStore.getState();
+    
+    // Reset global error and update status to reflect the new attempt.
+    // This ensures any previous error banner hides and the indicator shows new progress.
+    store.setError(null);
+    store.setIsLoading(true);
+    store.setLoadingStatus(stepConfig.progressMsg || '');
 
     try {
       // Steps now manage their own status lifecycle (working → done/error)
@@ -162,21 +169,18 @@ export function useSwarmRegeneration({
         workContext,
         useAgentStore.getState().agents, // Use store for current truth
         (text, isFirstChunk) => {
-          const baseMessages = messagesRef.current || [];
-          
-          // No synthesis-specific logic needed - handled by SynthesisStep via onSynthesisJump callback
-          const updatedMessages = calculateUpdatedStateForRegeneration(
-            baseMessages,
-            messageIndex,
-            stepId,
-            agentIndex,
-            workContext,
-            text,
-            settings,
-            isFirstChunk
-          );
-
-          setMessages(updatedMessages);
+          setMessages(prev => {
+            return calculateUpdatedStateForRegeneration(
+              prev,
+              messageIndex,
+              stepId,
+              agentIndex,
+              workContext,
+              text,
+              settings,
+              isFirstChunk
+            );
+          });
         },
         controller.signal,
         pauseResolverRef,
@@ -192,34 +196,66 @@ export function useSwarmRegeneration({
       );
 
       // Handle final result
-      if (typeof result === 'object' && result !== null && 'sources' in result) {
-         setMessages(prev => {
-           const workToUpdate = prev[messageIndex]?.work || workContext;
-           const updatedWork = workToUpdate ? (() => {
-             const ensuredWork = withEnsuredResults(workToUpdate);
-             return {
-               ...ensuredWork,
-               results: { ...ensuredWork.results, [stepId]: result },
-               // FINAL SNAPSHOT: Save latest global agentStates for HISTORY
-               agentStates: useAgentStore.getState().agents.filter(a => a.messageId === messageId)
-             };
-           })() : undefined;
-           
-           const updated = updateTargetMessage(prev, messageIndex, stepId, {
-             sources: (result as any).sources,
-             work: updatedWork
-           }, { workContext });
-           
-           return updated ?? prev;
-         });
-       }
+      // "result" contains the authoritative updated Work object for THIS agent from the step.
+      // We use it to surgically update the latest message state without overwriting other agents' work.
+      setMessages(prev => {
+          const idx = prev.findIndex(m => m.id === messageId);
+          if (idx === -1) return prev;
 
-      // Steps already set 'done' status - no need to duplicate here
+          const existingMessage = prev[idx];
+          const existingWork = existingMessage.work || workContext;
+          
+          // 1. Extract this agent's specific data from the regeneration result
+          const text = stepId === STEPS.SYNTHESIS 
+             ? (result.work.results?.[stepId] as any)?.text 
+             : (result.work.results?.[stepId] as string[])?.[agentIndex];
+             
+          const thought = stepId === STEPS.SYNTHESIS
+             ? result.work.results?.[`${stepId}_thought`] as string
+             : (result.work.results?.[`${stepId}_thoughts`] as string[])?.[agentIndex];
+
+          const usage = stepId === STEPS.SYNTHESIS
+             ? result.work.results?.[`${stepId}_usage`]
+             : (result.work.results?.[`${stepId}_usage`] as any[])?.[agentIndex];
+
+          // 2. Perform atomic update into the LATEST messages work state
+          let updatedWork = updateAgentWork(existingWork, stepId, agentIndex, {
+              text,
+              thought,
+              usage
+          });
+          
+          // 3. Sync step metadata (status: done/error) from the result
+          if (result.work.stepMetadata) {
+              const latestMeta = result.work.stepMetadata.find(m => m.id === stepId);
+              if (latestMeta) {
+                if (!updatedWork.stepMetadata) updatedWork.stepMetadata = [];
+                const mIdx = updatedWork.stepMetadata.findIndex(m => m.id === stepId);
+                if (mIdx >= 0) updatedWork.stepMetadata[mIdx] = { ...updatedWork.stepMetadata[mIdx], ...latestMeta };
+                else updatedWork.stepMetadata.push(latestMeta);
+              }
+          }
+
+          // 4. Snapshot current agent states for history tracking
+          const currentAgents = useAgentStore.getState().agents.filter(a => a.messageId === messageId);
+          updatedWork.agentStates = currentAgents;
+          
+          const updatedMessage: Message = {
+              ...existingMessage,
+              work: updatedWork,
+              sources: result.sources || existingMessage.sources
+          };
+          
+          const newMessages = [...prev];
+          newMessages[idx] = updatedMessage;
+          return newMessages;
+      });
+      
       regenLogger.info('Regeneration SUCCESS', { stepId, agentIndex });
       
       // Cleanup tracking
       activeRegenerationsRef.current.delete(regenerationKey);
-      controllersRef.current.delete(controllerKey);
+      useAgentStore.getState().unregisterAbortController(controllerKey);
       
     } catch (error) {
       // ABORT GUARD: If the error is due to user cancellation, don't treat it as a failure
@@ -233,7 +269,7 @@ export function useSwarmRegeneration({
         useAgentStore.getState().setIsLoading(false);
         
         activeRegenerationsRef.current.delete(regenerationKey);
-        controllersRef.current.delete(controllerKey);
+        useAgentStore.getState().unregisterAbortController(controllerKey);
         return;
       }
 
@@ -262,7 +298,7 @@ export function useSwarmRegeneration({
       // Cleanup tracking on error (but keep error updates in messages)
       // Steps already updated work.results with error info
       activeRegenerationsRef.current.delete(regenerationKey);
-      controllersRef.current.delete(controllerKey);
+      useAgentStore.getState().unregisterAbortController(controllerKey);
       // DON'T clear currentMessageId here - leave it set so error state remains visible
       // It will be cleared when next regeneration/orchestration starts
     }

@@ -14,8 +14,8 @@ export function hasPartialWorkResults(work: Work | undefined): boolean {
   const refinementResults = work.results?.[STEPS.REFINEMENT];
   
   return (
-    (Array.isArray(initialResults) && initialResults.some(r => r && !r.includes('[System:'))) ||
-    (Array.isArray(refinementResults) && refinementResults.some(r => r && !r.includes('[System:')))
+    (Array.isArray(initialResults) && initialResults.some(r => r && r.length > 0)) ||
+    (Array.isArray(refinementResults) && refinementResults.some(r => r && r.length > 0))
   );
 }
 

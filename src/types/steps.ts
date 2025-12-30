@@ -117,4 +117,5 @@ export interface AgentInstruction {
 export interface MultiAgentConfig {
   prepareAgent: (index: number) => AgentInstruction;
   tools?: Tool[];
+  simulateError?: SimulateError;
 }

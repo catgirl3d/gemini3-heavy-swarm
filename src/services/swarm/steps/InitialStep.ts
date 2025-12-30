@@ -1,6 +1,6 @@
 import { Content } from '@google/genai';
 import { StepContext, StepId, STEPS } from '@/types/steps';
-import { AgentState } from '@/types';
+import { AgentState, Work } from '@/types';
 import { prepareGeminiContent } from '@/services/swarm/contentUtils';
 import { getAgentRole } from '@/utils/chat/roleUtils';
 import { BaseStep } from './BaseStep';
@@ -16,13 +16,20 @@ export class InitialStep extends BaseStep {
   };
 
   async execute(context: StepContext): Promise<string[]> {
+    const { work, settings } = context;
+    // Check if agents have already been initialized and potentially failed (implies regeneration/retry)
+    const agentStates = work.agentStates || [];
+    const hasPriorAttempt = agentStates.some(a => a.stepId === STEPS.INITIAL && a.status !== 'waiting');
+
     return this.executeMultiAgent(context, {
       prepareAgent: (i) => this.prepareInstruction(context, i),
-      tools: [{ googleSearch: {} }]
+      tools: [{ googleSearch: {} }],
+      // Only simulate errors on first execution, not on regeneration/retry
+      simulateError: hasPriorAttempt ? undefined : settings.simulateInitialError
     });
   }
 
-  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<string> {
+  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<{ text: string; work: Work }> {
     const { systemInstruction, userTurn, mainChatHistory } = this.prepareInstruction(context, agentIndex);
     return this.runAgentRegeneration(context, agentIndex, { systemInstruction, userTurn, mainChatHistory }, agentStates);
   }

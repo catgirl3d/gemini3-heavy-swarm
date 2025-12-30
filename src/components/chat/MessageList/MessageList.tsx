@@ -5,7 +5,7 @@ import { MarkdownRenderer, LoadingIndicator } from '@/components/ui';
 import { ShowWork } from '@/components/chat/ShowWork';
 import { Sources } from '@/components/chat/Sources';
 import { Message, AgentState, Work } from '@/types';
-import { StepId } from '@/types/steps';
+import { StepId, STEPS } from '@/types/steps';
 
 interface MessageListProps {
   messages: Message[];
@@ -46,7 +46,7 @@ const MessageListComponent: FC<MessageListProps> = ({
       {messages.length === 0 && !isLoading ? (
         <EmptyState onPromptClick={onPromptClick} modelDisplayName={modelDisplayName} />
       ) : (
-        messages.map((msg) => {
+        messages.map((msg, index) => {
           const hasText = !!msg.parts?.[0]?.text;
           // Check if message has valid work content OR active agents (even if results are empty/error)
           // preventing the message from being hidden if it only contains error states
@@ -59,6 +59,18 @@ const MessageListComponent: FC<MessageListProps> = ({
           
           // Determine if this message is actively being generated/regenerated
           const isActiveGeneration = isLoading && msg.id === messageId;
+          
+          const isLast = index === messages.length - 1;
+          
+          // Check if we have substantial completed work (like initial drafts) that should be shown despite an error
+          const hasCompletedDrafts = !!msg.work?.results?.[STEPS.INITIAL]?.some((draft: string | null) => draft && draft.length > 0);
+
+          // CRITICAL: If a global error occurred, hide the last model message if it has no final text AND no completed drafts.
+          // This prevents showing an empty/broken "Show Work" card alongside the main error banner,
+          // while still preserving visibility of drafts if the error occurred later (e.g. during synthesis).
+          if (error && isLast && msg.role === 'model' && !hasText && !hasCompletedDrafts) {
+             return null;
+          }
           
           // Skip empty model messages ONLY if not currently loading
           if (msg.role === 'model' && !hasText && !hasWork && !isActiveGeneration) {

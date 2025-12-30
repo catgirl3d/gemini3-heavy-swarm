@@ -185,3 +185,46 @@
     font-size: 0.85rem;
   }
 }
+
+/* Error State Layout */
+.loading-header.controls-only {
+  justify-content: flex-end;
+}
+
+.loading-error-banner {
+  display: flex;
+  gap: 0.75rem;
+  background-color: #fef2f2;
+  border: 1px solid #fee2e2;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  align-items: flex-start;
+}
+
+.error-icon-svg {
+  width: 20px;
+  height: 20px;
+  color: #dc2626;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.error-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.error-title {
+  font-weight: 600;
+  color: #991b1b;
+  font-size: 0.9rem;
+}
+
+.error-message {
+  font-size: 0.85rem;
+  color: #b91c1c;
+  line-height: 1.4;
+  word-break: break-word;
+}

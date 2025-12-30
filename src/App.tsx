@@ -118,13 +118,8 @@ export const App: FC = () => {
 
   // Memoized handler for regeneration to prevent MessageList re-renders
   const handleRegenerate = useCallback((messageId: string, phase: StepId, agentIndex: number) => {
-    if (phase === STEPS.SYNTHESIS) {
-      setShouldAutoScroll(true);
-      // Force jump to bottom immediately
-      setTimeout(() => scrollToBottom(), 0);
-    }
     regenerateAgentResponse(messageId, phase, agentIndex);
-  }, [setShouldAutoScroll, scrollToBottom, regenerateAgentResponse]);
+  }, [regenerateAgentResponse]);
 
   // Enforce model restrictions based on server status
   useEffect(() => {

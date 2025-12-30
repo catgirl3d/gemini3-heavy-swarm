@@ -13,6 +13,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   model: DEFAULT_MODEL,
   devMode: false,
   debugMode: false,
+  simulateInitialError: 'none',
+  simulateRefinementError: 'none',
   simulateSynthesisError: 'none',
   pauseAfterInitial: false,
   pauseAfterRefinement: false,

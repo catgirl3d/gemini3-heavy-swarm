@@ -35,6 +35,7 @@ vi.mock('@/stores/agentStore', () => ({
   useAgentStore: {
     getState: vi.fn(() => ({
       setCurrentWork: vi.fn(),
+      updateWorkResult: vi.fn(),
       setIsPaused: vi.fn(),
       setLoadingStatus: vi.fn(),
       setIsLoading: vi.fn()

@@ -6,7 +6,11 @@ import { useAgentStore } from '@/stores/agentStore';
 // Mock dependencies
 vi.mock('@/stores/agentStore', () => ({
   useAgentStore: {
-    getState: vi.fn()
+    getState: vi.fn(() => ({
+      updateAgent: vi.fn(),
+      updateWorkResult: vi.fn(),
+      setCurrentWork: vi.fn()
+    }))
   }
 }));
 
@@ -64,6 +68,7 @@ describe('SynthesisStep', () => {
     updateAgentMock = vi.fn();
     (useAgentStore.getState as any).mockReturnValue({
       updateAgent: updateAgentMock,
+      updateWorkResult: vi.fn(),
       setCurrentWork: vi.fn(),
       agents: []
     });
@@ -134,13 +139,17 @@ describe('SynthesisStep', () => {
     expect(internalContext).toContain('<original_query>\nSummarize climate change\n</original_query>');
   });
 
-  it('should call execute during regeneration', async () => {
-    const executeSpy = vi.spyOn(step, 'execute').mockResolvedValue({ text: 'regen result' });
+  it('should call runSynthesisRegeneration during regeneration', async () => {
+    const runRegenSpy = vi.spyOn(step as any, 'runSynthesisRegeneration').mockResolvedValue({ 
+      text: 'regen result', 
+      work: mockContext.work,
+      sources: []
+    });
     const agentStates: any[] = [];
     
     const result = await step.regenerate(mockContext, 0, agentStates);
     
-    expect(executeSpy).toHaveBeenCalledWith(mockContext);
+    expect(runRegenSpy).toHaveBeenCalled();
     expect(result.text).toBe('regen result');
   });
 

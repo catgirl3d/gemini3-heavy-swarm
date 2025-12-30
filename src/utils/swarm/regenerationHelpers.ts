@@ -3,7 +3,8 @@ import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { AppSettings, Message, Work } from '@/types';
 import { ensureModelMessageForSynthesis, updateMessageParts, updateWorkAgentNames } from '@/utils/chat/messageHelpers';
 import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
-import { updateStepResult } from '@/utils/swarm/workHelpers';
+import { updateAgentWork } from '@/utils/swarm/workHelpers';
+import { useAgentStore } from '@/stores/agentStore';
 import { Logger } from '@shared/utils/logger';
 
 /**
@@ -48,7 +49,9 @@ export function processSynthesisChunkUpdate(
 }
 
 /**
- * Updates a Work object with the new agent name and step result.
+ * Updates a Work object with new text AND syncs usage/thought from the store.
+ * During regeneration, usage and thought are updated in currentWork store but not
+ * in the message's work object. This function merges them to keep UI in sync.
  */
 export function updateWorkForStep(
   work: Work,
@@ -59,7 +62,37 @@ export function updateWorkForStep(
 ): Work {
   const newName = getUpdatedAgentName(agentIndex, stepId, settings);
   let updatedWork = updateWorkAgentNames(work, stepId, agentIndex, newName);
-  return updateStepResult(updatedWork, stepId, agentIndex, text);
+  
+  // Sync usage and thought from currentWork store if available
+  const currentWork = useAgentStore.getState().currentWork;
+  let thought: string | undefined;
+  let usage: any | undefined;
+  
+  if (currentWork?.results) {
+    // Extract thought
+    if (stepId === STEPS.SYNTHESIS) {
+      thought = currentWork.results[`${stepId}_thought`] as string;
+    } else {
+      const thoughts = currentWork.results[`${stepId}_thoughts`] as string[] | undefined;
+      thought = thoughts?.[agentIndex];
+    }
+    
+    // Extract usage
+    const usageKey = `${stepId}_usage`;
+    if (stepId === STEPS.SYNTHESIS) {
+      usage = currentWork.results[usageKey];
+    } else {
+      const usages = currentWork.results[usageKey] as any[] | undefined;
+      usage = usages?.[agentIndex];
+    }
+  }
+  
+  // Use atomic update that handles text, thought, and usage
+  return updateAgentWork(updatedWork, stepId, agentIndex, {
+    text,
+    thought,
+    usage
+  });
 }
 
 /**

@@ -100,7 +100,10 @@ describe('RefinementStep', () => {
   });
 
   it('should use correctly prepared instruction during regeneration', async () => {
-    const runRegenSpy = vi.spyOn(step as any, 'runAgentRegeneration').mockResolvedValue('refined response');
+    const runRegenSpy = vi.spyOn(step as any, 'runAgentRegeneration').mockResolvedValue({ 
+      text: 'refined response', 
+      work: mockContext.work 
+    });
     const agentStates: any[] = [];
     
     // Set drafts in mockContext - the getStepResults mock will pick them up

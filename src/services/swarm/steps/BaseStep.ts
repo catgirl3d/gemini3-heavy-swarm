@@ -1,13 +1,12 @@
 import { StepDescriptor, StepContext, StepId, STEPS, StreamConfig, StreamCallbacks, StreamResult, AgentInstruction, MultiAgentConfig } from '@/types/steps';
-import { Tool } from '@google/genai';
+import { Tool, Content, GroundingChunk } from '@google/genai';
 import { getStepConfig, StepConfig } from '@/utils/swarm/stepConstants';
-import { AgentState, Source, TokenUsage } from '@/types';
+import { AgentState, Source, TokenUsage, Work } from '@/types';
 import { createAgentStates, updateAgentState, updateAgentStateById } from './utils/agentStateUtils';
 import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from './utils/devModeUtils';
 import { extractTextFromParts, extractTokenUsage } from './utils/streamUtils';
 import { getErrorLabel, checkGlobalRateLimitFailure, checkGlobalStepFailure, getFriendlyErrorMessage } from './utils/errorUtils';
 import { getGenerationConfig } from '@/services/proxy/geminiConfig';
-import { GroundingChunk } from '@google/genai';
 import { Logger } from '@shared/utils/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
 import { withRetry } from '@/utils/common/retryStrategy';
@@ -156,7 +155,8 @@ export abstract class BaseStep implements StepDescriptor {
      }
 
      // SYNC: Ensure work results are updated in the global store for live streaming visibility
-     useAgentStore.getState().setCurrentWork({ ...work });
+     // Use atomic update to prevent race conditions during parallel execution
+     useAgentStore.getState().updateWorkResult(stepId, index, { text, thought, usage });
 
      if (text.length > 0 && onMessageUpdate && options.streamToMessage) {
        onMessageUpdate(text, options.isFirstChunk ?? false);
@@ -405,6 +405,7 @@ export abstract class BaseStep implements StepDescriptor {
           tools: config.tools,
           signal,
           agentIndex: i,
+          simulateError: config.simulateError,
         },
         {
           onChunk: (text, thought, usage) => {
@@ -579,8 +580,9 @@ export abstract class BaseStep implements StepDescriptor {
     agentIndex: number,
     instruction: AgentInstruction,
     agentStates: AgentState[],
-    tools?: Tool[]
-  ): Promise<string> {
+    tools?: Tool[],
+    onFirstTextChunk?: () => void
+  ): Promise<{ text: string; work: Work; groundingChunks?: GroundingChunk[] }> {
     const { ai, settings, work, signal, messageId } = context;
     if (!ai) throw new AppError("API Key not found", ErrorCode.INVALID_SETTINGS);
 
@@ -601,7 +603,7 @@ export abstract class BaseStep implements StepDescriptor {
     updateAgentStatus(this.id, agentIndex, 'working', messageId);
     
     try {
-      const { text: fullText, usage: finalUsage } = await this.runModelStream(
+      const { text: fullText, usage: finalUsage, groundingChunks } = await this.runModelStream(
         {
           ai, settings, model: settings.model,
           contents: [...mainChatHistory, userTurn],
@@ -612,11 +614,17 @@ export abstract class BaseStep implements StepDescriptor {
         },
         {
           onChunk: (text, thought, usage) => {
+            // Trigger first text chunk callback (for synthesis jump)
+            if (text.length > 0 && onFirstTextChunk) {
+              onFirstTextChunk();
+              onFirstTextChunk = undefined; // Only call once
+            }
+            
             this.handleStreamChunk(context, agentIndex, text, thought, usage, {
               isFirstChunk: false,
               streamToMessage: true,
               agentStates: currentAgentStates,
-              statusMsg: config.progressMsg // Sync status/thoughts/usage in store
+              statusMsg: config.progressMsg
             });
           },
           onRetry: (attempt) => {
@@ -631,14 +639,20 @@ export abstract class BaseStep implements StepDescriptor {
         this.ensureStepUsage(work, this.id, settings.numAgents);
         (work.results[`${this.id}_usage`] as any[])[agentIndex] = finalUsage;
         
-        // Also update the store for immediate UI update
-        useAgentStore.getState().setCurrentWork({ ...work });
+        // Also update the store atomically for immediate UI update
+        useAgentStore.getState().updateWorkResult(this.id, agentIndex, { usage: finalUsage });
       }
       
       // Set final 'done' status after successful completion
       updateAgentStatus(this.id, agentIndex, 'done', messageId);
+
+      // META UPDATE: Ensure step is marked as done for StepRunner
+      this.updateStepMetadata(work, 'done');
       
-      return fullText;
+      // Update store with final snapshot
+      useAgentStore.getState().setCurrentWork({ ...work });
+      
+      return { text: fullText, work, groundingChunks };
     } catch (error) {
       // Step fully owns error handling - set status AND update work.results
       const errorLabel = this.getErrorLabel(error, config.labels.error);
@@ -659,6 +673,62 @@ export abstract class BaseStep implements StepDescriptor {
       
       // Re-throw to let caller handle additional UI updates (e.g., message parts)
       throw error;
+    }
+  }
+
+  /**
+   * Thin wrapper around runAgentRegeneration for synthesis step.
+   * Handles synthesis-specific behaviors: sources extraction and onSynthesisJump callback.
+   */
+  protected async runSynthesisRegeneration(
+    context: StepContext,
+    instruction: { systemInstruction: string; userTurn: Content; mainChatHistory: Content[] },
+    agentStates: AgentState[],
+    tools?: Tool[]
+  ): Promise<{ text: string; sources?: Source[]; work: Work }> {
+    const { systemInstruction, userTurn, mainChatHistory } = instruction;
+    
+    // Synthesis always uses agentIndex 0
+    const agentIndex = 0;
+    const agentInstruction: AgentInstruction = { systemInstruction, userTurn, mainChatHistory };
+    
+    // Delegate to base regeneration logic
+    const result = await this.runAgentRegeneration(
+      context,
+      agentIndex,
+      agentInstruction,
+      agentStates,
+      tools,
+      () => context.onSynthesisJump?.() // Pass callback for synthesis jump
+    );
+    
+    // Extract sources from grounding chunks
+    const sources = this.extractSources(result.groundingChunks);
+    
+    // Update work.results to include sources
+    if (sources && sources.length > 0) {
+      this.ensureResults(result.work);
+      const currentResult = result.work.results?.[this.id];
+      if (typeof currentResult === 'object') {
+        result.work.results![this.id] = { ...currentResult, sources } as any;
+      }
+    }
+    
+    return { text: result.text, sources, work: result.work };
+  }
+
+  /**
+   * Helper to update step metadata (status) in the Work object.
+   * critical for ensuring StepRunner skips completed steps during Resume.
+   */
+  protected updateStepMetadata(work: Work, status: 'done' | 'error' = 'done'): void {
+    const config = getStepConfig(this.id);
+    if (!work.stepMetadata) work.stepMetadata = [];
+    const metaIdx = work.stepMetadata.findIndex(m => m.id === this.id);
+    if (metaIdx >= 0) {
+        work.stepMetadata[metaIdx] = { ...work.stepMetadata[metaIdx], status };
+    } else {
+        work.stepMetadata.push({ id: this.id, status, label: config.name });
     }
   }
 }

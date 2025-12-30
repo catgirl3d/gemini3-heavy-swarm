@@ -4,6 +4,7 @@ import { StepId, STEPS } from '@/types/steps';
 import { AgentAvatar } from '@/components/chat';
 import { TimerDisplay } from '@/components/ui/TimerDisplay';
 import { Logger } from '@shared/utils/logger';
+import { getStepConfig } from '@/utils/swarm/stepConstants';
 import './LoadingIndicator.css';
 
 const logger = new Logger('LoadingIndicator', true);
@@ -17,36 +18,39 @@ export const LoadingIndicator: FC<{
     onRegenerate?: (stepId: StepId, agentIndex: number) => void;
     noWrapper?: boolean;
 }> = ({ status, agentStates, isPaused, messageId, onContinue, onRegenerate, noWrapper }) => {
-  // Check if synthesizer is in error state - if so, Continue should trigger regeneration
-  const synthesizerState = agentStates.find(a => 
-    a.stepId === STEPS.SYNTHESIS && (!messageId || a.messageId === messageId)
-  );
-  const isSynthesizerError = synthesizerState?.status === 'error';
+  // Check for errors in any step to determine button state
+  const erroredAgents = agentStates.filter(a => a.status === 'error' && (!messageId || a.messageId === messageId));
+  const isWorking = agentStates.some(a => a.status === 'working' && (!messageId || a.messageId === messageId));
+  const isError = !isWorking && (erroredAgents.length > 0 || (typeof status === 'string' && status.startsWith('Error')));
 
   const handleContinueClick = () => {
-    if (isSynthesizerError && onRegenerate) {
-      // Synthesizer errored - Continue should retry synthesis
-      onRegenerate?.(STEPS.SYNTHESIS, 0);
+    // If we have specific agents in error, retry them individually using the proven regeneration logic
+    // This is more reliable than full workflow resume ('onContinue') for step-specific failures
+    if (erroredAgents.length > 0 && onRegenerate) {
+        erroredAgents.forEach(agent => {
+            onRegenerate(agent.stepId, agent.agentIndex);
+        });
     } else if (onContinue) {
-      // Normal pause - continue the workflow
+      // For generic pauses or states without specific agent errors, use Resume logic
       onContinue();
     }
   };
 
   // Determine button text based on context
-  const continueButtonText = isSynthesizerError ? 'Retry Synthesis' : 'Continue';
+  const continueButtonText = isError ? 'Retry' : 'Continue';
 
   // DYNAMIC STATUS DERIVATION:
-  // If the global 'status' prop is generic/empty, we derive a more useful status 
-  // from the active agent states to tell the user what's actually happening.
+  // If the global 'status' prop is generic/empty, OR if it's an error message but agents are working,
+  // we derive a more useful status from the active agent states to tell the user what's actually happening.
   let displayStatus = status || 'Initializing...';
   
-  if (!status || status === 'Working...') {
-      const activeState = agentStates.find(a => a.status === 'working' || a.status === 'error');
+  const isStatusError = typeof status === 'string' && status.startsWith('Error');
+  const shouldDeriveStatus = !status || status === 'Working...' || (isStatusError && isWorking);
+
+  if (shouldDeriveStatus) {
+      const activeState = agentStates.find(a => a.status === 'working' || (a.status === 'error' && !isWorking));
       if (activeState) {
-          if (activeState.stepId === STEPS.INITIAL) displayStatus = 'Step 1/3: Initializing Agents...';
-          else if (activeState.stepId === STEPS.REFINEMENT) displayStatus = 'Step 2/3: Refining Content...';
-          else if (activeState.stepId === STEPS.SYNTHESIS) displayStatus = 'Step 3/3: Synthesizing Final Answer...';
+          displayStatus = getStepConfig(activeState.stepId).progressMsg;
       } else if (agentStates.some(a => a.stepId === STEPS.INITIAL && a.status === 'waiting')) {
           displayStatus = 'Starting Swarm...';
       }
@@ -94,15 +98,28 @@ export const LoadingIndicator: FC<{
   const content = (
     <div className="loading-container-wrapper">
         <div className="loading-animation">
-        <div className="loading-header">
-            <span className="loading-status">{displayStatus}</span>
+        
+        {isError && (
+            <div className="loading-error-banner">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="error-icon-svg">
+                    <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
+                </svg>
+                <div className="error-content">
+                    <span className="error-title">Process Interrupted</span>
+                    <span className="error-message">{displayStatus.replace(/^Error:\s*/i, '')}</span>
+                </div>
+            </div>
+        )}
+
+        <div className={`loading-header ${isError ? 'controls-only' : ''}`}>
+            {!isError && <span className="loading-status">{displayStatus}</span>}
             <div className="loading-header-content">
-                {isPaused && (onContinue || (isSynthesizerError && onRegenerate)) && (
+                {isPaused && !isWorking && (onContinue || (erroredAgents.length > 0 && onRegenerate)) && (
                     <button className="continue-button" onClick={handleContinueClick}>
                         {continueButtonText}
                     </button>
                 )}
-                <TimerDisplay isActive={!isPaused} />
+                <TimerDisplay isActive={!isPaused || isWorking} />
             </div>
         </div>
         <div className="agent-progress-list">

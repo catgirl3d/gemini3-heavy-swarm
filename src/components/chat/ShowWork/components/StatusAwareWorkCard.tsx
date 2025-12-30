@@ -3,7 +3,7 @@ import { Work, TokenUsage } from '@/types';
 import { StepId } from '@/types/steps';
 import { WorkCard, CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
 import { useResolvedAgentState } from '@/hooks/swarm/useResolvedSwarmState';
-import { getStepConfig, hasStepContentError } from '@/utils/swarm/stepConstants';
+import { getStepConfig } from '@/utils/swarm/stepConstants';
 
 interface StatusAwareWorkCardProps {
   // Card identification
@@ -52,10 +52,8 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
   
   // Resolve agent state from either live store or historical snapshot
   const agent = useResolvedAgentState(messageId, step, index, work);
-  const hasError = hasStepContentError(content, step);
   const status: DisplayStatus = 
     agent ? (agent.status as DisplayStatus) :
-    hasError ? 'error' :
     content ? 'done' :
     'waiting';
   
