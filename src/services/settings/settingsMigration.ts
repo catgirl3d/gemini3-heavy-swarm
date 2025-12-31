@@ -162,5 +162,16 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
     migrated.maxOutputTokens = 65536;
   }
 
+  // Migration 12: Ensure search tool flags exist
+  if (migrated.useSearchInInitial === undefined) {
+    migrated.useSearchInInitial = true;
+  }
+  if (migrated.useSearchInRefinement === undefined) {
+    migrated.useSearchInRefinement = true;
+  }
+  if (migrated.useSearchInSynthesis === undefined) {
+    migrated.useSearchInSynthesis = true;
+  }
+
   return migrated as AppSettings;
 }

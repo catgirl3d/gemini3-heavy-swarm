@@ -19,7 +19,7 @@ export class InitialStep extends BaseStep {
     const { work, settings } = context;
     return this.executeMultiAgent(context, {
       prepareAgent: (i) => this.prepareInstruction(context, i),
-      tools: [{ googleSearch: {} }],
+      tools: settings.useSearchInInitial ? [{ googleSearch: {} }] : undefined,
       simulateError: settings.simulateInitialError,
       simulateErrorAttempts: settings.simulateInitialErrorAttempts
     });
@@ -33,7 +33,7 @@ export class InitialStep extends BaseStep {
       agentIndex,
       { systemInstruction, userTurn, mainChatHistory },
       agentStates,
-      undefined, // tools
+      settings.useSearchInInitial ? [{ googleSearch: {} }] : [], // Use empty array to override BaseStep default
       undefined, // onFirstTextChunk
       settings.simulateInitialError,
       settings.simulateInitialErrorAttempts
@@ -58,6 +58,11 @@ export class InitialStep extends BaseStep {
         parts: [...currentUserTurn.parts, { text: roleReminder }]
       };
     }
+
+    if (settings.useSearchInInitial) {
+      systemInstruction += `\n\n<search_instruction>\n[CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!\n</search_instruction>`;
+    }
+
     systemInstruction += `\n</system_instruction>`;
 
     return { systemInstruction, userTurn, mainChatHistory };

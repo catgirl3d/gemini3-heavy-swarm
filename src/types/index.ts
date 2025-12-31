@@ -82,6 +82,9 @@ export interface AppSettings {
   simulateSynthesisErrorAttempts: number;
   pauseAfterInitial: boolean;
   pauseAfterRefinement: boolean;
+  useSearchInInitial: boolean;
+  useSearchInRefinement: boolean;
+  useSearchInSynthesis: boolean;
   temperature: number;
   maxOutputTokens: number;
   unsafeTemperature?: boolean;

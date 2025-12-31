@@ -186,6 +186,48 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
             </div>
 
             <div className="modal-card">
+                <span className="modal-card-title">Search Tools</span>
+                <div className="modal-form-group checkbox-group">
+                    <input
+                        type="checkbox"
+                        name="useSearchInInitial"
+                        id="useSearchInInitial"
+                        checked={localSettings.useSearchInInitial || false}
+                        onChange={handleChange}
+                    />
+                    <label htmlFor="useSearchInInitial" className="modal-label checkbox-label">
+                        Use Google Search in Initial Drafts
+                    </label>
+                </div>
+
+                <div className="modal-form-group checkbox-group">
+                    <input
+                        type="checkbox"
+                        name="useSearchInRefinement"
+                        id="useSearchInRefinement"
+                        checked={localSettings.useSearchInRefinement || false}
+                        onChange={handleChange}
+                    />
+                    <label htmlFor="useSearchInRefinement" className="modal-label checkbox-label">
+                        Use Google Search in Critics (Refinement)
+                    </label>
+                </div>
+
+                <div className="modal-form-group checkbox-group">
+                    <input
+                        type="checkbox"
+                        name="useSearchInSynthesis"
+                        id="useSearchInSynthesis"
+                        checked={localSettings.useSearchInSynthesis || false}
+                        onChange={handleChange}
+                    />
+                    <label htmlFor="useSearchInSynthesis" className="modal-label checkbox-label">
+                        Use Google Search in Final Synthesis
+                    </label>
+                </div>
+            </div>
+
+            <div className="modal-card">
                 <span className="modal-card-title">System</span>
                 <div className="modal-form-group checkbox-group">
                     <input

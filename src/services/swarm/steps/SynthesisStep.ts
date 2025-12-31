@@ -88,7 +88,7 @@ export class SynthesisStep extends BaseStep {
           ai, settings, model: settings.model,
           contents: [...mainChatHistory, synthesizerTurn],
           systemInstruction,
-          tools: [{googleSearch: {}}],
+          tools: settings.useSearchInSynthesis ? [{ googleSearch: {} }] : undefined,
           signal,
           simulateError: settings.simulateSynthesisError,
           simulateErrorAttempts: settings.simulateSynthesisErrorAttempts,
@@ -201,7 +201,7 @@ export class SynthesisStep extends BaseStep {
       context,
       { systemInstruction, userTurn: synthesizerTurn, mainChatHistory },
       agentStates,
-      [{ googleSearch: {} }],
+      settings.useSearchInSynthesis ? [{ googleSearch: {} }] : [], // Use empty array to override BaseStep default
       settings.simulateSynthesisError,
       settings.simulateSynthesisErrorAttempts
     );
@@ -230,6 +230,10 @@ export class SynthesisStep extends BaseStep {
       .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
       .join('\n\n');
 
+    const searchInstruction = settings.useSearchInSynthesis 
+      ? `\n4. [CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!`
+      : '';
+
     const synthesizerContext = `
 # INPUT DATA
 <context_data>
@@ -247,8 +251,7 @@ ${agentDrafts}
 As defined in <mission> synthesize the best single, final answer from <agent_drafts> to address <original_query>.
 1. Resolve any contradictions.
 2. [CRITICAL] Combine the best insights.
-3. Structure the response clearly.
-4. [CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!
+3. Structure the response clearly.${searchInstruction}
 </instruction>`;
 
     const synthesizerTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}`}] };

@@ -26,7 +26,7 @@ export class RefinementStep extends BaseStep {
 
     return this.executeMultiAgent(context, {
       prepareAgent: (i) => this.prepareRefinement(context, i, initialDrafts as string[]),
-      tools: [{ googleSearch: {} }],
+      tools: settings.useSearchInRefinement ? [{ googleSearch: {} }] : undefined,
       simulateError: settings.simulateRefinementError,
       simulateErrorAttempts: settings.simulateRefinementErrorAttempts
     });
@@ -48,7 +48,7 @@ export class RefinementStep extends BaseStep {
       agentIndex,
       { systemInstruction, userTurn, mainChatHistory },
       agentStates,
-      undefined, // tools
+      settings.useSearchInRefinement ? [{ googleSearch: {} }] : [], // Use empty array to override BaseStep default
       undefined, // onFirstTextChunk
       settings.simulateRefinementError,
       settings.simulateRefinementErrorAttempts
@@ -71,6 +71,10 @@ export class RefinementStep extends BaseStep {
     const rawMyDraft = initialDrafts[index] ?? '';
     const myDraftForRefinement = rawMyDraft;
 
+    const searchInstruction = settings.useSearchInRefinement 
+      ? `\n3. [CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!`
+      : '';
+
     const refinementContext = `
 # INPUT DATA
 <context_data>
@@ -90,8 +94,7 @@ ${peerDrafts}
 # YOUR TASK
 <instruction>
 1. As defined in <mission> critically re-evaluate <my_draft> considering insights from <peer_drafts>.
-2. Provide a new, improved response to <original_query>.
-3. [CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!
+2. Provide a new, improved response to <original_query>.${searchInstruction}
 </instruction>`;
     
     const userTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
