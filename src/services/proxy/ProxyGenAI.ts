@@ -59,13 +59,17 @@ class ProxyGenerativeModel {
           'Content-Type': 'application/json',
           'X-API-Secret': API_SECRET,
         },
-        body: JSON.stringify({
-          model: this.model,
-          contents: request.contents,
-          generationConfig: this.generationConfig,
-          systemInstruction: this.systemInstruction,
-          tools: this.tools
-        })
+        body: (() => {
+          const payload = {
+            model: this.model,
+            contents: request.contents,
+            generationConfig: this.generationConfig,
+            systemInstruction: this.systemInstruction,
+            tools: this.tools
+          };
+          logger.info('Gemini SDK Request Payload:', payload);
+          return JSON.stringify(payload);
+        })()
       });
     } catch (fetchError: any) {
       if (fetchError instanceof AppError) throw fetchError;

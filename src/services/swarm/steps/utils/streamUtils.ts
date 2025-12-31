@@ -15,6 +15,12 @@ export interface GeminiUsageMetadata {
   promptTokenCount?: number;
   candidatesTokenCount?: number;
   totalTokenCount?: number;
+  /** Number of tokens used for "thoughts" in thinking models */
+  thoughtsTokenCount?: number;
+  /** Number of tokens from cached content */
+  cachedContentTokenCount?: number;
+  /** Number of tokens in tool-use prompts */
+  toolUsePromptTokenCount?: number;
 }
 
 /**
@@ -55,6 +61,7 @@ export const extractTextFromParts = (
 
 /**
  * Extracts token usage information from chunk usage metadata.
+ * Includes all available fields: prompt, candidates, thoughts, cached content, and tool use.
  */
 export const extractTokenUsage = (usageMetadata: GeminiUsageMetadata | undefined): TokenUsage | null => {
   if (!usageMetadata) return null;
@@ -62,6 +69,9 @@ export const extractTokenUsage = (usageMetadata: GeminiUsageMetadata | undefined
   return {
     promptTokens: usageMetadata.promptTokenCount || 0,
     candidatesTokens: usageMetadata.candidatesTokenCount || 0,
-    totalTokens: usageMetadata.totalTokenCount || 0
+    totalTokens: usageMetadata.totalTokenCount || 0,
+    thoughtsTokenCount: usageMetadata.thoughtsTokenCount,
+    cachedContentTokenCount: usageMetadata.cachedContentTokenCount,
+    toolUsePromptTokenCount: usageMetadata.toolUsePromptTokenCount
   };
 };

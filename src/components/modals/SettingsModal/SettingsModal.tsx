@@ -68,7 +68,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
         const checked = (e.target as HTMLInputElement).checked;
         setLocalSettings(prev => ({
             ...prev,
-            [name]: type === 'checkbox' ? checked : (name === 'numAgents' ? parseInt(value) || 1 : name === 'temperature' ? parseFloat(value) : value)
+            [name]: type === 'checkbox' ? checked : (name === 'numAgents' || name === 'maxOutputTokens' ? parseInt(value) || 1 : name === 'temperature' ? parseFloat(value) : value)
         }));
     };
 
@@ -83,6 +83,10 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
         if (finalSettings.simulateInitialErrorAttempts < 1) finalSettings.simulateInitialErrorAttempts = 1;
         if (finalSettings.simulateRefinementErrorAttempts < 1) finalSettings.simulateRefinementErrorAttempts = 1;
         if (finalSettings.simulateSynthesisErrorAttempts < 1) finalSettings.simulateSynthesisErrorAttempts = 1;
+
+        // Validation: Max output tokens limits
+        if (finalSettings.maxOutputTokens > 65536) finalSettings.maxOutputTokens = 65536;
+        if (finalSettings.maxOutputTokens < 1) finalSettings.maxOutputTokens = 1;
 
         onSave(finalSettings);
         onClose();

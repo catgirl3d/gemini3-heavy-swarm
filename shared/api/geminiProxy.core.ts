@@ -60,6 +60,12 @@ export function validateAndPrepareProxy(requestBody: GeminiRequest, isPrivateMod
     return { ok: false, error: serialization.error, statusCode: serialization.statusCode };
   }
 
+  // Log the final payload for debugging
+  logger.info(`[Backend Proxy] Preparing request for ${targetModel}`, { 
+    generationConfig, 
+    systemInstructionVisible: !!systemInstruction 
+  });
+
   // 5. Build URL and return prepared request
   return {
     ok: true,

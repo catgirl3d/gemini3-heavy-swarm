@@ -8,14 +8,15 @@ import { GenerationConfig, ThinkingLevel } from '@google/genai';
 export const getGenerationConfig = (
   model: string,
   userTemperature: number | undefined,
+  userMaxOutputTokens: number = 65536,
   unsafeTemperature: boolean = false
 ): GenerationConfig => {
   const isGemini3 = model.includes('gemini-3');
   const isThinkingModel = model.toLowerCase().includes('thinking') || isGemini3;
 
-  // Base config (maxOutputTokens is mandatory for all)
+  // Base config
   const config: GenerationConfig = {
-    maxOutputTokens: 65536,
+    maxOutputTokens: userMaxOutputTokens,
   };
 
   if (isGemini3) {

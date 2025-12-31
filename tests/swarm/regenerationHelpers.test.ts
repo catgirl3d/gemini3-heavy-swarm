@@ -17,6 +17,7 @@ const mockSettings: AppSettings = {
   debugMode: false,
   numAgents: 3,
   temperature: 0.7,
+  maxOutputTokens: 8192,
   unsafeTemperature: false,
   activeProfileId: 'default',
   profiles: [],

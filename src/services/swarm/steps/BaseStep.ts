@@ -556,14 +556,18 @@ export abstract class BaseStep implements StepDescriptor {
           lastUsage = null;
           let chunkCount = 0;
 
+          const config = {
+            ...getGenerationConfig(model, settings.temperature, settings.maxOutputTokens, settings.unsafeTemperature),
+            systemInstruction,
+            tools,
+          };
+
+          logger.info(`[Direct SDK Call] Starting stream for model: ${model}`, { config });
+
           const stream = await ai.models.generateContentStream({
             model,
             contents,
-            config: {
-              ...getGenerationConfig(model, settings.temperature, settings.unsafeTemperature),
-              systemInstruction,
-              tools,
-            },
+            config,
           });
 
           for await (const chunk of stream) {
@@ -657,6 +661,11 @@ export abstract class BaseStep implements StepDescriptor {
     
     // Set initial 'working' status - Step manages its own lifecycle
     updateAgentStatus(this.id, agentIndex, 'working', messageId);
+
+    // Clear previous usage to avoid displaying stale data during regeneration
+    this.ensureStepUsage(work, this.id, settings.numAgents);
+    (work.results[`${this.id}_usage`] as any[])[agentIndex] = null;
+    useAgentStore.getState().updateWorkResult(this.id, agentIndex, { usage: null });
     
     try {
       const { text: fullText, usage: finalUsage, groundingChunks } = await this.runModelStream(

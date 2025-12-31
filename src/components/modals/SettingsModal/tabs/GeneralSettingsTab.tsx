@@ -87,6 +87,54 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                     </div>
                 </div>
 
+                <div className="settings-row">
+                    <div className="modal-form-group">
+                        <label className="modal-label">
+                            Max Output Tokens: <span className="token-value-highlight">{(localSettings.maxOutputTokens / 1000).toFixed(1)}k</span> ({localSettings.maxOutputTokens.toLocaleString()})
+                        </label>
+                        <input
+                            type="range"
+                            name="maxOutputTokens"
+                            min="10"
+                            max="65536"
+                            step="1"
+                            value={localSettings.maxOutputTokens || 65536}
+                            onChange={handleChange}
+                            className="modal-range-slider"
+                        />
+                        <div className="token-presets">
+                            {[8192, 16384, 32768, 65536].map(val => (
+                                <button
+                                    key={val}
+                                    type="button"
+                                    className={`token-chip ${localSettings.maxOutputTokens === val ? 'active' : ''}`}
+                                    onClick={() => setLocalSettings(prev => ({ ...prev, maxOutputTokens: val }))}
+                                >
+                                    {val === 65536 ? '64k (Max)' : `${(val / 1024).toFixed(0)}k`}
+                                </button>
+                            ))}
+                            <button
+                                type="button"
+                                className="token-chip"
+                                onClick={() => {
+                                    const val = window.prompt('Enter custom Max Output Tokens (10 - 65536):', localSettings.maxOutputTokens.toString());
+                                    if (val) {
+                                        const num = parseInt(val);
+                                        if (!isNaN(num) && num >= 10 && num <= 65536) {
+                                            setLocalSettings(prev => ({ ...prev, maxOutputTokens: num }));
+                                        }
+                                    }
+                                }}
+                            >
+                                ✎ Custom
+                            </button>
+                        </div>
+                        <p className="modal-help-text">
+                            Maximum tokens the model can generate. The limit is 65,536 tokens.
+                        </p>
+                    </div>
+                </div>
+
                 {model.includes('gemini-3') && (
                     <TemperatureBanner
                         isActive={!!localSettings.unsafeTemperature}

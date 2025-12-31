@@ -24,6 +24,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   activeProfileId: 'default',
   profiles: DEFAULT_PROFILES,
   temperature: 0.7,
+  maxOutputTokens: 65536,
   unsafeTemperature: false,
   dynamicAgentRoles: true,
   activeRoleProfileId: 'default-roles',

@@ -141,6 +141,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, o
   }, [cardMetaMap, onRegenerate]);
 
   // Memoized total token calculation to avoid recomputation on every render
+  // Note: totalTokens from API already includes prompt + candidates + thoughts + toolUse + cached
   const totalTokens = useMemo(() => {
     let total = 0;
     

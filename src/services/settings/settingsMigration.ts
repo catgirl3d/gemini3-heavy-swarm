@@ -157,5 +157,10 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
     migrated.simulateSynthesisErrorAttempts = 1;
   }
 
+  // Migration 11: Ensure maxOutputTokens exists
+  if (migrated.maxOutputTokens === undefined) {
+    migrated.maxOutputTokens = 65536;
+  }
+
   return migrated as AppSettings;
 }

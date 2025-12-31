@@ -83,6 +83,7 @@ export interface AppSettings {
   pauseAfterInitial: boolean;
   pauseAfterRefinement: boolean;
   temperature: number;
+  maxOutputTokens: number;
   unsafeTemperature?: boolean;
   dynamicAgentRoles: boolean;
   activeRoleProfileId: string;
@@ -100,6 +101,21 @@ export interface TokenUsage {
   promptTokens: number;
   candidatesTokens: number;
   totalTokens: number;
+  /** 
+   * Number of tokens used for "thoughts" in thinking models.
+   * Only present for models with thinking capabilities (e.g., Gemini 2.0 Flash Thinking).
+   */
+  thoughtsTokenCount?: number;
+  /**
+   * Number of tokens from cached content (context caching).
+   * Useful for understanding cost savings from caching.
+   */
+  cachedContentTokenCount?: number;
+  /**
+   * Number of tokens in tool-use prompts.
+   * Only present when tools are used in the request.
+   */
+  toolUsePromptTokenCount?: number;
 }
 
 /**

@@ -65,7 +65,10 @@ describe('streamUtils', () => {
       expect(extractTokenUsage(metadata)).toEqual({
         promptTokens: 10,
         candidatesTokens: 20,
-        totalTokens: 30
+        totalTokens: 30,
+        thoughtsTokenCount: undefined,
+        cachedContentTokenCount: undefined,
+        toolUsePromptTokenCount: undefined
       });
     });
 
@@ -77,7 +80,47 @@ describe('streamUtils', () => {
       expect(extractTokenUsage(metadata)).toEqual({
         promptTokens: 5,
         candidatesTokens: 0,
-        totalTokens: 0
+        totalTokens: 0,
+        thoughtsTokenCount: undefined,
+        cachedContentTokenCount: undefined,
+        toolUsePromptTokenCount: undefined
+      });
+    });
+
+    it('should extract extended token fields for thinking models', () => {
+      const metadata = {
+        promptTokenCount: 100,
+        candidatesTokenCount: 200,
+        totalTokenCount: 500,
+        thoughtsTokenCount: 150,
+        cachedContentTokenCount: 50,
+        toolUsePromptTokenCount: 0
+      };
+      expect(extractTokenUsage(metadata)).toEqual({
+        promptTokens: 100,
+        candidatesTokens: 200,
+        totalTokens: 500,
+        thoughtsTokenCount: 150,
+        cachedContentTokenCount: 50,
+        toolUsePromptTokenCount: 0
+      });
+    });
+
+    it('should handle partial extended fields', () => {
+      const metadata = {
+        promptTokenCount: 80,
+        candidatesTokenCount: 120,
+        totalTokenCount: 250,
+        thoughtsTokenCount: 50
+        // cachedContentTokenCount and toolUsePromptTokenCount missing
+      };
+      expect(extractTokenUsage(metadata)).toEqual({
+        promptTokens: 80,
+        candidatesTokens: 120,
+        totalTokens: 250,
+        thoughtsTokenCount: 50,
+        cachedContentTokenCount: undefined,
+        toolUsePromptTokenCount: undefined
       });
     });
   });
