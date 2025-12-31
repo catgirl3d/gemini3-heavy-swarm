@@ -16,4 +16,5 @@ export interface ProfileMetadata {
     id: InstructionType;
     label: string;
     help: string;
+    modelKey: keyof AppSettings;
 }

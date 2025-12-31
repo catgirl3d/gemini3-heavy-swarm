@@ -33,6 +33,7 @@ export class InitialStep extends BaseStep {
       agentIndex,
       { systemInstruction, userTurn, mainChatHistory },
       agentStates,
+      'roles', // Identify as drafter roles
       settings.useSearchInInitial ? [{ googleSearch: {} }] : [], // Use empty array to override BaseStep default
       undefined, // onFirstTextChunk
       settings.simulateInitialError,

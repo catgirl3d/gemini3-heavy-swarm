@@ -48,6 +48,7 @@ export class RefinementStep extends BaseStep {
       agentIndex,
       { systemInstruction, userTurn, mainChatHistory },
       agentStates,
+      'criticRoles', // Identify as critic roles
       settings.useSearchInRefinement ? [{ googleSearch: {} }] : [], // Use empty array to override BaseStep default
       undefined, // onFirstTextChunk
       settings.simulateRefinementError,

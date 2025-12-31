@@ -12,6 +12,7 @@ export interface Preset {
     name: string;
     instruction: string;
     isCustom: boolean;
+    model?: string;
 }
 
 export interface RoleAndPromptConfigModalProps {
@@ -26,4 +27,7 @@ export interface RoleAndPromptConfigModalProps {
     setIsDropdownOpen: React.Dispatch<React.SetStateAction<boolean>>;
     onSavePreset: (name: string) => void;
     extraActions?: React.ReactNode;
+    modelValue?: string;
+    isModelUnlocked?: boolean;
+    onModelChange?: (model: string) => void;
 }

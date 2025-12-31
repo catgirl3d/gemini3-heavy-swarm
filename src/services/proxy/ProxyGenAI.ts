@@ -67,7 +67,8 @@ class ProxyGenerativeModel {
             systemInstruction: this.systemInstruction,
             tools: this.tools
           };
-          logger.info('Gemini SDK Request Payload:', payload);
+          // Stringify for better visibility in logs (prevents object collapsing)
+          logger.info('Gemini SDK Request Payload:', JSON.stringify(payload, null, 2));
           return JSON.stringify(payload);
         })()
       });

@@ -9,6 +9,7 @@ export interface PromptProfile {
 export interface AgentRole {
   name: string;
   instruction: string;
+  model?: string;
 }
 
 export interface RoleProfile {
@@ -45,6 +46,7 @@ export interface SavedInstruction {
     /** Instruction types for UI/settings. Note: 'refinement_prompt' differs from StepId 'refinement_step' */
     type: PromptTypeId;
     content: string;
+    model?: string;
 }
 
 /**
@@ -62,6 +64,7 @@ export interface SavedRole {
     id: string;
     name: string;
     instruction: string;
+    model?: string;
 }
 
 export type SimulateError = 'none' | '429' | '500' | '503' | 'timeout';
@@ -93,6 +96,9 @@ export interface AppSettings {
   roleProfiles: RoleProfile[];
   savedInstructions: SavedInstruction[];
   savedRoles: SavedRole[];
+  initialModel?: string;
+  refinementModel?: string;
+  synthesisModel?: string;
 }
 
 export interface Source {

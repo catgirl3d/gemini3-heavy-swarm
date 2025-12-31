@@ -2,6 +2,7 @@ import React, { FC, useState, useRef, useEffect } from 'react';
 import { BaseModal } from '@/components/modals/BaseModal';
 import { RoleAndPromptConfigModalProps } from '@/components/modals/RoleAndPromptConfigModal/types';
 import { PortalDropdown } from '@/components/ui';
+import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
 import './RoleAndPromptConfigModal.css';
 
 // Stable reference to prevent click listener churn
@@ -19,7 +20,10 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
     isDropdownOpen,
     setIsDropdownOpen,
     onSavePreset,
-    extraActions
+    extraActions,
+    modelValue,
+    isModelUnlocked = true,
+    onModelChange
 }) => {
     const [isSaving, setIsSaving] = useState(false);
     const [presetName, setPresetName] = useState('');
@@ -121,6 +125,34 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
                         </PortalDropdown>
                     </div>
                 </div>
+
+                {onModelChange && (
+                    <>
+                        <BaseModal.Divider />
+                        <div className="modal-form-group">
+                            <label className="modal-label">Model for this Step</label>
+                            <select
+                                value={!isModelUnlocked ? 'gemini-2.5-flash-lite' : (modelValue || '')}
+                                onChange={(e) => onModelChange(e.target.value)}
+                                className="modal-input"
+                                disabled={!isModelUnlocked}
+                            >
+                                <option value="">Use Global Model</option>
+                                {AVAILABLE_MODELS.map(m => (
+                                    <option key={m.value} value={m.value}>{m.label}</option>
+                                ))}
+                            </select>
+                            <p className="modal-help-text">
+                                Select 'Use Global Model' to use the global model from General settings.
+                            </p>
+                            {!isModelUnlocked && (
+                                <p className="modal-help-text warning">
+                                    Only Gemini 2.5 Flash-Lite is available in Demo Mode.
+                                </p>
+                            )}
+                        </div>
+                    </>
+                )}
 
                 <BaseModal.Divider />
 

@@ -85,7 +85,7 @@ export class SynthesisStep extends BaseStep {
       let isFirstTextChunk = true;
       const { text: finalResponseText, groundingChunks } = await this.runModelStream(
         {
-          ai, settings, model: settings.model,
+          ai, settings, model: this.getStepModel(settings),
           contents: [...mainChatHistory, synthesizerTurn],
           systemInstruction,
           tools: settings.useSearchInSynthesis ? [{ googleSearch: {} }] : undefined,

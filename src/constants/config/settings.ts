@@ -33,5 +33,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   activeRoleProfileId: 'default-roles',
   roleProfiles: DEFAULT_ROLE_PROFILES,
   savedInstructions: [],
-  savedRoles: []
+  savedRoles: [],
+  initialModel: '',
+  refinementModel: '',
+  synthesisModel: ''
 };

@@ -10,6 +10,7 @@ import { SettingsModalProps, InstructionType } from '@/components/modals/Setting
 import { useProfileManagement } from '@/components/modals/SettingsModal/hooks/useProfileManagement';
 import { useRoleManagement } from '@/components/modals/SettingsModal/hooks/useRoleManagement';
 import { usePresetManagement } from '@/components/modals/SettingsModal/hooks/usePresetManagement';
+import { INSTRUCTION_METADATA } from '@/components/modals/SettingsModal/constants';
 import { GeneralSettingsTab } from '@/components/modals/SettingsModal/tabs/GeneralSettingsTab';
 import { PromptsTab } from '@/components/modals/SettingsModal/tabs/PromptsTab';
 import { RolesTab } from '@/components/modals/SettingsModal/tabs/RolesTab';
@@ -77,7 +78,30 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
         const isUsingProxyFinal = checkProxyUsage(finalSettings.apiKey);
         const isUnlockedFinal = !isUsingProxyFinal || (serverStatus?.hasServerKey && serverStatus?.proxyMode === 'private');
         
-        if (!isUnlockedFinal) finalSettings.model = 'gemini-2.5-flash-lite';
+        if (!isUnlockedFinal) {
+            finalSettings.model = 'gemini-2.5-flash-lite';
+            // Reset step-specific models to fallback to global
+            finalSettings.initialModel = undefined;
+            finalSettings.refinementModel = undefined;
+            finalSettings.synthesisModel = undefined;
+
+            // Reset models in all role profiles
+            if (finalSettings.roleProfiles) {
+                finalSettings.roleProfiles = finalSettings.roleProfiles.map(profile => ({
+                    ...profile,
+                    roles: profile.roles.map(role => ({ ...role, model: undefined })),
+                    criticRoles: profile.criticRoles?.map(role => ({ ...role, model: undefined }))
+                }));
+            }
+
+            // Reset models in saved presets
+            if (finalSettings.savedInstructions) {
+                finalSettings.savedInstructions = finalSettings.savedInstructions.map(i => ({ ...i, model: undefined }));
+            }
+            if (finalSettings.savedRoles) {
+                finalSettings.savedRoles = finalSettings.savedRoles.map(r => ({ ...r, model: undefined }));
+            }
+        }
 
         // Validation: Ensure error simulation attempts are at least 1
         if (finalSettings.simulateInitialErrorAttempts < 1) finalSettings.simulateInitialErrorAttempts = 1;
@@ -127,8 +151,10 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                 {activeTab === 'prompts' && (
                     <PromptsTab
                         localSettings={localSettings}
+                        setLocalSettings={setLocalSettings}
                         activeProfile={activeProfile}
                         isEditingProfileName={isEditingProfileName}
+                        isModelUnlocked={isModelUnlocked}
                         setIsEditingProfileName={setIsEditingProfileName}
                         handleRenameProfile={profileMgr.handleRenameProfile}
                         handleProfileChange={profileMgr.handleProfileChange}
@@ -181,11 +207,14 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                             }
                         ]}
                         presets={presetMgr.getRolePresets(activeRoleProfile.id, activeRoleType)}
-                        onApplyPreset={(p) => roleMgr.handleApplyRole(editingRoleIndex, { name: p.name, instruction: p.instruction })}
+                        onApplyPreset={(p) => roleMgr.handleApplyRole(editingRoleIndex, { name: p.name, instruction: p.instruction, model: p.model })}
                         onDeletePreset={presetMgr.handleDeleteRolePreset}
                         isDropdownOpen={isRolePresetDropdownOpen}
                         setIsDropdownOpen={setIsRolePresetDropdownOpen}
                         onSavePreset={(name) => presetMgr.handleSaveRolePreset(editingRoleIndex, activeRoleType, activeRoleProfile, name)}
+                        modelValue={((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.model || ''}
+                        isModelUnlocked={isModelUnlocked}
+                        onModelChange={(model) => roleMgr.handleRoleChange(editingRoleIndex, 'model', model)}
                     />
                 )}
 
@@ -201,11 +230,19 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                             type: 'textarea', placeholder: "Enter instructions...", autoFocus: true
                         }]}
                         presets={presetMgr.getInstructionPresets(editingInstruction)}
-                        onApplyPreset={(p) => presetMgr.handleApplyInstructionPreset(editingInstruction, p.instruction)}
+                        onApplyPreset={(p) => presetMgr.handleApplyInstructionPreset(editingInstruction, p.instruction, p.model)}
                         onDeletePreset={presetMgr.handleDeleteInstructionPreset}
                         isDropdownOpen={isInstructionPresetDropdownOpen}
                         setIsDropdownOpen={setIsInstructionPresetDropdownOpen}
                         onSavePreset={(name) => presetMgr.handleSaveInstructionPreset(editingInstruction, name)}
+                        modelValue={(localSettings[INSTRUCTION_METADATA[editingInstruction].modelKey] as string) || ''}
+                        isModelUnlocked={isModelUnlocked}
+                        onModelChange={(model) => {
+                            setLocalSettings(prev => ({
+                                ...prev,
+                                [INSTRUCTION_METADATA[editingInstruction!].modelKey]: model || undefined
+                            }));
+                        }}
                     />
                 )}
             </BaseModal.Body>

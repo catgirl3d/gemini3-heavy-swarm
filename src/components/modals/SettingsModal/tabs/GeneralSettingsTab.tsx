@@ -51,6 +51,11 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                             <option key={model.value} value={model.value}>{model.label}</option>
                         ))}
                     </select>
+                    {isModelUnlocked && (
+                        <p className="modal-help-text">
+                            Global default model. Priority: <strong>Agent Role</strong> &gt; <strong>Step Instruction</strong> &gt; <strong>Global Default</strong>.
+                        </p>
+                    )}
                     {!isModelUnlocked && (
                         <p className="modal-help-text warning">
                             Only Gemini 2.5 Flash-Lite is available in Demo Mode. Add an API key to unlock all models.

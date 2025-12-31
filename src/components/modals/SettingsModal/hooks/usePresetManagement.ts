@@ -2,6 +2,7 @@ import React from 'react';
 import { AppSettings, PromptProfile, RoleProfile, PROMPT_TYPES } from '@/types';
 import { DEFAULT_SETTINGS } from '@/constants';
 import { InstructionType } from '@/components/modals/SettingsModal/types';
+import { INSTRUCTION_METADATA } from '@/components/modals/SettingsModal/constants';
 
 export function usePresetManagement(
     localSettings: AppSettings,
@@ -21,6 +22,7 @@ export function usePresetManagement(
         const savedPresets = (localSettings.savedRoles || []).map(r => ({
             name: r.name,
             instruction: r.instruction,
+            model: r.model,
             isCustom: true,
             id: r.id
         }));
@@ -28,6 +30,7 @@ export function usePresetManagement(
         const noRolePreset = {
             name: "No Role",
             instruction: "",
+            model: "",
             isCustom: false,
             id: "default-no-role"
         };
@@ -46,6 +49,7 @@ export function usePresetManagement(
             id: p.id,
             name: p.name,
             instruction: type === PROMPT_TYPES.INITIAL ? p.initialInstruction : type === PROMPT_TYPES.REFINEMENT ? p.refinementInstruction : p.synthesizerInstruction,
+            model: (localSettings[INSTRUCTION_METADATA[type].modelKey] as string) || '', // Pass current model for profile-based presets
             isCustom: false
         }));
 
@@ -53,6 +57,7 @@ export function usePresetManagement(
             id: i.id,
             name: i.name,
             instruction: i.content,
+            model: i.model,
             isCustom: true
         }));
 
@@ -67,6 +72,9 @@ export function usePresetManagement(
             : editingInstruction === PROMPT_TYPES.REFINEMENT
                 ? activeProfile.refinementInstruction
                 : activeProfile.synthesizerInstruction;
+        
+        // Need to get current model too
+        const currentModel = (localSettings[INSTRUCTION_METADATA[editingInstruction].modelKey] as string) || '';
 
         setLocalSettings(prev => ({
             ...prev,
@@ -76,7 +84,8 @@ export function usePresetManagement(
                     id: `saved-${Date.now()}`,
                     name: newPresetName.trim(),
                     type: editingInstruction,
-                    content: currentInstruction
+                    content: currentInstruction,
+                    model: currentModel
                 }
             ]
         }));
@@ -104,7 +113,8 @@ export function usePresetManagement(
                 {
                     id: `saved-role-${Date.now()}`,
                     name: newPresetName.trim(),
-                    instruction: currentRole.instruction
+                    instruction: currentRole.instruction,
+                    model: currentRole.model
                 }
             ]
         }));
@@ -117,7 +127,7 @@ export function usePresetManagement(
         }));
     };
 
-    const handleApplyInstructionPreset = (type: InstructionType, instruction: string) => {
+    const handleApplyInstructionPreset = (type: InstructionType, instruction: string, model?: string) => {
         setLocalSettings(prev => {
             const newProfiles = prev.profiles.map(p => {
                 if (p.id === prev.activeProfileId) {
@@ -128,7 +138,15 @@ export function usePresetManagement(
                 }
                 return p;
             });
-            return { ...prev, profiles: newProfiles };
+            
+            const updatedSettings = { ...prev, profiles: newProfiles };
+            
+            // Also apply model if provided
+            if (model !== undefined) {
+                (updatedSettings as any)[INSTRUCTION_METADATA[type].modelKey] = model || undefined;
+            }
+            
+            return updatedSettings;
         });
     };
 

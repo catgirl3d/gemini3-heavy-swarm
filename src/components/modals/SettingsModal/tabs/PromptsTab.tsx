@@ -7,8 +7,10 @@ import { InstructionType } from '@/components/modals/SettingsModal/types';
 
 interface PromptsTabProps {
     localSettings: AppSettings;
+    setLocalSettings: React.Dispatch<React.SetStateAction<AppSettings>>;
     activeProfile: PromptProfile;
     isEditingProfileName: boolean;
+    isModelUnlocked: boolean;
     setIsEditingProfileName: (val: boolean) => void;
     handleRenameProfile: (name: string) => void;
     handleProfileChange: (e: ChangeEvent<HTMLSelectElement>) => void;
@@ -19,8 +21,10 @@ interface PromptsTabProps {
 
 export const PromptsTab: FC<PromptsTabProps> = ({
     localSettings,
+    setLocalSettings,
     activeProfile,
     isEditingProfileName,
+    isModelUnlocked,
     setIsEditingProfileName,
     handleRenameProfile,
     handleProfileChange,

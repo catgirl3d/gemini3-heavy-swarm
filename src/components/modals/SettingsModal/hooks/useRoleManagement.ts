@@ -8,7 +8,7 @@ export function useRoleManagement(
     activeRoleProfile: RoleProfile,
     activeRoleType: 'drafter' | 'critic'
 ) {
-    const handleRoleChange = (index: number, field: 'name' | 'instruction', value: string) => {
+    const handleRoleChange = (index: number, field: 'name' | 'instruction' | 'model', value: string) => {
         setLocalSettings(prev => {
             const targetId = activeRoleProfile.id;
             const newProfiles = (prev.roleProfiles || []).map(p => {
@@ -17,7 +17,10 @@ export function useRoleManagement(
                     const currentRoles = p[roleKey] || [];
                     const newRoles = [...currentRoles];
                     if (newRoles[index]) {
-                        newRoles[index] = { ...newRoles[index], [field]: value };
+                        newRoles[index] = { 
+                            ...newRoles[index], 
+                            [field]: field === 'model' ? (value || undefined) : value 
+                        };
                     }
                     return { ...p, [roleKey]: newRoles };
                 }
@@ -27,7 +30,7 @@ export function useRoleManagement(
         });
     };
 
-    const handleApplyRole = (index: number, role: { name: string, instruction: string }) => {
+    const handleApplyRole = (index: number, role: { name: string, instruction: string, model?: string }) => {
         setLocalSettings(prev => {
             const targetId = activeRoleProfile.id;
             const newProfiles = (prev.roleProfiles || []).map(p => {
@@ -36,7 +39,12 @@ export function useRoleManagement(
                     const currentRoles = p[roleKey] || [];
                     const newRoles = [...currentRoles];
                     if (newRoles[index]) {
-                        newRoles[index] = { ...newRoles[index], name: role.name, instruction: role.instruction };
+                        newRoles[index] = { 
+                            ...newRoles[index], 
+                            name: role.name, 
+                            instruction: role.instruction,
+                            model: role.model // Add model support for applying roles
+                        };
                     }
                     return { ...p, [roleKey]: newRoles };
                 }

@@ -61,9 +61,9 @@ export function validateAndPrepareProxy(requestBody: GeminiRequest, isPrivateMod
   }
 
   // Log the final payload for debugging
-  logger.info(`[Backend Proxy] Preparing request for ${targetModel}`, { 
-    generationConfig, 
-    systemInstructionVisible: !!systemInstruction 
+  logger.info(`[Backend Proxy] Preparing request for ${targetModel}`, {
+    generationConfig: JSON.stringify(generationConfig, null, 2),
+    systemInstructionVisible: !!systemInstruction
   });
 
   // 5. Build URL and return prepared request

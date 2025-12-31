@@ -13,6 +13,7 @@ import { AppError, ErrorCode } from '@/utils/errors/AppError';
 import { withRetry } from '@/utils/common/retryStrategy';
 import { useAgentStore } from '@/stores/agentStore';
 import { updateAgentStatus, updateAgentStatusIfChanged } from '@/utils/swarm/statusHelpers';
+import { AppSettings } from '@/types';
 
 export abstract class BaseStep implements StepDescriptor {
   abstract id: StepId;
@@ -71,6 +72,45 @@ export abstract class BaseStep implements StepDescriptor {
     const stepId = this.id;
     // Always use plural for consistency (agentIndex determines array vs scalar structure)
     return `${stepId}_error_counts`;
+  }
+
+  /**
+   * Returns the model for the current step.
+   * If a step-specific model is set in settings, it is used, otherwise falls back to the global model.
+   */
+  protected getStepModel(settings: AppSettings): string {
+    const stepId = this.id;
+    if (stepId === STEPS.INITIAL && settings.initialModel) return settings.initialModel;
+    if (stepId === STEPS.REFINEMENT && settings.refinementModel) return settings.refinementModel;
+    if (stepId === STEPS.SYNTHESIS && settings.synthesisModel) return settings.synthesisModel;
+    return settings.model;
+  }
+
+  /**
+   * Returns the model for the current agent based on role and step configuration.
+   * Priority: Role model > Step model > Global model
+   */
+  protected getRoleModel(settings: AppSettings, agentIndex: number, roleType: 'roles' | 'criticRoles'): string {
+    // Early return if no role profiles
+    if (!settings.roleProfiles || settings.roleProfiles.length === 0) {
+        return this.getStepModel(settings);
+    }
+
+    // 1. Try to get role-specific model
+    const activeRoleProfile = settings.roleProfiles.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles[0];
+    if (!activeRoleProfile) {
+        return this.getStepModel(settings);
+    }
+
+    const roleList = roleType === 'roles' ? activeRoleProfile.roles : activeRoleProfile.criticRoles;
+    const role = roleList?.[agentIndex];
+    
+    if (role?.model) {
+        return role.model;
+    }
+    
+    // 2. Fallback to step model (which falls back to global)
+    return this.getStepModel(settings);
   }
 
 
@@ -417,9 +457,12 @@ export abstract class BaseStep implements StepDescriptor {
       this.ensureDebugInfo(work, stepId);
       work.debugInfo[stepId][i] = { systemInstruction, history: mainChatHistory, userTurn };
 
+      // Determine model for this specific agent based on role
+      const agentModel = this.getRoleModel(settings, i, stepId === STEPS.INITIAL ? 'roles' : 'criticRoles');
+
       const { text: fullText } = await this.runModelStream(
         {
-          ai, settings, model: settings.model,
+          ai, settings, model: agentModel,
           contents: [...mainChatHistory, userTurn],
           systemInstruction,
           tools: config.tools,
@@ -638,6 +681,7 @@ export abstract class BaseStep implements StepDescriptor {
     agentIndex: number,
     instruction: AgentInstruction,
     agentStates: AgentState[],
+    roleType?: 'roles' | 'criticRoles',
     tools?: Tool[],
     onFirstTextChunk?: () => void,
     simulateError?: SimulateError,
@@ -667,10 +711,15 @@ export abstract class BaseStep implements StepDescriptor {
     (work.results[`${this.id}_usage`] as any[])[agentIndex] = null;
     useAgentStore.getState().updateWorkResult(this.id, agentIndex, { usage: null });
     
+    // Determine model
+    const model = roleType 
+        ? this.getRoleModel(settings, agentIndex, roleType)
+        : this.getStepModel(settings);
+
     try {
       const { text: fullText, usage: finalUsage, groundingChunks } = await this.runModelStream(
         {
-          ai, settings, model: settings.model,
+          ai, settings, model,
           contents: [...mainChatHistory, userTurn],
           systemInstruction,
           tools: tools ?? [{ googleSearch: {} }],
@@ -767,6 +816,7 @@ export abstract class BaseStep implements StepDescriptor {
       agentIndex,
       agentInstruction,
       agentStates,
+      undefined, // No roleType for synthesis
       tools,
       () => context.onSynthesisJump?.(), // Pass callback for synthesis jump
       simulateError,

@@ -232,6 +232,29 @@
   gap: 0.1rem;
 }
 
+.role-step-model-selector {
+  margin-left: auto;
+  min-width: 140px;
+}
+
+.modal-input.minimal {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+  height: auto;
+  margin-bottom: 0;
+  border-radius: 6px;
+  background-color: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+.modal-input.minimal:hover {
+  background-color: #e2e8f0;
+}
+
+.modal-input.minimal:focus {
+  background-color: #fff;
+}
+
 .role-move-buttons.horizontal {
   display: flex;
   flex-direction: row;

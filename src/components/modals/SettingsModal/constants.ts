@@ -6,17 +6,20 @@ export const INSTRUCTION_METADATA: Record<InstructionType, ProfileMetadata> = {
     [PROMPT_TYPES.INITIAL]: {
         id: PROMPT_TYPES.INITIAL,
         label: 'Initial Agent Instruction',
-        help: 'Instructions for the agents drafting the first response.'
+        help: 'Instructions for the agents drafting the first response.',
+        modelKey: 'initialModel'
     },
     [PROMPT_TYPES.REFINEMENT]: {
         id: PROMPT_TYPES.REFINEMENT,
         label: 'Refinement Instruction',
-        help: 'Instructions for agents critiquing the initial drafts.'
+        help: 'Instructions for agents critiquing the initial drafts.',
+        modelKey: 'refinementModel'
     },
     [PROMPT_TYPES.SYNTHESIS]: {
         id: PROMPT_TYPES.SYNTHESIS,
         label: 'Synthesizer Instruction',
-        help: 'Instructions for the final agent merging all refined responses.'
+        help: 'Instructions for the final agent merging all refined responses.',
+        modelKey: 'synthesisModel'
     }
 };
 

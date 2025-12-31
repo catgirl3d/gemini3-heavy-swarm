@@ -173,5 +173,33 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
     migrated.useSearchInSynthesis = true;
   }
 
+  // Migration 13: Ensure step-specific models exist
+  if (migrated.initialModel === undefined) {
+    migrated.initialModel = '';
+  }
+  if (migrated.refinementModel === undefined) {
+    migrated.refinementModel = '';
+  }
+  if (migrated.synthesisModel === undefined) {
+    migrated.synthesisModel = '';
+  }
+
+  // Migration 14: Ensure role models exist and are valid
+  if (migrated.roleProfiles) {
+    (migrated.roleProfiles as any[]) = migrated.roleProfiles.map((profile: any) => {
+        return {
+            ...profile,
+            roles: (profile.roles || []).map((role: any) => ({
+                ...role,
+                model: role.model || undefined // Clean up empty strings or add if missing
+            })),
+            criticRoles: (profile.criticRoles || []).map((role: any) => ({
+                ...role,
+                model: role.model || undefined
+            }))
+        };
+    });
+  }
+
   return migrated as AppSettings;
 }
