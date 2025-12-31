@@ -70,11 +70,9 @@ describe('InitialStep', () => {
     const userTurnText = config.userTurn.parts[0].text;
     expect(userTurnText).toContain('user input'); // From prepareGeminiContent mock
     
-    // Check internal bit if dynamic roles are enabled (it adds role reminder)
-    if (mockContext.settings.dynamicAgentRoles) {
-      const lastPart = config.userTurn.parts[config.userTurn.parts.length - 1].text;
-      expect(lastPart).toContain('Agent 1 Role');
-    }
+    // Check internal bit (it adds role reminder)
+    const lastPart = config.userTurn.parts[config.userTurn.parts.length - 1].text;
+    expect(lastPart).toContain('Agent 1 Role');
   });
 
   it('should use the same instruction during regeneration', async () => {

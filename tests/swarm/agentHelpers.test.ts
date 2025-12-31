@@ -49,47 +49,37 @@ describe('agentHelpers', () => {
 
     describe('getUpdatedAgentName', () => {
         const mockSettings: AppSettings = {
-            dynamicAgentRoles: false,
+            dynamicAgentRoles: true,
             activeRoleProfileId: 'p1',
             roleProfiles: [{
                 id: 'p1',
                 name: 'Profile 1',
-                roles: [{ name: 'Researcher', instruction: '' }],
+                roles: [
+                    { name: 'Researcher', instruction: '' },
+                    { name: 'Analyst', instruction: '' }
+                ],
                 criticRoles: [{ name: 'Reviewer', instruction: '' }]
             }]
         } as AppSettings;
 
-        it('should return basic name for initial step when dynamic roles are disabled', () => {
-            const name = getUpdatedAgentName(0, STEPS.INITIAL, { ...mockSettings, dynamicAgentRoles: false });
-            expect(name).toBe('Agent 1');
-        });
-
-        it('should return role-based name for initial step when dynamic roles are enabled', () => {
-            const name = getUpdatedAgentName(0, STEPS.INITIAL, { ...mockSettings, dynamicAgentRoles: true });
+        it('should always return role-based name for initial step', () => {
+            const name = getUpdatedAgentName(0, STEPS.INITIAL, mockSettings);
             expect(name).toBe('Agent 1 (Researcher)');
         });
 
-        it('should return basic name for refinement step when dynamic roles are disabled', () => {
-            const name = getUpdatedAgentName(0, STEPS.REFINEMENT, { ...mockSettings, dynamicAgentRoles: false });
-            expect(name).toBe('Critic 1');
-        });
-
-        it('should return role-based name for refinement step when dynamic roles are enabled', () => {
-            const name = getUpdatedAgentName(0, STEPS.REFINEMENT, { ...mockSettings, dynamicAgentRoles: true });
+        it('should always return role-based name for refinement step', () => {
+            const name = getUpdatedAgentName(0, STEPS.REFINEMENT, mockSettings);
             expect(name).toBe('Critic 1 (Reviewer)');
         });
 
-        it('should return synthesizer name for synthesis step regardless of settings', () => {
-            const name1 = getUpdatedAgentName(0, STEPS.SYNTHESIS, { ...mockSettings, dynamicAgentRoles: false });
-            const name2 = getUpdatedAgentName(0, STEPS.SYNTHESIS, { ...mockSettings, dynamicAgentRoles: true });
-            
-            expect(name1).toBe('Synthesizer');
-            expect(name2).toBe('Synthesizer');
+        it('should return synthesizer name for synthesis step', () => {
+            const name = getUpdatedAgentName(0, STEPS.SYNTHESIS, mockSettings);
+            expect(name).toBe('Synthesizer');
         });
 
-        it('should handle index correctly for multiple agents', () => {
-            const name = getUpdatedAgentName(1, STEPS.INITIAL, { ...mockSettings, dynamicAgentRoles: false });
-            expect(name).toBe('Agent 2');
+        it('should handle index correctly and use corresponding role', () => {
+            const name = getUpdatedAgentName(1, STEPS.INITIAL, mockSettings);
+            expect(name).toBe('Agent 2 (Analyst)');
         });
     });
 });

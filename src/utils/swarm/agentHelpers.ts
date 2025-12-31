@@ -19,12 +19,9 @@ export function getUpdatedAgentName(index: number, stepId: StepId, settings: App
     return config.namePrefix;
   }
   
-  if (settings.dynamicAgentRoles) {
-    const role = getAgentRole(index, settings, config.roleKey);
-    return `${config.namePrefix} ${index + 1} (${role.name})`;
-  }
-  
-  return `${config.namePrefix} ${index + 1}`;
+  // Always apply dynamic agent roles
+  const role = getAgentRole(index, settings, config.roleKey);
+  return `${config.namePrefix} ${index + 1} (${role.name})`;
 }
 
 /**

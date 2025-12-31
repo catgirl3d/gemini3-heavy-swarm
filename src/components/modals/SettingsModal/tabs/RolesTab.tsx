@@ -2,7 +2,7 @@ import React, { FC, ChangeEvent } from 'react';
 import { AppSettings, RoleProfile } from '@/types';
 import { ProfileHeader } from '@/components/modals/SettingsModal/components/ProfileHeader';
 import { RoleItem } from '@/components/modals/SettingsModal/components/RoleItem';
-import { InfoIcon, WarningIcon } from '@/components/modals/SettingsModal/icons';
+import { InfoIcon } from '@/components/modals/SettingsModal/icons';
 
 interface RolesTabProps {
     localSettings: AppSettings;
@@ -85,21 +85,6 @@ export const RolesTab: FC<RolesTabProps> = ({
                         <button className="add-role-btn-small" onClick={handleAddRole}>+ Add Role</button>
                     </div>
                 </div>
-
-                {!localSettings.dynamicAgentRoles && (
-                    <div className="modal-banner warning">
-                        <WarningIcon />
-                        <span>
-                            <strong>Dynamic Agent Roles</strong> are currently disabled. These roles will not be used until you enable them in the <strong>General</strong> tab.
-                        </span>
-                        <button
-                            onClick={() => setLocalSettings(prev => ({ ...prev, dynamicAgentRoles: true }))}
-                            className="warning-banner-btn"
-                        >
-                            Enable
-                        </button>
-                    </div>
-                )}
 
                 <div className="roles-list-container">
                     <div className="modal-banner info">

@@ -30,7 +30,7 @@ const mockSettings: AppSettings = {
   simulateSynthesisErrorAttempts: 0,
   pauseAfterInitial: false,
   pauseAfterRefinement: false,
-  dynamicAgentRoles: false,
+  dynamicAgentRoles: true,
   activeRoleProfileId: 'default',
   roleProfiles: [],
   savedInstructions: [],

@@ -101,12 +101,11 @@ ${peerDrafts}
     
     const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
     
+    // Always apply dynamic agent roles
     let roleInstruction = '';
-    if (settings.dynamicAgentRoles) {
-        const role = getAgentRole(index, settings, 'criticRoles');
-        if (role.instruction) {
-            roleInstruction = `\n\n<role_assignment>\n${role.instruction}\n</role_assignment>`;
-        }
+    const role = getAgentRole(index, settings, 'criticRoles');
+    if (role.instruction) {
+        roleInstruction = `\n\n<role_assignment>\n${role.instruction}\n</role_assignment>`;
     }
 
     const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.refinementInstruction}</mission>${roleInstruction}\n</system_instruction>`;

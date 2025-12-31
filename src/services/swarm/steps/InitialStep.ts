@@ -49,15 +49,14 @@ export class InitialStep extends BaseStep {
     let systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.initialInstruction}</mission>`;
     let userTurn = currentUserTurn;
 
-    if (settings.dynamicAgentRoles) {
-      const perspective = getAgentRole(index, settings, 'roles');
-      systemInstruction += `\n<role>${perspective.name}</role>\n<role_instruction>${perspective.instruction}</role_instruction>`;
-      const roleReminder = `\n\n<system_note>\nRemember your assigned role: ${perspective.name}\n</system_note>`;
-      userTurn = {
-        role: 'user',
-        parts: [...currentUserTurn.parts, { text: roleReminder }]
-      };
-    }
+    // Always apply dynamic agent roles
+    const perspective = getAgentRole(index, settings, 'roles');
+    systemInstruction += `\n<role>${perspective.name}</role>\n<role_instruction>${perspective.instruction}</role_instruction>`;
+    const roleReminder = `\n\n<system_note>\nRemember your assigned role: ${perspective.name}\n</system_note>`;
+    userTurn = {
+      role: 'user',
+      parts: [...currentUserTurn.parts, { text: roleReminder }]
+    };
 
     if (settings.useSearchInInitial) {
       systemInstruction += `\n\n<search_instruction>\n[CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!\n</search_instruction>`;

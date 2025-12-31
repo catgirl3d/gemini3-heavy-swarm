@@ -148,19 +148,6 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                 <div className="modal-form-group checkbox-group">
                     <input
                         type="checkbox"
-                        name="dynamicAgentRoles"
-                        id="dynamicAgentRoles"
-                        checked={localSettings.dynamicAgentRoles || false}
-                        onChange={handleChange}
-                    />
-                    <label htmlFor="dynamicAgentRoles" className="modal-label checkbox-label">
-                        Dynamic Agent Roles (Visionary, Critic, etc.)
-                    </label>
-                </div>
-
-                <div className="modal-form-group checkbox-group">
-                    <input
-                        type="checkbox"
                         name="pauseAfterInitial"
                         id="pauseAfterInitial"
                         checked={localSettings.pauseAfterInitial || false}
