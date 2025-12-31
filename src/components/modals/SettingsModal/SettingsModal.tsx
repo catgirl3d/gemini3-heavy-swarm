@@ -152,6 +152,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         handleAddRole={roleMgr.handleAddRole}
                         handleDeleteRole={roleMgr.handleDeleteRole}
                         handleMoveRole={roleMgr.handleMoveRole}
+                        handleRestoreDefaultRoles={roleMgr.handleRestoreDefaultRoles}
                         setEditingRoleIndex={setEditingRoleIndex}
                         setLocalSettings={setLocalSettings}
                     />

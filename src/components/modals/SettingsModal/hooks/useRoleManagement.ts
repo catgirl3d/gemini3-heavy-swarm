@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppSettings, RoleProfile } from '@/types';
+import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
 
 export function useRoleManagement(
     localSettings: AppSettings,
@@ -98,11 +99,31 @@ export function useRoleManagement(
         });
     };
 
+    const handleRestoreDefaultRoles = () => {
+        const defaultProfile = DEFAULT_ROLE_PROFILES.find((p: RoleProfile) => p.id === activeRoleProfile.id) || DEFAULT_ROLE_PROFILES[0];
+        
+        setLocalSettings(prev => {
+            const targetId = activeRoleProfile.id;
+            const newProfiles = (prev.roleProfiles || []).map(p => {
+                if (p.id === targetId) {
+                    return { 
+                        ...p, 
+                        roles: [...defaultProfile.roles], 
+                        criticRoles: [...(defaultProfile.criticRoles || [])] 
+                    };
+                }
+                return p;
+            });
+            return { ...prev, roleProfiles: newProfiles, activeRoleProfileId: targetId };
+        });
+    };
+
     return {
         handleRoleChange,
         handleApplyRole,
         handleAddRole,
         handleDeleteRole,
-        handleMoveRole
+        handleMoveRole,
+        handleRestoreDefaultRoles
     };
 }

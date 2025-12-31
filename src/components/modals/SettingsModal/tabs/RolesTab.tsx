@@ -18,6 +18,7 @@ interface RolesTabProps {
     handleAddRole: () => void;
     handleDeleteRole: (index: number) => void;
     handleMoveRole: (index: number, direction: 'up' | 'down') => void;
+    handleRestoreDefaultRoles: () => void;
     setEditingRoleIndex: (index: number | null) => void;
     setLocalSettings: React.Dispatch<React.SetStateAction<AppSettings>>;
 }
@@ -36,6 +37,7 @@ export const RolesTab: FC<RolesTabProps> = ({
     handleAddRole,
     handleDeleteRole,
     handleMoveRole,
+    handleRestoreDefaultRoles,
     setEditingRoleIndex,
     setLocalSettings
 }) => {
@@ -76,7 +78,12 @@ export const RolesTab: FC<RolesTabProps> = ({
                             </button>
                         </div>
                     </div>
-                    <button className="add-role-btn-small" onClick={handleAddRole}>+ Add Role</button>
+                    <div className="roles-toolbar-actions">
+                        <button className="add-role-btn-small" onClick={handleRestoreDefaultRoles}>
+                            Restore Defaults
+                        </button>
+                        <button className="add-role-btn-small" onClick={handleAddRole}>+ Add Role</button>
+                    </div>
                 </div>
 
                 {!localSettings.dynamicAgentRoles && (
