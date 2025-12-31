@@ -168,7 +168,7 @@ export function useSwarmRegeneration({
         stepId,
         workContext,
         useAgentStore.getState().agents, // Use store for current truth
-        (text, isFirstChunk) => {
+        (text, isFirstChunk, thought, usage) => {
           setMessages(prev => {
             return calculateUpdatedStateForRegeneration(
               prev,
@@ -178,7 +178,10 @@ export function useSwarmRegeneration({
               workContext,
               text,
               settings,
-              isFirstChunk
+              isFirstChunk,
+              messageId,
+              thought,
+              usage
             );
           });
         },
@@ -276,9 +279,21 @@ export function useSwarmRegeneration({
       regenLogger.error(`Regeneration failed for step ${stepId}, agent ${agentIndex}:`, error);
       const errorMessage = getFriendlyErrorMessage(error);
       
+      // Update store state to show error in LoadingIndicator.
+      // NOTE: We set both isLoading: true AND isPaused: true.
+      // CRITICAL: isLoading must remain true so that MessageList keeps the LoadingIndicator mounted.
+      // In our state machine, this specific combination signals to the UI
+      // (LoadingIndicator) that the process has errored and needs a Retry button.
+      const store = useAgentStore.getState();
+      store.setIsLoading(true);
+      store.setIsPaused(true);
+      store.setLoadingStatus(`Error: ${errorMessage}`);
+
       // Steps already updated work.results and status - just save work snapshot and update message
       setMessages(prev => {
-        const workToUpdate = prev[messageIndex]?.work || workContext;
+        // CRITICAL: Use workContext as the base because it contains the incremented error counts
+        // from the failed attempt. prev[messageIndex]?.work might be stale.
+        const workToUpdate = workContext || prev[messageIndex]?.work;
         
         // Steps already updated work.results with error - just add agentStates snapshot
         const updatedWork = workToUpdate ? {

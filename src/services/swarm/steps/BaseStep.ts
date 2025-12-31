@@ -1,4 +1,5 @@
 import { StepDescriptor, StepContext, StepId, STEPS, StreamConfig, StreamCallbacks, StreamResult, AgentInstruction, MultiAgentConfig } from '@/types/steps';
+import { SimulateError } from '@/types';
 import { Tool, Content, GroundingChunk } from '@google/genai';
 import { getStepConfig, StepConfig } from '@/utils/swarm/stepConstants';
 import { AgentState, Source, TokenUsage, Work } from '@/types';
@@ -61,6 +62,17 @@ export abstract class BaseStep implements StepDescriptor {
   protected checkGlobalRateLimitFailure = checkGlobalRateLimitFailure;
   protected checkGlobalStepFailure = checkGlobalStepFailure;
 
+  /**
+   * Type-safe helper to get the error count key for the current step.
+   * Prevents magic string typos by using WorkResultKey type.
+   * @param agentIndex - Optional agent index. Determines data structure (array vs scalar), not naming.
+   */
+  protected getErrorCountKey(agentIndex?: number): string {
+    const stepId = this.id;
+    // Always use plural for consistency (agentIndex determines array vs scalar structure)
+    return `${stepId}_error_counts`;
+  }
+
 
 
   /**
@@ -79,7 +91,7 @@ export abstract class BaseStep implements StepDescriptor {
     index: number,
     text: string,
     thought: string,
-    usage: any,
+    usage: TokenUsage | null,
     options: {
       statusMsg?: string;
       agentStates?: AgentState[];
@@ -159,7 +171,7 @@ export abstract class BaseStep implements StepDescriptor {
      useAgentStore.getState().updateWorkResult(stepId, index, { text, thought, usage });
 
      if (text.length > 0 && onMessageUpdate && options.streamToMessage) {
-       onMessageUpdate(text, options.isFirstChunk ?? false);
+       onMessageUpdate(text, options.isFirstChunk ?? false, thought, usage);
      }
   }
 
@@ -385,6 +397,14 @@ export abstract class BaseStep implements StepDescriptor {
     const results: string[] = Array(settings.numAgents).fill('');
     this.ensureResults(work);
 
+    // Initialize persistent error counts if simulating errors
+    if (config.simulateError && config.simulateError !== 'none') {
+      const errorKey = this.getErrorCountKey(0); // Multi-agent context
+      if (!Array.isArray(work.results[errorKey])) {
+        work.results[errorKey] = Array(settings.numAgents).fill(0);
+      }
+    }
+
     // Standardized initialization of agent states
     let currentAgentStates = this.initializeAgentStates(context);
     const stepConfig = getStepConfig(stepId);
@@ -406,6 +426,8 @@ export abstract class BaseStep implements StepDescriptor {
           signal,
           agentIndex: i,
           simulateError: config.simulateError,
+          simulateErrorAttempts: config.simulateErrorAttempts,
+          work: context.work,
         },
         {
           onChunk: (text, thought, usage) => {
@@ -445,8 +467,61 @@ export abstract class BaseStep implements StepDescriptor {
     config: StreamConfig,
     callbacks: StreamCallbacks
   ): Promise<StreamResult> {
-    const { ai, settings, model, contents, systemInstruction, tools, signal, agentIndex, devModeDuration, simulateError } = config;
+    const { ai, settings, model, contents, systemInstruction, tools, signal, agentIndex, devModeDuration, simulateError, simulateErrorAttempts, work: configWork } = config;
     const logger = new Logger(`${this.id}${agentIndex !== undefined ? `:Agent${agentIndex}` : ''}`, settings.debugMode);
+
+    // Persistent error simulation logic (works across manual regenerations)
+    if (simulateError && simulateError !== 'none') {
+      const maxErrorAttempts = simulateErrorAttempts ?? 1;
+      const stepId = this.id;
+      
+      // Use work from config (passed from context) or fallback to store
+      const targetWork = configWork || useAgentStore.getState().currentWork;
+      
+      if (targetWork) {
+        this.ensureResults(targetWork);
+        const errorKey = this.getErrorCountKey(agentIndex);
+        
+        let currentCount = 0;
+        if (agentIndex === undefined) {
+          currentCount = (targetWork.results[errorKey] as number) || 0;
+        } else {
+          if (!Array.isArray(targetWork.results[errorKey])) {
+            targetWork.results[errorKey] = Array(settings.numAgents).fill(0);
+          }
+          currentCount = (targetWork.results[errorKey] as number[])[agentIndex] || 0;
+        }
+
+        if (currentCount < maxErrorAttempts) {
+          // Increment and save count
+          if (agentIndex === undefined) {
+            targetWork.results[errorKey] = currentCount + 1;
+          } else {
+            (targetWork.results[errorKey] as number[])[agentIndex] = currentCount + 1;
+          }
+          
+          // Update store to persist count
+          useAgentStore.getState().setCurrentWork({ ...targetWork });
+
+          logger.debug(`SIMULATION: Throwing simulated ${simulateError} error (Persistent Attempt ${currentCount + 1}/${maxErrorAttempts})`);
+          
+          switch (simulateError) {
+            case '429':
+              throw new AppError('Resource has been exhausted (e.g. check quota). (429)', ErrorCode.RATE_LIMIT, null, 429);
+            case '503':
+              throw new AppError('The service is currently overloaded. (503)', ErrorCode.SERVICE_OVERLOADED, null, 503);
+            case '500':
+              throw new AppError('Internal error encountered. (500)', ErrorCode.PROXY_ERROR, null, 500);
+            case 'timeout':
+              throw new AppError('Network request failed: fetch timed out', ErrorCode.NETWORK_ERROR);
+            default:
+              throw new Error(`${simulateError} Simulated error`);
+          }
+        } else {
+          logger.debug(`SIMULATION: Success after ${maxErrorAttempts} persistent failed attempts`);
+        }
+      }
+    }
 
     let fullText = '';
     let fullThought = '';
@@ -474,27 +549,6 @@ export abstract class BaseStep implements StepDescriptor {
       
       try {
         await withRetry(async (attempt) => {
-          // Simulation mode for testing error UI (controlled via config/settings)
-          if (simulateError && simulateError !== 'none') {
-            // Throw simulated error on first attempt to test recovery UI
-            if (attempt === 1) {
-              logger.debug(`SIMULATION: Throwing simulated ${simulateError} error for testing (Attempt ${attempt})`);
-              
-              switch (simulateError) {
-                case '429':
-                  throw new AppError('Resource has been exhausted (e.g. check quota). (429)', ErrorCode.RATE_LIMIT, null, 429);
-                case '503':
-                  throw new AppError('The service is currently overloaded. (503)', ErrorCode.SERVICE_OVERLOADED, null, 503);
-                case '500':
-                  throw new AppError('Internal error encountered. (500)', ErrorCode.PROXY_ERROR, null, 500);
-                case 'timeout':
-                  throw new AppError('Network request failed: fetch timed out', ErrorCode.NETWORK_ERROR);
-                default:
-                  throw new Error(`${simulateError} Simulated error`);
-              }
-            }
-          }
-
           // Reset accumulators for each attempt to ensure clean regeneration if retried
           fullText = '';
           fullThought = '';
@@ -581,7 +635,9 @@ export abstract class BaseStep implements StepDescriptor {
     instruction: AgentInstruction,
     agentStates: AgentState[],
     tools?: Tool[],
-    onFirstTextChunk?: () => void
+    onFirstTextChunk?: () => void,
+    simulateError?: SimulateError,
+    simulateErrorAttempts?: number
   ): Promise<{ text: string; work: Work; groundingChunks?: GroundingChunk[] }> {
     const { ai, settings, work, signal, messageId } = context;
     if (!ai) throw new AppError("API Key not found", ErrorCode.INVALID_SETTINGS);
@@ -611,6 +667,9 @@ export abstract class BaseStep implements StepDescriptor {
           tools: tools ?? [{ googleSearch: {} }],
           signal,
           agentIndex,
+          simulateError,
+          simulateErrorAttempts,
+          work: context.work
         },
         {
           onChunk: (text, thought, usage) => {
@@ -665,7 +724,6 @@ export abstract class BaseStep implements StepDescriptor {
         : Array(settings.numAgents).fill('');
       
       // Preserve any partial text that was streamed before error
-      // Preserve any partial text that was streamed before error
       work.results[this.id] = currentResults;
       
       // Update store with error state
@@ -684,7 +742,9 @@ export abstract class BaseStep implements StepDescriptor {
     context: StepContext,
     instruction: { systemInstruction: string; userTurn: Content; mainChatHistory: Content[] },
     agentStates: AgentState[],
-    tools?: Tool[]
+    tools?: Tool[],
+    simulateError?: SimulateError,
+    simulateErrorAttempts?: number
   ): Promise<{ text: string; sources?: Source[]; work: Work }> {
     const { systemInstruction, userTurn, mainChatHistory } = instruction;
     
@@ -699,7 +759,9 @@ export abstract class BaseStep implements StepDescriptor {
       agentInstruction,
       agentStates,
       tools,
-      () => context.onSynthesisJump?.() // Pass callback for synthesis jump
+      () => context.onSynthesisJump?.(), // Pass callback for synthesis jump
+      simulateError,
+      simulateErrorAttempts
     );
     
     // Extract sources from grounding chunks

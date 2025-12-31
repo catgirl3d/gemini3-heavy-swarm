@@ -25,7 +25,7 @@ vi.mock('@/utils/swarm/stepConstants', () => ({
   getStepConfig: vi.fn((id: string) => {
     const configs: any = {
       initial_step: { name: 'Initial', labels: { done: 'Initial Done' } },
-      refinement_step: { name: 'Refinement', labels: { done: 'Refined' }, errorPattern: '[System: Refinement Failed]' },
+      refinement_step: { name: 'Refinement', labels: { done: 'Refined' } },
       synthesis_step: { 
           name: 'Synthesis',
           labels: { waiting: 'Waiting...', working: 'Synthesizing...', done: 'Done', error: 'Error' }, 
@@ -34,12 +34,7 @@ vi.mock('@/utils/swarm/stepConstants', () => ({
     };
     return configs[id] || { labels: {} };
   }),
-  STEPS: { INITIAL: 'initial_step', REFINEMENT: 'refinement_step', SYNTHESIS: 'synthesis_step' },
-  hasStepContentError: vi.fn((text, stepId) => {
-    if (stepId === 'refinement_step') return text?.includes('[System: Refinement Failed]');
-    if (stepId === 'initial_step') return text?.includes('[System: Initial Step Failed]');
-    return false;
-  })
+  STEPS: { INITIAL: 'initial_step', REFINEMENT: 'refinement_step', SYNTHESIS: 'synthesis_step' }
 }));
 
 vi.mock('@/utils/swarm/workHelpers', () => ({
@@ -100,7 +95,7 @@ describe('SynthesisStep', () => {
 
   it('should fallback to initial draft if refinement failed for an agent', () => {
     const refinedWithFailure = [
-      '[System: Refinement Failed]. error',
+      '',
       'refined 2'
     ];
 

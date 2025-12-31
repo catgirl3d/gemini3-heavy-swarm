@@ -77,6 +77,9 @@ export interface AppSettings {
   simulateInitialError: SimulateError;
   simulateRefinementError: SimulateError;
   simulateSynthesisError: SimulateError; // Error simulation for testing
+  simulateInitialErrorAttempts: number;
+  simulateRefinementErrorAttempts: number;
+  simulateSynthesisErrorAttempts: number;
   pauseAfterInitial: boolean;
   pauseAfterRefinement: boolean;
   temperature: number;
@@ -112,7 +115,15 @@ export type WorkResultKey =
   | `${typeof STEPS.SYNTHESIS}_thought`
   | `${typeof STEPS.INITIAL}_usage`
   | `${typeof STEPS.REFINEMENT}_usage`
-  | `${typeof STEPS.SYNTHESIS}_usage`;
+  | `${typeof STEPS.SYNTHESIS}_usage`
+  // Error count tracking for retry simulation
+  // Note: All steps use plural '_error_counts' suffix for naming consistency,
+  // but data structure differs by step type:
+  // - Multi-agent steps (initial, refinement): number[] (array of counts per agent)
+  // - Single-agent step (synthesis): number (scalar count)
+  | `${typeof STEPS.INITIAL}_error_counts`
+  | `${typeof STEPS.REFINEMENT}_error_counts`
+  | `${typeof STEPS.SYNTHESIS}_error_counts`;
 
 export interface Work {
   /**

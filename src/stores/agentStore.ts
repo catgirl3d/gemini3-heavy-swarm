@@ -11,7 +11,14 @@ interface AgentStore {
   agents: AgentState[];
   currentWork: Work | undefined;
   
-  // Swarm status state
+  /**
+   * Swarm state machine flags:
+   * 
+   * 1. { isLoading: false, isPaused: false } -> Idle / Process Finished
+   * 2. { isLoading: true,  isPaused: false } -> Active processing
+   * 3. { isLoading: true,  isPaused: true  } -> Interrupted / Error (waiting for Retry)
+   * 4. { isLoading: false, isPaused: true  } -> Transition state (usually treated as Idle)
+   */
   isLoading: boolean;
   isPaused: boolean;
   loadingStatus: string;

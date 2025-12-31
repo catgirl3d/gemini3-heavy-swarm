@@ -146,5 +146,16 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
     migrated.numAgents = 5;
   }
 
+  // Migration 10: Ensure error simulation attempts exist
+  if (migrated.simulateInitialErrorAttempts === undefined) {
+    migrated.simulateInitialErrorAttempts = 1;
+  }
+  if (migrated.simulateRefinementErrorAttempts === undefined) {
+    migrated.simulateRefinementErrorAttempts = 1;
+  }
+  if (migrated.simulateSynthesisErrorAttempts === undefined) {
+    migrated.simulateSynthesisErrorAttempts = 1;
+  }
+
   return migrated as AppSettings;
 }

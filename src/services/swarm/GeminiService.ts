@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { ProxyGenAI } from '@/services/proxy/ProxyGenAI';
 import { IS_FORCED_PROXY } from '@/constants';
 import { getDirectApiKey } from '@/services/proxy/proxyUtils';
-import { AppSettings, Work, AgentState, Message, Source } from '@/types';
+import { AppSettings, Work, AgentState, Message, Source, TokenUsage } from '@/types';
 import type { MutableRefObject } from 'react';
 import { StepRunner } from './StepRunner';
 import { InitialStep } from './steps/InitialStep';
@@ -42,7 +42,7 @@ export class GeminiService {
     imageFile: File | null,
     history: Message[],
     messageId: string,
-    onMessageUpdate: (text: string, isFirstChunk: boolean) => void,
+    onMessageUpdate: (text: string, isFirstChunk: boolean, thought?: string, usage?: TokenUsage | null) => void,
     signal: AbortSignal,
     pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>,
     onPause?: () => void,
@@ -117,7 +117,7 @@ export class GeminiService {
     stepId: StepId, // Use formal StepId type
     workContext: Work,
     agentStates: AgentState[],
-    onUpdate: (text: string, isFirstChunk: boolean) => void,
+    onUpdate: (text: string, isFirstChunk: boolean, thought?: string, usage?: TokenUsage | null) => void,
     signal: AbortSignal,
     pauseResolverRef?: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>,
     onPause?: () => void,
@@ -147,7 +147,7 @@ export class GeminiService {
         imageFile,
         history,
         work: workContext,
-        onMessageUpdate: (text, isFirstChunk) => onUpdate(text, isFirstChunk), // Map message update to the callback
+        onMessageUpdate: (text, isFirstChunk, thought, usage) => onUpdate(text, isFirstChunk, thought, usage), // Map message update to the callback
         onSynthesisJump,
         signal,
         messageId,

@@ -1,10 +1,9 @@
 import { StepId, STEPS } from '@/types/steps';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
-import { AppSettings, Message, Work } from '@/types';
+import { AppSettings, Message, Work, TokenUsage } from '@/types';
 import { ensureModelMessageForSynthesis, updateMessageParts, updateWorkAgentNames } from '@/utils/chat/messageHelpers';
 import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
 import { updateAgentWork } from '@/utils/swarm/workHelpers';
-import { useAgentStore } from '@/stores/agentStore';
 import { Logger } from '@shared/utils/logger';
 
 /**
@@ -52,46 +51,28 @@ export function processSynthesisChunkUpdate(
  * Updates a Work object with new text AND syncs usage/thought from the store.
  * During regeneration, usage and thought are updated in currentWork store but not
  * in the message's work object. This function merges them to keep UI in sync.
+ * 
+ * SAFETY: Only syncs thought/usage from store if currentMessageId matches the provided messageId,
+ * preventing data leakage between parallel regenerations of different messages.
  */
 export function updateWorkForStep(
   work: Work,
   stepId: StepId,
   agentIndex: number,
   text: string,
-  settings: AppSettings
+  settings: AppSettings,
+  messageId: string,
+  thought?: string,
+  usage?: TokenUsage | null
 ): Work {
   const newName = getUpdatedAgentName(agentIndex, stepId, settings);
   let updatedWork = updateWorkAgentNames(work, stepId, agentIndex, newName);
-  
-  // Sync usage and thought from currentWork store if available
-  const currentWork = useAgentStore.getState().currentWork;
-  let thought: string | undefined;
-  let usage: any | undefined;
-  
-  if (currentWork?.results) {
-    // Extract thought
-    if (stepId === STEPS.SYNTHESIS) {
-      thought = currentWork.results[`${stepId}_thought`] as string;
-    } else {
-      const thoughts = currentWork.results[`${stepId}_thoughts`] as string[] | undefined;
-      thought = thoughts?.[agentIndex];
-    }
-    
-    // Extract usage
-    const usageKey = `${stepId}_usage`;
-    if (stepId === STEPS.SYNTHESIS) {
-      usage = currentWork.results[usageKey];
-    } else {
-      const usages = currentWork.results[usageKey] as any[] | undefined;
-      usage = usages?.[agentIndex];
-    }
-  }
   
   // Use atomic update that handles text, thought, and usage
   return updateAgentWork(updatedWork, stepId, agentIndex, {
     text,
     thought,
-    usage
+    usage: usage || undefined
   });
 }
 
@@ -109,7 +90,10 @@ export function calculateUpdatedStateForRegeneration(
   workContext: Work | undefined,
   text: string,
   settings: AppSettings,
-  isFirstChunk: boolean
+  isFirstChunk: boolean,
+  messageId: string,
+  thought?: string,
+  usage?: TokenUsage | null
 ): Message[] {
   let targetIdx = messageIndex;
   let updatedMsgs = [...messages];
@@ -134,7 +118,7 @@ export function calculateUpdatedStateForRegeneration(
   
   if (msg && workToUse) {
     // Update the work object in the message with new results
-    const updatedWork = updateWorkForStep(workToUse, stepId, agentIndex, text, settings);
+    const updatedWork = updateWorkForStep(workToUse, stepId, agentIndex, text, settings, messageId, thought, usage);
     updatedMsgs[targetIdx] = { ...msg, work: updatedWork };
   } else if (isFirstChunk) {
     logger.warn('calculateUpdatedState: Missing message or work', { 

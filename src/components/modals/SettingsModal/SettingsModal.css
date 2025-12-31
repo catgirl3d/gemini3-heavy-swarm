@@ -111,6 +111,28 @@
   margin-bottom: 0;
 }
 
+.debug-simulation-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+.debug-simulation-row .modal-help-text {
+  width: 100%;
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}
+
+.debug-simulation-type {
+  flex: 1;
+}
+
+.debug-simulation-attempts {
+  flex: 0 0 auto;
+}
+
 .modal-card .modal-form-group:last-child {
   margin-bottom: 0;
   width: 100%;

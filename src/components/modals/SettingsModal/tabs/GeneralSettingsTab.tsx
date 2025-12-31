@@ -170,60 +170,153 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                     </div>
 
                     <div className="modal-form-group">
-                        <label className="modal-label">Initial Error Simulation</label>
-                        <select
-                            name="simulateInitialError"
-                            value={localSettings.simulateInitialError || 'none'}
-                            onChange={handleChange}
-                            className="modal-input"
-                        >
-                            <option value="none">None (Normal Operation)</option>
-                            <option value="429">429 - Rate Limit Exceeded</option>
-                            <option value="500">500 - Internal Server Error</option>
-                            <option value="503">503 - Service Unavailable</option>
-                            <option value="timeout">Request Timeout</option>
-                        </select>
-                        <p className="modal-help-text">
-                            Simulate errors on first initial attempt.
-                        </p>
+                        <div className="debug-simulation-row">
+                            <div className="debug-simulation-type">
+                                <label className="modal-label">Initial Error Simulation</label>
+                                <select
+                                    name="simulateInitialError"
+                                    value={localSettings.simulateInitialError || 'none'}
+                                    onChange={handleChange}
+                                    className="modal-input"
+                                >
+                                    <option value="none">None (Normal Operation)</option>
+                                    <option value="429">429 - Rate Limit Exceeded</option>
+                                    <option value="500">500 - Internal Server Error</option>
+                                    <option value="503">503 - Service Unavailable</option>
+                                    <option value="timeout">Request Timeout</option>
+                                </select>
+                            </div>
+
+                            {localSettings.simulateInitialError !== 'none' && (
+                                <>
+                                    <div className="debug-simulation-attempts">
+                                        <label className="modal-label">Attempts</label>
+                                        <StepperControl
+                                            value={localSettings.simulateInitialErrorAttempts || 1}
+                                            min={0}
+                                            max={10}
+                                            onValueChange={(val) => {
+                                                if (val === 0) {
+                                                    setLocalSettings(prev => ({
+                                                        ...prev,
+                                                        simulateInitialError: 'none',
+                                                        simulateInitialErrorAttempts: 1
+                                                    }));
+                                                } else {
+                                                    setLocalSettings(prev => ({
+                                                        ...prev,
+                                                        simulateInitialErrorAttempts: val
+                                                    }));
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <p className="modal-help-text">
+                                        Will fail {localSettings.simulateInitialErrorAttempts || 1} time(s), then succeed on attempt {(localSettings.simulateInitialErrorAttempts || 1) + 1}.
+                                    </p>
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     <div className="modal-form-group">
-                        <label className="modal-label">Refinement Error Simulation</label>
-                        <select
-                            name="simulateRefinementError"
-                            value={localSettings.simulateRefinementError || 'none'}
-                            onChange={handleChange}
-                            className="modal-input"
-                        >
-                            <option value="none">None (Normal Operation)</option>
-                            <option value="429">429 - Rate Limit Exceeded</option>
-                            <option value="500">500 - Internal Server Error</option>
-                            <option value="503">503 - Service Unavailable</option>
-                            <option value="timeout">Request Timeout</option>
-                        </select>
-                        <p className="modal-help-text">
-                            Simulate errors on first refinement attempt.
-                        </p>
+                        <div className="debug-simulation-row">
+                            <div className="debug-simulation-type">
+                                <label className="modal-label">Refinement Error Simulation</label>
+                                <select
+                                    name="simulateRefinementError"
+                                    value={localSettings.simulateRefinementError || 'none'}
+                                    onChange={handleChange}
+                                    className="modal-input"
+                                >
+                                    <option value="none">None (Normal Operation)</option>
+                                    <option value="429">429 - Rate Limit Exceeded</option>
+                                    <option value="500">500 - Internal Server Error</option>
+                                    <option value="503">503 - Service Unavailable</option>
+                                    <option value="timeout">Request Timeout</option>
+                                </select>
+                            </div>
+
+                            {localSettings.simulateRefinementError !== 'none' && (
+                                <>
+                                    <div className="debug-simulation-attempts">
+                                        <label className="modal-label">Attempts</label>
+                                        <StepperControl
+                                            value={localSettings.simulateRefinementErrorAttempts || 1}
+                                            min={0}
+                                            max={10}
+                                            onValueChange={(val) => {
+                                                if (val === 0) {
+                                                    setLocalSettings(prev => ({
+                                                        ...prev,
+                                                        simulateRefinementError: 'none',
+                                                        simulateRefinementErrorAttempts: 1
+                                                    }));
+                                                } else {
+                                                    setLocalSettings(prev => ({
+                                                        ...prev,
+                                                        simulateRefinementErrorAttempts: val
+                                                    }));
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <p className="modal-help-text">
+                                        Will fail {localSettings.simulateRefinementErrorAttempts || 1} time(s), then succeed on attempt {(localSettings.simulateRefinementErrorAttempts || 1) + 1}.
+                                    </p>
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     <div className="modal-form-group">
-                        <label className="modal-label">Synthesis Error Simulation</label>
-                        <select
-                            name="simulateSynthesisError"
-                            value={localSettings.simulateSynthesisError || 'none'}
-                            onChange={handleChange}
-                            className="modal-input"
-                        >
-                            <option value="none">None (Normal Operation)</option>
-                            <option value="429">429 - Rate Limit Exceeded</option>
-                            <option value="500">500 - Internal Server Error</option>
-                            <option value="503">503 - Service Unavailable</option>
-                            <option value="timeout">Request Timeout</option>
-                        </select>
-                        <p className="modal-help-text">
-                            Simulate errors on first synthesis attempt for testing error UI.
-                        </p>
+                        <div className="debug-simulation-row">
+                            <div className="debug-simulation-type">
+                                <label className="modal-label">Synthesis Error Simulation</label>
+                                <select
+                                    name="simulateSynthesisError"
+                                    value={localSettings.simulateSynthesisError || 'none'}
+                                    onChange={handleChange}
+                                    className="modal-input"
+                                >
+                                    <option value="none">None (Normal Operation)</option>
+                                    <option value="429">429 - Rate Limit Exceeded</option>
+                                    <option value="500">500 - Internal Server Error</option>
+                                    <option value="503">503 - Service Unavailable</option>
+                                    <option value="timeout">Request Timeout</option>
+                                </select>
+                            </div>
+
+                            {localSettings.simulateSynthesisError !== 'none' && (
+                                <>
+                                    <div className="debug-simulation-attempts">
+                                        <label className="modal-label">Attempts</label>
+                                        <StepperControl
+                                            value={localSettings.simulateSynthesisErrorAttempts || 1}
+                                            min={0}
+                                            max={10}
+                                            onValueChange={(val) => {
+                                                if (val === 0) {
+                                                    setLocalSettings(prev => ({
+                                                        ...prev,
+                                                        simulateSynthesisError: 'none',
+                                                        simulateSynthesisErrorAttempts: 1
+                                                    }));
+                                                } else {
+                                                    setLocalSettings(prev => ({
+                                                        ...prev,
+                                                        simulateSynthesisErrorAttempts: val
+                                                    }));
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <p className="modal-help-text">
+                                        Will fail {localSettings.simulateSynthesisErrorAttempts || 1} time(s), then succeed on attempt {(localSettings.simulateSynthesisErrorAttempts || 1) + 1}.
+                                    </p>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

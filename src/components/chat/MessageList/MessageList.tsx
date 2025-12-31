@@ -6,6 +6,7 @@ import { ShowWork } from '@/components/chat/ShowWork';
 import { Sources } from '@/components/chat/Sources';
 import { Message, AgentState, Work } from '@/types';
 import { StepId, STEPS } from '@/types/steps';
+import { getStepResults } from '@/utils/swarm/workHelpers';
 
 interface MessageListProps {
   messages: Message[];
@@ -63,7 +64,9 @@ const MessageListComponent: FC<MessageListProps> = ({
           const isLast = index === messages.length - 1;
           
           // Check if we have substantial completed work (like initial drafts) that should be shown despite an error
-          const hasCompletedDrafts = !!msg.work?.results?.[STEPS.INITIAL]?.some((draft: string | null) => draft && draft.length > 0);
+          const hasCompletedDrafts = msg.work
+            ? getStepResults(msg.work, STEPS.INITIAL).some(draft => !!draft && draft.length > 0)
+            : false;
 
           // CRITICAL: If a global error occurred, hide the last model message if it has no final text AND no completed drafts.
           // This prevents showing an empty/broken "Show Work" card alongside the main error banner,

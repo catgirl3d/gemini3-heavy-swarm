@@ -17,21 +17,27 @@ export class InitialStep extends BaseStep {
 
   async execute(context: StepContext): Promise<string[]> {
     const { work, settings } = context;
-    // Check if agents have already been initialized and potentially failed (implies regeneration/retry)
-    const agentStates = work.agentStates || [];
-    const hasPriorAttempt = agentStates.some(a => a.stepId === STEPS.INITIAL && a.status !== 'waiting');
-
     return this.executeMultiAgent(context, {
       prepareAgent: (i) => this.prepareInstruction(context, i),
       tools: [{ googleSearch: {} }],
-      // Only simulate errors on first execution, not on regeneration/retry
-      simulateError: hasPriorAttempt ? undefined : settings.simulateInitialError
+      simulateError: settings.simulateInitialError,
+      simulateErrorAttempts: settings.simulateInitialErrorAttempts
     });
   }
 
   async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<{ text: string; work: Work }> {
+    const { settings } = context;
     const { systemInstruction, userTurn, mainChatHistory } = this.prepareInstruction(context, agentIndex);
-    return this.runAgentRegeneration(context, agentIndex, { systemInstruction, userTurn, mainChatHistory }, agentStates);
+    return this.runAgentRegeneration(
+      context,
+      agentIndex,
+      { systemInstruction, userTurn, mainChatHistory },
+      agentStates,
+      undefined, // tools
+      undefined, // onFirstTextChunk
+      settings.simulateInitialError,
+      settings.simulateInitialErrorAttempts
+    );
   }
 
   private prepareInstruction(context: StepContext, index: number) {

@@ -37,8 +37,6 @@ export interface StepConfig {
   allowPause?: boolean;
   /** Key in AppSettings that controls whether to pause after this step */
   pauseSettingKey?: 'pauseAfterInitial' | 'pauseAfterRefinement';
-  /** Pattern to identify system error messages in this step's output */
-  errorPattern?: string;
 }
 
 const STEP_CONFIGS: Record<StepId, StepConfig> = {
@@ -57,8 +55,7 @@ const STEP_CONFIGS: Record<StepId, StepConfig> = {
     name: 'Initial Step',
     description: 'Agents draft their initial responses based on the user query.',
     allowPause: true,
-    pauseSettingKey: 'pauseAfterInitial',
-    errorPattern: '[System: Initial Step Failed]'
+    pauseSettingKey: 'pauseAfterInitial'
   },
   [STEPS.REFINEMENT]: {
     namePrefix: 'Critic',
@@ -75,8 +72,7 @@ const STEP_CONFIGS: Record<StepId, StepConfig> = {
     name: 'Refinement Step',
     description: 'Agents critique and refine their responses based on other agents\' inputs.',
     allowPause: true,
-    pauseSettingKey: 'pauseAfterRefinement',
-    errorPattern: '[System: Refinement Failed]'
+    pauseSettingKey: 'pauseAfterRefinement'
   },
   [STEPS.SYNTHESIS]: {
     namePrefix: 'Synthesizer',
@@ -92,8 +88,7 @@ const STEP_CONFIGS: Record<StepId, StepConfig> = {
     progressMsg: 'Synthesizing final response...',
     name: 'Synthesis Step',
     description: 'Synthesizes all refined responses into a final answer.',
-    synthesisJump: true,
-    errorPattern: '[System: Synthesis Failed]'
+    synthesisJump: true
   }
 };
 
@@ -149,11 +144,3 @@ export function handleSynthesisJump(
   onJump?.();
 }
 
-/**
- * Checks if a step's result text contains a system error message.
- */
-export function hasStepContentError(text: string | null | undefined, stepId: StepId): boolean {
-  if (!text) return false;
-  const config = STEP_CONFIGS[stepId];
-  return !!config.errorPattern && text.includes(config.errorPattern);
-}

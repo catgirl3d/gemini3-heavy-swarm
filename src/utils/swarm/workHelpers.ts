@@ -180,7 +180,11 @@ export function updateAgentWork(
   // 1. Update Text
   if (updates.text !== undefined) {
     if (stepId === STEPS.SYNTHESIS) {
-      const existing = results[stepId] as Record<string, any> || {};
+      const raw = results[stepId];
+      // Guard: only spread if it's a plain object, not string/array (legacy formats)
+      const existing = raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? (raw as Record<string, any>)
+        : {};
       results[stepId] = { ...existing, text: updates.text };
     } else {
       const arr = Array.isArray(results[stepId]) ? [...results[stepId] as any[]] : Array(numAgents).fill('');

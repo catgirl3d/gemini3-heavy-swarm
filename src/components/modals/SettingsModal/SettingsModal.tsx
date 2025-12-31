@@ -78,6 +78,12 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
         const isUnlockedFinal = !isUsingProxyFinal || (serverStatus?.hasServerKey && serverStatus?.proxyMode === 'private');
         
         if (!isUnlockedFinal) finalSettings.model = 'gemini-2.5-flash-lite';
+
+        // Validation: Ensure error simulation attempts are at least 1
+        if (finalSettings.simulateInitialErrorAttempts < 1) finalSettings.simulateInitialErrorAttempts = 1;
+        if (finalSettings.simulateRefinementErrorAttempts < 1) finalSettings.simulateRefinementErrorAttempts = 1;
+        if (finalSettings.simulateSynthesisErrorAttempts < 1) finalSettings.simulateSynthesisErrorAttempts = 1;
+
         onSave(finalSettings);
         onClose();
         setShowConfirmClose(false);

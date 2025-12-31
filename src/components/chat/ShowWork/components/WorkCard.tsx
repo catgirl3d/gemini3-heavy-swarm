@@ -155,9 +155,6 @@ const WorkCardComponent: FC<WorkCardProps> = ({
     }
   }, [cardId, onCardAction, onRegenerate]);
   const renderContent = (content: string | null) => {
-    // Check for system error messages in content, or fallback to status-based error display if content is missing.
-    const contentToAnalyze = content || '';
-    
     // Check for error status
     if (status === 'error') {
       // Use statusLabel for error classification

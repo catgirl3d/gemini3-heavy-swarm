@@ -30,7 +30,8 @@
     "src",
     "shared",
     "server",
-    "functions"
+    "functions",
+    "tests"
   ],
   "exclude": [
     "dist",

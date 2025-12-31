@@ -17,11 +17,9 @@ vi.mock('@/utils/swarm/stepConstants', () => ({
   getStepConfig: vi.fn((id: string) => ({
     name: 'Refinement',
     description: 'Refine',
-    labels: { working: 'Refining...', done: 'Refined', error: 'Error' },
-    errorPattern: '[System: Initial Step Failed]'
+    labels: { working: 'Refining...', done: 'Refined', error: 'Error' }
   })),
-  STEPS: { INITIAL: 'initial_step', REFINEMENT: 'refinement_step', SYNTHESIS: 'synthesis_step' },
-  hasStepContentError: vi.fn((text) => text?.includes('[System: Initial Step Failed]'))
+  STEPS: { INITIAL: 'initial_step', REFINEMENT: 'refinement_step', SYNTHESIS: 'synthesis_step' }
 }));
 
 vi.mock('@/utils/swarm/workHelpers', () => ({
@@ -61,7 +59,7 @@ describe('RefinementStep', () => {
     // Agent 2 (peer, index 1) has an error
     const drafts = [
       'draft 1', 
-      '[System: Initial Step Failed]. Some error'
+      ''
     ];
 
     const instruction = (step as any).prepareRefinement(mockContext, 0, drafts);
@@ -77,7 +75,7 @@ describe('RefinementStep', () => {
   it('should fallback to empty string if its own initial draft has an error', () => {
     // Agent 1's perspective, but agent 1 itself failed
     const drafts = [
-      '[System: Initial Step Failed]. error',
+      '',
       'draft 2'
     ];
 
@@ -112,7 +110,7 @@ describe('RefinementStep', () => {
     await step.regenerate(mockContext, 1, agentStates);
     
     expect(runRegenSpy).toHaveBeenCalled();
-    const [_, indexArg, instructionArg] = runRegenSpy.mock.calls[0];
+    const [_, indexArg, instructionArg] = runRegenSpy.mock.calls[0] as any[];
     
     expect(indexArg).toBe(1);
     const internalContext = instructionArg.userTurn.parts[instructionArg.userTurn.parts.length - 1].text;

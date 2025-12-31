@@ -89,7 +89,7 @@ describe('InitialStep', () => {
     await step.regenerate(mockContext, 0, agentStates);
     
     expect(runRegenSpy).toHaveBeenCalled();
-    const [contextArg, indexArg, instructionArg] = runRegenSpy.mock.calls[0];
+    const [, indexArg, instructionArg] = runRegenSpy.mock.calls[0] as any[];
     
     expect(indexArg).toBe(0);
     expect(instructionArg.systemInstruction).toContain('Agent 1 Instruction');

@@ -25,7 +25,6 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, o
   const [debugModalData, setDebugModalData] = useState<DebugModalData | null>(null);
   const [thoughtModalData, setThoughtModalData] = useState<ThoughtModalData | null>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
-  const prevSynthesizerStatusRef = useRef<string | undefined>(undefined);
 
   // Resolve swarm states from either live store or historical snapshot
   const {
@@ -34,23 +33,6 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, o
     isEarlyStageWorking
   } = useResolvedSwarmState(messageId, work);
 
-  // Auto-collapse when synthesis starts in live mode OR during synthesis regeneration
-  useEffect(() => {
-    // Prevent premature collapse during early stages or regeneration
-    const isTransitionToWorking = synthesizerState?.status === 'working' && prevSynthesizerStatusRef.current !== 'working';
-    const isOurMessage = synthesizerState?.messageId === messageId;
-    
-    // Collapse cards when synthesizer starts working - works for both:
-    // 1. Normal flow (isLive = true)
-    // 2. Regeneration (isLive may be false, but isOurMessage is true)
-    if ((isLive || isOurMessage) && isTransitionToWorking && !isEarlyStageWorking) {
-      if (detailsRef.current) {
-        detailsRef.current.open = false;
-      }
-    }
-    prevSynthesizerStatusRef.current = synthesizerState?.status;
-  }, [isLive, messageId, synthesizerState?.status, synthesizerState?.messageId, isEarlyStageWorking]);
-  
   const synthesisResult = useMemo(() => getSynthesisResult(work), [work]);
   const initialResults = useMemo(() => getStepResults(work, STEPS.INITIAL), [work]);
   const refinedResults = useMemo(() => getStepResults(work, STEPS.REFINEMENT), [work]);
@@ -65,6 +47,24 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, o
     typeof synthesisResult === 'string'
       ? synthesisResult
       : synthesisResult?.text ?? null;
+
+  // Auto-collapse when synthesis starts in live mode OR during synthesis regeneration
+  useEffect(() => {
+    const isWorking = synthesizerState?.status === 'working';
+    const isOurMessage = synthesizerState?.messageId === messageId;
+    
+    // CRITICAL: Only collapse if we actually have some synthesis text (chunks arrived).
+    // This prevents the "Synthesis Jump" from happening if an error occurs immediately
+    // during regeneration, while still allowing the progress bar to move (working status).
+    const hasContent = !!(synthesisText && synthesisText.length > 0);
+
+    // Collapse cards when synthesizer is working AND has content
+    if ((isLive || isOurMessage) && isWorking && !isEarlyStageWorking && hasContent) {
+      if (detailsRef.current && detailsRef.current.open) {
+        detailsRef.current.open = false;
+      }
+    }
+  }, [isLive, messageId, synthesizerState?.status, synthesizerState?.messageId, isEarlyStageWorking, synthesisText]);
 
   // Build card metadata map for stable action resolution
   const cardMetaMap = useMemo(() => {

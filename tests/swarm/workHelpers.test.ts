@@ -1,6 +1,6 @@
 
 import { describe, it, expect } from 'vitest';
-import { updateStepResult, cloneWork, withEnsuredResults } from '../../src/utils/swarm/workHelpers';
+import { updateStepResult, cloneWork, withEnsuredResults, updateAgentWork } from '../../src/utils/swarm/workHelpers';
 import { STEPS } from '../../src/types/steps';
 import { Work } from '../../src/types';
 
@@ -41,6 +41,51 @@ describe('workHelpers', () => {
             const updated = updateStepResult(emptyWork, STEPS.INITIAL, 0, 'first');
             
             expect(updated.results?.[STEPS.INITIAL]).toEqual(['first']);
+        });
+        it('should handle legacy string in synthesis results', () => {
+            const originalWork: Work = {
+                results: {
+                    [STEPS.SYNTHESIS]: "legacy string" as any
+                }
+            };
+            
+            const updated = updateStepResult(originalWork, STEPS.SYNTHESIS, -1, 'new synthesis');
+            
+            const result = updated.results?.[STEPS.SYNTHESIS] as { text: string };
+            expect(result).toEqual({ text: 'new synthesis' });
+            expect(Object.keys(result)).not.toContain('0');
+        });
+    });
+
+    describe('updateAgentWork', () => {
+        it('should handle legacy string in synthesis results', () => {
+            const originalWork: Work = {
+                results: {
+                    [STEPS.SYNTHESIS]: "legacy string" as any
+                }
+            };
+            
+            const updated = updateAgentWork(originalWork, STEPS.SYNTHESIS, 0, { text: "new synthesis" });
+            
+            const result = updated.results?.[STEPS.SYNTHESIS] as { text: string };
+            expect(result).toEqual({ text: "new synthesis" });
+            expect(Object.keys(result)).not.toContain('0');
+        });
+
+        it('should update multiple fields atomically', () => {
+            const originalWork: Work = {
+                results: {}
+            };
+            
+            const updated = updateAgentWork(originalWork, STEPS.SYNTHESIS, 0, {
+                text: "text",
+                thought: "thought",
+                usage: { totalTokens: 10, promptTokens: 5, candidatesTokens: 5 }
+            });
+            
+            expect(updated.results?.[STEPS.SYNTHESIS]).toEqual({ text: "text" });
+            expect(updated.results?.[`${STEPS.SYNTHESIS}_thought`]).toBe("thought");
+            expect(updated.results?.[`${STEPS.SYNTHESIS}_usage`]).toEqual({ totalTokens: 10, promptTokens: 5, candidatesTokens: 5 });
         });
     });
 

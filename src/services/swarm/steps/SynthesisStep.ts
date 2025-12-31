@@ -43,13 +43,20 @@ export class SynthesisStep extends BaseStep {
     const hadError = typeof existingSynthesisResult === 'object' && existingSynthesisResult?.error === true;
     
     const config = getStepConfig(this.id);
+    
+    // Persistent error count check for synthesis
+    const errorCountKey = (BaseStep as any).getErrorCountKey(STEPS.SYNTHESIS, undefined);
+    const errorCount = (work.results?.[errorCountKey] as number) || 0;
+    const isSimulatingError = settings.simulateSynthesisError !== 'none' && errorCount < settings.simulateSynthesisErrorAttempts;
+    const isRetrying = hadError || isSimulatingError;
+
     const synthesizerState: AgentState = {
       id: `${messageId}-synthesizer_agent`,
       name: 'Synthesizer Agent',
-      // Keep error status if regenerating, otherwise start as waiting
-      // until first chunk arrives to prevent premature card collapse.
-      status: hadError ? 'error' : 'waiting',
-      label: hadError ? 'Retrying synthesis...' : config.labels.waiting,
+      // Keep error status if regenerating or simulating error, otherwise start as working
+      // so progress bar moves immediately. Auto-collapse is now handled by content check in ShowWork.
+      status: isRetrying ? 'error' : 'working',
+      label: isRetrying ? 'Retrying synthesis...' : config.labels.working,
       stepId: STEPS.SYNTHESIS,
       agentIndex: 0,
       messageId
@@ -83,8 +90,9 @@ export class SynthesisStep extends BaseStep {
           systemInstruction,
           tools: [{googleSearch: {}}],
           signal,
-          // Only simulate errors on first execution, not on regeneration
-          simulateError: hadError ? undefined : settings.simulateSynthesisError
+          simulateError: settings.simulateSynthesisError,
+          simulateErrorAttempts: settings.simulateSynthesisErrorAttempts,
+          work: context.work
         },
         {
           onChunk: (text, thought, usage) => {
@@ -102,8 +110,8 @@ export class SynthesisStep extends BaseStep {
               /**
                * SYNTHESIS JUMP BEHAVIOR
                * When first chunk arrives, we trigger onSynthesisJump to hide loading indicators.
-               * Card collapse is handled automatically by ShowWork observing the agent status
-               * change (waiting -> working) that we just performed above.
+               * Card collapse is handled by ShowWork observing both 'working' status AND
+               * the presence of actual content (synthesisText).
                */
               context.onSynthesisJump?.();
             }
@@ -188,12 +196,14 @@ export class SynthesisStep extends BaseStep {
   async regenerate(context: StepContext, _agentIndex: number, agentStates: AgentState[]): Promise<{ text: string; sources?: Source[]; work: Work }> {
     const refinedDrafts = getStepResults(context.work, STEPS.REFINEMENT);
     const { systemInstruction, synthesizerTurn, mainChatHistory } = this.prepareSynthesis(context, refinedDrafts);
-    
+    const { settings } = context;
     return this.runSynthesisRegeneration(
       context,
       { systemInstruction, userTurn: synthesizerTurn, mainChatHistory },
       agentStates,
-      [{ googleSearch: {} }]
+      [{ googleSearch: {} }],
+      settings.simulateSynthesisError,
+      settings.simulateSynthesisErrorAttempts
     );
   }
 

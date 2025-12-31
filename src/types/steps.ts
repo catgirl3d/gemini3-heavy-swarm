@@ -18,6 +18,10 @@ export interface StreamConfig {
   devModeDuration?: number;
   /** Optional error message to throw inside the retry block for testing */
   simulateError?: SimulateError;
+  /** Number of failed attempts before success when simulating errors */
+  simulateErrorAttempts?: number;
+  /** The work object to track persistent error counts */
+  work?: Work;
 }
 
 export interface StreamCallbacks {
@@ -51,7 +55,7 @@ export interface StepContext {
    * @param text - The latest text chunk or full text
    * @param isFirstChunk - Whether this is the first chunk of the stream
    */
-  onMessageUpdate: (text: string, isFirstChunk: boolean) => void;
+  onMessageUpdate: (text: string, isFirstChunk: boolean, thought?: string, usage?: TokenUsage | null) => void;
   
   /**
    * Optional: Called when synthesis step receives its first text chunk.
@@ -118,4 +122,5 @@ export interface MultiAgentConfig {
   prepareAgent: (index: number) => AgentInstruction;
   tools?: Tool[];
   simulateError?: SimulateError;
+  simulateErrorAttempts?: number;
 }

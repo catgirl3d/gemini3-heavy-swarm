@@ -210,7 +210,8 @@ export function useSwarmOrchestration({
         imageFile,
         historyForSwarm,
         modelMessageId,
-        (text, isFirstChunk) => {
+        (text, isFirstChunk, _thought, _usage) => {
+          // _thought and _usage are ignored here as they are handled by individual steps
           // Message update callback - just update the message text
           setMessages(prev => {
             const newMessages = [...prev];
@@ -273,8 +274,10 @@ export function useSwarmOrchestration({
 
       // CRITICAL: Save agent states to message.work even on error
       // This ensures regeneration can find and update existing agents instead of creating duplicates
+      const workAtTimeOfError = useAgentStore.getState().currentWork;
+      
       setMessages(prev => {
-        const currentWork = useAgentStore.getState().currentWork;
+        const currentWork = workAtTimeOfError;
         const agentsForThisMessage = errorStates.filter(a => a.messageId === modelMessageId);
         
         logger.debug('Saving error state agents to message.work', {

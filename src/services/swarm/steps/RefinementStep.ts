@@ -24,14 +24,11 @@ export class RefinementStep extends BaseStep {
       throw new Error('Cannot run refinement step without initial drafts');
     }
 
-    // Check for existing results to avoid infinite error loops
-    const agentStates = work.agentStates || [];
-    const hasPriorAttempt = agentStates.some(a => a.stepId === STEPS.REFINEMENT && a.status !== 'waiting');
-
     return this.executeMultiAgent(context, {
       prepareAgent: (i) => this.prepareRefinement(context, i, initialDrafts as string[]),
       tools: [{ googleSearch: {} }],
-      simulateError: hasPriorAttempt ? undefined : settings.simulateRefinementError
+      simulateError: settings.simulateRefinementError,
+      simulateErrorAttempts: settings.simulateRefinementErrorAttempts
     });
   }
 
@@ -44,8 +41,18 @@ export class RefinementStep extends BaseStep {
       throw new Error('Cannot regenerate refinement without initial drafts');
     }
 
+    const { settings } = context;
     const { systemInstruction, userTurn, mainChatHistory } = this.prepareRefinement(context, agentIndex, initialDrafts as string[]);
-    return this.runAgentRegeneration(context, agentIndex, { systemInstruction, userTurn, mainChatHistory }, agentStates);
+    return this.runAgentRegeneration(
+      context,
+      agentIndex,
+      { systemInstruction, userTurn, mainChatHistory },
+      agentStates,
+      undefined, // tools
+      undefined, // onFirstTextChunk
+      settings.simulateRefinementError,
+      settings.simulateRefinementErrorAttempts
+    );
   }
 
   private prepareRefinement(context: StepContext, index: number, initialDrafts: string[]) {
