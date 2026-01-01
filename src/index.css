@@ -9,6 +9,8 @@
   --primary-color: #1e293b; /* Dark Slate */
   --primary-gradient: linear-gradient(135deg, #0f172a 0%, #334155 100%);
   --accent-color: #3b82f6; /* Blue for interactions */
+  --accent-bg: #eff6ff;
+  --accent-border: #dbeafe;
   
   --background-rgb: 241, 245, 249;
   --app-background: #ffffff;

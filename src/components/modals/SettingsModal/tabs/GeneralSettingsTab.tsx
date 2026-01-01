@@ -1,67 +1,151 @@
 import React, { FC, ChangeEvent } from 'react';
-import { AppSettings } from '@/types';
+import { AppSettings, ServerStatus } from '@/types';
 import { StepperControl } from '@/components/modals/SettingsModal/components/StepperControl';
 import { TemperatureBanner } from '@/components/modals/SettingsModal/components/TemperatureBanner';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
+import { ModelSelector } from '@/components/ui';
 
 interface GeneralSettingsTabProps {
     localSettings: AppSettings;
     handleChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
     setLocalSettings: React.Dispatch<React.SetStateAction<AppSettings>>;
     isModelUnlocked: boolean;
+    openDropdownId: string | null;
+    setOpenDropdownId: (id: string | null) => void;
+    serverStatus?: ServerStatus;
 }
 
 export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
     localSettings,
     handleChange,
     setLocalSettings,
-    isModelUnlocked
+    isModelUnlocked,
+    openDropdownId,
+    setOpenDropdownId,
+    serverStatus
 }) => {
     const model = localSettings.model ?? 'gemini-3-flash-preview';
+    const isGeminiDemo = !localSettings.apiKey && isModelUnlocked && serverStatus?.proxyMode !== 'private';
 
     return (
         <div className="settings-section fade-in">
             <div className="modal-card">
                 <span className="modal-card-title">Core Configuration</span>
+                
                 <div className="modal-form-group">
-                    <label className="modal-label">API Key (Optional)</label>
-                    <input
-                        type="password"
-                        name="apiKey"
-                        value={localSettings.apiKey || ''}
+                    <label className="modal-label">Provider</label>
+                    <select
+                        name="provider"
+                        value={localSettings.provider || 'gemini'}
                         onChange={handleChange}
                         className="modal-input"
-                        placeholder="Enter your Gemini API Key"
-                    />
-                    <p className="modal-help-text">
-                        Leave empty to use the default key (if configured). Your key is stored locally in your browser.
-                    </p>
+                    >
+                        <option value="gemini">Google Gemini</option>
+                        <option value="openrouter">OpenRouter</option>
+                    </select>
                 </div>
 
-                <div className="modal-form-group">
-                    <label className="modal-label">Model</label>
-                    <select
-                        name="model"
-                        value={!isModelUnlocked ? 'gemini-2.5-flash-lite' : (localSettings.model || 'gemini-3-flash-preview')}
-                        onChange={handleChange}
-                        className="modal-input"
-                        disabled={!isModelUnlocked}
-                    >
-                        {AVAILABLE_MODELS.map(model => (
-                            <option key={model.value} value={model.value}>{model.label}</option>
-                        ))}
-                    </select>
-                    {isModelUnlocked && (
-                        <p className="modal-help-text">
-                            Global default model. Priority: <strong>Agent Role</strong> &gt; <strong>Step Instruction</strong> &gt; <strong>Global Default</strong>.
-                        </p>
-                    )}
-                    {!isModelUnlocked && (
-                        <p className="modal-help-text warning">
-                            Only Gemini 2.5 Flash-Lite is available in Demo Mode. Add an API key to unlock all models.
-                        </p>
-                    )}
-                </div>
+                {localSettings.provider === 'gemini' ? (
+                    <>
+                        <div className="modal-form-group">
+                            <label className="modal-label">Gemini API Key</label>
+                            <input
+                                type="password"
+                                name="apiKey"
+                                value={localSettings.apiKey || ''}
+                                onChange={handleChange}
+                                className="modal-input"
+                                placeholder="Enter your Gemini API Key"
+                            />
+                            <p className="modal-help-text">
+                                Leave empty to use the default key (if configured). Your key is stored locally in your browser.
+                            </p>
+                        </div>
+
+                        <div className="modal-form-group">
+                            <label className="modal-label">Gemini Model</label>
+                            <ModelSelector
+                                provider="gemini"
+                                value={!isModelUnlocked ? 'gemini-2.5-flash-lite' : (localSettings.model || 'gemini-3-flash-preview')}
+                                onChange={(val) => handleChange({ target: { name: 'model', value: val } } as any)}
+                                disabled={!isModelUnlocked || isGeminiDemo}
+                                isOpen={openDropdownId === 'gemini-model'}
+                                onOpenChange={(open) => setOpenDropdownId(open ? 'gemini-model' : null)}
+                            />
+                            {localSettings.apiKey && (
+                                <p className="modal-help-text success">
+                                    Personal API key in use. All models unlocked.
+                                </p>
+                            )}
+                            {!localSettings.apiKey && isModelUnlocked && serverStatus?.proxyMode === 'private' && (
+                                <p className="modal-help-text success">
+                                    Private Server Mode. All models are unlocked via the server's API key.
+                                </p>
+                            )}
+                            {!localSettings.apiKey && isModelUnlocked && serverStatus?.proxyMode !== 'private' && (
+                                <p className="modal-help-text warning">
+                                    Demo Mode: Using server-side key. Only Gemini 2.5 Flash-Lite is available. Add your own API key to unlock all models.
+                                </p>
+                            )}
+                            {!localSettings.apiKey && !isModelUnlocked && (
+                                <p className="modal-help-text danger">
+                                    No API key available. Service is unavailable.
+                                </p>
+                            )}
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div className="modal-form-group">
+                            <label className="modal-label">OpenRouter API Key</label>
+                            <input
+                                type="password"
+                                name="openRouterApiKey"
+                                value={localSettings.openRouterApiKey || ''}
+                                onChange={handleChange}
+                                className="modal-input"
+                                placeholder="Enter your OpenRouter API Key"
+                            />
+                            <p className="modal-help-text">
+                                Leave empty to use the server-side key (if configured).
+                            </p>
+                        </div>
+
+                        <div className="modal-form-group">
+                            <label className="modal-label">OpenRouter Model</label>
+                            <ModelSelector
+                                provider="openrouter"
+                                value={localSettings.openRouterModel || ''}
+                                onChange={(val) => handleChange({ target: { name: 'openRouterModel', value: val } } as any)}
+                                placeholder="Select model..."
+                                disabled={!isModelUnlocked}
+                                isOpen={openDropdownId === 'openrouter-model'}
+                                onOpenChange={(open) => setOpenDropdownId(open ? 'openrouter-model' : null)}
+                                isDemoMode={!localSettings.openRouterApiKey && serverStatus?.proxyMode !== 'private'}
+                            />
+                            {localSettings.openRouterApiKey && (
+                                <p className="modal-help-text success">
+                                    Personal OpenRouter key in use. All models unlocked.
+                                </p>
+                            )}
+                            {!localSettings.openRouterApiKey && isModelUnlocked && serverStatus?.proxyMode === 'private' && (
+                                <p className="modal-help-text success">
+                                    Private Server Mode. All models are unlocked via the server's API key.
+                                </p>
+                            )}
+                            {!localSettings.openRouterApiKey && isModelUnlocked && serverStatus?.proxyMode !== 'private' && (
+                                <p className="modal-help-text warning">
+                                    Demo Mode: Using server-side key. Only free models are available. Add your own API key to unlock all models.
+                                </p>
+                            )}
+                            {!localSettings.openRouterApiKey && !isModelUnlocked && (
+                                <p className="modal-help-text danger">
+                                    OpenRouter is not available. Add an API key or configure server-side key.
+                                </p>
+                            )}
+                        </div>
+                    </>
+                )}
 
                 <div className="settings-row">
                     <div className="modal-form-group">
@@ -140,7 +224,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                     </div>
                 </div>
 
-                {model.includes('gemini-3') && (
+                {localSettings.provider === 'gemini' && model.includes('gemini-3') && (
                     <TemperatureBanner
                         isActive={!!localSettings.unsafeTemperature}
                         onToggle={() => setLocalSettings(prev => ({ ...prev, unsafeTemperature: !prev.unsafeTemperature }))}
@@ -177,47 +261,49 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                 </div>
             </div>
 
-            <div className="modal-card">
-                <span className="modal-card-title">Search Tools</span>
-                <div className="modal-form-group checkbox-group">
-                    <input
-                        type="checkbox"
-                        name="useSearchInInitial"
-                        id="useSearchInInitial"
-                        checked={localSettings.useSearchInInitial || false}
-                        onChange={handleChange}
-                    />
-                    <label htmlFor="useSearchInInitial" className="modal-label checkbox-label">
-                        Use Google Search in Initial Drafts
-                    </label>
-                </div>
+            {localSettings.provider === 'gemini' && (
+                <div className="modal-card">
+                    <span className="modal-card-title">Search Tools</span>
+                    <div className="modal-form-group checkbox-group">
+                        <input
+                            type="checkbox"
+                            name="useSearchInInitial"
+                            id="useSearchInInitial"
+                            checked={localSettings.useSearchInInitial || false}
+                            onChange={handleChange}
+                        />
+                        <label htmlFor="useSearchInInitial" className="modal-label checkbox-label">
+                            Use Google Search in Initial Drafts
+                        </label>
+                    </div>
 
-                <div className="modal-form-group checkbox-group">
-                    <input
-                        type="checkbox"
-                        name="useSearchInRefinement"
-                        id="useSearchInRefinement"
-                        checked={localSettings.useSearchInRefinement || false}
-                        onChange={handleChange}
-                    />
-                    <label htmlFor="useSearchInRefinement" className="modal-label checkbox-label">
-                        Use Google Search in Critics (Refinement)
-                    </label>
-                </div>
+                    <div className="modal-form-group checkbox-group">
+                        <input
+                            type="checkbox"
+                            name="useSearchInRefinement"
+                            id="useSearchInRefinement"
+                            checked={localSettings.useSearchInRefinement || false}
+                            onChange={handleChange}
+                        />
+                        <label htmlFor="useSearchInRefinement" className="modal-label checkbox-label">
+                            Use Google Search in Critics (Refinement)
+                        </label>
+                    </div>
 
-                <div className="modal-form-group checkbox-group">
-                    <input
-                        type="checkbox"
-                        name="useSearchInSynthesis"
-                        id="useSearchInSynthesis"
-                        checked={localSettings.useSearchInSynthesis || false}
-                        onChange={handleChange}
-                    />
-                    <label htmlFor="useSearchInSynthesis" className="modal-label checkbox-label">
-                        Use Google Search in Final Synthesis
-                    </label>
+                    <div className="modal-form-group checkbox-group">
+                        <input
+                            type="checkbox"
+                            name="useSearchInSynthesis"
+                            id="useSearchInSynthesis"
+                            checked={localSettings.useSearchInSynthesis || false}
+                            onChange={handleChange}
+                        />
+                        <label htmlFor="useSearchInSynthesis" className="modal-label checkbox-label">
+                            Use Google Search in Final Synthesis
+                        </label>
+                    </div>
                 </div>
-            </div>
+            )}
 
             <div className="modal-card">
                 <span className="modal-card-title">System</span>

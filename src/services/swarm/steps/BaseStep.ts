@@ -1,11 +1,12 @@
 import { StepDescriptor, StepContext, StepId, STEPS, StreamConfig, StreamCallbacks, StreamResult, AgentInstruction, MultiAgentConfig } from '@/types/steps';
 import { SimulateError } from '@/types';
-import { Tool, Content, GroundingChunk } from '@google/genai';
+import { Tool, Content } from '@google/genai';
 import { getStepConfig, StepConfig } from '@/utils/swarm/stepConstants';
+import type { GroundingChunk } from './utils/streamUtils';
 import { AgentState, Source, TokenUsage, Work } from '@/types';
 import { createAgentStates, updateAgentState, updateAgentStateById } from './utils/agentStateUtils';
 import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from './utils/devModeUtils';
-import { extractTextFromParts, extractTokenUsage } from './utils/streamUtils';
+import { extractTextFromParts, extractTokenUsage, extractPartsFromChunk, extractUsageMetadataFromChunk, extractGroundingChunksFromChunk } from './utils/streamUtils';
 import { getErrorLabel, checkGlobalRateLimitFailure, checkGlobalStepFailure, getFriendlyErrorMessage } from './utils/errorUtils';
 import { getGenerationConfig } from '@/services/proxy/geminiConfig';
 import { Logger } from '@shared/utils/logger';
@@ -83,7 +84,7 @@ export abstract class BaseStep implements StepDescriptor {
     if (stepId === STEPS.INITIAL && settings.initialModel) return settings.initialModel;
     if (stepId === STEPS.REFINEMENT && settings.refinementModel) return settings.refinementModel;
     if (stepId === STEPS.SYNTHESIS && settings.synthesisModel) return settings.synthesisModel;
-    return settings.model;
+    return settings.provider === 'openrouter' ? settings.openRouterModel : settings.model;
   }
 
   /**
@@ -620,7 +621,9 @@ export abstract class BaseStep implements StepDescriptor {
             }
 
             chunkCount++;
-            const { text, thought } = this.extractStreamContent(chunk.candidates?.[0]?.content?.parts);
+            // Type-safe extraction using helper functions
+            const parts = extractPartsFromChunk(chunk);
+            const { text, thought } = this.extractStreamContent(parts);
             
             // Log first chunk details or when thought content appears
             const isFirstThought = thought && !fullThought;
@@ -637,12 +640,15 @@ export abstract class BaseStep implements StepDescriptor {
             fullText += text;
             fullThought += thought;
 
-            const usage = this.extractTokenUsage(chunk.usageMetadata);
+            // Type-safe extraction of usage metadata
+            const usageMetadata = extractUsageMetadataFromChunk(chunk);
+            const usage = this.extractTokenUsage(usageMetadata);
             if (usage) {
               lastUsage = usage;
             }
             
-            const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+            // Type-safe extraction of grounding chunks
+            const groundingChunks = extractGroundingChunksFromChunk(chunk);
             if (groundingChunks) {
               allGroundingChunks.push(...groundingChunks);
             }

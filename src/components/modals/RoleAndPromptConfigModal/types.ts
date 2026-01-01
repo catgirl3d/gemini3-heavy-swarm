@@ -30,4 +30,6 @@ export interface RoleAndPromptConfigModalProps {
     modelValue?: string;
     isModelUnlocked?: boolean;
     onModelChange?: (model: string) => void;
+    provider?: 'gemini' | 'openrouter';
+    isDemoMode?: boolean;
 }

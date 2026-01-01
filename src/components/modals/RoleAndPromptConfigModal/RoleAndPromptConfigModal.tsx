@@ -1,13 +1,13 @@
 import React, { FC, useState, useRef, useEffect } from 'react';
 import { BaseModal } from '@/components/modals/BaseModal';
 import { RoleAndPromptConfigModalProps } from '@/components/modals/RoleAndPromptConfigModal/types';
-import { PortalDropdown } from '@/components/ui';
+import { PortalDropdown, ModelSelector } from '@/components/ui';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
 import './RoleAndPromptConfigModal.css';
 
 // Stable reference to prevent click listener churn
 // Include portal wrapper so clicks inside the portaled dropdown aren't treated as "outside"
-const CLICK_OUTSIDE_SELECTORS = ['.preset-menu-container', '.modal-dropdown-portal'];
+const CLICK_OUTSIDE_SELECTORS = ['.preset-menu-container', '.model-selector-container', '.modal-dropdown-portal'];
 
 export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
     isOpen,
@@ -23,9 +23,12 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
     extraActions,
     modelValue,
     isModelUnlocked = true,
-    onModelChange
+    onModelChange,
+    provider = 'gemini',
+    isDemoMode = false
 }) => {
     const [isSaving, setIsSaving] = useState(false);
+    const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
     const [presetName, setPresetName] = useState('');
     const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -34,6 +37,7 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
         if (!isOpen) {
             setIsSaving(false);
             setPresetName('');
+            setIsModelSelectorOpen(false);
         }
     }, [isOpen]);
 
@@ -58,7 +62,15 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
             size="md"
             className="role-edit-modal"
             clickOutsideSelectors={CLICK_OUTSIDE_SELECTORS}
-            onCloseDropdowns={() => setIsDropdownOpen(false)}
+            onCloseDropdowns={() => {
+                setIsDropdownOpen(false);
+                setIsModelSelectorOpen(false);
+            }}
+            onEscape={() => {
+                if (isDropdownOpen) setIsDropdownOpen(false);
+                else if (isModelSelectorOpen) setIsModelSelectorOpen(false);
+                else handleClose();
+            }}
         >
             <BaseModal.Header title={title} onClose={handleClose} />
             <BaseModal.Body>
@@ -131,23 +143,35 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
                         <BaseModal.Divider />
                         <div className="modal-form-group">
                             <label className="modal-label">Model for this Step</label>
-                            <select
-                                value={!isModelUnlocked ? 'gemini-2.5-flash-lite' : (modelValue || '')}
-                                onChange={(e) => onModelChange(e.target.value)}
-                                className="modal-input"
-                                disabled={!isModelUnlocked}
-                            >
-                                <option value="">Use Global Model</option>
-                                {AVAILABLE_MODELS.map(m => (
-                                    <option key={m.value} value={m.value}>{m.label}</option>
-                                ))}
-                            </select>
+                            {/* Type-safe: onModelChange is guaranteed to be defined within this conditional block */}
+                            <ModelSelector
+                                provider={provider}
+                                value={(!isModelUnlocked || (provider === 'gemini' && isDemoMode)) ? (provider === 'openrouter' ? '' : 'gemini-2.5-flash-lite') : (modelValue || '')}
+                                onChange={onModelChange}
+                                isOpen={isModelSelectorOpen}
+                                onOpenChange={setIsModelSelectorOpen}
+                                placeholder="Use Global Model"
+                                disabled={!isModelUnlocked || (provider === 'gemini' && isDemoMode)}
+                                showEmptyOption={true}
+                                emptyLabel="Use Global Model"
+                                isDemoMode={isDemoMode}
+                            />
                             <p className="modal-help-text">
                                 Select 'Use Global Model' to use the global model from General settings.
                             </p>
-                            {!isModelUnlocked && (
+                            {isDemoMode && provider === 'gemini' && (
                                 <p className="modal-help-text warning">
-                                    Only Gemini 2.5 Flash-Lite is available in Demo Mode.
+                                    Only Gemini 2.5 Flash-Lite is available in Demo Mode. Add an API key to unlock all models.
+                                </p>
+                            )}
+                            {isDemoMode && provider === 'openrouter' && (
+                                <p className="modal-help-text warning">
+                                    Demo Mode: Only free models are available.
+                                </p>
+                            )}
+                            {!isModelUnlocked && !isDemoMode && (
+                                <p className="modal-help-text danger">
+                                    No API key available.
                                 </p>
                             )}
                         </div>

@@ -98,6 +98,18 @@ export const App: FC = () => {
     // Check if there's content to send BEFORE clearing the fields
     if (!userInput.trim() && !image) return;
     
+    // Validate model is selected
+    const currentModel = settings.provider === 'openrouter' ? settings.openRouterModel : settings.model;
+    if (!currentModel || currentModel.trim() === '') {
+      setToast({ 
+        message: settings.provider === 'openrouter' 
+          ? 'Please select an OpenRouter model in settings before sending a message.' 
+          : 'Please select a model in settings before sending a message.', 
+        type: 'error' 
+      });
+      return;
+    }
+    
     // Store current values
     const currentInput = userInput;
     const currentImage = image;
@@ -114,7 +126,7 @@ export const App: FC = () => {
     }
     
     await sendMessage(currentInput, currentImage, currentImageFile);
-  }, [userInput, image, imageFile, sendMessage]);
+  }, [userInput, image, imageFile, sendMessage, settings.provider, settings.model, settings.openRouterModel, setToast]);
 
   // Memoized handler for regeneration to prevent MessageList re-renders
   const handleRegenerate = useCallback((messageId: string, phase: StepId, agentIndex: number) => {
@@ -125,17 +137,22 @@ export const App: FC = () => {
   useEffect(() => {
     if (!serverStatus.isLoaded || !settingsLoaded) return;
 
-    const isUsingProxyNow = checkProxyUsage(settings.apiKey);
-    const isLocked = isUsingProxyNow && (serverStatus.proxyMode !== 'private');
+    // Only enforce Gemini restrictions if Gemini is the selected provider
+    if (settings.provider === 'gemini') {
+        const isUsingProxyNow = checkProxyUsage(settings.apiKey);
+        const isLocked = isUsingProxyNow && (serverStatus.proxyMode !== 'private');
 
-    if (isLocked && settings.model !== 'gemini-2.5-flash-lite') {
-        new Logger('App', settings.debugMode).info("Enforcing demo model restriction (gemini-2.5-flash-lite)");
-        setSettings(prev => ({ ...prev, model: 'gemini-2.5-flash-lite' }));
+        if (isLocked && settings.model !== 'gemini-2.5-flash-lite') {
+            new Logger('App', settings.debugMode).info("Enforcing demo model restriction (gemini-2.5-flash-lite)");
+            setSettings(prev => ({ ...prev, model: 'gemini-2.5-flash-lite' }));
+        }
     }
   }, [serverStatus.isLoaded, serverStatus.proxyMode, settings.apiKey, settings.model, settingsLoaded, setSettings]);
 
-  const isUsingProxy = checkProxyUsage(settings.apiKey);
-  const modelDisplayName = getModelDisplayName(settings.model);
+  const isUsingProxy = settings.provider === 'openrouter' ? !settings.openRouterApiKey : checkProxyUsage(settings.apiKey);
+  const modelDisplayName = settings.provider === 'openrouter'
+    ? (settings.openRouterModel || 'OpenRouter')
+    : getModelDisplayName(settings.model);
 
   return (
     <div className="chat-container">
@@ -148,6 +165,8 @@ export const App: FC = () => {
         isMissingKey={isMissingKey}
         isProxyDemo={isProxyDemo}
         isProxyPrivate={isProxyPrivate}
+        hasUserApiKey={!!settings.apiKey}
+        hasUserOpenRouterKey={!!settings.openRouterApiKey}
       />
       
       <Header

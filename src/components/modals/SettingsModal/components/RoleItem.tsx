@@ -3,7 +3,7 @@ import { ArrowUpIcon, ArrowDownIcon, ConfigIcon, TrashIcon } from '@/components/
 
 interface RoleItemProps {
     index: number;
-    role: { name: string; instruction: string };
+    role: { name: string; instruction: string; model?: string };
     isFirst: boolean;
     isLast: boolean;
     canDelete: boolean;
@@ -30,8 +30,15 @@ export const RoleItem: FC<RoleItemProps> = ({
                 <div className="role-ordinal">#{index + 1}</div>
 
                 <div className="role-main-content">
-                    <div className="role-name-display">
-                        {role.name || 'Unnamed Role'}
+                    <div className="role-info-group">
+                        <div className="role-name-display">
+                            {role.name || 'Unnamed Role'}
+                        </div>
+                        {role.model && (
+                            <div className="role-model-tag">
+                                {role.model}
+                            </div>
+                        )}
                     </div>
                 </div>
 

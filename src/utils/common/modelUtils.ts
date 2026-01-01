@@ -6,5 +6,10 @@ export const getModelDisplayName = (model: string): string => {
     'gemini-3-flash-preview': 'Gemini 3 Flash Swarm',
     'gemini-3-pro-preview': 'Gemini 3 Pro Swarm',
   };
-  return modelNames[model] || 'Gemini Swarm';
+  if (modelNames[model]) return modelNames[model];
+  
+  // If it's a path-like model (e.g. provider/model), it's likely OpenRouter
+  if (model.includes('/')) return model;
+
+  return model || 'Default Model';
 };

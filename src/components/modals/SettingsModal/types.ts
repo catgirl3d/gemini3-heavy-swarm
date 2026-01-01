@@ -1,11 +1,11 @@
-import { AppSettings, PromptTypeId } from '@/types';
+import { AppSettings, PromptTypeId, ServerStatus } from '@/types';
 
 export interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
     settings: AppSettings;
     onSave: (newSettings: AppSettings) => void;
-    serverStatus?: { hasServerKey: boolean; proxyMode: string };
+    serverStatus?: ServerStatus;
 }
 
 export type TabType = 'general' | 'prompts' | 'roles';

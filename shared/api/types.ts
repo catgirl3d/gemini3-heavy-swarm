@@ -8,6 +8,14 @@ export interface GeminiRequest {
   tools?: Tool[];
 }
 
+export interface OpenRouterRequest {
+  model: string;
+  messages: { role: string; content: string }[];
+  stream?: boolean;
+  temperature?: number;
+  max_tokens?: number;
+}
+
 export interface KVNamespaceSubset {
   get(key: string): Promise<string | null>;
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;

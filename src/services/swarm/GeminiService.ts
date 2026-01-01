@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { ProxyGenAI } from '@/services/proxy/ProxyGenAI';
+import { OpenRouterGenAI } from '@/services/openrouter/OpenRouterGenAI';
 import { IS_FORCED_PROXY } from '@/constants';
 import { getDirectApiKey } from '@/services/proxy/proxyUtils';
 import { AppSettings, Work, AgentState, Message, Source, TokenUsage } from '@/types';
@@ -16,7 +17,7 @@ const getLogger = (settings: AppSettings) => new Logger('GeminiSwarm', settings.
 
 
 export class GeminiService {
-  private ai: GoogleGenAI | ProxyGenAI | null = null;
+  private ai: GoogleGenAI | ProxyGenAI | OpenRouterGenAI | null = null;
   private steps: StepDescriptor[];
 
   constructor() {
@@ -52,7 +53,9 @@ export class GeminiService {
   ): Promise<{ text: string; sources?: Source[]; work: Work }> {
     
     // Initialize AI client with user key if provided, otherwise fall back to env key
-    this.initAiClient(settings.apiKey);
+    this.initAiClient(settings);
+
+    const effectiveSettings = this.getEffectiveSettings(settings);
 
     const liveWork: Work = existingWork || {
       results: {
@@ -70,7 +73,7 @@ export class GeminiService {
     };
 
     getLogger(settings).debug(existingWork ? 'resumeSwarm start' : 'runSwarm start', {
-      model: settings.model,
+      model: settings.provider === 'openrouter' ? settings.openRouterModel : settings.model,
       numAgents: settings.numAgents,
       devMode: settings.devMode,
       pauseAfterInitial: settings.pauseAfterInitial
@@ -78,7 +81,7 @@ export class GeminiService {
 
     const context: StepContext = {
       ai: this.ai,
-      settings,
+      settings: effectiveSettings,
       userInput,
       image,
       imageFile,
@@ -124,7 +127,9 @@ export class GeminiService {
     onSynthesisJump?: () => void
   ): Promise<{ text: string; sources?: Source[]; work: Work }> {
     // Ensure AI client is updated with the latest key from settings
-    this.initAiClient(settings.apiKey);
+    this.initAiClient(settings);
+
+    const effectiveSettings = this.getEffectiveSettings(settings);
 
     // Find the step
     const step = this.steps.find(s => s.id === stepId);
@@ -141,7 +146,7 @@ export class GeminiService {
     // Create a context that proxies onMessageUpdate to onUpdate for streaming
     const context: StepContext = {
         ai: this.ai,
-        settings,
+        settings: effectiveSettings,
         userInput,
         image,
         imageFile,
@@ -158,12 +163,33 @@ export class GeminiService {
     return step.regenerate(context, agentIndex, agentStates) as Promise<{ text: string; sources?: Source[]; work: Work }>;
   }
 
-  private initAiClient(providedKey?: string) {
-    const apiKey = getDirectApiKey(providedKey);
-    if (apiKey) {
-      this.ai = new GoogleGenAI({ apiKey });
+  private initAiClient(settings: AppSettings) {
+    if (settings.provider === 'openrouter') {
+      this.ai = new OpenRouterGenAI({
+        apiKey: settings.openRouterApiKey,
+        model: settings.openRouterModel,
+        isProxy: !settings.openRouterApiKey
+      });
     } else {
-      this.ai = new ProxyGenAI();
+      const apiKey = getDirectApiKey(settings.apiKey);
+      if (apiKey) {
+        this.ai = new GoogleGenAI({ apiKey });
+      } else {
+        this.ai = new ProxyGenAI();
+      }
     }
+  }
+
+  private getEffectiveSettings(settings: AppSettings): AppSettings {
+    // Force disable search for OpenRouter as it's text-only for now
+    if (settings.provider === 'openrouter') {
+      return {
+        ...settings,
+        useSearchInInitial: false,
+        useSearchInRefinement: false,
+        useSearchInSynthesis: false
+      };
+    }
+    return settings;
   }
 }

@@ -11,6 +11,7 @@ import { isProductionEnvironment, MAX_REQUEST_SIZE } from '../shared/security/se
 import { getAllowedOrigins, isOriginAllowed, buildCorsHeaders, buildSecurityHeaders, checkPreflightAllowed } from '../shared/api/cors.core';
 import { validateApiSecret, getProxyMode } from '../shared/api/security.core';
 import { validateAndPrepareProxy, executeGeminiRequest } from '../shared/api/geminiProxy.core';
+import { validateAndPrepareOpenRouterProxy, executeOpenRouterRequest } from '../shared/api/openrouterProxy.core';
 import { checkRateLimit, streamToExpress } from '../shared/api/adapters/express.adapter';
 import { getSafeGeminiError } from '../shared/api/errors';
 import { Logger } from '../shared/utils/logger';
@@ -135,7 +136,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 	}
 
 	// Rate limiting check - only for POST /api/gemini
-	if (req.method === 'POST' && req.path === '/api/gemini') {
+	if (req.method === 'POST' && (req.path === '/api/gemini' || req.path === '/api/openrouter')) {
 		const rateLimit = checkRateLimit(req.ip || 'unknown');
 		if (!rateLimit.allowed) {
 			return res.status(429).json({ error: 'Too many requests' });
@@ -152,6 +153,7 @@ app.use(express.static(path.join(__dirname, '..', 'dist')));
 app.get('/api/status', (req: Request, res: Response) => {
 	res.json({
 		hasServerKey: !!process.env.GEMINI_API_KEY,
+		hasOpenRouterKey: !!process.env.OPENROUTER_API_KEY,
 		hasKV: true, // Local server uses in-memory rate limiting
 		proxyMode: getProxyMode(process.env.GEMINI_PROXY_MODE)
 	});
@@ -194,6 +196,47 @@ app.post('/api/gemini', async (req: Request, res: Response) => {
 	}
 });
 
+// OpenRouter Proxy Endpoint
+app.post('/api/openrouter', async (req: Request, res: Response) => {
+	try {
+		const apiKey = process.env.OPENROUTER_API_KEY;
+		if (!apiKey) {
+			logger.error('OPENROUTER_API_KEY not set');
+			return res.status(500).json({ error: 'Server configuration error: OpenRouter API key missing' });
+		}
+
+		// Validation and preparation
+		const preparation = validateAndPrepareOpenRouterProxy(req.body);
+		
+		if (preparation.ok === false) {
+			return res.status(preparation.statusCode).json({ error: preparation.error });
+		}
+
+		logger.info(`Request received for OpenRouter model: ${req.body.model}`);
+
+		// Execute request
+		const response = await executeOpenRouterRequest(
+			preparation.targetUrl,
+			preparation.requestBody,
+			apiKey,
+			process.env.OPENROUTER_REFERER,
+			process.env.OPENROUTER_TITLE
+		);
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			return res.status(response.status).json({ error: `OpenRouter error: ${errorText}` });
+		}
+
+		// Stream response back to client
+		await streamToExpress(response, res);
+
+	} catch (error: any) {
+		logger.error(`OpenRouter proxy error: ${error.message}`);
+		res.status(500).json({ error: error.message });
+	}
+});
+
 // Handle client-side routing by serving index.html for all other routes
 app.get('*', (req: Request, res: Response) => {
 	res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
@@ -212,6 +255,7 @@ async function startServer() {
 		app.listen(availablePort, () => {
 			logger.info(`✅ Server running on port ${availablePort}`);
 			logger.info(`Environment check: GEMINI_API_KEY is ${process.env.GEMINI_API_KEY ? 'SET' : 'NOT SET'}`)
+			logger.info(`Environment check: OPENROUTER_API_KEY is ${process.env.OPENROUTER_API_KEY ? 'SET' : 'NOT SET'}`)
 			logger.info(`Environment check: GEMINI_PROXY_MODE is ${getProxyMode(process.env.GEMINI_PROXY_MODE)}`);
 			logger.info(`Environment check: API_SECRET is ${process.env.API_SECRET ? 'SET' : 'NOT SET'}`);
 			if (process.env.ALLOWED_ORIGINS) {

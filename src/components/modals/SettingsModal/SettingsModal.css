@@ -225,6 +225,21 @@
   text-overflow: ellipsis;
 }
 
+.role-model-tag {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--accent-color);
+  background-color: var(--accent-bg);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid var(--accent-border);
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  margin-left: 10px;
+}
 
 .role-actions-compact {
   display: flex;
@@ -673,4 +688,29 @@
 .modal-range-slider::-webkit-slider-thumb:hover {
   transform: scale(1.1);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+}
+
+.modal-help-text {
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.modal-help-text.success {
+  color: #059669; /* Green-600 */
+  font-weight: 500;
+}
+
+.modal-help-text.warning {
+  color: #d97706; /* Amber-600 */
+  background-color: #fffbeb;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #fef3c7;
+}
+
+.modal-help-text.danger {
+  color: #dc2626; /* Red-600 */
+  font-weight: 600;
 }

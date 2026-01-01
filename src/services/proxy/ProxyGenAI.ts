@@ -5,7 +5,7 @@ import { AppError, ErrorCode } from '@/utils/errors/AppError';
 
 const logger = new Logger('ProxyGenAI');
 
-const STREAM_READ_TIMEOUT_MS = 10000; // 10 seconds
+const STREAM_READ_TIMEOUT_MS = 60000; // 60 seconds (increased for reasoning models and slow responses)
 
 // Minimal interface matching what the steps use from the Google SDK
 export class ProxyGenAI {

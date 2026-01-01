@@ -10,6 +10,8 @@ interface StatusBannerProps {
   isMissingKey: boolean;
   isProxyDemo: boolean;
   isProxyPrivate: boolean;
+  hasUserApiKey: boolean;
+  hasUserOpenRouterKey: boolean;
 }
 
 export const StatusBanner: FC<StatusBannerProps> = ({
@@ -20,7 +22,9 @@ export const StatusBanner: FC<StatusBannerProps> = ({
   onDismiss,
   isMissingKey,
   isProxyDemo,
-  isProxyPrivate
+  isProxyPrivate,
+  hasUserApiKey,
+  hasUserOpenRouterKey
 }) => {
   if (isBannerDismissed) return null;
 
@@ -53,13 +57,13 @@ export const StatusBanner: FC<StatusBannerProps> = ({
         </div>
       )}
 
-      {serverStatus.isLoaded && isProxyDemo && (
+      {serverStatus.isLoaded && isProxyDemo && !hasUserApiKey && !hasUserOpenRouterKey && (
         <div className="modal-banner info global">
             <div className="modal-banner-content">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                     <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 01.67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 11-.671-1.34l.041-.022zM12 9a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
                 </svg>
-                Demo mode. Only Gemini 2.5 Flash-Lite is available unless you add your own API key.
+                Demo mode. Limited models available. Add your own API key in settings to unlock full access.
             </div>
             <button className="modal-banner-close-btn" onClick={onDismiss} aria-label="Dismiss banner">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -69,13 +73,16 @@ export const StatusBanner: FC<StatusBannerProps> = ({
         </div>
       )}
 
-      {serverStatus.isLoaded && isProxyPrivate && (
+      {serverStatus.isLoaded && (isProxyPrivate || hasUserApiKey || hasUserOpenRouterKey) && (
         <div className="modal-banner success global">
             <div className="modal-banner-content">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M18 1.5c2.9 0 5.25 2.35 5.25 5.25v3.75a.75.75 0 01-1.5 0V6.75a3.75 3.75 0 10-7.5 0v3a3 3 0 013 3v6.75a3 3 0 01-3 3H3.75a3 3 0 01-3-3v-6.75a3 3 0 013-3h9v-3c0-2.9 2.35-5.25 5.25-5.25z" />
                 </svg>
-                Private Server Mode. All models are unlocked via the server's API key.
+                {hasUserApiKey || hasUserOpenRouterKey
+                    ? "Private API Key Active. All models are unlocked."
+                    : "Private Server Mode. All models are unlocked via the server's API key."
+                }
             </div>
             <button className="modal-banner-close-btn" onClick={onDismiss} aria-label="Dismiss banner">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">

@@ -3,10 +3,11 @@ export type { StepId };
 export { STEPS };
 import { GoogleGenAI, Content, Tool, GroundingChunk } from '@google/genai';
 import { ProxyGenAI } from '@/services/proxy/ProxyGenAI';
+import { OpenRouterGenAI } from '@/services/openrouter/OpenRouterGenAI';
 import type { AppError } from '@/utils/errors/AppError';
 
 export interface StreamConfig {
-  ai: GoogleGenAI | ProxyGenAI | null;
+  ai: GoogleGenAI | ProxyGenAI | OpenRouterGenAI | null;
   settings: AppSettings;
   model: string;
   contents: Content[];
@@ -39,7 +40,7 @@ export interface StreamResult {
 /** Pipeline step identifiers. Note: 'refinement_step' is distinct from 'refinement_prompt' InstructionType */
 
 export interface StepContext {
-  ai: GoogleGenAI | ProxyGenAI | null;
+  ai: GoogleGenAI | ProxyGenAI | OpenRouterGenAI | null;
   settings: AppSettings;
   history: Message[];
   userInput: string;

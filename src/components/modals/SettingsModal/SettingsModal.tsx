@@ -17,6 +17,24 @@ import { RolesTab } from '@/components/modals/SettingsModal/tabs/RolesTab';
 
 import './SettingsModal.css';
 
+/**
+ * Determines if a model is unlocked based on the provider and available keys.
+ * A model is unlocked if either the user has provided their own API key,
+ * or if the server has a key configured.
+ * 
+ * @param provider - The AI provider to check ('gemini' or 'openrouter')
+ * @param hasUserKey - Whether the user has provided their own API key
+ * @param hasServerKey - Whether the server has a key configured
+ * @returns true if the model is unlocked (either user or server has a key)
+ */
+function isModelUnlockedForProvider(
+    provider: 'gemini' | 'openrouter',
+    hasUserKey: boolean,
+    hasServerKey: boolean
+): boolean {
+    return hasUserKey || hasServerKey;
+}
+
 export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, serverStatus }) => {
     const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
     const [activeTab, setActiveTab] = useState<'general' | 'prompts' | 'roles'>('general');
@@ -31,6 +49,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     // Preset states
     const [isRolePresetDropdownOpen, setIsRolePresetDropdownOpen] = useState(false);
     const [isInstructionPresetDropdownOpen, setIsInstructionPresetDropdownOpen] = useState(false);
+    const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
     const [showConfirmClose, setShowConfirmClose] = useState(false);
 
     const hasChanges = useMemo(() => {
@@ -56,8 +75,16 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     // Derived values
     const activeProfile = localSettings.profiles?.find(p => p.id === localSettings.activeProfileId) || localSettings.profiles?.[0] || DEFAULT_SETTINGS.profiles[0];
     const activeRoleProfile = localSettings.roleProfiles?.find(p => p.id === localSettings.activeRoleProfileId) || localSettings.roleProfiles?.[0] || DEFAULT_SETTINGS.roleProfiles[0];
-    const isUsingProxy = checkProxyUsage(localSettings.apiKey);
-    const isModelUnlocked = !isUsingProxy || (serverStatus?.hasServerKey && serverStatus?.proxyMode === 'private');
+    const isUsingProxy = localSettings.provider === 'openrouter' ? !localSettings.openRouterApiKey : checkProxyUsage(localSettings.apiKey);
+    const isModelUnlocked = isModelUnlockedForProvider(
+        localSettings.provider,
+        localSettings.provider === 'openrouter' ? !!localSettings.openRouterApiKey : !!localSettings.apiKey,
+        localSettings.provider === 'openrouter' ? !!serverStatus?.hasOpenRouterKey : !!serverStatus?.hasServerKey
+    );
+
+    const currentIsDemoMode = localSettings.provider === 'openrouter'
+        ? (!localSettings.openRouterApiKey && !!serverStatus?.hasOpenRouterKey && serverStatus?.proxyMode !== 'private')
+        : (!localSettings.apiKey && !!serverStatus?.hasServerKey && serverStatus?.proxyMode !== 'private');
 
     // Hooks
     const profileMgr = useProfileManagement(localSettings, setLocalSettings, activeProfile, activeRoleProfile, setIsEditingProfileName, setIsEditingRoleName);
@@ -75,11 +102,25 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
 
     const handleSave = () => {
         const finalSettings = { ...localSettings };
-        const isUsingProxyFinal = checkProxyUsage(finalSettings.apiKey);
-        const isUnlockedFinal = !isUsingProxyFinal || (serverStatus?.hasServerKey && serverStatus?.proxyMode === 'private');
         
-        if (!isUnlockedFinal) {
-            finalSettings.model = 'gemini-2.5-flash-lite';
+        // Calculate unlocked and demo state for the selected provider
+        const hasUserKeyFinal = finalSettings.provider === 'openrouter' ? !!finalSettings.openRouterApiKey : !!finalSettings.apiKey;
+        const hasServerKeyFinal = finalSettings.provider === 'openrouter' ? !!serverStatus?.hasOpenRouterKey : !!serverStatus?.hasServerKey;
+        const isUnlockedFinal = isModelUnlockedForProvider(finalSettings.provider, hasUserKeyFinal, hasServerKeyFinal);
+        const isDemoFinal = !hasUserKeyFinal && hasServerKeyFinal && serverStatus?.proxyMode !== 'private';
+        
+        if (!isUnlockedFinal || isDemoFinal) {
+            // Force default model in demo or no-key mode
+            if (finalSettings.provider === 'gemini') {
+                finalSettings.model = 'gemini-2.5-flash-lite';
+            } else if (finalSettings.provider === 'openrouter' && isDemoFinal) {
+                // In demo mode, clear OpenRouter model if it's not a free model
+                const currentModel = finalSettings.openRouterModel || '';
+                if (currentModel && !currentModel.endsWith(':free')) {
+                    finalSettings.openRouterModel = '';
+                }
+            }
+            
             // Reset step-specific models to fallback to global
             finalSettings.initialModel = undefined;
             finalSettings.refinementModel = undefined;
@@ -124,6 +165,18 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
             onClose={handleClose}
             size="lg"
             className=""
+            clickOutsideSelectors={['.model-selector-container', '.modal-dropdown-portal']}
+            onCloseDropdowns={() => {
+                setOpenDropdownId(null);
+                setIsRolePresetDropdownOpen(false);
+                setIsInstructionPresetDropdownOpen(false);
+            }}
+            onEscape={() => {
+                if (openDropdownId) setOpenDropdownId(null);
+                else if (isRolePresetDropdownOpen) setIsRolePresetDropdownOpen(false);
+                else if (isInstructionPresetDropdownOpen) setIsInstructionPresetDropdownOpen(false);
+                else handleClose();
+            }}
         >
             <BaseModal.Header title="Swarm Configuration" onClose={handleClose} />
             
@@ -146,6 +199,9 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         handleChange={handleChange}
                         setLocalSettings={setLocalSettings}
                         isModelUnlocked={isModelUnlocked}
+                        serverStatus={serverStatus}
+                        openDropdownId={openDropdownId}
+                        setOpenDropdownId={setOpenDropdownId}
                     />
                 )}
                 {activeTab === 'prompts' && (
@@ -191,6 +247,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                     <RoleAndPromptConfigModal
                         isOpen={true}
                         onClose={() => { setEditingRoleIndex(null); setIsRolePresetDropdownOpen(false); }}
+                        provider={localSettings.provider}
                         title={`Configure Role #${editingRoleIndex + 1}`}
                         fields={[
                             {
@@ -214,6 +271,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         onSavePreset={(name) => presetMgr.handleSaveRolePreset(editingRoleIndex, activeRoleType, activeRoleProfile, name)}
                         modelValue={((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.model || ''}
                         isModelUnlocked={isModelUnlocked}
+                        isDemoMode={currentIsDemoMode}
                         onModelChange={(model) => roleMgr.handleRoleChange(editingRoleIndex, 'model', model)}
                     />
                 )}
@@ -222,6 +280,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                     <RoleAndPromptConfigModal
                         isOpen={true}
                         onClose={() => { setEditingInstruction(null); setIsInstructionPresetDropdownOpen(false); }}
+                        provider={localSettings.provider}
                         title={`Configure ${editingInstruction.replace('_prompt', '').charAt(0).toUpperCase() + editingInstruction.replace('_prompt', '').slice(1)} Instruction`}
                         fields={[{
                             label: "Instruction",
@@ -237,6 +296,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         onSavePreset={(name) => presetMgr.handleSaveInstructionPreset(editingInstruction, name)}
                         modelValue={(localSettings[INSTRUCTION_METADATA[editingInstruction].modelKey] as string) || ''}
                         isModelUnlocked={isModelUnlocked}
+                        isDemoMode={currentIsDemoMode}
                         onModelChange={(model) => {
                             setLocalSettings(prev => ({
                                 ...prev,

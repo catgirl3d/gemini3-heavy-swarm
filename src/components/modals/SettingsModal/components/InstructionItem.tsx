@@ -5,10 +5,11 @@ interface InstructionItemProps {
     index: number;
     label: string;
     help: string;
+    model?: string;
     onEdit: () => void;
 }
 
-export const InstructionItem: FC<InstructionItemProps> = ({ index, label, help, onEdit }) => {
+export const InstructionItem: FC<InstructionItemProps> = ({ index, label, help, model, onEdit }) => {
     return (
         <div className="role-item compact">
             <div className="role-compact-row">
@@ -18,6 +19,11 @@ export const InstructionItem: FC<InstructionItemProps> = ({ index, label, help, 
                     <div className="role-info-group">
                         <div className="role-name-display">
                             {label}
+                            {model && (
+                                <span className="role-model-tag">
+                                    {model}
+                                </span>
+                            )}
                         </div>
                         <div className="modal-help-text ellipsis">
                             {help}

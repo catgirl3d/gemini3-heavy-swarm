@@ -70,9 +70,12 @@ export interface SavedRole {
 export type SimulateError = 'none' | '429' | '500' | '503' | 'timeout';
 
 export interface AppSettings {
+  provider: 'gemini' | 'openrouter';
   numAgents: number;
   apiKey?: string;
   model: string;
+  openRouterApiKey?: string;
+  openRouterModel: string;
   activeProfileId: string;
   profiles: PromptProfile[];
   devMode: boolean;
@@ -213,6 +216,7 @@ export interface AgentState {
 
 export interface ServerStatus {
   hasServerKey: boolean;
+  hasOpenRouterKey: boolean;
   proxyMode: string;
   isLoaded: boolean;
 }

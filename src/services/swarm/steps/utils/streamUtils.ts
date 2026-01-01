@@ -24,11 +24,90 @@ export interface GeminiUsageMetadata {
 }
 
 /**
+ * Structure of Gemini grounding metadata.
+ * Compatible with @google/genai GroundingChunk.
+ */
+export interface GroundingChunk {
+  web?: {
+    uri?: string;
+    title?: string;
+  };
+}
+
+export interface GeminiCandidate {
+  content?: {
+    parts?: GeminiPart[];
+  };
+  groundingMetadata?: {
+    groundingChunks?: GroundingChunk[];
+  };
+}
+
+/**
+ * Gemini stream chunk structure (from Proxy or SDK).
+ */
+export interface GeminiStreamChunk {
+  candidates?: GeminiCandidate[];
+  usageMetadata?: GeminiUsageMetadata;
+  text?: () => string; // Proxy adds this helper
+}
+
+/**
+ * OpenRouter stream chunk structure (normalized to match Gemini format).
+ * OpenRouter chunks are already normalized in OpenRouterGenAI.ts to match Gemini format.
+ */
+export interface OpenRouterStreamChunk {
+  candidates?: GeminiCandidate[];
+  usageMetadata?: GeminiUsageMetadata;
+  text?: () => string;
+}
+
+/**
+ * Union type for all supported stream chunk formats.
+ */
+export type StreamChunk = GeminiStreamChunk | OpenRouterStreamChunk;
+
+/**
  * Result of processing a stream chunk.
  */
 export interface StreamChunkResult {
   text: string;
   thought: string;
+}
+
+/**
+ * Type guard to check if an object is a valid stream chunk.
+ */
+export function isValidStreamChunk(chunk: unknown): chunk is StreamChunk {
+  return (
+    typeof chunk === 'object' &&
+    chunk !== null &&
+    ('candidates' in chunk || 'usageMetadata' in chunk)
+  );
+}
+
+/**
+ * Safely extracts parts from a stream chunk with type checking.
+ */
+export function extractPartsFromChunk(chunk: unknown): GeminiPart[] | undefined {
+  if (!isValidStreamChunk(chunk)) return undefined;
+  return chunk.candidates?.[0]?.content?.parts;
+}
+
+/**
+ * Safely extracts usage metadata from a stream chunk with type checking.
+ */
+export function extractUsageMetadataFromChunk(chunk: unknown): GeminiUsageMetadata | undefined {
+  if (!isValidStreamChunk(chunk)) return undefined;
+  return chunk.usageMetadata;
+}
+
+/**
+ * Safely extracts grounding chunks from a stream chunk with type checking.
+ */
+export function extractGroundingChunksFromChunk(chunk: unknown): GroundingChunk[] | undefined {
+  if (!isValidStreamChunk(chunk)) return undefined;
+  return chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
 }
 
 /**

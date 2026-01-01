@@ -184,7 +184,18 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
     migrated.synthesisModel = '';
   }
 
-  // Migration 14: Ensure role models exist and are valid
+  // Migration 14: Ensure OpenRouter settings exist
+  if (migrated.provider === undefined) {
+    migrated.provider = 'gemini';
+  }
+  if (migrated.openRouterApiKey === undefined) {
+    migrated.openRouterApiKey = '';
+  }
+  if (migrated.openRouterModel === undefined) {
+    migrated.openRouterModel = '';
+  }
+
+  // Migration 15: Ensure role models exist and are valid
   if (migrated.roleProfiles) {
     (migrated.roleProfiles as any[]) = migrated.roleProfiles.map((profile: any) => {
         return {

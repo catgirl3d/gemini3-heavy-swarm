@@ -27,6 +27,7 @@ export const onRequestGet = (async (context) => {
 
   return new Response(JSON.stringify({
     hasServerKey: !!env.GEMINI_API_KEY,
+    hasOpenRouterKey: !!env.OPENROUTER_API_KEY,
     hasKV: !!env.RATE_LIMIT_KV,
     proxyMode: getProxyMode(env.GEMINI_PROXY_MODE)
   }), {
