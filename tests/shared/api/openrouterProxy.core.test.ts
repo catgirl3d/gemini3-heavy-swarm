@@ -24,16 +24,18 @@ describe('openrouterProxy.core', () => {
     it('should return error for invalid messages', () => {
       const result = validateAndPrepareOpenRouterProxy({ model: 'test', messages: [] });
       if (!result.ok) {
-        expect(result.statusCode).toBe(400);
-        expect(result.error).toContain('Invalid messages');
+        const errorResult = result as { ok: false; error: string; statusCode: number };
+        expect(errorResult.statusCode).toBe(400);
+        expect(errorResult.error).toContain('Invalid messages structure');
       }
     });
 
     it('should return error for missing model', () => {
       const result = validateAndPrepareOpenRouterProxy({ model: '', messages: [{ role: 'user', content: 'hi' }] });
       if (!result.ok) {
-        expect(result.statusCode).toBe(400);
-        expect(result.error).toContain('Model is required');
+        const errorResult = result as { ok: false; error: string; statusCode: number };
+        expect(errorResult.statusCode).toBe(400);
+        expect(errorResult.error).toContain('Model is required');
       }
     });
 
@@ -52,8 +54,9 @@ describe('openrouterProxy.core', () => {
 
       const result = validateAndPrepareOpenRouterProxy(largeBody);
       if (!result.ok) {
-        expect(result.statusCode).toBe(413);
-        expect(result.error).toContain('too large');
+        const errorResult = result as { ok: false; error: string; statusCode: number };
+        expect(errorResult.statusCode).toBe(413);
+        expect(errorResult.error).toContain('too large');
       }
     });
 
@@ -62,8 +65,9 @@ describe('openrouterProxy.core', () => {
       it('should reject paid models in demo mode (default)', () => {
         const result = validateAndPrepareOpenRouterProxy(validPaidBody, false);
         if (!result.ok) {
-          expect(result.statusCode).toBe(403);
-          expect(result.error).toContain('Only free models are allowed in demo mode');
+          const errorResult = result as { ok: false; error: string; statusCode: number };
+          expect(errorResult.statusCode).toBe(403);
+          expect(errorResult.error).toContain('Only free models are allowed in demo mode');
         } else {
           throw new Error('Expected rejection of paid model in demo mode');
         }
@@ -72,7 +76,8 @@ describe('openrouterProxy.core', () => {
       it('should reject paid models when isPrivateMode is not provided', () => {
         const result = validateAndPrepareOpenRouterProxy(validPaidBody);
         if (!result.ok) {
-          expect(result.statusCode).toBe(403);
+          const errorResult = result as { ok: false; error: string; statusCode: number };
+          expect(errorResult.statusCode).toBe(403);
         } else {
           throw new Error('Expected rejection of paid model without private mode');
         }
@@ -81,7 +86,8 @@ describe('openrouterProxy.core', () => {
       it('should allow paid models in private mode', () => {
         const result = validateAndPrepareOpenRouterProxy(validPaidBody, true);
         if (!result.ok) {
-          throw new Error(`Expected success in private mode, got: ${result.error}`);
+          const errorResult = result as { ok: false; error: string; statusCode: number };
+          throw new Error(`Expected success in private mode, got: ${errorResult.error}`);
         }
         expect(result.ok).toBe(true);
         expect(result.targetUrl).toBe('https://openrouter.ai/api/v1/chat/completions');

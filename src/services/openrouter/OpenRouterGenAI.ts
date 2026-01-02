@@ -1,5 +1,4 @@
-import { encode } from 'gpt-tokenizer';
-import { Content, GenerationConfig } from '@google/genai';
+import { Content } from '@google/genai';
 import { API_SECRET } from '@/constants';
 import { Logger } from '@shared/utils/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
@@ -127,12 +126,13 @@ export class OpenRouterGenAI {
          * by the official 'usage' data from the API's final chunk to ensure 100% accuracy 
          * once the generation is complete.
          */
-        const estimateTokens = (textOrCharCount: string | number): number => {
+        const estimateTokens = async (textOrCharCount: string | number): Promise<number> => {
           if (typeof textOrCharCount === 'number') {
             // If we only have char count (fallback), use a safe heuristic
             return Math.ceil(textOrCharCount / 3.5);
           }
           try {
+            const { encode } = await import('gpt-tokenizer');
             return encode(textOrCharCount).length;
           } catch (e) {
             // Fallback if tokenizer fails
@@ -141,7 +141,7 @@ export class OpenRouterGenAI {
         };
 
         // Estimate prompt tokens from initial messages (system already included via unshift)
-        const estimatePromptTokens = (): number => {
+        const estimatePromptTokens = async (): Promise<number> => {
           let totalContent = '';
           
           // Count all messages (includes system instruction added via unshift)
@@ -150,7 +150,8 @@ export class OpenRouterGenAI {
           }
           
           // Add 5% overhead for chat template and special tokens
-          return Math.ceil(estimateTokens(totalContent) * 1.05);
+          const baseCount = await estimateTokens(totalContent);
+          return Math.ceil(baseCount * 1.05);
         };
 
         const timeoutMs = this.options.timeout || DEFAULT_STREAM_READ_TIMEOUT_MS;
@@ -159,7 +160,7 @@ export class OpenRouterGenAI {
           let buffer = '';
           
           // Initialize with estimated prompt tokens
-          const estimatedPromptTokens = estimatePromptTokens();
+          const estimatedPromptTokens = await estimatePromptTokens();
           let accumulatedContent = '';
           let accumulatedReasoning = '';
           
@@ -212,7 +213,7 @@ export class OpenRouterGenAI {
                     accumulatedReasoning += reasoning;
                     if (!parsed.usage) {
                       // Accurate token count for reasoning
-                      lastUsage.thoughtsTokenCount = estimateTokens(accumulatedReasoning);
+                      lastUsage.thoughtsTokenCount = await estimateTokens(accumulatedReasoning);
                     }
                   }
                   
@@ -224,8 +225,8 @@ export class OpenRouterGenAI {
                       accumulatedContent += content;
                       // Only update estimates if we don't have real usage yet
                       if (!parsed.usage) {
-                        const candidateTokens = estimateTokens(accumulatedContent);
-                        const reasoningTokens = estimateTokens(accumulatedReasoning);
+                        const candidateTokens = await estimateTokens(accumulatedContent);
+                        const reasoningTokens = await estimateTokens(accumulatedReasoning);
                         lastUsage.candidatesTokenCount = candidateTokens;
                         lastUsage.totalTokenCount = estimatedPromptTokens + candidateTokens + reasoningTokens;
                       }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, FormEvent, FC } from 'react';
+import React, { useState, useEffect, useRef, useCallback, FormEvent, FC, lazy, Suspense } from 'react';
 import { useGeminiSwarm } from '@/hooks/core/useGeminiSwarm';
 import { useServerStatus } from '@/hooks/network/useServerStatus';
 import { useAutoScroll } from '@/hooks/ui/useAutoScroll';
@@ -9,8 +9,10 @@ import { Logger } from '@shared/utils/logger';
 import { StatusBanner, Header, Toast, ToastType } from '@/components/layout';
 import { MessageList, InputArea } from '@/components/chat';
 import { ScrollToBottomButton } from '@/components/ui';
-import { SettingsModal, InfoModal } from '@/components/modals';
-import { StepId, STEPS } from '@/types/steps';
+import { StepId } from '@/types/steps';
+
+const SettingsModal = lazy(() => import('@/components/modals').then(m => ({ default: m.SettingsModal })));
+const InfoModal = lazy(() => import('@/components/modals').then(m => ({ default: m.InfoModal })));
 
 export const App: FC = () => {
   const {
@@ -202,19 +204,21 @@ export const App: FC = () => {
         onClick={scrollToBottom}
       />
 
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        settings={settings}
-        onSave={setSettings}
-        serverStatus={serverStatus}
-        onShowError={(message) => setToast({ message, type: 'error' })}
-      />
-      
-      <InfoModal
-        isOpen={isInfoOpen}
-        onClose={() => setIsInfoOpen(false)}
-      />
+      <Suspense fallback={null}>
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          settings={settings}
+          onSave={setSettings}
+          serverStatus={serverStatus}
+          onShowError={(message) => setToast({ message, type: 'error' })}
+        />
+        
+        <InfoModal
+          isOpen={isInfoOpen}
+          onClose={() => setIsInfoOpen(false)}
+        />
+      </Suspense>
 
       {toast && (
         <Toast

@@ -16,6 +16,26 @@ export default defineConfig(({ mode }) => {
         }
       },
       plugins: [react()],
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: (id) => {
+              if (id.includes('gpt-tokenizer')) {
+                return 'tokenizer';
+              }
+              if (id.includes('@google/genai')) {
+                return 'vendor-genai';
+              }
+              if (id.includes('react-markdown') || id.includes('remark') || id.includes('micromark')) {
+                return 'vendor-markdown';
+              }
+              if (id.includes('node_modules')) {
+                return 'vendor';
+              }
+            }
+          }
+        }
+      },
       define: {
         // Only inject GEMINI_API_KEY into the client bundle in development to prevent leaks in production builds
         'process.env.GEMINI_API_KEY': JSON.stringify(mode === 'development' ? env.GEMINI_API_KEY : '')
