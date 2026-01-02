@@ -58,6 +58,10 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
     'waiting';
   
   const label = agent?.label || config.labels[status];
+  
+  // Use live agent name from state when available, otherwise fallback to passed title
+  // This ensures role names (e.g., "Agent 1 (Researcher)") are shown during generation
+  const displayTitle = agent?.name || title;
 
   // DEBUG: Log final status
   return (
@@ -65,7 +69,7 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
       cardId={cardId}
       onCardAction={onCardAction}
       className={className}
-      title={title}
+      title={displayTitle}
       statusLabel={label}
       status={status}
       icon={status === 'waiting' ? <span>{index + 1}</span> : undefined}
