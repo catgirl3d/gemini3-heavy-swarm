@@ -79,28 +79,30 @@ export abstract class BaseStep implements StepDescriptor {
    * Returns the model for the current step.
    * If a step-specific model is set in settings, it is used, otherwise falls back to the global model.
    */
-  protected getStepModel(settings: AppSettings): string {
+  protected getStepModel(context: StepContext): string {
+    const { settings, ai } = context;
     const stepId = this.id;
     if (stepId === STEPS.INITIAL && settings.initialModel) return settings.initialModel;
     if (stepId === STEPS.REFINEMENT && settings.refinementModel) return settings.refinementModel;
     if (stepId === STEPS.SYNTHESIS && settings.synthesisModel) return settings.synthesisModel;
-    return settings.provider === 'openrouter' ? settings.openRouterModel : settings.model;
+    return ai?.getDefaultModel(settings) || settings.model;
   }
 
   /**
    * Returns the model for the current agent based on role and step configuration.
    * Priority: Role model > Step model > Global model
    */
-  protected getRoleModel(settings: AppSettings, agentIndex: number, roleType: 'roles' | 'criticRoles'): string {
+  protected getRoleModel(context: StepContext, agentIndex: number, roleType: 'roles' | 'criticRoles'): string {
+    const { settings } = context;
     // Early return if no role profiles
     if (!settings.roleProfiles || settings.roleProfiles.length === 0) {
-        return this.getStepModel(settings);
+        return this.getStepModel(context);
     }
 
     // 1. Try to get role-specific model
     const activeRoleProfile = settings.roleProfiles.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles[0];
     if (!activeRoleProfile) {
-        return this.getStepModel(settings);
+        return this.getStepModel(context);
     }
 
     const roleList = roleType === 'roles' ? activeRoleProfile.roles : activeRoleProfile.criticRoles;
@@ -111,7 +113,7 @@ export abstract class BaseStep implements StepDescriptor {
     }
     
     // 2. Fallback to step model (which falls back to global)
-    return this.getStepModel(settings);
+    return this.getStepModel(context);
   }
 
 
@@ -459,7 +461,7 @@ export abstract class BaseStep implements StepDescriptor {
       work.debugInfo[stepId][i] = { systemInstruction, history: mainChatHistory, userTurn };
 
       // Determine model for this specific agent based on role
-      const agentModel = this.getRoleModel(settings, i, stepId === STEPS.INITIAL ? 'roles' : 'criticRoles');
+      const agentModel = this.getRoleModel(context, i, stepId === STEPS.INITIAL ? 'roles' : 'criticRoles');
 
       const { text: fullText } = await this.runModelStream(
         {
@@ -611,44 +613,44 @@ export abstract class BaseStep implements StepDescriptor {
           const stream = await ai.models.generateContentStream({
             model,
             contents,
-            config,
+            config: {
+              ...getGenerationConfig(model, settings.temperature, settings.maxOutputTokens, settings.unsafeTemperature),
+              systemInstruction,
+              tools,
+            },
           });
 
-          for await (const chunk of stream) {
+          for await (const chunk of stream.stream) {
             if (signal.aborted) {
               logger.debug('Aborted by signal');
               throw new Error('Aborted');
             }
 
             chunkCount++;
-            // Type-safe extraction using helper functions
-            const parts = extractPartsFromChunk(chunk);
-            const { text, thought } = this.extractStreamContent(parts);
+            
+            const { text, thought, usage, groundingChunks } = chunk;
             
             // Log first chunk details or when thought content appears
             const isFirstThought = thought && !fullThought;
             if (chunkCount === 1 || isFirstThought) {
               logger.debug(`Chunk #${chunkCount}`, { 
                 textLen: text.length, 
-                thoughtLen: thought.length,
+                thoughtLen: thought?.length || 0,
                 hasText: text.length > 0,
-                hasThought: thought.length > 0,
+                hasThought: (thought?.length || 0) > 0,
                 isFirstThought
               });
             }
 
             fullText += text;
-            fullThought += thought;
+            if (thought) {
+              fullThought += thought;
+            }
 
-            // Type-safe extraction of usage metadata
-            const usageMetadata = extractUsageMetadataFromChunk(chunk);
-            const usage = this.extractTokenUsage(usageMetadata);
             if (usage) {
               lastUsage = usage;
             }
             
-            // Type-safe extraction of grounding chunks
-            const groundingChunks = extractGroundingChunksFromChunk(chunk);
             if (groundingChunks) {
               allGroundingChunks.push(...groundingChunks);
             }
@@ -719,8 +721,8 @@ export abstract class BaseStep implements StepDescriptor {
     
     // Determine model
     const model = roleType 
-        ? this.getRoleModel(settings, agentIndex, roleType)
-        : this.getStepModel(settings);
+        ? this.getRoleModel(context, agentIndex, roleType)
+        : this.getStepModel(context);
 
     try {
       const { text: fullText, usage: finalUsage, groundingChunks } = await this.runModelStream(

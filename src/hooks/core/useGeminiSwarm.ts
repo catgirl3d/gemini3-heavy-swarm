@@ -1,5 +1,6 @@
-import { useRef } from 'react';
-import { GeminiService } from '@/services/swarm/GeminiService';
+import { useRef, useMemo, useEffect } from 'react';
+import { SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
+import { AiProviderFactory } from '@/services/ai';
 import { useAppSettings } from '@/hooks/state/useAppSettings';
 import { useMessages } from '@/hooks/state/useMessages';
 import { useAbortController } from '@/hooks/network/useAbortController';
@@ -29,8 +30,20 @@ export const useGeminiSwarm = () => {
   // 2. Shared Infrastructure
   const mainAbort = useAbortController();
   const regenAbort = useAbortController();
-  const geminiServiceRef = useRef<GeminiService>(new GeminiService());
+  
+  // Create provider when settings change
+  const provider = useMemo(
+    () => AiProviderFactory.create(settings),
+    [settings.provider, settings.apiKey, settings.openRouterApiKey, settings.openRouterModel]
+  );
+
+  const orchestratorRef = useRef<SwarmOrchestrator>(new SwarmOrchestrator(provider));
   const pauseResolverRef = useRef<(() => void) | null>(null);
+
+  // Update orchestrator when provider changes
+  useEffect(() => {
+    orchestratorRef.current = new SwarmOrchestrator(provider);
+  }, [provider]);
 
   // 3. Specialized Orchestration Hook (SendMessage, Stop, Retry, Continue)
   const orchestration = useSwarmOrchestration({
@@ -40,7 +53,7 @@ export const useGeminiSwarm = () => {
     mainAbort,
     regenAbort,
     pauseResolverRef,
-    geminiServiceRef
+    orchestratorRef
   });
 
   // 4. Specialized Regeneration Hook (RegenerateAgentResponse)
@@ -51,7 +64,7 @@ export const useGeminiSwarm = () => {
     setMessages,
     currentWork,
     currentMessageId,
-    geminiServiceRef,
+    orchestratorRef,
     lastInput: orchestration.lastInput
   });
 

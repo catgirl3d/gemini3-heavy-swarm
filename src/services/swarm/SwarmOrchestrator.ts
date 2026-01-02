@@ -1,41 +1,33 @@
-import { GoogleGenAI } from '@google/genai';
-import { ProxyGenAI } from '@/services/proxy/ProxyGenAI';
-import { OpenRouterGenAI } from '@/services/openrouter/OpenRouterGenAI';
-import { IS_FORCED_PROXY } from '@/constants';
-import { getDirectApiKey } from '@/services/proxy/proxyUtils';
+import { AiProvider } from '@/types/ai-provider';
 import { AppSettings, Work, AgentState, Message, Source, TokenUsage } from '@/types';
 import type { MutableRefObject } from 'react';
-import { StepRunner } from './StepRunner';
-import { InitialStep } from './steps/InitialStep';
-import { RefinementStep } from './steps/RefinementStep';
-import { SynthesisStep } from './steps/SynthesisStep';
-import { StepContext, StepDescriptor, StepId, STEPS } from '@/types/steps';
+import { StepRunner } from '@/services/swarm/StepRunner';
+import { InitialStep } from '@/services/swarm/steps/InitialStep';
+import { RefinementStep } from '@/services/swarm/steps/RefinementStep';
+import { SynthesisStep } from '@/services/swarm/steps/SynthesisStep';
+import { StepContext, StepDescriptor, STEPS, StepId } from '@/types/steps';
 import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
 import { Logger } from '@shared/utils/logger';
 
-const getLogger = (settings: AppSettings) => new Logger('GeminiSwarm', settings.debugMode);
+const getLogger = (settings: AppSettings) => new Logger('SwarmOrchestrator', settings.debugMode);
 
-
-export class GeminiService {
-  private ai: GoogleGenAI | ProxyGenAI | OpenRouterGenAI | null = null;
-  private steps: StepDescriptor[];
-
-  constructor() {
-    // Initialize with default env key if available, but this can be overridden per-run
-    const apiKey = getDirectApiKey();
-    if (apiKey) {
-      this.ai = new GoogleGenAI({ apiKey });
-    } else {
-      this.ai = new ProxyGenAI();
-    }
-    // Initialize the default pipeline
-    this.steps = [
+/**
+ * SwarmOrchestrator - Orchestrates the multi-agent swarm workflow.
+ * Uses Strategy Pattern via AiProvider for LLM communication.
+ */
+export class SwarmOrchestrator {
+  constructor(
+    private provider: AiProvider,
+    private steps: StepDescriptor[] = [
       new InitialStep(),
       new RefinementStep(),
       new SynthesisStep()
-    ];
-  }
+    ]
+  ) {}
 
+  /**
+   * Runs the complete swarm workflow.
+   */
   async runSwarm(
     settings: AppSettings,
     userInput: string,
@@ -52,10 +44,8 @@ export class GeminiService {
     existingWork?: Work
   ): Promise<{ text: string; sources?: Source[]; work: Work }> {
     
-    // Initialize AI client with user key if provided, otherwise fall back to env key
-    this.initAiClient(settings);
-
-    const effectiveSettings = this.getEffectiveSettings(settings);
+    // Provider handles its own settings adjustments
+    const effectiveSettings = this.provider.getEffectiveSettings(settings);
 
     const liveWork: Work = existingWork || {
       results: {
@@ -73,14 +63,15 @@ export class GeminiService {
     };
 
     getLogger(settings).debug(existingWork ? 'resumeSwarm start' : 'runSwarm start', {
-      model: settings.provider === 'openrouter' ? settings.openRouterModel : settings.model,
+      provider: this.provider.name,
+      model: this.provider.getDefaultModel(settings),
       numAgents: settings.numAgents,
       devMode: settings.devMode,
       pauseAfterInitial: settings.pauseAfterInitial
     });
 
     const context: StepContext = {
-      ai: this.ai,
+      ai: this.provider, // Now uses AiProvider interface
       settings: effectiveSettings,
       userInput,
       image,
@@ -109,6 +100,9 @@ export class GeminiService {
     };
   }
 
+  /**
+   * Regenerates a specific agent result for a given step.
+   */
   async regenerateResponse(
     settings: AppSettings,
     userInput: string,
@@ -117,7 +111,7 @@ export class GeminiService {
     history: Message[],
     messageId: string,
     agentIndex: number,
-    stepId: StepId, // Use formal StepId type
+    stepId: StepId,
     workContext: Work,
     agentStates: AgentState[],
     onUpdate: (text: string, isFirstChunk: boolean, thought?: string, usage?: TokenUsage | null) => void,
@@ -126,10 +120,9 @@ export class GeminiService {
     onPause?: () => void,
     onSynthesisJump?: () => void
   ): Promise<{ text: string; sources?: Source[]; work: Work }> {
-    // Ensure AI client is updated with the latest key from settings
-    this.initAiClient(settings);
-
-    const effectiveSettings = this.getEffectiveSettings(settings);
+    
+    // Provider handles its own settings adjustments
+    const effectiveSettings = this.provider.getEffectiveSettings(settings);
 
     // Find the step
     const step = this.steps.find(s => s.id === stepId);
@@ -143,16 +136,15 @@ export class GeminiService {
     }
 
     // Execute regeneration
-    // Create a context that proxies onMessageUpdate to onUpdate for streaming
     const context: StepContext = {
-        ai: this.ai,
+        ai: this.provider, // Now uses AiProvider interface
         settings: effectiveSettings,
         userInput,
         image,
         imageFile,
         history,
         work: workContext,
-        onMessageUpdate: (text, isFirstChunk, thought, usage) => onUpdate(text, isFirstChunk, thought, usage), // Map message update to the callback
+        onMessageUpdate: (text, isFirstChunk, thought, usage) => onUpdate(text, isFirstChunk, thought, usage),
         onSynthesisJump,
         signal,
         messageId,
@@ -161,35 +153,5 @@ export class GeminiService {
     };
 
     return step.regenerate(context, agentIndex, agentStates) as Promise<{ text: string; sources?: Source[]; work: Work }>;
-  }
-
-  private initAiClient(settings: AppSettings) {
-    if (settings.provider === 'openrouter') {
-      this.ai = new OpenRouterGenAI({
-        apiKey: settings.openRouterApiKey,
-        model: settings.openRouterModel,
-        isProxy: !settings.openRouterApiKey
-      });
-    } else {
-      const apiKey = getDirectApiKey(settings.apiKey);
-      if (apiKey) {
-        this.ai = new GoogleGenAI({ apiKey });
-      } else {
-        this.ai = new ProxyGenAI();
-      }
-    }
-  }
-
-  private getEffectiveSettings(settings: AppSettings): AppSettings {
-    // Force disable search for OpenRouter as it's text-only for now
-    if (settings.provider === 'openrouter') {
-      return {
-        ...settings,
-        useSearchInInitial: false,
-        useSearchInRefinement: false,
-        useSearchInSynthesis: false
-      };
-    }
-    return settings;
   }
 }

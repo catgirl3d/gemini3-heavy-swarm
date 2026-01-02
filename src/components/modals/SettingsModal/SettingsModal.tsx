@@ -1,7 +1,7 @@
 import React, { FC, useState, useEffect, useMemo } from 'react';
 import { AppSettings, PROMPT_TYPES } from '@/types';
 import { DEFAULT_SETTINGS, IS_FORCED_PROXY } from '@/constants';
-import { isUsingProxy as checkProxyUsage } from '@/services/proxy/proxyUtils';
+import { useProviderInfo, getProviderInfo } from '@/hooks/core/useProviderInfo';
 
 import { RoleAndPromptConfigModal, BaseModal, ConfirmationModal } from '@/components/modals';
 
@@ -17,23 +17,6 @@ import { RolesTab } from '@/components/modals/SettingsModal/tabs/RolesTab';
 
 import './SettingsModal.css';
 
-/**
- * Determines if a model is unlocked based on the provider and available keys.
- * A model is unlocked if either the user has provided their own API key,
- * or if the server has a key configured.
- * 
- * @param provider - The AI provider to check ('gemini' or 'openrouter')
- * @param hasUserKey - Whether the user has provided their own API key
- * @param hasServerKey - Whether the server has a key configured
- * @returns true if the model is unlocked (either user or server has a key)
- */
-function isModelUnlockedForProvider(
-    provider: 'gemini' | 'openrouter',
-    hasUserKey: boolean,
-    hasServerKey: boolean
-): boolean {
-    return hasUserKey || hasServerKey;
-}
 
 export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, serverStatus }) => {
     const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
@@ -75,16 +58,10 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     // Derived values
     const activeProfile = localSettings.profiles?.find(p => p.id === localSettings.activeProfileId) || localSettings.profiles?.[0] || DEFAULT_SETTINGS.profiles[0];
     const activeRoleProfile = localSettings.roleProfiles?.find(p => p.id === localSettings.activeRoleProfileId) || localSettings.roleProfiles?.[0] || DEFAULT_SETTINGS.roleProfiles[0];
-    const isUsingProxy = localSettings.provider === 'openrouter' ? !localSettings.openRouterApiKey : checkProxyUsage(localSettings.apiKey);
-    const isModelUnlocked = isModelUnlockedForProvider(
-        localSettings.provider,
-        localSettings.provider === 'openrouter' ? !!localSettings.openRouterApiKey : !!localSettings.apiKey,
-        localSettings.provider === 'openrouter' ? !!serverStatus?.hasOpenRouterKey : !!serverStatus?.hasServerKey
-    );
-
-    const currentIsDemoMode = localSettings.provider === 'openrouter'
-        ? (!localSettings.openRouterApiKey && !!serverStatus?.hasOpenRouterKey && serverStatus?.proxyMode !== 'private')
-        : (!localSettings.apiKey && !!serverStatus?.hasServerKey && serverStatus?.proxyMode !== 'private');
+    
+    // Use the hook for local settings derived info
+    const localProviderInfo = useProviderInfo(localSettings, serverStatus);
+    const { isUnlocked: isModelUnlocked, isDemoMode: currentIsDemoMode } = localProviderInfo;
 
     // Hooks
     const profileMgr = useProfileManagement(localSettings, setLocalSettings, activeProfile, activeRoleProfile, setIsEditingProfileName, setIsEditingRoleName);
@@ -104,10 +81,9 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
         const finalSettings = { ...localSettings };
         
         // Calculate unlocked and demo state for the selected provider
-        const hasUserKeyFinal = finalSettings.provider === 'openrouter' ? !!finalSettings.openRouterApiKey : !!finalSettings.apiKey;
-        const hasServerKeyFinal = finalSettings.provider === 'openrouter' ? !!serverStatus?.hasOpenRouterKey : !!serverStatus?.hasServerKey;
-        const isUnlockedFinal = isModelUnlockedForProvider(finalSettings.provider, hasUserKeyFinal, hasServerKeyFinal);
-        const isDemoFinal = !hasUserKeyFinal && hasServerKeyFinal && serverStatus?.proxyMode !== 'private';
+        const finalProviderInfo = getProviderInfo(finalSettings, serverStatus);
+        const isUnlockedFinal = finalProviderInfo.isUnlocked;
+        const isDemoFinal = finalProviderInfo.isDemoMode;
         
         if (!isUnlockedFinal || isDemoFinal) {
             // Force default model in demo or no-key mode

@@ -9,7 +9,7 @@ import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
 import { calculateUpdatedStateForRegeneration } from '@/utils/swarm/regenerationHelpers';
 import { withEnsuredResults, cloneWork, updateAgentWork } from '@/utils/swarm/workHelpers';
 import { getFriendlyErrorMessage } from '@/services/swarm/steps/utils/errorUtils';
-import { GeminiService } from '@/services/swarm/GeminiService';
+import { SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { useAgentStore } from '@/stores/agentStore';
 
 const regenLogger = new Logger('Regeneration', true);
@@ -21,7 +21,7 @@ interface RegenerationDependencies {
   setMessages: Dispatch<SetStateAction<Message[]>>;
   currentWork: Work | undefined;
   currentMessageId: string | undefined;
-  geminiServiceRef: RefObject<GeminiService>;
+  orchestratorRef: RefObject<SwarmOrchestrator>;
   lastInput: { text: string, image: string | null, imageFile: File | null } | null;
 }
 
@@ -32,7 +32,7 @@ export function useSwarmRegeneration({
   setMessages,
   currentWork,
   currentMessageId,
-  geminiServiceRef,
+  orchestratorRef,
   lastInput
 }: RegenerationDependencies) {
 
@@ -153,11 +153,11 @@ export function useSwarmRegeneration({
       // Use imageFile from lastInput only if it matches the current image
       const imageFile = (lastInput?.image === image) ? lastInput.imageFile : null;
 
-      if (!geminiServiceRef.current) {
-        throw new Error('GeminiService not initialized');
+      if (!orchestratorRef.current) {
+        throw new Error('SwarmOrchestrator not initialized');
       }
 
-      const result = await geminiServiceRef.current.regenerateResponse(
+      const result = await orchestratorRef.current.regenerateResponse(
         settings,
         userInput,
         image,

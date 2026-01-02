@@ -134,7 +134,7 @@
 
 .model-options-list {
     overflow-y: auto;
-    padding: 0.5rem;
+   padding: 0rem 0.4rem;
     flex: 1;
 }
 
@@ -209,7 +209,7 @@
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    padding: 0.75rem 0.75rem 0.25rem;
+    padding: 0.75rem 0.5rem 0.25rem;
     opacity: 0.7;
 }
 

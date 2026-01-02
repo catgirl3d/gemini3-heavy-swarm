@@ -9,16 +9,16 @@ This project implements a "Secret Handshake" (anti-abuse measure) for API endpoi
 ## 🚀 How It Works
 
 1. **Client-Side (Frontend):**
-   - The handshake is initiated in `ProxyGenerativeModel.generateContentStream()` (`services/ProxyGenAI.ts`).
-   - Every request to `/api/gemini` includes the `X-API-Secret` header.
+   - The handshake is initiated in `ProxyGenerativeModel.generateContentStream()` (`services/ProxyGenAI.ts`) and `OpenRouterGenAI`.
+   - Every request to `/api/gemini` and `/api/openrouter` includes the `X-API-Secret` header.
    - Vite injects the `VITE_API_SECRET` during the build process.
 
 2. **Server-Side (Backend):**
    - **Express (`server/server.ts`)**: An inline middleware validates the header for all `/api/` POST requests.
-   - **Cloudflare Functions**: The `validateSecretHeader()` function in `functions/_security.ts` (called by `functions/api/gemini.ts`) performs the validation.
+   - **Cloudflare Functions**: The `validateSecretHeader()` function in `functions/_security.ts` (called by `functions/api/gemini.ts` and `functions/api/openrouter.ts`) performs the validation.
 
 3. **Outcome:**
-   - If keys **match** — the request is proxied to the Google Gemini API.
+   - If keys **match** — the request is proxied to the respective AI provider API (Google Gemini or OpenRouter).
    - If keys **mismatch or are missing** — the server returns a `403 Forbidden` error.
 
 ## 🛠 Configuration
@@ -69,7 +69,7 @@ The backend (both `server/server.ts` and Cloudflare Functions) implements a rate
 
 ### 🛡️ Implementation Details
 
-- **Targeted Protection:** Rate limiting is **only applied** to the model generation endpoint (`POST /api/gemini`).
+- **Targeted Protection:** Rate limiting is **only applied** to the model generation endpoints (`POST /api/gemini` and `POST /api/openrouter`).
 - **Excluded Requests:** Static files (HTML/JS/CSS), CORS preflight (`OPTIONS`), and health checks (`/api/status`) are **not** rate-limited to ensure smooth application loading.
 - **Limit:** Defined by `RATE_LIMIT_PER_MINUTE` in `shared/security/security.ts`.
 - **Behavior:** If the limit is exceeded, the server returns a `429 Too Many Requests` error.

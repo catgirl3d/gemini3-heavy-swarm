@@ -1,16 +1,27 @@
 # Gemini 3 Heavy Swarm
 
-An advanced AI swarm interface powered by Google's **Gemini 3 Pro Preview** model. This application orchestrates a team of cooperative AI agents to produce high-quality, refined, and synthesized responses for complex queries.
+An advanced AI swarm interface supporting multiple AI providers (**Google Gemini** and **OpenRouter**). This application orchestrates a team of cooperative AI agents to produce high-quality, refined, and synthesized responses for complex queries.
 
 ## Features
 
+- **Modular AI Providers (Strategy Pattern)**:
+  - **Native Gemini**: Direct interaction with Google's Gemini models via Google AI API.
+  - **OpenRouter**: Access to a wide range of models (OpenAI GPT, Anthropic Claude, DeepSeek, Meta Llama, and more) via OpenRouter API.
+  - **Proxy Mode**: Secure, server-side mediated requests for public deployments with support for both Gemini and OpenRouter.
 - **Multi-Agent Swarm Architecture**:
   - **Initial Drafts**: Multiple agents generate independent initial responses.
   - **Critique & Refinement**: Agents review peer drafts to improve their own answers.
   - **Final Synthesis**: A synthesizer agent merges the best insights into a single, comprehensive response.
+- **Advanced Model Features**:
+  - **Reasoning Models Support**: Full support for thinking/reasoning models with dedicated UI visualization for internal thoughts.
+  - **Accurate Token Tracking**: Real-time token counting with separate tracking for prompt, completion, reasoning, and cached tokens, including cost estimation.
+  - **Streaming Responses**: Low-latency Server-Sent Events (SSE) streaming for all supported providers.
 - **Transparent Process**: View the full "Chain of Thought" and intermediate outputs from all agents via the "Show Agent Work" feature.
-- **Multimodal Support**: Upload images for analysis alongside text prompts.
-- **Customizable Configuration**: Adjust the number of agents and system instructions for different roles.
+- **Multimodal Support**: Upload images for analysis alongside text prompts (Gemini provider).
+- **Customizable Configuration**: 
+  - Adjust the number of agents and system instructions for different roles.
+  - Configure models per pipeline step (Initial/Refinement/Synthesis).
+  - Role-based model selection for fine-grained control.
 - **Modern UI**: Built with React, Vite, and TypeScript, featuring markdown rendering and syntax highlighting.
 
 ## Getting Started
@@ -18,7 +29,9 @@ An advanced AI swarm interface powered by Google's **Gemini 3 Pro Preview** mode
 ### Prerequisites
 
 - Node.js (v18+ recommended)
-- Google Gemini API Key
+- At least one of the following API keys:
+  - **Google Gemini API Key** (required for Gemini provider)
+  - **OpenRouter API Key** (required for OpenRouter provider)
 
 ### Installation
 
@@ -35,9 +48,14 @@ An advanced AI swarm interface powered by Google's **Gemini 3 Pro Preview** mode
 > **Note:** This is a value you create yourself (any string). It is NOT something you get from Google or any other service.
 
    ```env
-   GEMINI_API_KEY=your_api_key_here
+   # Provider: Google Gemini (Optional - only if using Gemini provider)
+   GEMINI_API_KEY=your_gemini_api_key_here
    
-   # These two MUST be the same value (create any random string yourself)
+   # Provider: OpenRouter (Optional - only if using OpenRouter provider via proxy)
+   # Users can also provide their own OpenRouter key directly in the UI
+   OPENROUTER_API_KEY=your_openrouter_api_key_here
+   
+   # Security: These two MUST be the same value (create any random string yourself)
    API_SECRET=your-secret-here
    VITE_API_SECRET=your-secret-here
    ```
@@ -89,7 +107,7 @@ The production server will serve both the built frontend and handle API requests
 
 ### Server Configuration (Proxy Mode)
 
-The application includes a proxy server (`server/server.ts` for local, `functions/api/gemini.ts` for Cloudflare) to handle API requests securely.
+The application includes a proxy server (`server/server.ts` for local, `functions/api/gemini.ts` and `functions/api/openrouter.ts` for Cloudflare) to handle API requests securely.
 
 **Proxy Modes:**
 
@@ -97,13 +115,14 @@ You can configure the proxy behavior using the `GEMINI_PROXY_MODE` environment v
 
 - **Demo Mode**:
   - Set `GEMINI_PROXY_MODE=demo`.
-  - Forces all requests to use the `gemini-2.5-flash-lite` model to prevent abuse and manage costs.
-  - Useful for public deployments.
+  - **For Gemini**: Forces all requests to use free Gemini models (`gemini-2.5-flash-lite`).
+  - **For OpenRouter**: Restricts to free models only (e.g., models with `:free` suffix).
+  - Prevents abuse and manages costs in public deployments.
 
 - **Private Mode (Default)**:
   - Set `GEMINI_PROXY_MODE=private` (or leave undefined).
-  - Allows the client to request any available model (e.g., Gemini 3 Pro).
-  - Use this for personal deployments where you want full access to all models via your server's API key.
+  - Allows the client to request any available model from either provider.
+  - Use this for personal deployments where you want full model access via your server's API key.
 
 ### Local Testing (Force Proxy)
 
@@ -116,8 +135,11 @@ In development mode (e.g. via `npm run dev:all`), the application **forces all r
   In production builds (`npm run build`), the forced proxy is automatically disabled. Users can either provide their own API key (direct route) or be routed through the proxy if no key is provided.
 
 **Model Enforcement:**
-- **Demo Mode**: When using the proxy in `demo` mode, the application automatically resets the model selection to `gemini-2.5-flash-lite` on page reload to prevent unauthorized access to premium models.
-- **Private Mode (Default)**: When the server is configured in `private` mode (default), user model preferences are preserved across page reloads, allowing full access to all available models.
+- **Demo Mode**: 
+  - **Gemini**: Resets to free Gemini models (`gemini-2.5-flash-lite`) on page reload.
+  - **OpenRouter**: Restricts to models with `:free` suffix.
+  - Prevents unauthorized access to premium models in public deployments.
+- **Private Mode (Default)**: User model preferences are preserved across page reloads, allowing full access to all available models from both providers.
 
 ### Security (X-API-Secret)
 
@@ -139,7 +161,8 @@ The application uses multiple environment variables for configuration. Here's a 
 | Variable | Required | Where to Set | Purpose | Example Value |
 |----------|----------|--------------|---------|---------------|
 | **Core Configuration** |
-| `GEMINI_API_KEY` | ✅ Yes | Backend (`.env.local`, Cloudflare, Cloud Run) | Google Gemini API key for making requests | `AIzaSy...` |
+| `GEMINI_API_KEY` | ⚠️ Conditional | Backend (`.env.local`, Cloudflare, Cloud Run) | Google Gemini API key (required only if using Gemini provider) | `AIzaSy...` |
+| `OPENROUTER_API_KEY` | ⚠️ Conditional | Backend (`.env.local`, Cloudflare, Cloud Run) | OpenRouter API key (required only if using OpenRouter via proxy; users can also provide their own key in UI) | `sk-or-v1-...` |
 | `API_SECRET` | ✅ Yes | Backend (`.env.local`, Cloudflare, Cloud Run) | **User-defined** secret for anti-abuse (must match `VITE_API_SECRET`) | `any-random-string` |
 | `VITE_API_SECRET` | ✅ Yes | Frontend (`.env.local`, build environment) | **User-defined** client secret (must match `API_SECRET`) | `any-random-string` |
 | **Security & CORS** |
@@ -157,6 +180,9 @@ The application uses multiple environment variables for configuration. Here's a 
 # Required
 GEMINI_API_KEY=your_api_key_here
 
+# Optional: OpenRouter
+OPENROUTER_API_KEY=your_openrouter_key_here
+
 # These two MUST be the same value (create any random string yourself)
 API_SECRET=your-secret-here
 VITE_API_SECRET=your-secret-here
@@ -167,7 +193,8 @@ PORT=8080
 ```
 
 **Cloudflare Pages (Dashboard → Settings → Environment variables):**
-- `GEMINI_API_KEY` - Your Google AI API key
+- `GEMINI_API_KEY` - Your Google AI API key (optional, only if using Gemini provider)
+- `OPENROUTER_API_KEY` - Your OpenRouter API key (optional, only if using OpenRouter via proxy)
 - `API_SECRET` - Complex secret string
 - `ALLOWED_ORIGINS` - Comma-separated list of allowed domains (optional)
 - `GEMINI_PROXY_MODE` - `demo` or `private`
@@ -209,6 +236,43 @@ Deploy to Cloudflare Pages (requires Wrangler):
 ```bash
 npm run deploy
 ```
+
+For detailed security instructions and implementation details, see [docs/API_SECURITY.md](./docs/API_SECURITY.md).
+
+## Using OpenRouter
+
+The application supports [OpenRouter](https://openrouter.ai/) as an alternative AI provider, giving you access to a diverse range of models from multiple providers (OpenAI, Anthropic, DeepSeek, Meta, Google, and more).
+
+### Getting Started with OpenRouter
+
+1. **Get an API Key**: Sign up at [openrouter.ai](https://openrouter.ai/) and create an API key.
+
+2. **Configure in Settings**:
+   - Open Settings → General Tab
+   - Select **OpenRouter** from the Provider dropdown
+   - Enter your OpenRouter API key (or leave blank to use server-configured key)
+   - Enter a model ID (e.g., `google/gemini-2.0-flash-thinking-exp:free`)
+
+3. **Choose Your Connection Method**:
+   - **Direct Connection**: Enter your API key in the UI (stored locally in browser)
+   - **Proxy Connection**: Leave API key blank and configure `OPENROUTER_API_KEY` on the server
+
+### Model Selection
+
+OpenRouter provides access to hundreds of models. Find the complete model list at [openrouter.ai/models](https://openrouter.ai/models)
+
+### OpenRouter-Specific Notes
+
+- **Text-Only**: Search tools are automatically disabled when using OpenRouter (image analysis not yet supported)
+- **Full Feature Support**: Streaming, token tracking, reasoning visualization, and model flexibility work the same as with Gemini provider
+
+## Architecture
+
+The project follows a modular architecture using the **Strategy Pattern** for AI providers and **Dependency Injection** for swarm orchestration.
+
+- **AI Providers**: Encapsulated in `src/services/ai/providers`, implementing the `AiProvider` interface.
+- **Swarm Orchestrator**: Manages the multi-step agent workflow in `src/services/swarm/SwarmOrchestrator.ts`.
+- **Pipeline Steps**: Discrete logic for Initial, Refinement, and Synthesis phases in `src/services/swarm/steps`.
 
 ## Credits
 

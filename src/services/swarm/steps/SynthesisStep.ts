@@ -45,7 +45,7 @@ export class SynthesisStep extends BaseStep {
     const config = getStepConfig(this.id);
     
     // Persistent error count check for synthesis
-    const errorCountKey = (BaseStep as any).getErrorCountKey(STEPS.SYNTHESIS, undefined);
+    const errorCountKey = this.getErrorCountKey(undefined);
     const errorCount = (work.results?.[errorCountKey] as number) || 0;
     const isSimulatingError = settings.simulateSynthesisError !== 'none' && errorCount < settings.simulateSynthesisErrorAttempts;
     const isRetrying = hadError || isSimulatingError;
@@ -85,7 +85,7 @@ export class SynthesisStep extends BaseStep {
       let isFirstTextChunk = true;
       const { text: finalResponseText, groundingChunks } = await this.runModelStream(
         {
-          ai, settings, model: this.getStepModel(settings),
+          ai, settings, model: this.getStepModel(context),
           contents: [...mainChatHistory, synthesizerTurn],
           systemInstruction,
           tools: settings.useSearchInSynthesis ? [{ googleSearch: {} }] : undefined,

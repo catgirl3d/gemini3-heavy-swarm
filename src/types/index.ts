@@ -1,3 +1,5 @@
+export * from './ai-provider';
+
 export interface PromptProfile {
   id: string;
   name: string;
@@ -5,6 +7,7 @@ export interface PromptProfile {
   refinementInstruction: string;
   synthesizerInstruction: string;
 }
+
 
 export interface AgentRole {
   name: string;

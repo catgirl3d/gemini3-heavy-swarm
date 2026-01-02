@@ -1,31 +1,25 @@
 import React, { FC } from 'react';
 import { ServerStatus } from '@/types';
 
+import { useProviderInfo } from '@/hooks/core/useProviderInfo';
+
 interface StatusBannerProps {
   serverStatus: ServerStatus;
+  providerInfo: ReturnType<typeof useProviderInfo>;
   shouldShowLoadingBanner: boolean;
-  isUsingProxy: boolean;
   isBannerDismissed: boolean;
   onDismiss: () => void;
-  isMissingKey: boolean;
-  isProxyDemo: boolean;
-  isProxyPrivate: boolean;
-  hasUserApiKey: boolean;
-  hasUserOpenRouterKey: boolean;
 }
 
 export const StatusBanner: FC<StatusBannerProps> = ({
   serverStatus,
+  providerInfo,
   shouldShowLoadingBanner,
-  isUsingProxy,
   isBannerDismissed,
-  onDismiss,
-  isMissingKey,
-  isProxyDemo,
-  isProxyPrivate,
-  hasUserApiKey,
-  hasUserOpenRouterKey
+  onDismiss
 }) => {
+  const { isUsingProxy, isUnlocked, isDemoMode } = providerInfo;
+  
   if (isBannerDismissed) return null;
 
   return (
@@ -41,7 +35,8 @@ export const StatusBanner: FC<StatusBannerProps> = ({
         </div>
       )}
 
-      {serverStatus.isLoaded && isMissingKey && (
+      {/* Priority 1: Missing Key Warning (most critical) */}
+      {serverStatus.isLoaded && !isUnlocked && (
         <div className="modal-banner warning global">
             <div className="modal-banner-content">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -57,7 +52,8 @@ export const StatusBanner: FC<StatusBannerProps> = ({
         </div>
       )}
 
-      {serverStatus.isLoaded && isProxyDemo && !hasUserApiKey && !hasUserOpenRouterKey && (
+      {/* Priority 2: Demo Mode Info (only if unlocked) */}
+      {serverStatus.isLoaded && isUnlocked && isDemoMode && (
         <div className="modal-banner info global">
             <div className="modal-banner-content">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -73,15 +69,16 @@ export const StatusBanner: FC<StatusBannerProps> = ({
         </div>
       )}
 
-      {serverStatus.isLoaded && (isProxyPrivate || hasUserApiKey || hasUserOpenRouterKey) && (
+      {/* Priority 3: Success/Private Mode (only if unlocked and not demo) */}
+      {serverStatus.isLoaded && isUnlocked && !isDemoMode && (
         <div className="modal-banner success global">
             <div className="modal-banner-content">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M18 1.5c2.9 0 5.25 2.35 5.25 5.25v3.75a.75.75 0 01-1.5 0V6.75a3.75 3.75 0 10-7.5 0v3a3 3 0 013 3v6.75a3 3 0 01-3 3H3.75a3 3 0 01-3-3v-6.75a3 3 0 013-3h9v-3c0-2.9 2.35-5.25 5.25-5.25z" />
                 </svg>
-                {hasUserApiKey || hasUserOpenRouterKey
-                    ? "Private API Key Active. All models are unlocked."
-                    : "Private Server Mode. All models are unlocked via the server's API key."
+                {isUsingProxy
+                    ? `Private Server Mode. All models are unlocked via the server's ${providerInfo.isOpenRouter ? 'OpenRouter' : 'Gemini'} API key.`
+                    : "Private API Key Active. All models are unlocked."
                 }
             </div>
             <button className="modal-banner-close-btn" onClick={onDismiss} aria-label="Dismiss banner">

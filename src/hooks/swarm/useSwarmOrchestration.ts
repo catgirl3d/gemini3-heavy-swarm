@@ -1,26 +1,26 @@
 import { useState, RefObject, Dispatch, SetStateAction, MutableRefObject } from 'react';
 import { AppSettings, Message, AgentState, Work } from '@/types';
 import { STEPS } from '@/types/steps';
+import { SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { generateUUID } from '@/utils/common/uuid';
 import { updateMessageParts, findTargetMessageIndex } from '@/utils/chat/messageHelpers';
 import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
 import { handleSendMessageError } from '@/utils/swarm/errorHandling';
 import { handleSynthesisJump } from '@/utils/swarm/stepConstants';
-import { GeminiService } from '@/services/swarm/GeminiService';
 import { AbortControllerHook } from '@/hooks/network/useAbortController';
 import { Logger } from '@shared/utils/logger';
 import { useAgentStore } from '@/stores/agentStore';
 
 const logger = new Logger('Orchestration', true);
 
-interface OrchestrationDependencies {
+export interface OrchestrationDependencies {
   settings: AppSettings;
   messagesRef: RefObject<Message[]>;
   setMessages: Dispatch<SetStateAction<Message[]>>;
   mainAbort: AbortControllerHook;
   regenAbort: AbortControllerHook;
   pauseResolverRef: MutableRefObject<(() => void) | null>;
-  geminiServiceRef: RefObject<GeminiService>;
+  orchestratorRef: RefObject<SwarmOrchestrator>;
 }
 
 
@@ -31,7 +31,7 @@ export function useSwarmOrchestration({
   mainAbort,
   regenAbort,
   pauseResolverRef,
-  geminiServiceRef
+  orchestratorRef
 }: OrchestrationDependencies) {
   const [lastInput, setLastInput] = useState<{ text: string, image: string | null, imageFile: File | null } | null>(null);
 
@@ -198,12 +198,12 @@ export function useSwarmOrchestration({
 
     const lastUserMessageIndex = historyForSwarm.length - 1;
 
-    if (!geminiServiceRef.current) {
-      throw new Error('GeminiService not initialized');
+    if (!orchestratorRef.current) {
+      throw new Error('SwarmOrchestrator not initialized');
     }
 
     try {
-      const result = await geminiServiceRef.current.runSwarm(
+      const { text: finalMessageText, sources, work } = await orchestratorRef.current.runSwarm(
         settings,
         userInput,
         image,
@@ -240,16 +240,16 @@ export function useSwarmOrchestration({
       );
 
       logger.info('Swarm work COMPLETE', { 
-        workKeys: result.work?.results ? Object.keys(result.work.results) : [],
-        sourcesCount: result.sources?.length 
+        workKeys: work?.results ? Object.keys(work.results) : [],
+        sourcesCount: sources?.length 
       });
 
       setMessages(prev => {
         const currentAgents = useAgentStore.getState().agents;
         const agentsForThisMessage = currentAgents.filter(a => a.messageId === modelMessageId);
         const updated = updateTargetMessage(prev, prev.length - 1, STEPS.SYNTHESIS, {
-          sources: result.sources,
-          work: { ...result.work, agentStates: agentsForThisMessage }
+          sources: sources,
+          work: { ...work, agentStates: agentsForThisMessage }
         });
         
         return updated ?? prev;

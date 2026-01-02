@@ -2,8 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, FormEvent, FC } from '
 import { useGeminiSwarm } from '@/hooks/core/useGeminiSwarm';
 import { useServerStatus } from '@/hooks/network/useServerStatus';
 import { useAutoScroll } from '@/hooks/ui/useAutoScroll';
-import { getModelDisplayName } from '@/utils/common/modelUtils';
-import { isUsingProxy as checkProxyUsage } from '@/services/proxy/proxyUtils';
+import { useProviderInfo } from '@/hooks/core/useProviderInfo';
 import { Logger } from '@shared/utils/logger';
 
 import { StatusBanner, Header, Toast, ToastType } from '@/components/layout';
@@ -36,11 +35,10 @@ export const App: FC = () => {
     serverStatus,
     shouldShowLoadingBanner,
     isBannerDismissed,
-    dismissBanner,
-    isMissingKey,
-    isProxyDemo,
-    isProxyPrivate
+    dismissBanner
   } = useServerStatus();
+
+  const providerInfo = useProviderInfo(settings, serverStatus);
 
   const {
     messageListRef,
@@ -96,17 +94,20 @@ export const App: FC = () => {
     event.preventDefault();
     
     // Check if there's content to send BEFORE clearing the fields
-    if (!userInput.trim() && !image) return;
-    
-    // Validate model is selected
-    const currentModel = settings.provider === 'openrouter' ? settings.openRouterModel : settings.model;
-    if (!currentModel || currentModel.trim() === '') {
-      setToast({ 
-        message: settings.provider === 'openrouter' 
-          ? 'Please select an OpenRouter model in settings before sending a message.' 
-          : 'Please select a model in settings before sending a message.', 
-        type: 'error' 
-      });
+    if (!providerInfo.canSend(userInput, !!image)) {
+      if (!providerInfo.isUnlocked) {
+        setToast({ 
+          message: 'Please provide an API key in settings or ensure server has one configured.', 
+          type: 'error' 
+        });
+      } else if (!providerInfo.currentModelId) {
+        setToast({ 
+          message: providerInfo.isOpenRouter 
+            ? 'Please select an OpenRouter model in settings before sending a message.' 
+            : 'Please select a model in settings before sending a message.', 
+          type: 'error' 
+        });
+      }
       return;
     }
     
@@ -126,7 +127,7 @@ export const App: FC = () => {
     }
     
     await sendMessage(currentInput, currentImage, currentImageFile);
-  }, [userInput, image, imageFile, sendMessage, settings.provider, settings.model, settings.openRouterModel, setToast]);
+  }, [userInput, image, imageFile, sendMessage, providerInfo, setToast]);
 
   // Memoized handler for regeneration to prevent MessageList re-renders
   const handleRegenerate = useCallback((messageId: string, phase: StepId, agentIndex: number) => {
@@ -137,36 +138,25 @@ export const App: FC = () => {
   useEffect(() => {
     if (!serverStatus.isLoaded || !settingsLoaded) return;
 
-    // Only enforce Gemini restrictions if Gemini is the selected provider
-    if (settings.provider === 'gemini') {
-        const isUsingProxyNow = checkProxyUsage(settings.apiKey);
-        const isLocked = isUsingProxyNow && (serverStatus.proxyMode !== 'private');
-
-        if (isLocked && settings.model !== 'gemini-2.5-flash-lite') {
+    // Enforce Gemini restrictions for demo model if applicable
+    if (providerInfo.isGemini && providerInfo.isDemoMode) {
+        if (settings.model !== 'gemini-2.5-flash-lite') {
             new Logger('App', settings.debugMode).info("Enforcing demo model restriction (gemini-2.5-flash-lite)");
             setSettings(prev => ({ ...prev, model: 'gemini-2.5-flash-lite' }));
         }
     }
-  }, [serverStatus.isLoaded, serverStatus.proxyMode, settings.apiKey, settings.model, settingsLoaded, setSettings]);
+  }, [serverStatus.isLoaded, providerInfo.isGemini, providerInfo.isDemoMode, settings.model, settingsLoaded, setSettings]);
 
-  const isUsingProxy = settings.provider === 'openrouter' ? !settings.openRouterApiKey : checkProxyUsage(settings.apiKey);
-  const modelDisplayName = settings.provider === 'openrouter'
-    ? (settings.openRouterModel || 'OpenRouter')
-    : getModelDisplayName(settings.model);
+  const { isUsingProxy, modelDisplayName } = providerInfo;
 
   return (
     <div className="chat-container">
       <StatusBanner
         serverStatus={serverStatus}
+        providerInfo={providerInfo}
         shouldShowLoadingBanner={shouldShowLoadingBanner}
-        isUsingProxy={isUsingProxy}
         isBannerDismissed={isBannerDismissed}
         onDismiss={dismissBanner}
-        isMissingKey={isMissingKey}
-        isProxyDemo={isProxyDemo}
-        isProxyPrivate={isProxyPrivate}
-        hasUserApiKey={!!settings.apiKey}
-        hasUserOpenRouterKey={!!settings.openRouterApiKey}
       />
       
       <Header
