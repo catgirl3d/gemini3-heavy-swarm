@@ -12,7 +12,7 @@ import { getFriendlyErrorMessage } from '@/services/swarm/steps/utils/errorUtils
 import { SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { useAgentStore } from '@/stores/agentStore';
 
-const regenLogger = new Logger('Regeneration', true);
+const regenLogger = new Logger('Regeneration');
 
 interface RegenerationDependencies {
   settings: AppSettings;

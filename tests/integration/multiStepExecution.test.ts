@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { InitialStep } from '@/services/swarm/steps/InitialStep';
 import { RefinementStep } from '@/services/swarm/steps/RefinementStep';
 import { SynthesisStep } from '@/services/swarm/steps/SynthesisStep';
-import { Work, AppSettings } from '@/types';
+import { Work, AppSettings, ProviderType } from '@/types';
 import { StepContext, STEPS } from '@/types/steps';
 
 // Helper to create mock stream
@@ -36,7 +36,7 @@ describe('Multi-Step Execution Integration', () => {
 
     settings = {
       numAgents: 3,
-      provider: 'gemini',
+      provider: ProviderType.Gemini,
       model: 'gemini-1.5-flash',
       apiKey: 'test-key',
       temperature: 0.7,

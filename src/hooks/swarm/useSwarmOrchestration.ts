@@ -11,7 +11,7 @@ import { AbortControllerHook } from '@/hooks/network/useAbortController';
 import { Logger } from '@shared/utils/logger';
 import { useAgentStore } from '@/stores/agentStore';
 
-const logger = new Logger('Orchestration', true);
+const logger = new Logger('Orchestration');
 
 export interface OrchestrationDependencies {
   settings: AppSettings;

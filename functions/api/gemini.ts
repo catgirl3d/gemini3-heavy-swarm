@@ -74,7 +74,7 @@ export const onRequestPost = (async (context) => {
     }
 
     // Validation and preparation
-    const isPrivateMode = getProxyMode(env.GEMINI_PROXY_MODE) === 'private';
+    const isPrivateMode = getProxyMode(env.PROXY_MODE) === 'private';
     const preparation = validateAndPrepareProxy(body, isPrivateMode);
     
     if (preparation.ok === false) {

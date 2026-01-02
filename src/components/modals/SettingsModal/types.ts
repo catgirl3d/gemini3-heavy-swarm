@@ -6,6 +6,7 @@ export interface SettingsModalProps {
     settings: AppSettings;
     onSave: (newSettings: AppSettings) => void;
     serverStatus?: ServerStatus;
+    onShowError?: (message: string) => void; // Optional callback for showing validation errors
 }
 
 export type TabType = 'general' | 'prompts' | 'roles';

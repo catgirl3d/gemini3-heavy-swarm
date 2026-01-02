@@ -2,6 +2,7 @@ import React, { FC, useState, useRef, useEffect } from 'react';
 import { BaseModal } from '@/components/modals/BaseModal';
 import { RoleAndPromptConfigModalProps } from '@/components/modals/RoleAndPromptConfigModal/types';
 import { PortalDropdown, ModelSelector } from '@/components/ui';
+import { ProviderType } from '@/types';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
 import './RoleAndPromptConfigModal.css';
 
@@ -24,7 +25,7 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
     modelValue,
     isModelUnlocked = true,
     onModelChange,
-    provider = 'gemini',
+    provider = ProviderType.Gemini,
     isDemoMode = false
 }) => {
     const [isSaving, setIsSaving] = useState(false);
@@ -146,12 +147,12 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
                             {/* Type-safe: onModelChange is guaranteed to be defined within this conditional block */}
                             <ModelSelector
                                 provider={provider}
-                                value={(!isModelUnlocked || (provider === 'gemini' && isDemoMode)) ? (provider === 'openrouter' ? '' : 'gemini-2.5-flash-lite') : (modelValue || '')}
+                                value={(!isModelUnlocked || (provider === ProviderType.Gemini && isDemoMode)) ? (provider === ProviderType.OpenRouter ? '' : 'gemini-2.5-flash-lite') : (modelValue || '')}
                                 onChange={onModelChange}
                                 isOpen={isModelSelectorOpen}
                                 onOpenChange={setIsModelSelectorOpen}
                                 placeholder="Use Global Model"
-                                disabled={!isModelUnlocked || (provider === 'gemini' && isDemoMode)}
+                                disabled={!isModelUnlocked || (provider === ProviderType.Gemini && isDemoMode)}
                                 showEmptyOption={true}
                                 emptyLabel="Use Global Model"
                                 isDemoMode={isDemoMode}
@@ -159,12 +160,12 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
                             <p className="modal-help-text">
                                 Select 'Use Global Model' to use the global model from General settings.
                             </p>
-                            {isDemoMode && provider === 'gemini' && (
+                            {isDemoMode && provider === ProviderType.Gemini && (
                                 <p className="modal-help-text warning">
                                     Only Gemini 2.5 Flash-Lite is available in Demo Mode. Add an API key to unlock all models.
                                 </p>
                             )}
-                            {isDemoMode && provider === 'openrouter' && (
+                            {isDemoMode && provider === ProviderType.OpenRouter && (
                                 <p className="modal-help-text warning">
                                     Demo Mode: Only free models are available.
                                 </p>

@@ -67,6 +67,9 @@ export class OpenRouterGenAI {
           max_tokens: maxOutputTokens
         };
 
+        // Log request payload for debugging (only visible in debug mode)
+        logger.debug('OpenRouter Request Payload:', JSON.stringify(payload, null, 2));
+
         let response: Response;
         try {
           if (this.options.isProxy) {
@@ -194,7 +197,7 @@ export class OpenRouterGenAI {
                   
                   // If real usage data arrives, use it (overrides estimates)
                   if (parsed.usage) {
-                    logger.info('Received raw usage from OpenRouter:', parsed.usage);
+                    logger.debug('Received raw usage from OpenRouter:', parsed.usage);
                     lastUsage = {
                       promptTokenCount: parsed.usage.prompt_tokens || 0,
                       candidatesTokenCount: parsed.usage.completion_tokens || 0,

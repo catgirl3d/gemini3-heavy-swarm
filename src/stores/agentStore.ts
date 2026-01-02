@@ -4,7 +4,7 @@ import { StepId } from '@/types/steps';
 import { updateAgentWork } from '@/utils/swarm/workHelpers';
 import { Logger } from '@shared/utils/logger';
 
-const logger = new Logger('AgentStore', true);
+const logger = new Logger('AgentStore');
 
 interface AgentStore {
   // Agent state

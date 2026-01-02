@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OpenRouterProvider } from '@/services/ai/providers/OpenRouterProvider';
-import { AppSettings } from '@/types';
+import { AppSettings, ProviderType } from '@/types';
 
 // Mock OpenRouterGenAI
 const mockGenerateContentStream = vi.fn();
@@ -21,7 +21,7 @@ describe('OpenRouterProvider', () => {
   });
 
   it('should have correct name and capabilities', () => {
-    expect(provider.name).toBe('openrouter');
+    expect(provider.name).toBe(ProviderType.OpenRouter);
     expect(provider.capabilities).toEqual({
       search: false,
       vision: false,

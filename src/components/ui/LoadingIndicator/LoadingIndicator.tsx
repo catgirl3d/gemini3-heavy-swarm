@@ -7,7 +7,7 @@ import { Logger } from '@shared/utils/logger';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import './LoadingIndicator.css';
 
-const logger = new Logger('LoadingIndicator', true);
+const logger = new Logger('LoadingIndicator');
 
 export const LoadingIndicator: FC<{
     status: string;
@@ -67,7 +67,7 @@ export const LoadingIndicator: FC<{
       agentIndex: a.agentIndex
     }));
     
-    logger.info('LoadingIndicator RENDER', { 
+    logger.debug('LoadingIndicator RENDER', { 
       status, 
       currentMessageId: messageId,
       agentStatesCount: agentStates.length,
@@ -80,7 +80,7 @@ export const LoadingIndicator: FC<{
     });
     
     return () => {
-      logger.warn('LoadingIndicator UNMOUNTED', { 
+      logger.debug('LoadingIndicator UNMOUNTED', { 
         lastStatus: status, 
         messageId,
         isPaused, 

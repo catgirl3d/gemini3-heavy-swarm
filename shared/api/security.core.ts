@@ -43,8 +43,8 @@ export function validateApiSecret(headerSecret: string | null | undefined, envSe
 }
 
 /**
- * Normalizes the GEMINI_PROXY_MODE environment variable.
- * @param envValue - Value from environment (GEMINI_PROXY_MODE)
+ * Normalizes the PROXY_MODE environment variable.
+ * @param envValue - Value from environment (PROXY_MODE)
  * @returns 'demo' | 'private'
  */
 export function getProxyMode(envValue: string | undefined): 'demo' | 'private' {

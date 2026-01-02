@@ -8,6 +8,7 @@ import { AppSettings } from '@/types';
 export abstract class BaseProvider implements AiProvider {
   abstract readonly name: string;
   abstract readonly capabilities: ProviderCapabilities;
+  abstract readonly isProxy: boolean;
 
   /**
    * Default implementation - returns settings unchanged.

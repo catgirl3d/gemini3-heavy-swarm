@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { AppSettings, ServerStatus } from '@/types';
+import { AppSettings, ServerStatus, ProviderType } from '@/types';
 import { getModelDisplayName } from '@/utils/common/modelUtils';
 import { isUsingProxy as checkProxyUsage } from '@/services/proxy/proxyUtils';
 
@@ -8,8 +8,8 @@ import { isUsingProxy as checkProxyUsage } from '@/services/proxy/proxyUtils';
  * Useful for logic outside of React components or in event handlers.
  */
 export function getProviderInfo(settings: AppSettings, serverStatus?: ServerStatus) {
-  const isGemini = settings.provider === 'gemini';
-  const isOpenRouter = settings.provider === 'openrouter';
+  const isGemini = settings.provider === ProviderType.Gemini;
+  const isOpenRouter = settings.provider === ProviderType.OpenRouter;
 
   // 1. Determine active model ID
   const currentModelId = isOpenRouter ? settings.openRouterModel : settings.model;

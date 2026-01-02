@@ -1,21 +1,23 @@
 import { BaseProvider } from './BaseProvider';
 import { ProviderCapabilities, GenerateRequest, ProviderStreamResult, StreamChunk } from '@/types/ai-provider';
-import { AppSettings, TokenUsage } from '@/types';
+import { AppSettings, TokenUsage, ProviderType } from '@/types';
 import { OpenRouterGenAI } from '@/services/openrouter/OpenRouterGenAI';
 
 export class OpenRouterProvider extends BaseProvider {
-  readonly name = 'openrouter';
+  readonly name = ProviderType.OpenRouter;
   readonly capabilities: ProviderCapabilities = {
     search: false,  // OpenRouter doesn't support Google Search grounding
     vision: false,  // Text-only for now
     reasoning: true,
     codeExecution: false,
   };
+  readonly isProxy: boolean;
 
   private client: OpenRouterGenAI;
 
   constructor(options: { apiKey?: string; model: string; isProxy?: boolean }) {
     super();
+    this.isProxy = options.isProxy ?? false;
     this.client = new OpenRouterGenAI(options);
   }
 

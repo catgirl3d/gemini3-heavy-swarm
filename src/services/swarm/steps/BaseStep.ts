@@ -1,5 +1,5 @@
 import { StepDescriptor, StepContext, StepId, STEPS, StreamConfig, StreamCallbacks, StreamResult, AgentInstruction, MultiAgentConfig } from '@/types/steps';
-import { SimulateError } from '@/types';
+import { SimulateError, ProviderType } from '@/types';
 import { Tool, Content } from '@google/genai';
 import { getStepConfig, StepConfig } from '@/utils/swarm/stepConstants';
 import type { GroundingChunk } from './utils/streamUtils';
@@ -574,8 +574,6 @@ export abstract class BaseStep implements StepDescriptor {
     const allGroundingChunks: GroundingChunk[] = [];
     let lastUsage: TokenUsage | null = null;
 
-    logger.debug('Starting model stream', { model, devMode: settings.devMode });
-
     if (settings.devMode) {
       logger.debug('Using DEV MODE (simulated response)');
       const dummyText = this.getDevModeText(this.id, agentIndex);
@@ -591,7 +589,16 @@ export abstract class BaseStep implements StepDescriptor {
     } else {
       if (!ai) throw new AppError("API Key not found", ErrorCode.INVALID_SETTINGS);
 
-      logger.debug('Starting API stream request');
+      // Centralized routing log - shows exactly how the request is being routed
+      const isProxy = ai.isProxy;
+      const route = isProxy ? 'proxy' : 'direct';
+      const providerName = ai.name === 'proxy' ? ProviderType.Gemini : ai.name;
+
+      logger.info(`> [ROUTING] MODEL: ${model} | PROVIDER: ${providerName} | ROUTE: ${route} <`, {
+        step: this.id,
+        agent: agentIndex,
+        devMode: settings.devMode
+      });
       
       try {
         await withRetry(async (attempt) => {

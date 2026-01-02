@@ -1,4 +1,4 @@
-import { AppSettings } from '@/types';
+import { AppSettings, ProviderType } from '@/types';
 import { IS_FORCED_PROXY } from './env';
 import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
 import { DEFAULT_PROFILES } from '@/constants/prompts';
@@ -8,8 +8,8 @@ import { DEFAULT_PROFILES } from '@/constants/prompts';
 const DEFAULT_MODEL = (process.env.GEMINI_API_KEY && !IS_FORCED_PROXY) ? 'gemini-3-pro-preview' : 'gemini-2.5-flash-lite';
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  provider: 'gemini',
-  numAgents: 4,
+  provider: ProviderType.Gemini,
+  numAgents: 2,
   apiKey: '',
   model: DEFAULT_MODEL,
   openRouterApiKey: '',

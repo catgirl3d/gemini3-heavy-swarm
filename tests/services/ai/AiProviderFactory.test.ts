@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AiProviderFactory } from '@/services/ai/AiProviderFactory';
-import { AppSettings } from '@/types';
+import { AppSettings, ProviderType } from '@/types';
 
 // Mock providers - use factory pattern to avoid hoisting issues
 vi.mock('@/services/ai/providers', () => {
@@ -21,8 +21,9 @@ const mockEnvGeminiApiKey = { value: undefined as string | undefined };
 
 vi.mock('@/services/proxy/proxyUtils', () => ({
   getDirectApiKey: vi.fn((userApiKey?: string) => {
+    if (userApiKey) return userApiKey;
     if (mockIsForcedProxy.value) return null;
-    return userApiKey || mockEnvGeminiApiKey.value || null;
+    return mockEnvGeminiApiKey.value || null;
   }),
 }));
 
@@ -32,6 +33,36 @@ vi.mock('@/constants', () => ({
 
 // Import mocked modules after mocks are set up
 import { GeminiProvider, ProxyProvider, OpenRouterProvider } from '@/services/ai/providers';
+
+const createMockSettings = (overrides: Partial<AppSettings> = {}): AppSettings => ({
+  provider: ProviderType.Gemini,
+  numAgents: 3,
+  model: 'gemini-1.5-flash',
+  openRouterModel: 'openai/gpt-3.5-turbo',
+  activeProfileId: 'default',
+  profiles: [],
+  devMode: false,
+  debugMode: false,
+  simulateInitialError: 'none',
+  simulateRefinementError: 'none',
+  simulateSynthesisError: 'none', // Error simulation for testing
+  simulateInitialErrorAttempts: 0,
+  simulateRefinementErrorAttempts: 0,
+  simulateSynthesisErrorAttempts: 0,
+  pauseAfterInitial: false,
+  pauseAfterRefinement: false,
+  useSearchInInitial: false,
+  useSearchInRefinement: false,
+  useSearchInSynthesis: false,
+  temperature: 0.7,
+  maxOutputTokens: 2048,
+  dynamicAgentRoles: false,
+  activeRoleProfileId: 'default',
+  roleProfiles: [],
+  savedInstructions: [],
+  savedRoles: [],
+  ...overrides,
+});
 
 describe('AiProviderFactory', () => {
   beforeEach(() => {
@@ -46,11 +77,11 @@ describe('AiProviderFactory', () => {
 
   describe('Provider creation', () => {
     it('should create OpenRouterProvider when provider is openrouter', () => {
-      const settings = { 
-        provider: 'openrouter',
+      const settings = createMockSettings({
+        provider: ProviderType.OpenRouter,
         openRouterApiKey: 'or-key',
         openRouterModel: 'or-model'
-      } as AppSettings;
+      });
       
       AiProviderFactory.create(settings);
       
@@ -62,10 +93,10 @@ describe('AiProviderFactory', () => {
     });
 
     it('should create GeminiProvider when apiKey is valid', () => {
-      const settings = { 
-          provider: 'gemini',
+      const settings = createMockSettings({
+          provider: ProviderType.Gemini,
           apiKey: 'valid-key'
-      } as AppSettings;
+      });
       
       AiProviderFactory.create(settings);
       
@@ -73,10 +104,10 @@ describe('AiProviderFactory', () => {
     });
 
     it('should create ProxyProvider when no apiKey is valid', () => {
-      const settings = { 
-          provider: 'gemini',
+      const settings = createMockSettings({
+          provider: ProviderType.Gemini,
           apiKey: ''
-      } as AppSettings;
+      });
       
       AiProviderFactory.create(settings);
       
@@ -86,9 +117,9 @@ describe('AiProviderFactory', () => {
 
   describe('getProviderName', () => {
     it('should return correct provider name using getProviderName', () => {
-      expect(AiProviderFactory.getProviderName({ provider: 'openrouter' } as any)).toBe('openrouter');
-      expect(AiProviderFactory.getProviderName({ provider: 'gemini', apiKey: 'valid-key' } as any)).toBe('gemini');
-      expect(AiProviderFactory.getProviderName({ provider: 'gemini', apiKey: '' } as any)).toBe('proxy');
+      expect(AiProviderFactory.getProviderName(createMockSettings({ provider: ProviderType.OpenRouter }))).toBe(ProviderType.OpenRouter);
+      expect(AiProviderFactory.getProviderName(createMockSettings({ provider: ProviderType.Gemini, apiKey: 'valid-key' }))).toBe(ProviderType.Gemini);
+      expect(AiProviderFactory.getProviderName(createMockSettings({ provider: ProviderType.Gemini, apiKey: '' }))).toBe('proxy');
     });
   });
 
@@ -101,11 +132,11 @@ describe('AiProviderFactory', () => {
       ['valid key', 'sk-or-123', false],
     ])('should set isProxy=%s when openRouterApiKey is %s', 
       (description, apiKey, expectedIsProxy) => {
-        const settings = { 
-          provider: 'openrouter',
+        const settings = createMockSettings({
+          provider: ProviderType.OpenRouter,
           openRouterApiKey: apiKey,
           openRouterModel: 'test-model'
-        } as AppSettings;
+        });
         
         AiProviderFactory.create(settings);
         
@@ -118,11 +149,11 @@ describe('AiProviderFactory', () => {
     );
 
     it('should handle missing openRouterModel gracefully', () => {
-      const settings = { 
-        provider: 'openrouter',
+      const settings = createMockSettings({
+        provider: ProviderType.OpenRouter,
         openRouterApiKey: 'key',
-        openRouterModel: undefined
-      } as AppSettings;
+        openRouterModel: undefined as any // Force undefined for test
+      });
       
       AiProviderFactory.create(settings);
       
@@ -141,10 +172,10 @@ describe('AiProviderFactory', () => {
       ['empty string', ''],
       ['null', null],
     ])('should create ProxyProvider when Gemini apiKey is %s', (description, apiKey) => {
-      const settings = { 
-        provider: 'gemini',
+      const settings = createMockSettings({
+        provider: ProviderType.Gemini,
         apiKey
-      } as AppSettings;
+      });
       
       AiProviderFactory.create(settings);
       
@@ -156,10 +187,10 @@ describe('AiProviderFactory', () => {
       // Note: Current getDirectApiKey doesn't trim, so whitespace is returned as-is
       // This would create GeminiProvider with invalid key, which may fail at runtime
       // This test documents current behavior - consider adding trim in production code
-      const settings = { 
-        provider: 'gemini',
+      const settings = createMockSettings({
+        provider: ProviderType.Gemini,
         apiKey: '   '
-      } as AppSettings;
+      });
       
       // With current implementation, whitespace is truthy and returned
       mockEnvGeminiApiKey.value = undefined;
@@ -172,10 +203,10 @@ describe('AiProviderFactory', () => {
     });
 
     it('should create GeminiProvider with valid apiKey', () => {
-      const settings = { 
-        provider: 'gemini',
+      const settings = createMockSettings({
+        provider: ProviderType.Gemini,
         apiKey: 'valid-key'
-      } as AppSettings;
+      });
       
       AiProviderFactory.create(settings);
       
@@ -186,10 +217,10 @@ describe('AiProviderFactory', () => {
     it('should fall back to environment variable when user apiKey is not provided', () => {
       mockEnvGeminiApiKey.value = 'env-gemini-key';
       
-      const settings = { 
-        provider: 'gemini',
+      const settings = createMockSettings({
+        provider: ProviderType.Gemini,
         apiKey: undefined
-      } as AppSettings;
+      });
       
       AiProviderFactory.create(settings);
       
@@ -200,10 +231,10 @@ describe('AiProviderFactory', () => {
     it('should prioritize user apiKey over environment variable', () => {
       mockEnvGeminiApiKey.value = 'env-gemini-key';
       
-      const settings = { 
-        provider: 'gemini',
+      const settings = createMockSettings({
+        provider: ProviderType.Gemini,
         apiKey: 'user-key'
-      } as AppSettings;
+      });
       
       AiProviderFactory.create(settings);
       
@@ -215,10 +246,10 @@ describe('AiProviderFactory', () => {
   describe('Provider switching', () => {
     it('should handle provider switching from gemini to openrouter', () => {
       // First create Gemini provider
-      const geminiSettings = { 
-        provider: 'gemini',
+      const geminiSettings = createMockSettings({
+        provider: ProviderType.Gemini,
         apiKey: 'valid-key'
-      } as AppSettings;
+      });
       
       AiProviderFactory.create(geminiSettings);
       expect(vi.mocked(GeminiProvider)).toHaveBeenCalledWith('valid-key');
@@ -228,11 +259,11 @@ describe('AiProviderFactory', () => {
       vi.mocked(OpenRouterProvider).mockClear();
       
       // Then switch to OpenRouter
-      const orSettings = { 
-        provider: 'openrouter',
+      const orSettings = createMockSettings({
+        provider: ProviderType.OpenRouter,
         openRouterApiKey: 'or-key',
         openRouterModel: 'test-model'
-      } as AppSettings;
+      });
       
       AiProviderFactory.create(orSettings);
       expect(vi.mocked(OpenRouterProvider)).toHaveBeenCalledWith({
@@ -245,28 +276,28 @@ describe('AiProviderFactory', () => {
   });
 
   describe('Forced proxy mode', () => {
-    it('should create ProxyProvider when IS_FORCED_PROXY is true, even with valid Gemini key', () => {
+    it('should prioritize user apiKey over IS_FORCED_PROXY', () => {
       mockIsForcedProxy.value = true;
       
-      const settings = { 
-        provider: 'gemini',
+      const settings = createMockSettings({
+        provider: ProviderType.Gemini,
         apiKey: 'valid-key'
-      } as AppSettings;
+      });
       
       AiProviderFactory.create(settings);
       
-      expect(vi.mocked(ProxyProvider)).toHaveBeenCalled();
-      expect(vi.mocked(GeminiProvider)).not.toHaveBeenCalled();
+      expect(vi.mocked(GeminiProvider)).toHaveBeenCalledWith('valid-key');
+      expect(vi.mocked(ProxyProvider)).not.toHaveBeenCalled();
     });
 
     it('should create ProxyProvider when IS_FORCED_PROXY is true with environment key', () => {
       mockIsForcedProxy.value = true;
       mockEnvGeminiApiKey.value = 'env-key';
       
-      const settings = { 
-        provider: 'gemini',
+      const settings = createMockSettings({
+        provider: ProviderType.Gemini,
         apiKey: undefined
-      } as AppSettings;
+      });
       
       AiProviderFactory.create(settings);
       

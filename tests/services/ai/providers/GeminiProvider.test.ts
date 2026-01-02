@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GeminiProvider } from '@/services/ai/providers/GeminiProvider';
-import { AppSettings } from '@/types';
+import { AppSettings, ProviderType } from '@/types';
 
 // Mock streamUtils
 vi.mock('@/services/swarm/steps/utils/streamUtils', () => ({
@@ -40,7 +40,7 @@ describe('GeminiProvider', () => {
   });
 
   it('should have correct name and capabilities', () => {
-    expect(provider.name).toBe('gemini');
+    expect(provider.name).toBe(ProviderType.Gemini);
     expect(provider.capabilities).toEqual({
       search: true,
       vision: true,

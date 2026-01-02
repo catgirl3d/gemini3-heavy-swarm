@@ -1,5 +1,5 @@
 import React, { FC, useState, useEffect, useMemo } from 'react';
-import { AppSettings, PROMPT_TYPES } from '@/types';
+import { AppSettings, PROMPT_TYPES, ProviderType } from '@/types';
 import { DEFAULT_SETTINGS, IS_FORCED_PROXY } from '@/constants';
 import { useProviderInfo, getProviderInfo } from '@/hooks/core/useProviderInfo';
 
@@ -18,7 +18,7 @@ import { RolesTab } from '@/components/modals/SettingsModal/tabs/RolesTab';
 import './SettingsModal.css';
 
 
-export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, serverStatus }) => {
+export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, serverStatus, onShowError }) => {
     const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
     const [activeTab, setActiveTab] = useState<'general' | 'prompts' | 'roles'>('general');
     
@@ -85,11 +85,42 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
         const isUnlockedFinal = finalProviderInfo.isUnlocked;
         const isDemoFinal = finalProviderInfo.isDemoMode;
         
+        // ===== VALIDATION: Check for required API keys =====
+        // This prevents AiProviderFactory from throwing errors and causing white screen of death
+        // We must ensure EITHER user has their own key OR server has a key configured (or env variable in dev)
+        if (finalSettings.provider === ProviderType.OpenRouter) {
+            // Check if ANY API key is available (user's or server's)
+            if (!finalSettings.openRouterApiKey && !isUnlockedFinal) {
+                const errorMsg = 'OpenRouter requires an API key. Please add your own API key in settings, or ensure the server has one configured.';
+                if (onShowError) {
+                    onShowError(errorMsg);
+                } else {
+                    alert(errorMsg); // Fallback if no toast available
+                }
+                return; // Block saving - this is a critical error
+            }
+        } else if (finalSettings.provider === ProviderType.Gemini) {
+            // Check if ANY API key is available (user's, server's, or environment variable in dev mode)
+            // Note: isUnlockedFinal is the single source of truth - it returns true if:
+            // 1. User has apiKey
+            // 2. OR Proxy is active and server has key
+            // 3. OR Direct mode is active and process.env.GEMINI_API_KEY exists
+            if (!finalSettings.apiKey && !isUnlockedFinal) {
+                const errorMsg = 'Gemini requires an API key. Please add your own API key in settings, or ensure the server has one configured.';
+                if (onShowError) {
+                    onShowError(errorMsg);
+                } else {
+                    alert(errorMsg); // Fallback if no toast available
+                }
+                return; // Block saving - this is a critical error
+            }
+        }
+        
         if (!isUnlockedFinal || isDemoFinal) {
             // Force default model in demo or no-key mode
-            if (finalSettings.provider === 'gemini') {
+            if (finalSettings.provider === ProviderType.Gemini) {
                 finalSettings.model = 'gemini-2.5-flash-lite';
-            } else if (finalSettings.provider === 'openrouter' && isDemoFinal) {
+            } else if (finalSettings.provider === ProviderType.OpenRouter && isDemoFinal) {
                 // In demo mode, clear OpenRouter model if it's not a free model
                 const currentModel = finalSettings.openRouterModel || '';
                 if (currentModel && !currentModel.endsWith(':free')) {

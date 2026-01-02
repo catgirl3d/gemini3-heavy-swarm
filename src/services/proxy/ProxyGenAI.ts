@@ -20,7 +20,7 @@ export class ProxyGenAI {
     return {
       generateContentStream: async (request: { model?: string; config?: any; contents: Content[] }) => {
         // Use the requested model, or fallback to flash-lite
-        // The server will enforce restrictions if GEMINI_PROXY_MODE is 'demo'
+        // The server will enforce restrictions if PROXY_MODE is 'demo'
         const modelName = request.model || 'gemini-2.5-flash-lite';
         
         // Separate generationConfig from top-level fields like systemInstruction and tools
@@ -68,7 +68,8 @@ class ProxyGenerativeModel {
             tools: this.tools
           };
           // Stringify for better visibility in logs (prevents object collapsing)
-          logger.info('Gemini SDK Request Payload:', JSON.stringify(payload, null, 2));
+          // Only visible in debug mode to avoid cluttering production logs
+          logger.debug('Gemini SDK Request Payload:', JSON.stringify(payload, null, 2));
           return JSON.stringify(payload);
         })()
       });

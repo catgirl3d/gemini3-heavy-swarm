@@ -1,5 +1,13 @@
 export * from './ai-provider';
 
+/**
+ * Supported AI Provider types.
+ */
+export enum ProviderType {
+  Gemini = 'gemini',
+  OpenRouter = 'openrouter',
+}
+
 export interface PromptProfile {
   id: string;
   name: string;
@@ -73,7 +81,7 @@ export interface SavedRole {
 export type SimulateError = 'none' | '429' | '500' | '503' | 'timeout';
 
 export interface AppSettings {
-  provider: 'gemini' | 'openrouter';
+  provider: ProviderType;
   numAgents: number;
   apiKey?: string;
   model: string;

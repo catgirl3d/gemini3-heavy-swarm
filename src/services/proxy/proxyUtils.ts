@@ -8,8 +8,15 @@ import { IS_FORCED_PROXY } from '@/constants';
  * @returns boolean indicating if proxy should be used
  */
 export function isUsingProxy(userApiKey?: string): boolean {
-    // Note: process.env.GEMINI_API_KEY is available in the client via Vite injection
-    return IS_FORCED_PROXY || (!userApiKey && !process.env.GEMINI_API_KEY);
+    // Note: process.env.GEMINI_API_KEY is injected by Vite ONLY in development mode.
+    // In production builds, this will be an empty string to prevent key leakage.
+    // User-provided API key always takes precedence over forced proxy
+    const hasUserKey = !!userApiKey;
+    const hasEnvKey = !!process.env.GEMINI_API_KEY;
+
+    if (hasUserKey) return false;
+
+    return IS_FORCED_PROXY || !hasEnvKey;
 }
 
 /**
@@ -20,6 +27,11 @@ export function isUsingProxy(userApiKey?: string): boolean {
  * @returns string | null
  */
 export function getDirectApiKey(userApiKey?: string): string | null {
+    // User-provided API key always takes precedence
+    if (userApiKey) return userApiKey;
+
+    // Forced proxy only affects the default/env API key
     if (IS_FORCED_PROXY) return null;
-    return userApiKey || process.env.GEMINI_API_KEY || null;
+
+    return process.env.GEMINI_API_KEY || null;
 }

@@ -64,6 +64,9 @@ export interface AiProvider {
   /** Provider capabilities */
   readonly capabilities: ProviderCapabilities;
 
+  /** Whether this provider routes through the proxy backend */
+  readonly isProxy: boolean;
+
   /**
    * Returns settings adjusted for this provider's capabilities.
    * E.g., OpenRouter disables search flags.

@@ -3,6 +3,7 @@ import { useGeminiSwarm } from '@/hooks/core/useGeminiSwarm';
 import { useServerStatus } from '@/hooks/network/useServerStatus';
 import { useAutoScroll } from '@/hooks/ui/useAutoScroll';
 import { useProviderInfo } from '@/hooks/core/useProviderInfo';
+import { ConfigProvider } from '@/providers';
 import { Logger } from '@shared/utils/logger';
 
 import { StatusBanner, Header, Toast, ToastType } from '@/components/layout';
@@ -150,7 +151,8 @@ export const App: FC = () => {
   const { isUsingProxy, modelDisplayName } = providerInfo;
 
   return (
-    <div className="chat-container">
+    <ConfigProvider settings={settings}>
+      <div className="chat-container">
       <StatusBanner
         serverStatus={serverStatus}
         providerInfo={providerInfo}
@@ -206,6 +208,7 @@ export const App: FC = () => {
         settings={settings}
         onSave={setSettings}
         serverStatus={serverStatus}
+        onShowError={(message) => setToast({ message, type: 'error' })}
       />
       
       <InfoModal
@@ -221,6 +224,7 @@ export const App: FC = () => {
           onClose={() => setToast(null)}
         />
       )}
-    </div>
+      </div>
+    </ConfigProvider>
   );
 };

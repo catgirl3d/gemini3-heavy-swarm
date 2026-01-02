@@ -1,4 +1,4 @@
-import { AppSettings, RoleProfile, SavedInstruction, LegacySavedInstruction, AgentRole, PROMPT_TYPES, PromptTypeId } from '@/types';
+import { AppSettings, RoleProfile, SavedInstruction, LegacySavedInstruction, AgentRole, PROMPT_TYPES, PromptTypeId, ProviderType } from '@/types';
 import { DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES } from '@/constants';
 
 /**
@@ -186,7 +186,7 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
 
   // Migration 14: Ensure OpenRouter settings exist
   if (migrated.provider === undefined) {
-    migrated.provider = 'gemini';
+    migrated.provider = ProviderType.Gemini;
   }
   if (migrated.openRouterApiKey === undefined) {
     migrated.openRouterApiKey = '';

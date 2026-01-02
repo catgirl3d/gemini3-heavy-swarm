@@ -1,5 +1,5 @@
 import React, { FC, ChangeEvent } from 'react';
-import { AppSettings, ServerStatus } from '@/types';
+import { AppSettings, ServerStatus, ProviderType } from '@/types';
 import { StepperControl } from '@/components/modals/SettingsModal/components/StepperControl';
 import { TemperatureBanner } from '@/components/modals/SettingsModal/components/TemperatureBanner';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
@@ -36,16 +36,16 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                     <label className="modal-label">Provider</label>
                     <select
                         name="provider"
-                        value={localSettings.provider || 'gemini'}
+                        value={localSettings.provider || ProviderType.Gemini}
                         onChange={handleChange}
                         className="modal-input"
                     >
-                        <option value="gemini">Google Gemini</option>
-                        <option value="openrouter">OpenRouter</option>
+                        <option value={ProviderType.Gemini}>Google Gemini</option>
+                        <option value={ProviderType.OpenRouter}>OpenRouter</option>
                     </select>
                 </div>
 
-                {localSettings.provider === 'gemini' ? (
+                {localSettings.provider === ProviderType.Gemini ? (
                     <>
                         <div className="modal-form-group">
                             <label className="modal-label">Gemini API Key</label>
@@ -65,7 +65,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                         <div className="modal-form-group">
                             <label className="modal-label">Gemini Model</label>
                             <ModelSelector
-                                provider="gemini"
+                                provider={ProviderType.Gemini}
                                 value={!isModelUnlocked ? 'gemini-2.5-flash-lite' : (localSettings.model || 'gemini-3-flash-preview')}
                                 onChange={(val) => handleChange({ target: { name: 'model', value: val } } as any)}
                                 disabled={!isModelUnlocked || isGeminiDemo}
@@ -114,7 +114,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                         <div className="modal-form-group">
                             <label className="modal-label">OpenRouter Model</label>
                             <ModelSelector
-                                provider="openrouter"
+                                provider={ProviderType.OpenRouter}
                                 value={localSettings.openRouterModel || ''}
                                 onChange={(val) => handleChange({ target: { name: 'openRouterModel', value: val } } as any)}
                                 placeholder="Select model..."
@@ -224,7 +224,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                     </div>
                 </div>
 
-                {localSettings.provider === 'gemini' && model.includes('gemini-3') && (
+                {localSettings.provider === ProviderType.Gemini && model.includes('gemini-3') && (
                     <TemperatureBanner
                         isActive={!!localSettings.unsafeTemperature}
                         onToggle={() => setLocalSettings(prev => ({ ...prev, unsafeTemperature: !prev.unsafeTemperature }))}
@@ -261,7 +261,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                 </div>
             </div>
 
-            {localSettings.provider === 'gemini' && (
+            {localSettings.provider === ProviderType.Gemini && (
                 <div className="modal-card">
                     <span className="modal-card-title">Search Tools</span>
                     <div className="modal-form-group checkbox-group">

@@ -23,138 +23,150 @@ An advanced AI swarm interface supporting multiple AI providers (**Google Gemini
   - Configure models per pipeline step (Initial/Refinement/Synthesis).
   - Role-based model selection for fine-grained control.
 - **Modern UI**: Built with React, Vite, and TypeScript, featuring markdown rendering and syntax highlighting.
-
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js (v18+ recommended)
-- At least one of the following API keys:
-  - **Google Gemini API Key** (required for Gemini provider)
-  - **OpenRouter API Key** (required for OpenRouter provider)
+- At least one API key (you can add it later in the UI or via env variables):
+  - **Google Gemini API key** (for the Gemini provider)
+  - **OpenRouter API key** (for the OpenRouter provider)
 
-### Installation
+### 🚀 Quick Start
 
-1. Clone the repository.
-2. Install dependencies:
+This is the fastest way to run the swarm locally.
+
+1. **Clone and install dependencies:**
 
    ```bash
+   git clone https://github.com/catgirl3d/gemini3-heavy-swarm
+   cd gemini3-heavy-swarm
    npm install
    ```
-3. Set up your environment variables. Create a `.env.local` file:
 
-> [!IMPORTANT]
-> `API_SECRET` and `VITE_API_SECRET` **must be identical**. They are the same key used for the handshake between client and server.
-> **Note:** This is a value you create yourself (any string). It is NOT something you get from Google or any other service.
+2. **(Optional) Configure basic environment:**
+
+   For local testing, you can either configure API keys via environment variables **or** enter them directly in the application settings UI.  
+   If you prefer the UI, you can skip environment configuration entirely.  
+   Create a `.env.local` file if you want to use server-side keys or proxy mode:
 
    ```env
-   # Provider: Google Gemini (Optional - only if using Gemini provider)
+   # Provider: Google Gemini (optional)
    GEMINI_API_KEY=your_gemini_api_key_here
-   
-   # Provider: OpenRouter (Optional - only if using OpenRouter provider via proxy)
-   # Users can also provide their own OpenRouter key directly in the UI
+
+   # Provider: OpenRouter (optional; users can also add a key in the UI)
    OPENROUTER_API_KEY=your_openrouter_api_key_here
-   
-   # Security: These two MUST be the same value (create any random string yourself)
+
+   # Security: these two MUST be the same value (any string you choose)
    API_SECRET=your-secret-here
    VITE_API_SECRET=your-secret-here
    ```
 
-### Running the Application
+3. **Run the app (frontend + backend together):**
 
-#### Development Mode (Recommended for Local Testing)
+   ```bash
+   npm run dev:all
+   ```
 
-To run the full stack (frontend + backend proxy server):
+4. **Open the UI:**
+   - Frontend: `http://localhost:3000`
+   - Backend API: `http://localhost:8080`
+
+Use this mode for development — it enables hot reloading and full debugging features.
+
+---
+
+## Development Workflows
+
+### Run frontend and backend separately
+
+Use this if you prefer to manage processes in separate terminals:
+
+- **Backend proxy** (API + proxy server, port 8080):
+
+  ```bash
+  npm run dev:proxy
+  ```
+
+- **Frontend** (Vite dev server, port 3000):
+
+  ```bash
+  npm run dev
+  ```
+
+### Preview production build locally
+
+These commands build and run the optimized production bundle. Use this to verify that everything works before deploying.
 
 ```bash
-npm run dev:all
-```
-
-This will start:
-- **Backend Server** on `http://localhost:8080` (handles API proxy requests)
-- **Frontend (Vite)** on `http://localhost:3000` (serves the React application)
-
-Open your browser and navigate to `http://localhost:3000`.
-
-#### Alternative Development Commands
-
-If you need to run components separately:
-
-```bash
-# Run only the backend proxy server
-npm run dev:proxy
-
-# Run only the frontend (in a new terminal)
-npm run dev
-```
-
-#### Production Mode
-
-To build and run the production server:
-
-```bash
-# 1. Build the frontend
+# 1. Build frontend & backend
 npm run build
-
-# 2. Build the backend server
 npm run build:server
 
-# 3. Start the production server
+# 2. Start production server (serves UI + API)
 npm run start:server
 ```
 
-The production server will serve both the built frontend and handle API requests on the same port (default: 8080).
+The app will be served at `http://localhost:8080` (handling both UI and API requests).
 
-### Server Configuration (Proxy Mode)
+---
 
-The application includes a proxy server (`server/server.ts` for local, `functions/api/gemini.ts` and `functions/api/openrouter.ts` for Cloudflare) to handle API requests securely.
+## Environment & Proxy Configuration
 
-**Proxy Modes:**
+The application can run with direct client keys or via a secure proxy server. This section is only needed if you care about cost control, abuse protection, or public deployments.
 
-You can configure the proxy behavior using the `GEMINI_PROXY_MODE` environment variable:
+### Proxy modes
 
-- **Demo Mode**:
-  - Set `GEMINI_PROXY_MODE=demo`.
-  - **For Gemini**: Forces all requests to use free Gemini models (`gemini-2.5-flash-lite`).
-  - **For OpenRouter**: Restricts to free models only (e.g., models with `:free` suffix).
-  - Prevents abuse and manages costs in public deployments.
+The app includes a proxy server (`server/server.ts` for local, `functions/api/gemini.ts` and `functions/api/openrouter.ts` for Cloudflare) to handle API requests securely.  
+You can configure its behavior using the `PROXY_MODE` environment variable:
 
-- **Private Mode (Default)**:
-  - Set `GEMINI_PROXY_MODE=private` (or leave undefined).
+- **Private mode (default)**:
+  - Set `PROXY_MODE=private` (or leave undefined).
   - Allows the client to request any available model from either provider.
   - Use this for personal deployments where you want full model access via your server's API key.
 
-### Local Testing (Force Proxy)
+- **Demo mode**:
+  - Set `PROXY_MODE=demo`.
+  - **Gemini**: Forces all requests to use free Gemini models (`gemini-2.5-flash-lite`).
+  - **OpenRouter**: Restricts to free models only (e.g., models with `:free` suffix).
+  - Helps prevent abuse and manage costs for public/demo deployments.
 
-In development mode (e.g. via `npm run dev:all`), the application **forces all requests through the local proxy server** (`server/server.ts`) by default. This allows you to test server-side logic (rate limits, security headers, etc.) even if you have a `GEMINI_API_KEY` set in your `.env.local`.
+### Local testing (force proxy)
 
-- **To bypass the forced proxy in dev**:
-  Set `VITE_FORCE_PROXY_OFF=true` in your `.env.local`. This will allow the client to use a direct API key if one is provided in the UI settings or environment.
-  
-- **Production behavior**:
-  In production builds (`npm run build`), the forced proxy is automatically disabled. Users can either provide their own API key (direct route) or be routed through the proxy if no key is provided.
+In development mode (e.g. via `npm run dev:all`), the application **forces requests through the local proxy server** (`server/server.ts`) by default if no user-provided API key is found. This lets you test server-side logic (rate limits, security headers, etc.) even if you have a `GEMINI_API_KEY` set in your `.env.local`.
 
-**Model Enforcement:**
-- **Demo Mode**: 
-  - **Gemini**: Resets to free Gemini models (`gemini-2.5-flash-lite`) on page reload.
-  - **OpenRouter**: Restricts to models with `:free` suffix.
-  - Prevents unauthorized access to premium models in public deployments.
-- **Private Mode (Default)**: User model preferences are preserved across page reloads, allowing full access to all available models from both providers.
+- **Key Precedence**: An API key entered manually in the application settings **always** takes precedence and bypasses the proxy, regardless of development flags.
+- **To bypass the forced proxy for env keys**
+  Set `VITE_FORCE_PROXY_OFF=true` in your `.env.local`. This allows the client to use the `GEMINI_API_KEY` from your environment variables directly without routing through the local proxy.
+
+- **Production behavior**  
+  In production builds (`npm run build`), server API keys are **not** bundled into the frontend code.
+
+  **How to configure keys:**
+  1. **Server-side (proxy route)**: Set `GEMINI_API_KEY` or `OPENROUTER_API_KEY` in your hosting platform's environment variables (e.g., Cloudflare Dashboard, Vercel, Docker env). This allows users without their own keys to use the app via your proxy.
+  2. **Client-side (direct route)**: Users can enter their personal API key in the application settings. This allows them to bypass the proxy and your rate limits.
+
+**Model enforcement (proxy mode):**
+- **Demo mode**: 
+  - **Gemini**: Forces usage of `gemini-2.5-flash-lite` (applied in UI and enforced by server).
+  - **OpenRouter**: Restricts selection to free models in the UI and enforces `:free` suffix on the server.
+  - Prevents unauthorized usage of premium models in public deployments.
+- **Private mode (default)**: Full access to all available models. User preferences are preserved across reloads.
 
 ### Security (X-API-Secret)
 
-For **anti-abuse protection** in proxy mode, the application uses a "Secret Handshake" mechanism. Both the client and the server must have the same `API_SECRET` configured.
+For **anti-abuse protection** in proxy mode, the application uses a "secret handshake" mechanism. Both the client and the server must have the same `API_SECRET` configured.
 
 > [!WARNING]
 > This is an **anti-abuse measure**, not a full authentication solution. Because `VITE_API_SECRET` is bundled into the frontend code, it is **visible in the browser's Network tab**. This prevents unauthorized third-party site usage and automated bot access, but it is not a secret from the end-user.
 
-**Required Environment Variables:**
-- `API_SECRET`: (Backend) Set in your server environment or Cloudflare dashboard.
-- `VITE_API_SECRET`: (Frontend) Injected during build time. Must match `API_SECRET`.
+**Required environment variables:**
+- `API_SECRET`: (backend) Set in your server environment or Cloudflare dashboard.
+- `VITE_API_SECRET`: (frontend) Injected at build time. Must match `API_SECRET`.
 
 For detailed security instructions and implementation details, see [docs/API_SECURITY.md](./docs/API_SECURITY.md).
 
-### Environment Variables Reference
+### Environment variables reference
 
 The application uses multiple environment variables for configuration. Here's a complete reference:
 
@@ -168,14 +180,15 @@ The application uses multiple environment variables for configuration. Here's a 
 | **Security & CORS** |
 | `ALLOWED_ORIGINS` | ⚠️ Recommended | Backend (Cloudflare, Cloud Run) | Comma-separated list of allowed origins for CORS | `https://example.com,https://app.example.com` |
 | **Proxy Configuration** |
-| `GEMINI_PROXY_MODE` | Optional | Backend (`.env.local`, Cloudflare, Cloud Run) | `demo` = force flash-lite model, `private` = allow all models | `demo` or `private` |
+| `PROXY_MODE` | Optional | Backend (`.env.local`, Cloudflare, Cloud Run) | `demo` = force flash-lite model, `private` = allow all models | `demo` or `private` |
 | **Development Only** |
-| `VITE_FORCE_PROXY_OFF` | Optional | Frontend (`.env.local`) | Disable forced proxy in dev mode | `true` |
+| `VITE_FORCE_PROXY_OFF` | Optional | Frontend (`.env.local`) | Disable forced proxy for environment keys in dev mode (UI keys always bypass proxy) | `true` |
 | `PORT` | Optional | Backend (`.env.local`, Cloud Run) | Server port (defaults to 8080) | `8080` |
 
-#### Setup Instructions by Environment
+#### Setup examples by environment
 
-**Local Development (`.env.local`):**
+**Local development (`.env.local`):**
+
 ```env
 # Required
 GEMINI_API_KEY=your_api_key_here
@@ -188,56 +201,76 @@ API_SECRET=your-secret-here
 VITE_API_SECRET=your-secret-here
 
 # Optional
-GEMINI_PROXY_MODE=private
+PROXY_MODE=private
 PORT=8080
 ```
 
 **Cloudflare Pages (Dashboard → Settings → Environment variables):**
-- `GEMINI_API_KEY` - Your Google AI API key (optional, only if using Gemini provider)
-- `OPENROUTER_API_KEY` - Your OpenRouter API key (optional, only if using OpenRouter via proxy)
-- `API_SECRET` - Complex secret string
-- `ALLOWED_ORIGINS` - Comma-separated list of allowed domains (optional)
-- `GEMINI_PROXY_MODE` - `demo` or `private`
+- `GEMINI_API_KEY` – Your Google AI API key (optional, only if using Gemini provider)
+- `OPENROUTER_API_KEY` – Your OpenRouter API key (optional, only if using OpenRouter via proxy)
+- `API_SECRET` – Complex secret string
+- `ALLOWED_ORIGINS` – Comma-separated list of allowed domains (optional)
+- `PROXY_MODE` – `demo` or `private`
 
-**Cloudflare KV Binding (Dashboard → Settings → Functions → KV namespace bindings):**
-- `RATE_LIMIT_KV` - Create a KV namespace for rate limiting and bind it with this name
+**Cloudflare KV binding (Dashboard → Settings → Functions → KV namespace bindings):**
+- `RATE_LIMIT_KV` – Create a KV namespace for rate limiting and bind it with this name
 
-**Build Environment (for frontend):**
+**Build environment (for frontend):**
+
 ```bash
 VITE_API_SECRET=your-secret-here npm run build
 ```
 
 > [!NOTE]
-> **Automatic Production Detection:**
+> **Automatic production detection:**
 > - **Node.js (Cloud Run/Express):** Uses `NODE_ENV === 'production'` (set in Dockerfile).
 > - **Cloudflare Workers:** Checks the actual `request.url` against production domains.
 > - HSTS is automatically enabled when running in production.
 > 
-> **Default Behaviors:**
-> - `ALLOWED_ORIGINS`: Defaults to production + localhost origins (see `shared/security/security.ts`)
-> - `GEMINI_PROXY_MODE`: Defaults to `private` (allows all models)
+> **Default behaviors:**
+> - `ALLOWED_ORIGINS`: In production, defaults to production origins only. In development, defaults to production + localhost origins (see `shared/api/cors.core.ts`).
+> - `PROXY_MODE`: Defaults to `private` (allows all models).
 
-For detailed security information, see [docs/API_SECURITY.md](./docs/API_SECURITY.md).
+---
 
-### Deployment Scripts
+## Deployment
+
+### Option 1: Cloudflare Pages (recommended)
+
+Deploys the frontend + serverless backend (Functions) automatically.
 
 | Command | Description |
 |---------|-------------|
-| `npm run build` | Builds the React frontend into `dist/`. |
-| `npm run build:server` | Bundles the TypeScript server into `server-build/server.js`. |
-| `npm run start:server` | Runs the compiled production-ready server. |
-| `npm run dev:all` | **Recommended:** Runs both backend and frontend concurrently. |
-| `npm run dev:proxy` | Runs the server in development mode (using `tsx`). |
-| `npm run typecheck` | Validates TypeScript types across the project. |
-| `npm run deploy` | Builds the frontend and deploys to Cloudflare Pages. |
-
-Deploy to Cloudflare Pages (requires Wrangler):
+| `npm run deploy` | Builds the frontend (`dist/`) and pushes to Cloudflare Pages. Requires [Wrangler](https://developers.cloudflare.com/workers/wrangler/). |
 
 ```bash
+# 1. Login to Cloudflare (one-time)
+npx wrangler login
+
+# 2. Deploy
 npm run deploy
 ```
 
-For detailed security instructions and implementation details, see [docs/API_SECURITY.md](./docs/API_SECURITY.md).
+### Option 2: Node.js / Docker
+
+For traditional hosting (VPS, Render, Railway, etc.).
+
+> **Tip:** For Dockerfile and Google Cloud Run scripts, see the [`deployment/`](./deployment/README.md) directory.
+
+| Command | Description |
+|---------|-------------|
+| `npm run build` | Builds the React static files into `dist/`. |
+| `npm run build:server` | Bundles the Node.js server into a single file `server-build/server.js`. |
+| `npm run start:server` | Starts the production server (serves static files + API). |
+
+```bash
+# Example VPS workflow
+npm run build
+npm run build:server
+npm run start:server
+```
+
+
 
 ## Using OpenRouter
 

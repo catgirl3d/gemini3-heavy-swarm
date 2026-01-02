@@ -1,3 +1,5 @@
+import { ProviderType } from '@/types';
+
 export interface ModalField {
     label: string;
     value: string;
@@ -30,6 +32,6 @@ export interface RoleAndPromptConfigModalProps {
     modelValue?: string;
     isModelUnlocked?: boolean;
     onModelChange?: (model: string) => void;
-    provider?: 'gemini' | 'openrouter';
+    provider?: ProviderType;
     isDemoMode?: boolean;
 }

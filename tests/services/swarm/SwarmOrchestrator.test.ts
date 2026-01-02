@@ -14,6 +14,7 @@ describe('SwarmOrchestrator Integrated', () => {
             reasoning: false,
             codeExecution: false
         },
+        isProxy: false,
         getEffectiveSettings: (s) => s,
         getDefaultModel: () => 'model',
         models: {

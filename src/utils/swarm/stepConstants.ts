@@ -2,7 +2,7 @@ import { StepId, STEPS } from '@/types/steps';
 import { Work } from '@/types';
 import { Logger } from '@shared/utils/logger';
 
-const logger = new Logger('SynthesisJump', true);
+const logger = new Logger('SynthesisJump');
 
 /**
  * Centralized configuration for step-specific behavior.

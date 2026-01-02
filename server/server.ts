@@ -155,7 +155,7 @@ app.get('/api/status', (req: Request, res: Response) => {
 		hasServerKey: !!process.env.GEMINI_API_KEY,
 		hasOpenRouterKey: !!process.env.OPENROUTER_API_KEY,
 		hasKV: true, // Local server uses in-memory rate limiting
-		proxyMode: getProxyMode(process.env.GEMINI_PROXY_MODE)
+		proxyMode: getProxyMode(process.env.PROXY_MODE)
 	});
 });
 
@@ -169,7 +169,7 @@ app.post('/api/gemini', async (req: Request, res: Response) => {
 		}
 
 		// Validation and preparation
-		const isPrivateMode = getProxyMode(process.env.GEMINI_PROXY_MODE) === 'private';
+		const isPrivateMode = getProxyMode(process.env.PROXY_MODE) === 'private';
 		const preparation = validateAndPrepareProxy(req.body, isPrivateMode);
 		
 		if (preparation.ok === false) {
@@ -256,7 +256,7 @@ async function startServer() {
 			logger.info(`✅ Server running on port ${availablePort}`);
 			logger.info(`Environment check: GEMINI_API_KEY is ${process.env.GEMINI_API_KEY ? 'SET' : 'NOT SET'}`)
 			logger.info(`Environment check: OPENROUTER_API_KEY is ${process.env.OPENROUTER_API_KEY ? 'SET' : 'NOT SET'}`)
-			logger.info(`Environment check: GEMINI_PROXY_MODE is ${getProxyMode(process.env.GEMINI_PROXY_MODE)}`);
+			logger.info(`Environment check: PROXY_MODE is ${getProxyMode(process.env.PROXY_MODE)}`);
 			logger.info(`Environment check: API_SECRET is ${process.env.API_SECRET ? 'SET' : 'NOT SET'}`);
 			if (process.env.ALLOWED_ORIGINS) {
 				logger.info(`Environment check: ALLOWED_ORIGINS is SET`);

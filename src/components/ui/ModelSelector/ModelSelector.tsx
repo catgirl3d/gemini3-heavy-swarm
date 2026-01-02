@@ -2,6 +2,7 @@ import React, { FC, useState, useEffect, useRef, useMemo } from 'react';
 import { fetchOpenRouterModels } from '@/services/openrouter/modelsService';
 import { RECOMMENDED_MODEL_IDS, FILTERED_MODEL_IDS } from '@/services/openrouter/constants';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
+import { ProviderType } from '@/types';
 import { PortalDropdown } from '@/components/ui/PortalDropdown/PortalDropdown';
 import thinkingIcon from '@/assets/thinking.png';
 import './ModelSelector.css';
@@ -9,7 +10,7 @@ import './ModelSelector.css';
 interface ModelSelectorProps {
     value: string;
     onChange: (value: string) => void;
-    provider: 'gemini' | 'openrouter';
+    provider: ProviderType;
     disabled?: boolean;
     placeholder?: string;
     showEmptyOption?: boolean;
@@ -56,10 +57,10 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        if (provider === 'gemini') {
+        if (provider === ProviderType.Gemini) {
             setModels(AVAILABLE_MODELS.map(m => ({ value: m.value, label: m.label })));
             setError(null);
-        } else if (provider === 'openrouter') {
+        } else if (provider === ProviderType.OpenRouter) {
             setIsLoading(true);
             setError(null);
             fetchOpenRouterModels()
@@ -111,12 +112,12 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
         );
 
         // Filter by free models only in demo mode for OpenRouter
-        if (isDemoMode && provider === 'openrouter') {
+        if (isDemoMode && provider === ProviderType.OpenRouter) {
             result = result.filter(m => m.priceText === 'Free');
         }
 
         // Filter out recommended from the "all" list when not searching to avoid duplication
-        if (!search && provider === 'openrouter') {
+        if (!search && provider === ProviderType.OpenRouter) {
             result = result.filter(m => !RECOMMENDED_MODEL_IDS.includes(m.value));
         }
 
@@ -133,7 +134,7 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
     }, [models, search, sortBy, provider, isDemoMode]);
 
     const recommendedModels = useMemo(() => {
-        if (provider !== 'openrouter' || search) return [];
+        if (provider !== ProviderType.OpenRouter || search) return [];
         // Use exact match to avoid false positives (like 'gpt-5.1 codex' matching 'gpt-5.1')
         // Also sort recommended by their order in the RECOMMENDED_MODEL_IDS list
         const isModelFiltered = (id: string) => FILTERED_MODEL_IDS.some(f => id.toLowerCase().includes(f.toLowerCase()));
@@ -192,7 +193,7 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
                                 }}
                             />
                         </div>
-                        {provider === 'openrouter' && (
+                        {provider === ProviderType.OpenRouter && (
                             <div className="model-sort-row">
                                 <span className="sort-label">Sort by:</span>
                                 <button

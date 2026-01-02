@@ -12,6 +12,7 @@ export class ProxyProvider extends BaseProvider {
     reasoning: true,
     codeExecution: true,
   };
+  readonly isProxy = true;
 
   private client: ProxyGenAI;
 

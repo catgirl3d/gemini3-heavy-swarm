@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { calculateUpdatedStateForRegeneration } from '../../src/utils/swarm/regenerationHelpers';
 import { STEPS } from '../../src/types/steps';
-import { Message, Work, AppSettings, TokenUsage } from '../../src/types';
+import { Message, Work, AppSettings, TokenUsage, ProviderType } from '../../src/types';
 
 const mockSettings: AppSettings = {
   model: 'test-model',
@@ -30,7 +30,7 @@ const mockSettings: AppSettings = {
   roleProfiles: [],
   savedInstructions: [],
   savedRoles: [],
-  provider: 'gemini',
+  provider: ProviderType.Gemini,
   openRouterModel: ''
 };
 
