@@ -68,8 +68,17 @@ describe('streamUtils', () => {
         totalTokens: 30,
         thoughtsTokenCount: undefined,
         cachedContentTokenCount: undefined,
-        toolUsePromptTokenCount: undefined
+        toolUsePromptTokenCount: undefined,
+        isEstimated: undefined
       });
+    });
+
+    it('should propagate isEstimated flag', () => {
+      const metadata = {
+        totalTokenCount: 10,
+        isEstimated: true
+      };
+      expect(extractTokenUsage(metadata as any).isEstimated).toBe(true);
     });
 
     it('should default missing values to 0', () => {

@@ -21,6 +21,8 @@ export interface GeminiUsageMetadata {
   cachedContentTokenCount?: number;
   /** Number of tokens in tool-use prompts */
   toolUsePromptTokenCount?: number;
+  /** Whether the token counts are estimated */
+  isEstimated?: boolean;
 }
 
 /**
@@ -151,6 +153,7 @@ export const extractTokenUsage = (usageMetadata: GeminiUsageMetadata | undefined
     totalTokens: usageMetadata.totalTokenCount || 0,
     thoughtsTokenCount: usageMetadata.thoughtsTokenCount,
     cachedContentTokenCount: usageMetadata.cachedContentTokenCount,
-    toolUsePromptTokenCount: usageMetadata.toolUsePromptTokenCount
+    toolUsePromptTokenCount: usageMetadata.toolUsePromptTokenCount,
+    isEstimated: usageMetadata.isEstimated
   };
 };

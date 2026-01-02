@@ -197,7 +197,8 @@ export class OpenRouterGenAI {
           let lastUsage: any = {
             promptTokenCount: estimatedPromptTokens,
             candidatesTokenCount: 0,
-            totalTokenCount: estimatedPromptTokens
+            totalTokenCount: estimatedPromptTokens,
+            isEstimated: true
           };
           
           let hasYieldedContent = false;
@@ -233,7 +234,8 @@ export class OpenRouterGenAI {
                       promptTokenCount: parsed.usage.prompt_tokens || 0,
                       candidatesTokenCount: parsed.usage.completion_tokens || 0,
                       totalTokenCount: parsed.usage.total_tokens || 0,
-                      thoughtsTokenCount: parsed.usage.reasoning_tokens || undefined
+                      thoughtsTokenCount: parsed.usage.reasoning_tokens || undefined,
+                      isEstimated: false
                     };
                   }
                   
@@ -244,6 +246,7 @@ export class OpenRouterGenAI {
                     if (!parsed.usage) {
                       // Accurate token count for reasoning
                       lastUsage.thoughtsTokenCount = await estimateTokens(accumulatedReasoning);
+                      lastUsage.isEstimated = true;
                     }
                   }
                   
@@ -259,6 +262,7 @@ export class OpenRouterGenAI {
                         const reasoningTokens = await estimateTokens(accumulatedReasoning);
                         lastUsage.candidatesTokenCount = candidateTokens;
                         lastUsage.totalTokenCount = estimatedPromptTokens + candidateTokens + reasoningTokens;
+                        lastUsage.isEstimated = true;
                       }
                     }
                     

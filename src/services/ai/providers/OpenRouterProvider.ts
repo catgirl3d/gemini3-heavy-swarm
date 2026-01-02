@@ -83,6 +83,7 @@ export class OpenRouterProvider extends BaseProvider {
         text: text,
         thought: chunk.thought, // OpenRouterGenAI marks thought in chunk
         usage: this.extractUsage(chunk.usageMetadata),
+        groundingChunks: chunk.groundingChunks,
         raw: chunk
     };
   }
@@ -95,7 +96,8 @@ export class OpenRouterProvider extends BaseProvider {
       totalTokens: metadata.totalTokenCount || 0,
       thoughtsTokenCount: metadata.thoughtsTokenCount,
       cachedContentTokenCount: metadata.cachedContentTokenCount,
-      toolUsePromptTokenCount: metadata.toolUsePromptTokenCount
+      toolUsePromptTokenCount: metadata.toolUsePromptTokenCount,
+      isEstimated: metadata.isEstimated
     };
   }
 }

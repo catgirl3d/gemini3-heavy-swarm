@@ -57,7 +57,8 @@ describe('OpenRouterProvider', () => {
           totalTokenCount: 15,
           promptTokenCount: 8,
           candidatesTokenCount: 7,
-          thoughtsTokenCount: 2
+          thoughtsTokenCount: 2,
+          isEstimated: true
         }
     };
     const mockAsyncIterable = (async function* () {
@@ -89,11 +90,31 @@ describe('OpenRouterProvider', () => {
         candidatesTokens: 7,
         thoughtsTokenCount: 2,
         cachedContentTokenCount: undefined,
-        toolUsePromptTokenCount: undefined
+        toolUsePromptTokenCount: undefined,
+        isEstimated: true
       },
       groundingChunks: undefined,
       raw: mockChunk
     });
+  });
+
+  it('should propagate isEstimated: false correctly', async () => {
+    const mockChunk = { 
+        text: vi.fn(() => 'final text'),
+        usageMetadata: { 
+          totalTokenCount: 20,
+          isEstimated: false
+        }
+    };
+    mockGenerateContentStream.mockResolvedValue({
+      stream: (async function* () { yield mockChunk; })()
+    });
+
+    const result = await provider.models.generateContentStream({ model: 'or', contents: [] });
+    const chunks: any[] = [];
+    for await (const chunk of result.stream) { chunks.push(chunk); }
+
+    expect(chunks[0].usage.isEstimated).toBe(false);
   });
 
   it('should handle empty stream correctly', async () => {

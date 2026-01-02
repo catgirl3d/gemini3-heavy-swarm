@@ -113,3 +113,31 @@
 .token-total-row .token-value {
   color: var(--primary-color, var(--text-primary));
 }
+
+/* Estimated states */
+.token-usage.is-estimated .token-count {
+  opacity: 0.8;
+  color: var(--text-secondary);
+}
+
+.estimated-badge {
+  font-size: 0.65rem;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+.token-estimate-notice {
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  margin-bottom: 8px;
+  white-space: normal;
+  line-height: 1.4;
+}

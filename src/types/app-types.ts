@@ -134,6 +134,10 @@ export interface TokenUsage {
    * Only present when tools are used in the request.
    */
   toolUsePromptTokenCount?: number;
+  /**
+   * Whether the token counts are estimated (client-side) or final (from API).
+   */
+  isEstimated?: boolean;
 }
 
 /**

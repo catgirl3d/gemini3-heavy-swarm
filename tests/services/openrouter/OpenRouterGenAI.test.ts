@@ -112,7 +112,8 @@ describe('OpenRouterGenAI', () => {
         promptTokenCount: 10,
         candidatesTokenCount: 5,
         totalTokenCount: 15,
-        thoughtsTokenCount: undefined
+        thoughtsTokenCount: undefined,
+        isEstimated: false
       });
     });
 
@@ -137,6 +138,42 @@ describe('OpenRouterGenAI', () => {
 
       expect(lastUsage.promptTokenCount).toBeGreaterThan(0);
       expect(lastUsage.candidatesTokenCount).toBeGreaterThan(0);
+      expect(lastUsage.isEstimated).toBe(true);
+    });
+
+    it('should track transition from estimated to real usage', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            // Chunk 1: Content only (estimated)
+            controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n'));
+            // Chunk 2: Usage data (real)
+            controller.enqueue(new TextEncoder().encode('data: {"choices":[], "usage":{"prompt_tokens":20, "completion_tokens":10, "total_tokens":30}}\n\n'));
+            controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+            controller.close();
+          }
+        })
+      });
+      global.fetch = fetchMock;
+
+      const result = await client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any);
+      const usages: any[] = [];
+      for await (const chunk of result.stream) {
+        if (chunk.usageMetadata) {
+          usages.push({ ...chunk.usageMetadata });
+        }
+      }
+
+      // First usage (estimated from content)
+      expect(usages[0].isEstimated).toBe(true);
+      
+      // Last usage (real from API)
+      const lastUsage = usages[usages.length - 1];
+      expect(lastUsage.isEstimated).toBe(false);
+      expect(lastUsage.promptTokenCount).toBe(20);
+      expect(lastUsage.candidatesTokenCount).toBe(10);
+      expect(lastUsage.totalTokenCount).toBe(30);
     });
   });
 
