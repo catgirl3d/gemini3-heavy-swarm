@@ -7,6 +7,30 @@ const logger = new Logger('OpenRouterGenAI');
 
 const DEFAULT_STREAM_READ_TIMEOUT_MS = 60000; // 60 seconds default for OpenRouter (increased for reasoning models)
 
+// Lazy-load tokenizer once per module to avoid repeated dynamic import overhead during streaming
+let encodeTokenizer: ((text: string) => number[]) | null = null;
+let encodeTokenizerReady: Promise<void> | null = null;
+
+const getEncodeTokenizer = async (): Promise<((text: string) => number[]) | null> => {
+  if (encodeTokenizer) return encodeTokenizer;
+
+  if (!encodeTokenizerReady) {
+    encodeTokenizerReady = import('gpt-tokenizer')
+      .then(({ encode }) => {
+        encodeTokenizer = encode;
+      })
+      .catch(error => {
+        // If loading fails, reset so future calls can retry and fall back
+        encodeTokenizer = null;
+        encodeTokenizerReady = null;
+        logger.warn('Failed to load gpt-tokenizer, falling back to heuristic token estimation.', { error });
+      });
+  }
+
+  await encodeTokenizerReady;
+  return encodeTokenizer;
+};
+
 export interface OpenRouterOptions {
   apiKey?: string;
   model: string;
@@ -131,11 +155,17 @@ export class OpenRouterGenAI {
             // If we only have char count (fallback), use a safe heuristic
             return Math.ceil(textOrCharCount / 3.5);
           }
+
           try {
-            const { encode } = await import('gpt-tokenizer');
+            const encode = await getEncodeTokenizer();
+            if (!encode) {
+              // Tokenizer failed to initialize, fall back to heuristic
+              return Math.ceil(textOrCharCount.length / 3.5);
+            }
+
             return encode(textOrCharCount).length;
           } catch (e) {
-            // Fallback if tokenizer fails
+            // Fallback if tokenizer fails at runtime
             return Math.ceil(textOrCharCount.length / 3.5);
           }
         };
