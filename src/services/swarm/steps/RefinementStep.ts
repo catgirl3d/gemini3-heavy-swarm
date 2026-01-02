@@ -6,6 +6,7 @@ import { getAgentRole } from '@/utils/chat/roleUtils';
 import { BaseStep } from './BaseStep';
 import { getStepResults } from '@/utils/swarm/workHelpers';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
+import { formatSystemInstruction, getRoleReminder, formatDrafts, buildRefinementContext, formatRole } from '@/utils/swarm/promptHelpers';
 
 export class RefinementStep extends BaseStep {
   id: StepId = STEPS.REFINEMENT;
@@ -60,57 +61,40 @@ export class RefinementStep extends BaseStep {
     const { settings, history, userInput, image, imageFile } = context;
     const { history: mainChatHistory, baseApiParts } = prepareGeminiContent(history, userInput, image, imageFile);
     
-    // Improved filtering using stepConfig utility
-    const peerDrafts = initialDrafts
-      .map((text: string, i: number) => ({ text, id: i + 1 }))
-      .filter((_, i) => i !== index)
-      .filter((a) => a.text && a.text.trim().length > 0) // Filter out empty drafts (waiting or errors)
-      .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
-      .join('\n\n');
+    // Format peer drafts using helper
+    const peerDrafts = formatDrafts(initialDrafts, index);
 
-    // Validate my draft. If it's empty (error/waiting), use empty string
-    const rawMyDraft = initialDrafts[index] ?? '';
-    const myDraftForRefinement = rawMyDraft;
+    // Get my draft (fallback to empty if error/waiting)
+    const myDraft = initialDrafts[index] ?? '';
 
-    const searchInstruction = settings.useSearchInRefinement 
-      ? `\n3. [CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!`
-      : '';
-
-    const refinementContext = `
-# INPUT DATA
-<context_data>
-<original_query>
-${userInput || "(See attached image/content)"}
-</original_query>
-
-<my_draft>
-${myDraftForRefinement}
-</my_draft>
-
-<peer_drafts>
-${peerDrafts}
-</peer_drafts>
-</context_data>
-
-# YOUR TASK
-<instruction>
-1. As defined in <mission> critically re-evaluate <my_draft> considering insights from <peer_drafts>.
-2. Provide a new, improved response to <original_query>.${searchInstruction}
-</instruction>`;
+    // Build refinement context using helper
+    const refinementContext = buildRefinementContext({
+      userInput,
+      myDraft,
+      peerDrafts,
+      useSearch: settings.useSearchInRefinement
+    });
     
     const userTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
     
     const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
     
     // Always apply dynamic agent roles
-    let roleInstruction = '';
     const role = getAgentRole(index, settings, 'criticRoles');
-    if (role.instruction) {
-        roleInstruction = `\n\n<role_assignment>\n${role.instruction}\n</role_assignment>`;
-    }
+    const roleInstruction = formatRole(role);
 
-    const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.refinementInstruction}</mission>${roleInstruction}\n</system_instruction>`;
+    const systemInstruction = formatSystemInstruction(
+        activeProfile.refinementInstruction,
+        roleInstruction
+    );
 
-    return { systemInstruction, userTurn, mainChatHistory };
+    // Add role reminder to user turn (similar to InitialStep)
+    const roleReminder = getRoleReminder(role.name);
+    const userTurnWithReminder: Content = {
+      role: 'user',
+      parts: [...userTurn.parts, { text: roleReminder }]
+    };
+
+    return { systemInstruction, userTurn: userTurnWithReminder, mainChatHistory };
   }
 }

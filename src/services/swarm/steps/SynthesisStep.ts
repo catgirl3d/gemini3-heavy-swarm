@@ -8,6 +8,7 @@ import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { Logger } from '@shared/utils/logger';
 import { useAgentStore } from '@/stores/agentStore';
 import { updateAgentStatus } from '@/utils/swarm/statusHelpers';
+import { formatSystemInstruction, formatDrafts, buildSynthesisContext } from '@/utils/swarm/promptHelpers';
 
 export class SynthesisStep extends BaseStep {
   id: StepId = STEPS.SYNTHESIS;
@@ -210,49 +211,26 @@ export class SynthesisStep extends BaseStep {
   private prepareSynthesis(context: StepContext, refinedDrafts: string[]) {
     const { settings, history, userInput, image, imageFile, work } = context;
     const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
-    const systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.synthesizerInstruction}</mission>\n</system_instruction>`;
+    const systemInstruction = formatSystemInstruction(activeProfile.synthesizerInstruction);
 
     const { history: mainChatHistory, baseApiParts } = prepareGeminiContent(history, userInput, image, imageFile);
 
     const initialDrafts = getStepResults(work, STEPS.INITIAL);
 
-    const agentDrafts = refinedDrafts
-      .map((refinedText: string, i: number) => {
-        // Standard fallback: if refinement failed (empty), use the initial draft for the SAME agent
-        const text = (!refinedText || refinedText.length === 0)
-          ? (initialDrafts[i] || '')
-          : refinedText;
-        
-        return { text, id: i + 1 };
-      })
-      // Filter out any remaining empty strings
-      .filter((a) => a.text && a.text.length > 0)
-      .map((a) => `    <draft id="agent_${a.id}">\n${a.text}\n    </draft>`)
-      .join('\n\n');
+    // Prepare drafts for synthesis (fallback to initial if refined is empty)
+    const draftsForSynthesis = refinedDrafts.map((refinedText: string, i: number) => {
+      return (!refinedText || refinedText.length === 0) ? (initialDrafts[i] || '') : refinedText;
+    });
 
-    const searchInstruction = settings.useSearchInSynthesis 
-      ? `\n4. [CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!`
-      : '';
+    // Format agent drafts using helper
+    const agentDrafts = formatDrafts(draftsForSynthesis);
 
-    const synthesizerContext = `
-# INPUT DATA
-<context_data>
-<original_query>
-${userInput || "(See attached image/content)"}
-</original_query>
-
-<agent_drafts>
-${agentDrafts}
-</agent_drafts>
-</context_data>
-
-# YOUR TASK
-<instruction>
-As defined in <mission> synthesize the best single, final answer from <agent_drafts> to address <original_query>.
-1. Resolve any contradictions.
-2. [CRITICAL] Combine the best insights.
-3. Structure the response clearly.${searchInstruction}
-</instruction>`;
+    // Build synthesis context using helper
+    const synthesizerContext = buildSynthesisContext({
+      userInput,
+      agentDrafts,
+      useSearch: settings.useSearchInSynthesis
+    });
 
     const synthesizerTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}`}] };
 

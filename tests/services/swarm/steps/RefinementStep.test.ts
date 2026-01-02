@@ -64,7 +64,8 @@ describe('RefinementStep', () => {
 
     const instruction = (step as any).prepareRefinement(mockContext, 0, drafts);
     
-    const internalContext = instruction.userTurn.parts[instruction.userTurn.parts.length - 1].text;
+    // parts[0] = base content, parts[1] = internal context, parts[2] = role reminder
+    const internalContext = instruction.userTurn.parts[1].text;
     
     // The peer draft section should NOT contain agent_2
     expect(internalContext).not.toContain('<draft id="agent_2">');
@@ -80,7 +81,8 @@ describe('RefinementStep', () => {
     ];
 
     const instruction = (step as any).prepareRefinement(mockContext, 0, drafts);
-    const internalContext = instruction.userTurn.parts[instruction.userTurn.parts.length - 1].text;
+    // parts[0] = base content, parts[1] = internal context, parts[2] = role reminder
+    const internalContext = instruction.userTurn.parts[1].text;
     
     // <my_draft> section should be empty
     expect(internalContext).toContain('<my_draft>\n\n</my_draft>');
@@ -92,9 +94,13 @@ describe('RefinementStep', () => {
     mockContext.userInput = 'How to cook rice?';
     const drafts = ['draft 1', 'draft 2'];
     const instruction = (step as any).prepareRefinement(mockContext, 0, drafts);
-    const internalContext = instruction.userTurn.parts[instruction.userTurn.parts.length - 1].text;
+    // parts[0] = base content, parts[1] = internal context, parts[2] = role reminder
+    const internalContext = instruction.userTurn.parts[1].text;
 
     expect(internalContext).toContain('<original_query>\nHow to cook rice?\n</original_query>');
+    // Verify role reminder is also present
+    const roleReminder = instruction.userTurn.parts[2].text;
+    expect(roleReminder).toContain('Remember your assigned role: Critic');
   });
 
   it('should use correctly prepared instruction during regeneration', async () => {
@@ -113,7 +119,11 @@ describe('RefinementStep', () => {
     const [_, indexArg, instructionArg] = runRegenSpy.mock.calls[0] as any[];
     
     expect(indexArg).toBe(1);
-    const internalContext = instructionArg.userTurn.parts[instructionArg.userTurn.parts.length - 1].text;
+    // parts[0] = base content, parts[1] = internal context, parts[2] = role reminder
+    const internalContext = instructionArg.userTurn.parts[1].text;
     expect(internalContext).toContain('<my_draft>\ninitial 2\n</my_draft>');
+    // Verify role reminder is also present
+    const roleReminder = instructionArg.userTurn.parts[2].text;
+    expect(roleReminder).toContain('Remember your assigned role');
   });
 });

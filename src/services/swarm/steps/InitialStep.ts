@@ -5,6 +5,7 @@ import { prepareGeminiContent } from '@/services/swarm/contentUtils';
 import { getAgentRole } from '@/utils/chat/roleUtils';
 import { BaseStep } from './BaseStep';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
+import { formatSystemInstruction, getSearchInstruction, getRoleReminder, formatRole } from '@/utils/swarm/promptHelpers';
 
 export class InitialStep extends BaseStep {
   id: StepId = STEPS.INITIAL;
@@ -47,23 +48,24 @@ export class InitialStep extends BaseStep {
     const currentUserTurn: Content = { role: 'user', parts: baseApiParts };
 
     const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
-    let systemInstruction = `<system_instruction>\n# SYSTEM INSTRUCTION\n<mission>${activeProfile.initialInstruction}</mission>`;
-    let userTurn = currentUserTurn;
-
+    
     // Always apply dynamic agent roles
     const perspective = getAgentRole(index, settings, 'roles');
-    systemInstruction += `\n<role>${perspective.name}</role>\n<role_instruction>${perspective.instruction}</role_instruction>`;
-    const roleReminder = `\n\n<system_note>\nRemember your assigned role: ${perspective.name}\n</system_note>`;
+    const roleContent = formatRole(perspective);
+    
+    const searchInstruction = getSearchInstruction(settings.useSearchInInitial);
+
+    const systemInstruction = formatSystemInstruction(
+      activeProfile.initialInstruction,
+      roleContent + searchInstruction
+    );
+
+    let userTurn = currentUserTurn;
+    const roleReminder = getRoleReminder(perspective.name);
     userTurn = {
       role: 'user',
       parts: [...currentUserTurn.parts, { text: roleReminder }]
     };
-
-    if (settings.useSearchInInitial) {
-      systemInstruction += `\n\n<search_instruction>\n[CRITICAL] You MUST ALWAYS use the googleSearch tool to verify facts and find additional information if needed!\n</search_instruction>`;
-    }
-
-    systemInstruction += `\n</system_instruction>`;
 
     return { systemInstruction, userTurn, mainChatHistory };
   }
