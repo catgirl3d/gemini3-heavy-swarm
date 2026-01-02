@@ -1,0 +1,843 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { BaseStep } from '@/services/swarm/steps/BaseStep';
+import { StepId, STEPS, Work, AgentState, TokenUsage, Source } from '@/types';
+import { AppSettings } from '@/types';
+import { StepContext } from '@/types/steps';
+import { GroundingChunk } from '@google/genai';
+import { useAgentStore } from '@/stores/agentStore';
+
+// Mock dependencies
+vi.mock('@/stores/agentStore', () => {
+  const mockState = {
+    setIsLoading: vi.fn(),
+    updateWorkResult: vi.fn(),
+    setCurrentWork: vi.fn(),
+    currentWork: null
+  };
+  const useAgentStore = vi.fn(() => mockState);
+  (useAgentStore as any).getState = vi.fn(() => mockState);
+  return { useAgentStore };
+});
+
+vi.mock('@/utils/swarm/statusHelpers', () => ({
+  updateAgentStatus: vi.fn(),
+  updateAgentStatusIfChanged: vi.fn()
+}));
+
+vi.mock('@/utils/swarm/stepConstants', () => ({
+  getStepConfig: vi.fn((id) => ({
+    name: 'Test Step',
+    labels: {
+      working: 'Working...',
+      done: 'Done',
+      error: 'Error'
+    },
+    progressMsg: 'In progress...'
+  })),
+  STEPS: {
+    INITIAL: 'initial_step',
+    REFINEMENT: 'refinement_step',
+    SYNTHESIS: 'synthesis_step'
+  }
+}));
+
+vi.mock('@/services/swarm/steps/utils/agentStateUtils', () => ({
+  createAgentStates: vi.fn((num, settings, config) => Array(num).fill(0).map((_, i) => ({ 
+    id: `${i}`, 
+    name: `Agent ${i+1}`, 
+    status: config.status,
+    label: config.statusLabel,
+    stepId: config.stepId,
+    messageId: config.messageId
+  }))),
+  updateAgentState: vi.fn((states, index, updates) => {
+    const newStates = [...states];
+    if (newStates[index]) {
+      newStates[index] = { ...newStates[index], ...updates };
+    }
+    return newStates;
+  }),
+  updateAgentStateById: vi.fn((states, id, updates) => {
+    return states.map((s: any) => s.id === id ? { ...s, ...updates } : s);
+  })
+}));
+
+/**
+ * Concrete implementation of BaseStep for testing purposes
+ */
+class TestStep extends BaseStep {
+  id: StepId = STEPS.INITIAL;
+  name = 'Test Step';
+  description = 'Test step for unit testing';
+  ui = { visibleInModal: true };
+
+  async execute(context: StepContext): Promise<unknown> {
+    return 'test result';
+  }
+
+  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<unknown> {
+    return 'regenerated result';
+  }
+
+  public testGetRoleModel(context: StepContext, agentIndex: number, roleType: 'roles' | 'criticRoles'): string {
+    return this.getRoleModel(context, agentIndex, roleType);
+  }
+
+  public testGetStepModel(context: StepContext): string {
+    return this.getStepModel(context);
+  }
+
+  public testHandleStreamChunk(
+    context: StepContext,
+    index: number,
+    text: string,
+    thought: string,
+    usage: TokenUsage | null,
+    options: {
+      statusMsg?: string;
+      agentStates?: AgentState[];
+      localResults?: string[];
+      isFirstChunk?: boolean;
+      streamToMessage?: boolean;
+    }
+  ): void {
+    this.handleStreamChunk(context, index, text, thought, usage, options);
+  }
+
+  public testEnsureResults(work: StepContext['work']): void {
+    this.ensureResults(work);
+  }
+
+  public testGetErrorCountKey(agentIndex?: number): string {
+    return this.getErrorCountKey(agentIndex);
+  }
+
+  public testEnsureStepUsage(work: Work, stepId: StepId, numAgents: number): unknown[] {
+    return this.ensureStepUsage(work, stepId, numAgents);
+  }
+
+  public testExtractSources(groundingChunks: GroundingChunk[]): Source[] | undefined {
+    return this.extractSources(groundingChunks);
+  }
+
+  public testCreateAgentStates(numAgents: number, settings: AppSettings, config: any): AgentState[] {
+    return this.createAgentStates(numAgents, settings, config);
+  }
+
+  public testUpdateAgentState(states: AgentState[], index: number, updates: Partial<AgentState>): AgentState[] {
+    return this.updateAgentState(states, index, updates);
+  }
+
+  public testProcessSettledOutcomes(
+    context: StepContext,
+    outcomes: PromiseSettledResult<string>[],
+    results: string[],
+    agentStates: AgentState[]
+  ): { updatedStates: AgentState[]; failures: unknown[] } {
+    return this.processSettledOutcomes(context, outcomes, results, agentStates);
+  }
+
+  public async testRunModelStream(config: any, callbacks: any): Promise<any> {
+    return this.runModelStream(config, callbacks);
+  }
+}
+
+describe('BaseStep', () => {
+  let step: TestStep;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    step = new TestStep();
+  });
+
+  describe('getRoleModel', () => {
+    it('should return role model when role has model defined (highest priority)', () => {
+      const context = {
+        settings: {
+          model: 'global-model',
+          initialModel: 'step-model',
+          roleProfiles: [{
+            id: 'profile-1',
+            roles: [
+              { name: 'Agent 1', model: 'role-specific-model' }
+            ]
+          }],
+          activeRoleProfileId: 'profile-1'
+        } as AppSettings,
+        ai: null
+      } as StepContext;
+
+      const result = step.testGetRoleModel(context, 0, 'roles');
+
+      expect(result).toBe('role-specific-model');
+    });
+
+    it('should return step model when role has no model defined', () => {
+      const context = {
+        settings: {
+          model: 'global-model',
+          initialModel: 'step-model',
+          roleProfiles: [{
+            id: 'profile-1',
+            roles: [
+              { name: 'Agent 1' } // no model
+            ]
+          }],
+          activeRoleProfileId: 'profile-1'
+        } as AppSettings,
+        ai: null
+      } as StepContext;
+
+      const result = step.testGetRoleModel(context, 0, 'roles');
+
+      expect(result).toBe('step-model');
+    });
+
+    it('should return global model when no step model and no role model defined', () => {
+      const context = {
+        settings: {
+          model: 'global-model',
+          roleProfiles: [{
+            id: 'profile-1',
+            roles: [
+              { name: 'Agent 1' } // no model
+            ]
+          }],
+          activeRoleProfileId: 'profile-1'
+        } as AppSettings,
+        ai: {
+          getDefaultModel: (settings: AppSettings) => settings.model
+        } as any
+      } as StepContext;
+
+      const result = step.testGetRoleModel(context, 0, 'roles');
+
+      expect(result).toBe('global-model');
+    });
+
+    it('should return step model when no role profiles exist', () => {
+      const context = {
+        settings: {
+          model: 'global-model',
+          initialModel: 'step-model',
+          roleProfiles: []
+        } as AppSettings,
+        ai: null
+      } as StepContext;
+
+      const result = step.testGetRoleModel(context, 0, 'roles');
+
+      expect(result).toBe('step-model');
+    });
+
+    it('should use first profile when activeRoleProfileId does not match', () => {
+      const context = {
+        settings: {
+          model: 'global-model',
+          initialModel: 'step-model',
+          roleProfiles: [
+            {
+              id: 'profile-1',
+              roles: [{ name: 'Agent 1', model: 'fallback-model' }]
+            }
+          ],
+          activeRoleProfileId: 'non-existent-id'
+        } as AppSettings,
+        ai: null
+      } as StepContext;
+
+      const result = step.testGetRoleModel(context, 0, 'roles');
+
+      expect(result).toBe('fallback-model');
+    });
+
+    it('should handle criticRoles correctly', () => {
+      const context = {
+        settings: {
+          model: 'global-model',
+          refinementModel: 'refinement-step-model',
+          roleProfiles: [{
+            id: 'profile-1',
+            criticRoles: [
+              { name: 'Critic 1', model: 'critic-role-model' }
+            ]
+          }],
+          activeRoleProfileId: 'profile-1'
+        } as AppSettings,
+        ai: null
+      } as StepContext;
+
+      step.id = STEPS.REFINEMENT; // Switch to refinement step
+
+      const result = step.testGetRoleModel(context, 0, 'criticRoles');
+
+      expect(result).toBe('critic-role-model');
+    });
+
+    it('should fallback to step model when role index is out of bounds', () => {
+      const context = {
+        settings: {
+          model: 'global-model',
+          initialModel: 'step-model',
+          roleProfiles: [{
+            id: 'profile-1',
+            roles: [
+              { name: 'Agent 1', model: 'role-1-model' }
+            ]
+          }],
+          activeRoleProfileId: 'profile-1'
+        } as AppSettings,
+        ai: null
+      } as StepContext;
+
+      // Request agent index 1, but only 1 role exists (index 0)
+      const result = step.testGetRoleModel(context, 1, 'roles');
+
+      expect(result).toBe('step-model');
+    });
+  });
+
+  describe('getStepModel', () => {
+    it('should return initialModel for INITIAL step', () => {
+      step.id = STEPS.INITIAL;
+      const context = {
+        settings: {
+          model: 'global-model',
+          initialModel: 'initial-model'
+        } as AppSettings,
+        ai: null
+      } as StepContext;
+
+      const result = step.testGetStepModel(context);
+
+      expect(result).toBe('initial-model');
+    });
+
+    it('should return refinementModel for REFINEMENT step', () => {
+      step.id = STEPS.REFINEMENT;
+      const context = {
+        settings: {
+          model: 'global-model',
+          refinementModel: 'refinement-model'
+        } as AppSettings,
+        ai: null
+      } as StepContext;
+
+      const result = step.testGetStepModel(context);
+
+      expect(result).toBe('refinement-model');
+    });
+
+    it('should return synthesisModel for SYNTHESIS step', () => {
+      step.id = STEPS.SYNTHESIS;
+      const context = {
+        settings: {
+          model: 'global-model',
+          synthesisModel: 'synthesis-model'
+        } as AppSettings,
+        ai: null
+      } as StepContext;
+
+      const result = step.testGetStepModel(context);
+
+      expect(result).toBe('synthesis-model');
+    });
+
+    it('should return global model when no step-specific model is set', () => {
+      step.id = STEPS.INITIAL;
+      const context = {
+        settings: {
+          model: 'global-model'
+        } as AppSettings,
+        ai: {
+          getDefaultModel: (settings: AppSettings) => settings.model
+        } as any
+      } as StepContext;
+
+      const result = step.testGetStepModel(context);
+
+      expect(result).toBe('global-model');
+    });
+  });
+
+  describe('handleStreamChunk', () => {
+    it('should update results for multi-agent scenario', () => {
+      const work: Work = {
+        results: {}
+      };
+
+      const context = {
+        work,
+        settings: { numAgents: 3 } as AppSettings,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn()
+      } as any;
+
+      const localResults = ['', '', ''];
+
+      step.testHandleStreamChunk(context, 1, 'Agent 2 text', '', null, {
+        localResults,
+        isFirstChunk: false,
+        streamToMessage: false
+      });
+
+      expect(localResults[1]).toBe('Agent 2 text');
+      expect(work.results[STEPS.INITIAL]).toEqual(['', 'Agent 2 text', '']);
+    });
+
+    it('should update thoughts correctly', () => {
+      const work: Work = {
+        results: {}
+      };
+
+      const context = {
+        work,
+        settings: { numAgents: 2 } as AppSettings,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn()
+      } as any;
+
+      step.testHandleStreamChunk(context, 0, 'text', 'thinking...', null, {
+        isFirstChunk: false,
+        streamToMessage: false
+      });
+
+      expect(work.results[`${STEPS.INITIAL}_thoughts`]).toEqual(['thinking...', '']);
+    });
+
+    it('should update token usage correctly', () => {
+      const work: Work = {
+        results: {}
+      };
+
+      const context = {
+        work,
+        settings: { numAgents: 2 } as AppSettings,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn()
+      } as any;
+
+      const usage = {
+        totalTokens: 100,
+        promptTokens: 50,
+        candidatesTokens: 50
+      };
+
+      step.testHandleStreamChunk(context, 0, 'text', '', usage, {
+        isFirstChunk: false,
+        streamToMessage: false
+      });
+
+      expect(work.results[`${STEPS.INITIAL}_usage`]).toBeDefined();
+      expect((work.results[`${STEPS.INITIAL}_usage`] as any[])[0]).toEqual(usage);
+    });
+
+    it('should handle synthesis (single agent) scenario', () => {
+      step.id = STEPS.SYNTHESIS;
+      const work: Work = {
+        results: {}
+      };
+
+      const context = {
+        work,
+        settings: { numAgents: 1 } as AppSettings,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn()
+      } as any;
+
+      step.testHandleStreamChunk(context, -1, 'synthesis text', '', null, {
+        isFirstChunk: false,
+        streamToMessage: false
+      });
+
+      expect((work.results[STEPS.SYNTHESIS] as any).text).toBe('synthesis text');
+    });
+
+    it('should call onMessageUpdate when streamToMessage is true', () => {
+      const work: Work = {
+        results: {}
+      };
+
+      const onMessageUpdate = vi.fn();
+
+      const context = {
+        work,
+        settings: { numAgents: 1 } as AppSettings,
+        messageId: 'msg-1',
+        onMessageUpdate
+      } as any;
+
+      const usage = { totalTokens: 10, promptTokens: 5, candidatesTokens: 5 };
+
+      step.testHandleStreamChunk(context, 0, 'streaming text', 'thought', usage, {
+        isFirstChunk: true,
+        streamToMessage: true
+      });
+
+      expect(onMessageUpdate).toHaveBeenCalledWith('streaming text', true, 'thought', usage);
+    });
+  });
+
+  describe('ensureResults', () => {
+    it('should initialize results if not present', () => {
+      const work: Work = {};
+
+      step.testEnsureResults(work);
+
+      expect(work.results).toBeDefined();
+      expect(work.results).toEqual({});
+    });
+
+    it('should not overwrite existing results', () => {
+      const work: Work = {
+        results: { existing: 'data' }
+      };
+
+      step.testEnsureResults(work);
+
+      expect(work.results).toEqual({ existing: 'data' });
+    });
+  });
+
+  describe('getErrorCountKey', () => {
+    it('should return consistent error count key for step', () => {
+      step.id = STEPS.INITIAL;
+
+      const key = step.testGetErrorCountKey();
+
+      expect(key).toBe('initial_step_error_counts');
+    });
+
+    it('should use plural form even with agentIndex', () => {
+      step.id = STEPS.REFINEMENT;
+
+      const key = step.testGetErrorCountKey(0);
+
+      expect(key).toBe('refinement_step_error_counts');
+    });
+  });
+
+  describe('ensureStepUsage', () => {
+    it('should initialize usage array for multi-agent', () => {
+      const work: Work = {
+        results: {}
+      };
+
+      const result = step.testEnsureStepUsage(work, STEPS.INITIAL, 3);
+
+      expect(result).toEqual([null, null, null]);
+      expect(work.results!['initial_step_usage']).toEqual([null, null, null]);
+    });
+
+    it('should not overwrite existing usage', () => {
+      const existingUsage = [
+        { totalTokens: 10, promptTokens: 5, candidatesTokens: 5 },
+        { totalTokens: 20, promptTokens: 10, candidatesTokens: 10 }
+      ];
+
+      const work: Work = {
+        results: {
+          'initial_step_usage': existingUsage
+        }
+      };
+
+      const result = step.testEnsureStepUsage(work, STEPS.INITIAL, 2);
+
+      expect(result).toEqual(existingUsage);
+    });
+  });
+
+  describe('extractSources', () => {
+    it('should extract unique sources from grounding chunks', () => {
+      const groundingChunks: GroundingChunk[] = [
+        { web: { uri: 'https://example.com', title: 'Example' } },
+        { web: { uri: 'https://test.com', title: 'Test' } }
+      ];
+
+      const sources = step.testExtractSources(groundingChunks);
+
+      expect(sources).toHaveLength(2);
+      expect(sources).toEqual([
+        { uri: 'https://example.com', title: 'Example' },
+        { uri: 'https://test.com', title: 'Test' }
+      ]);
+    });
+
+    it('should deduplicate sources by URI', () => {
+      const groundingChunks: GroundingChunk[] = [
+        { web: { uri: 'https://example.com', title: 'Example 1' } },
+        { web: { uri: 'https://example.com', title: 'Example 2' } }
+      ];
+
+      const sources = step.testExtractSources(groundingChunks);
+
+      expect(sources).toHaveLength(1);
+      // Should use the last occurrence's title
+      expect(sources![0].title).toBe('Example 2');
+    });
+
+    it('should return undefined for empty grounding chunks', () => {
+      const sources = step.testExtractSources([]);
+
+      expect(sources).toBeUndefined();
+    });
+
+    it('should use URI as title if title is missing', () => {
+      const groundingChunks: GroundingChunk[] = [
+        { web: { uri: 'https://example.com' } }
+      ];
+
+      const sources = step.testExtractSources(groundingChunks);
+
+      expect(sources).toHaveLength(1);
+      expect(sources![0].title).toBe('https://example.com');
+    });
+  });
+
+  describe('createAgentStates', () => {
+    it('should create correct number of agent states', () => {
+      const states = step.testCreateAgentStates(3, {} as AppSettings, {
+        stepId: STEPS.INITIAL,
+        status: 'working',
+        statusLabel: 'Researching...'
+      });
+
+      expect(states).toHaveLength(3);
+      states.forEach(state => {
+        expect(state.status).toBe('working');
+        expect(state.label).toBe('Researching...');
+        expect(state.stepId).toBe(STEPS.INITIAL);
+      });
+    });
+  });
+
+  describe('updateAgentState', () => {
+    it('should update agent state at specific index', () => {
+      const states: AgentState[] = [
+        { id: '1', name: 'Agent 1', stepId: STEPS.INITIAL, status: 'working', label: 'Working' },
+        { id: '2', name: 'Agent 2', stepId: STEPS.INITIAL, status: 'working', label: 'Working' }
+      ];
+
+      const updated = step.testUpdateAgentState(states, 1, {
+        status: 'done',
+        label: 'Complete'
+      });
+
+      expect(updated[0].status).toBe('working');
+      expect(updated[1].status).toBe('done');
+      expect(updated[1].label).toBe('Complete');
+    });
+
+    it('should not mutate original array', () => {
+      const states: AgentState[] = [
+        { id: '1', name: 'Agent 1', stepId: STEPS.INITIAL, status: 'working', label: 'Working' }
+      ];
+
+      const updated = step.testUpdateAgentState(states, 0, { status: 'done' });
+
+      expect(states[0].status).toBe('working');
+      expect(updated[0].status).toBe('done');
+      expect(updated).not.toBe(states);
+    });
+  });
+
+  describe('processSettledOutcomes', () => {
+    it('should identify failures and update states', () => {
+      const outcomes: PromiseSettledResult<string>[] = [
+        { status: 'fulfilled', value: 'success' },
+        { status: 'rejected', reason: new Error('Test error') }
+      ];
+
+      const results = ['success', ''];
+      const agentStates: AgentState[] = [
+        { id: '1', name: 'Agent 1', stepId: STEPS.INITIAL, status: 'working', label: 'Working' },
+        { id: '2', name: 'Agent 2', stepId: STEPS.INITIAL, status: 'working', label: 'Working' }
+      ];
+
+      const context = {
+        settings: { debugMode: false } as AppSettings,
+        messageId: 'msg-1'
+      } as StepContext;
+
+      const { updatedStates, failures } = step.testProcessSettledOutcomes(
+        context,
+        outcomes,
+        results,
+        agentStates
+      );
+
+      expect(failures).toHaveLength(1);
+      expect(updatedStates[0].status).toBe('working'); // First agent still working
+      expect(updatedStates[1].status).toBe('error'); // Second agent errored
+      expect(failures[0]).toBeInstanceOf(Error);
+    });
+  });
+
+  describe('runModelStream', () => {
+    it('should successfully run model stream and return accumulated text', async () => {
+      const mockAi = {
+        getProvider: vi.fn(),
+        create: vi.fn()
+      };
+
+      const mockProvider = {
+        models: {
+          generateContentStream: vi.fn()
+        }
+      };
+
+      mockAi.getProvider.mockReturnValue(mockProvider);
+
+      const mockStream = (async function* () {
+        yield { text: 'Hello', thought: '', usage: { totalTokens: 5, promptTokens: 0, candidatesTokens: 5 } };
+        yield { text: ' World', thought: '', usage: { totalTokens: 10, promptTokens: 0, candidatesTokens: 10 } };
+      })();
+
+      mockProvider.models.generateContentStream.mockResolvedValue({
+        stream: mockStream
+      });
+
+      const context = {
+        ai: mockProvider,
+        settings: { debugMode: false } as AppSettings,
+        model: 'test-model',
+        contents: [],
+        signal: new AbortController().signal, // Required by runModelStream
+        work: { results: {} }
+      };
+
+      const callbacks = {
+        onChunk: vi.fn()
+      };
+
+      const result = await step.testRunModelStream(context as any, callbacks);
+
+      expect(result.text).toBe('Hello World');
+      expect(callbacks.onChunk).toHaveBeenCalledTimes(2);
+      expect(callbacks.onChunk).toHaveBeenNthCalledWith(1, 'Hello', '', expect.anything());
+      expect(callbacks.onChunk).toHaveBeenNthCalledWith(2, 'Hello World', '', expect.anything());
+    });
+
+    it('should abort active stream during processing', async () => {
+      const mockAi = {
+        getProvider: vi.fn()
+      };
+      
+      const abortController = new AbortController();
+      const signal = abortController.signal;
+
+      const mockProvider = {
+        models: {
+          generateContentStream: vi.fn().mockResolvedValue({
+            stream: (async function* () {
+              yield { text: 'Start', thought: '', usage: null };
+              
+              // Simulate active abort during stream
+              abortController.abort();
+              
+              // Yield next chunk which should be ignored or cause abort detection
+              yield { text: 'Ignored Chunk' };
+            })()
+          })
+        }
+      };
+
+      mockAi.getProvider.mockReturnValue(mockProvider);
+
+      const context = {
+        ai: mockProvider,
+        settings: { debugMode: false },
+        model: 'test-model',
+        contents: [],
+        signal,
+        work: { results: {} }
+      };
+
+      const callbacks = {
+        onChunk: vi.fn()
+      };
+
+      await expect(step.testRunModelStream(context as any, callbacks)).rejects.toThrow('Aborted');
+      
+      // Verify first chunk was processed
+      expect(callbacks.onChunk).toHaveBeenCalledWith('Start', '', null);
+      
+      // Verify second chunk was NOT processed
+      expect(callbacks.onChunk).toHaveBeenCalledTimes(1);
+    });
+
+    it('should accumulate text before error and throw with partial data', async () => {
+      const mockProvider = {
+        models: {
+          generateContentStream: vi.fn().mockResolvedValue({
+            stream: (async function* () {
+              yield { text: 'Part 1', thought: '', usage: null };
+              yield { text: ' Part 2', thought: '', usage: null };
+              throw new Error('Stream interrupted');
+            })()
+          })
+        }
+      };
+
+      const context = {
+        ai: mockProvider,
+        settings: { debugMode: false },
+        model: 'test-model',
+        contents: [],
+        signal: new AbortController().signal,
+        work: { results: {} }
+      };
+
+      const callbacks = { onChunk: vi.fn() };
+
+      await expect(
+        step.testRunModelStream(context as any, callbacks)
+      ).rejects.toThrow('Stream interrupted');
+
+      // Verify that onChunk was called for successful chunks before error
+      expect(callbacks.onChunk).toHaveBeenCalledTimes(2);
+      expect(callbacks.onChunk).toHaveBeenNthCalledWith(1, 'Part 1', '', null);
+      expect(callbacks.onChunk).toHaveBeenNthCalledWith(2, 'Part 1 Part 2', '', null);
+    });
+
+    it('should handle errors thrown during chunk iteration', async () => {
+      let chunkCount = 0;
+      const mockProvider = {
+        models: {
+          generateContentStream: vi.fn().mockResolvedValue({
+            stream: (async function* () {
+              yield { text: 'Chunk 1', thought: '', usage: { totalTokens: 5, promptTokens: 0, candidatesTokens: 5 } };
+              chunkCount++;
+              yield { text: ' Chunk 2', thought: '', usage: { totalTokens: 10, promptTokens: 0, candidatesTokens: 10 } };
+              chunkCount++;
+              throw new Error('Network error during streaming');
+            })()
+          })
+        }
+      };
+
+      const context = {
+        ai: mockProvider,
+        settings: { debugMode: false },
+        model: 'test-model',
+        contents: [],
+        signal: new AbortController().signal,
+        work: { results: {} }
+      };
+
+      const callbacks = {
+        onChunk: vi.fn()
+      };
+
+      await expect(
+        step.testRunModelStream(context as any, callbacks)
+      ).rejects.toThrow('Network error during streaming');
+
+      // Both chunks should have been processed before the error
+      expect(chunkCount).toBe(2);
+      expect(callbacks.onChunk).toHaveBeenCalledTimes(2);
+    });
+
+  });
+});
+
