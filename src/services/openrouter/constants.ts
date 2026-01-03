@@ -6,6 +6,7 @@ export const RECOMMENDED_MODEL_IDS = [
     'deepseek/deepseek-v3.2',
     'tngtech/deepseek-r1t2-chimera:free',
     'nex-agi/deepseek-v3.1-nex-n1:free',
+    'xiaomi/mimo-v2-flash:free',
 ];
 
 export const FILTERED_MODEL_IDS = [

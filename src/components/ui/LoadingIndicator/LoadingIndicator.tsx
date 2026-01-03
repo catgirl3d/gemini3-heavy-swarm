@@ -5,6 +5,7 @@ import { AgentAvatar } from '@/components/chat';
 import { TimerDisplay } from '@/components/ui/TimerDisplay';
 import { Logger } from '@shared/utils/logger';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
+import { getErroredAgents, isAnyAgentWorking, isErrorState, getContinueButtonText, handleContinueClick } from '@/utils/swarm/continueHelpers';
 import './LoadingIndicator.css';
 
 const logger = new Logger('LoadingIndicator');
@@ -19,25 +20,14 @@ export const LoadingIndicator: FC<{
     noWrapper?: boolean;
 }> = ({ status, agentStates, isPaused, messageId, onContinue, onRegenerate, noWrapper }) => {
   // Check for errors in any step to determine button state
-  const erroredAgents = agentStates.filter(a => a.status === 'error' && (!messageId || a.messageId === messageId));
-  const isWorking = agentStates.some(a => a.status === 'working' && (!messageId || a.messageId === messageId));
-  const isError = !isWorking && (erroredAgents.length > 0 || (typeof status === 'string' && status.startsWith('Error')));
-
-  const handleContinueClick = () => {
-    // If we have specific agents in error, retry them individually using the proven regeneration logic
-    // This is more reliable than full workflow resume ('onContinue') for step-specific failures
-    if (erroredAgents.length > 0 && onRegenerate) {
-        erroredAgents.forEach(agent => {
-            onRegenerate(agent.stepId, agent.agentIndex);
-        });
-    } else if (onContinue) {
-      // For generic pauses or states without specific agent errors, use Resume logic
-      onContinue();
-    }
+  const erroredAgents = getErroredAgents(agentStates, messageId);
+  const isWorking = isAnyAgentWorking(agentStates, messageId);
+  const isError = isErrorState(agentStates, messageId);
+  const continueButtonText = getContinueButtonText(isError);
+  
+  const handleClick = () => {
+    handleContinueClick(agentStates, messageId, onContinue, onRegenerate);
   };
-
-  // Determine button text based on context
-  const continueButtonText = isError ? 'Retry' : 'Continue';
 
   // DYNAMIC STATUS DERIVATION:
   // If the global 'status' prop is generic/empty, OR if it's an error message but agents are working,
@@ -115,7 +105,7 @@ export const LoadingIndicator: FC<{
             {!isError && <span className="loading-status">{displayStatus}</span>}
             <div className="loading-header-content">
                 {isPaused && !isWorking && (onContinue || (erroredAgents.length > 0 && onRegenerate)) && (
-                    <button className="continue-button" onClick={handleContinueClick}>
+                    <button className="continue-button" onClick={handleClick}>
                         {continueButtonText}
                     </button>
                 )}

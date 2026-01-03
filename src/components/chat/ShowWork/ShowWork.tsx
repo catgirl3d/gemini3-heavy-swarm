@@ -8,6 +8,8 @@ import { CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
 import { ArrowDownIcon, TokenIcon } from '@/components/chat/ShowWork/icons';
 import { getStepResults, getStepThoughts, getStepUsage, getSynthesisThought, getSynthesisUsage, getSynthesisResult } from '@/utils/swarm/workHelpers';
 import { useResolvedSwarmState } from '@/hooks/swarm/useResolvedSwarmState';
+import { getErroredAgents, isAnyAgentWorking, isErrorState, getContinueButtonText, handleContinueClick as handleContinueClickHelper } from '@/utils/swarm/continueHelpers';
+import { useAgentStore } from '@/stores/agentStore';
 import './ShowWork.css';
 
 // Card metadata for stable callback resolution
@@ -26,6 +28,9 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
   const [thoughtModalData, setThoughtModalData] = useState<ThoughtModalData | null>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
+  // Get all agents for error checking
+  const allAgents = useAgentStore(state => state.agents);
+  
   // Resolve swarm states from either live store or historical snapshot
   const {
     synthesizerState,
@@ -158,6 +163,17 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
     return total;
   }, [initialUsages, refinedUsages, work]);
 
+  // Continue/Retry button logic using shared helpers
+  const erroredAgents = useMemo(() => getErroredAgents(allAgents, messageId), [allAgents, messageId]);
+  const isWorking = useMemo(() => isAnyAgentWorking(allAgents, messageId), [allAgents, messageId]);
+  const isError = useMemo(() => isErrorState(allAgents, messageId), [allAgents, messageId]);
+  const continueButtonText = getContinueButtonText(isError);
+  
+  const handleClick = useCallback(() => {
+    handleContinueClickHelper(allAgents, messageId, onContinue, onRegenerate);
+  }, [allAgents, messageId, onContinue, onRegenerate]);
+
+
   return (
     <>
     <details className="show-work-container" ref={detailsRef}>
@@ -245,13 +261,14 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
             </div>
         )}
 
-        {isPaused && isLive && onContinue && !isEarlyStageWorking && synthesizerState?.status !== 'working' && (
+        {isPaused && isLive && !isWorking && (onContinue || (erroredAgents.length > 0 && onRegenerate)) && (
             <div className="show-work-continue-container">
-                <button className="continue-button" onClick={onContinue}>
-                    Continue
+                <button className="continue-button" onClick={handleClick}>
+                    {continueButtonText}
                 </button>
             </div>
         )}
+
 
         <div className="show-work-footer">
             <button
