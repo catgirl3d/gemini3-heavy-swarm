@@ -10,6 +10,7 @@ import { getStepResults, getStepThoughts, getStepUsage, getSynthesisThought, get
 import { useResolvedSwarmState } from '@/hooks/swarm/useResolvedSwarmState';
 import { getErroredAgents, isAnyAgentWorking, isErrorState, getContinueButtonText, handleContinueClick as handleContinueClickHelper } from '@/utils/swarm/continueHelpers';
 import { useAgentStore } from '@/stores/agentStore';
+import { StepDebugInfo } from '@/types/app-types';
 import './ShowWork.css';
 
 // Card metadata for stable callback resolution
@@ -17,9 +18,10 @@ interface CardMeta {
   step: StepId;
   index: number;
   title: string;
+  agentName: string;
   content: string | null;
   thought: string | null | undefined;
-  debugInfo: Record<string, unknown> | undefined;
+  debugInfo: StepDebugInfo | undefined;
 }
 
 export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, isPaused, onContinue, onRegenerate }) => {
@@ -47,6 +49,8 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
   const initialThoughts = useMemo(() => getStepThoughts(work, STEPS.INITIAL), [work]);
   const refinedUsages = useMemo(() => getStepUsage(work, STEPS.REFINEMENT), [work]);
   const refinedThoughts = useMemo(() => getStepThoughts(work, STEPS.REFINEMENT), [work]);
+  const synthesisUsage = useMemo(() => getSynthesisUsage(work), [work]);
+  const synthesisThought = useMemo(() => getSynthesisThought(work), [work]);
 
   const synthesisText: string | null =
     typeof synthesisResult === 'string'
@@ -82,9 +86,10 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
         step: STEPS.INITIAL,
         index: i,
         title: `${name} - Initial Draft`,
+        agentName: name,
         content: resp,
         thought: initialThoughts[i],
-        debugInfo: work.debugInfo?.[STEPS.INITIAL]?.[i] as Record<string, unknown> | undefined
+        debugInfo: work.debugInfo?.[STEPS.INITIAL]?.[i]
       });
     });
     
@@ -95,9 +100,10 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
         step: STEPS.REFINEMENT,
         index: i,
         title: `${name} - Refined Response`,
+        agentName: name,
         content: resp,
         thought: refinedThoughts[i],
-        debugInfo: work.debugInfo?.[STEPS.REFINEMENT]?.[i] as Record<string, unknown> | undefined
+        debugInfo: work.debugInfo?.[STEPS.REFINEMENT]?.[i]
       });
     });
     
@@ -106,9 +112,10 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
       step: STEPS.SYNTHESIS,
       index: 0,
       title: 'Synthesizer - Final Response',
+      agentName: 'Synthesizer',
       content: synthesisText,
-      thought: getSynthesisThought(work),
-      debugInfo: work.debugInfo?.[STEPS.SYNTHESIS] as Record<string, unknown> | undefined
+      thought: synthesisThought,
+      debugInfo: work.debugInfo?.[STEPS.SYNTHESIS]
     });
     
     return map;
@@ -125,20 +132,29 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
           setModalData({ title: meta.title, content: meta.content });
         }
         break;
-      case 'showThought':
+      case 'showThought': {
         if (meta.thought) {
-          const thoughtTitle = meta.step === STEPS.SYNTHESIS 
-            ? 'Synthesizer - Thought Process'
-            : meta.title.replace(/ - (Initial Draft|Refined Response)$/, ' - $1 Thought Process').replace('Initial Draft Thought Process', 'Initial Thought Process').replace('Refined Response Thought Process', 'Refinement Thought Process');
+          let thoughtTitle: string;
+          
+          if (meta.step === STEPS.SYNTHESIS) {
+            thoughtTitle = 'Synthesizer - Thought Process';
+          } else {
+            const stepName = meta.step === STEPS.INITIAL ? 'Initial' : 'Refinement';
+            thoughtTitle = `${meta.agentName} - ${stepName} Thought Process`;
+          }
+          
           setThoughtModalData({ title: thoughtTitle, content: meta.thought });
         }
         break;
-      case 'showDebug':
+      }
+      case 'showDebug': {
         const debugTitle = meta.step === STEPS.SYNTHESIS
           ? 'Synthesizer - Debug Info'
-          : meta.title.replace(/ - (Initial Draft|Refined Response)$/, ' - $1 Debug Info');
-        setDebugModalData({ title: debugTitle, debugInfo: meta.debugInfo });
+          : `${meta.agentName} - ${meta.step === STEPS.INITIAL ? 'Initial' : 'Refinement'} Debug Info`;
+        const modalData: DebugModalData = { title: debugTitle, debugInfo: meta.debugInfo };
+        setDebugModalData(modalData);
         break;
+      }
       case 'regenerate':
         onRegenerate?.(meta.step, meta.index);
         break;
@@ -157,11 +173,10 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
     refinedUsages.forEach(u => total += u?.totalTokens || 0);
     
     // Add synthesis usage
-    const synthesisUsage = getSynthesisUsage(work);
     if (synthesisUsage) total += synthesisUsage.totalTokens || 0;
     
     return total;
-  }, [initialUsages, refinedUsages, work]);
+  }, [initialUsages, refinedUsages, synthesisUsage]);
 
   // Continue/Retry button logic using shared helpers
   const erroredAgents = useMemo(() => getErroredAgents(allAgents, messageId), [allAgents, messageId]);
@@ -172,7 +187,6 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
   const handleClick = useCallback(() => {
     handleContinueClickHelper(allAgents, messageId, onContinue, onRegenerate);
   }, [allAgents, messageId, onContinue, onRegenerate]);
-
 
   return (
     <>
@@ -185,9 +199,10 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
         <div className="work-category">
           <h4 className="work-category-title">Initial Drafts</h4>
           <div className={`work-grid ${initialResults.length === 1 ? 'single-column' : ''}`}>
-            {initialResults.map((resp, i) => {
-              const name = work.agentNames?.[i] || `Agent ${i + 1}`;
+            {initialResults.map((_, i) => {
               const cardId = `initial-${i}`;
+              const meta = cardMetaMap.get(cardId);
+              const name = work.agentNames?.[i] || `Agent ${i + 1}`;
               return (
                 <StatusAwareWorkCard
                   key={cardId}
@@ -198,10 +213,10 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
                   messageId={messageId}
                   onCardAction={handleCardAction}
                   title={name}
-                  content={resp}
+                  content={meta?.content ?? null}
                   tokenUsage={initialUsages[i] ?? undefined}
-                  thought={initialThoughts[i] ?? undefined}
-                  debugInfo={work.debugInfo?.[STEPS.INITIAL]?.[i]}
+                  thought={meta?.thought ?? undefined}
+                  debugInfo={meta?.debugInfo}
                   downloadFilename={`${name.replace(/\s+/g, '-')}-Initial_Draft.md`}
                 />
               );
@@ -214,9 +229,10 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
           <div className="work-category">
             <h4 className="work-category-title">Critiques & Refinements</h4>
             <div className={`work-grid ${refinedResults.length === 1 ? 'single-column' : ''}`}>
-              {refinedResults.map((resp, i) => {
-                const name = work.criticNames?.[i] || `Critic ${i + 1}`;
+              {refinedResults.map((_, i) => {
                 const cardId = `refined-${i}`;
+                const meta = cardMetaMap.get(cardId);
+                const name = work.criticNames?.[i] || `Critic ${i + 1}`;
                 return (
                   <StatusAwareWorkCard
                     key={cardId}
@@ -228,10 +244,10 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
                     onCardAction={handleCardAction}
                     className="refinement-step"
                     title={name}
-                    content={resp}
+                    content={meta?.content ?? null}
                     tokenUsage={refinedUsages[i] ?? undefined}
-                    thought={refinedThoughts[i] ?? undefined}
-                    debugInfo={work.debugInfo?.[STEPS.REFINEMENT]?.[i]}
+                    thought={meta?.thought ?? undefined}
+                    debugInfo={meta?.debugInfo}
                     downloadFilename={`${name.replace(/\s+/g, '-')}-Refined_Response.md`}
                   />
                 );
@@ -252,10 +268,10 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
                     onCardAction={handleCardAction}
                     className={STEPS.SYNTHESIS}
                     title="Synthesizer"
-                    content={synthesisText}
-                    tokenUsage={getSynthesisUsage(work) || undefined}
-                    thought={getSynthesisThought(work) || undefined}
-                    debugInfo={work.debugInfo?.[STEPS.SYNTHESIS]}
+                    content={cardMetaMap.get('synthesis')?.content ?? null}
+                    tokenUsage={synthesisUsage || undefined}
+                    thought={cardMetaMap.get('synthesis')?.thought || undefined}
+                    debugInfo={cardMetaMap.get('synthesis')?.debugInfo}
                     downloadFilename="Synthesis_Report.md"
                 />
             </div>
@@ -268,7 +284,6 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
                 </button>
             </div>
         )}
-
 
         <div className="show-work-footer">
             <button

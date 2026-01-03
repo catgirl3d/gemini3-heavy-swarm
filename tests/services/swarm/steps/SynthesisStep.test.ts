@@ -102,8 +102,8 @@ describe('SynthesisStep', () => {
     const instruction = (step as any).prepareSynthesis(mockContext, refinedWithFailure);
     const internalContext = instruction.synthesizerTurn.parts[instruction.synthesizerTurn.parts.length - 1].text;
     
-    expect(internalContext).toContain('<draft id="agent_1">\ninitial 1\n    </draft>');
-    expect(internalContext).toContain('<draft id="agent_2">\nrefined 2\n    </draft>');
+    expect(internalContext).toContain('<draft id="agent_1">\n      initial 1\n    </draft>');
+    expect(internalContext).toContain('<draft id="agent_2">\n      refined 2\n    </draft>');
   });
 
   it('should trigger Synthesis Jump behavior on the first text chunk', async () => {
@@ -131,7 +131,7 @@ describe('SynthesisStep', () => {
     const instruction = (step as any).prepareSynthesis(mockContext, refined);
     const internalContext = instruction.synthesizerTurn.parts[instruction.synthesizerTurn.parts.length - 1].text;
 
-    expect(internalContext).toContain('<original_query>\nSummarize climate change\n</original_query>');
+    expect(internalContext).toContain('<original_query>\n    Summarize climate change\n  </original_query>');
   });
 
   it('should call runSynthesisRegeneration during regeneration', async () => {

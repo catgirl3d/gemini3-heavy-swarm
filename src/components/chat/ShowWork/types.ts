@@ -1,4 +1,4 @@
-import { Work, AgentState } from '@/types';
+import { Work, AgentState, StepDebugInfo } from '@/types';
 import { StepId } from '@/types/steps';
 
 export interface WorkModalData {
@@ -8,7 +8,7 @@ export interface WorkModalData {
 
 export interface DebugModalData {
   title: string;
-  debugInfo: unknown;
+  debugInfo: StepDebugInfo | undefined;
 }
 
 export interface ThoughtModalData {

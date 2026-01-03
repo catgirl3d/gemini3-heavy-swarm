@@ -3,7 +3,7 @@ import { SimulateError, ProviderType } from '@/types';
 import { Tool, Content } from '@google/genai';
 import { getStepConfig, StepConfig } from '@/utils/swarm/stepConstants';
 import type { GroundingChunk } from './utils/streamUtils';
-import { AgentState, Source, TokenUsage, Work } from '@/types';
+import { AgentState, Source, TokenUsage, Work, StepDebugInfo } from '@/types';
 import { createAgentStates, updateAgentState, updateAgentStateById } from './utils/agentStateUtils';
 import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from './utils/devModeUtils';
 import { extractTextFromParts, extractTokenUsage, extractPartsFromChunk, extractUsageMetadataFromChunk, extractGroundingChunksFromChunk } from './utils/streamUtils';
@@ -416,12 +416,12 @@ export abstract class BaseStep implements StepDescriptor {
     work: StepContext['work'], 
     stepId: StepId,
     isArray = true
-  ): any[] | Record<string, any> {
+  ): StepDebugInfo[] | StepDebugInfo {
     if (!work.debugInfo) work.debugInfo = {};
     if (!work.debugInfo[stepId]) {
-      work.debugInfo[stepId] = isArray ? [] : {};
+      (work.debugInfo as any)[stepId] = isArray ? [] : ({} as StepDebugInfo);
     }
-    return work.debugInfo[stepId] as any;
+    return work.debugInfo[stepId] as StepDebugInfo[] | StepDebugInfo;
   }
 
   /**

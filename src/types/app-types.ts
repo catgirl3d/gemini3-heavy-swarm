@@ -1,3 +1,5 @@
+import { Content } from '@google/genai';
+
 export enum ProviderType {
   Gemini = 'gemini',
   OpenRouter = 'openrouter',
@@ -163,6 +165,29 @@ export type WorkResultKey =
   | `${typeof STEPS.REFINEMENT}_error_counts`
   | `${typeof STEPS.SYNTHESIS}_error_counts`;
 
+/**
+ * Debug information structure captured during step execution.
+ * Contains system instructions, chat history, and user prompt for debugging.
+ */
+export interface StepDebugInfo {
+  systemInstruction: string;
+  history: Content[];
+  userTurn: Content;
+}
+
+/**
+ * Debug information stored per step.
+ * - Multi-agent steps (initial, refinement): array of debug info per agent
+ * - Single-agent step (synthesis): single debug info object
+ */
+export type DebugInfo = {
+  [STEPS.INITIAL]?: StepDebugInfo[];
+  [STEPS.REFINEMENT]?: StepDebugInfo[];
+  [STEPS.SYNTHESIS]?: StepDebugInfo;
+  [key: string]: StepDebugInfo | StepDebugInfo[] | undefined;
+};
+
+
 export interface Work {
   /**
    * SNAPSHOT ONLY: content of message work.
@@ -202,7 +227,11 @@ export interface Work {
    * Do NOT use this for live status updates in the UI (use global agentStates instead).
    */
   agentStates?: AgentState[];
-  debugInfo?: Record<string, unknown>;
+  /** 
+   * Debug information captured during step execution.
+   * Contains system instructions, chat history, and user prompts for debugging.
+   */
+  debugInfo?: DebugInfo;
 }
 
 export interface Message {

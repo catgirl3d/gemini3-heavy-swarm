@@ -84,8 +84,8 @@ describe('RefinementStep', () => {
     // parts[0] = base content, parts[1] = internal context, parts[2] = role reminder
     const internalContext = instruction.userTurn.parts[1].text;
     
-    // <my_draft> section should be empty
-    expect(internalContext).toContain('<my_draft>\n\n</my_draft>');
+    // <my_draft> section should be empty (it will have a blank line due to indentation)
+    expect(internalContext).toContain('<my_draft>\n\n  </my_draft>');
     // Peer drafts should contain agent 2
     expect(internalContext).toContain('<draft id="agent_2">');
   });
@@ -97,7 +97,7 @@ describe('RefinementStep', () => {
     // parts[0] = base content, parts[1] = internal context, parts[2] = role reminder
     const internalContext = instruction.userTurn.parts[1].text;
 
-    expect(internalContext).toContain('<original_query>\nHow to cook rice?\n</original_query>');
+    expect(internalContext).toContain('<original_query>\n    How to cook rice?\n  </original_query>');
     // Verify role reminder is also present
     const roleReminder = instruction.userTurn.parts[2].text;
     expect(roleReminder).toContain('Remember your assigned role: Critic');
@@ -121,7 +121,7 @@ describe('RefinementStep', () => {
     expect(indexArg).toBe(1);
     // parts[0] = base content, parts[1] = internal context, parts[2] = role reminder
     const internalContext = instructionArg.userTurn.parts[1].text;
-    expect(internalContext).toContain('<my_draft>\ninitial 2\n</my_draft>');
+    expect(internalContext).toContain('<my_draft>\n    initial 2\n  </my_draft>');
     // Verify role reminder is also present
     const roleReminder = instructionArg.userTurn.parts[2].text;
     expect(roleReminder).toContain('Remember your assigned role');
