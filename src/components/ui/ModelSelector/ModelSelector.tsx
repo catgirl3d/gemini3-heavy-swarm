@@ -7,6 +7,8 @@ import { PortalDropdown } from '@/components/ui/PortalDropdown/PortalDropdown';
 import thinkingIcon from '@/assets/thinking.png';
 import './ModelSelector.css';
 
+import { getCachedModels, setCachedModels, ModelOption } from '@/services/openrouter/modelsCache';
+
 interface ModelSelectorProps {
     value: string;
     onChange: (value: string) => void;
@@ -42,14 +44,14 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
     const [search, setSearch] = useState('');
     const [sortBy, setSortBy] = useState<'name' | 'price_asc' | 'price_desc'>('name');
 
-    const [models, setModels] = useState<Array<{
-        value: string;
-        label: string;
-        description?: string;
-        price?: number;
-        priceText?: string;
-        supportsReasoning?: boolean;
-    }>>([]);
+    // Initialize models from cache if available for OpenRouter
+    const [models, setModels] = useState<ModelOption[]>(() => {
+        // Only load from cache if we're using OpenRouter
+        if (provider === ProviderType.OpenRouter) {
+            return getCachedModels() || [];
+        }
+        return [];
+    });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
@@ -65,7 +67,7 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
             setError(null);
             fetchOpenRouterModels()
                 .then(fetchedModels => {
-                    setModels(fetchedModels.map(m => {
+                    const processedModels = fetchedModels.map(m => {
                         const completionPrice = parseFloat(m.pricing.completion) || 0;
                         
                         // Human readable price (per 1M tokens) - using output/completion price
@@ -84,7 +86,11 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
                             priceText: displayPrice,
                             supportsReasoning
                         };
-                    }));
+                    });
+                    
+                    // Save to cache for future renders
+                    setCachedModels(processedModels);
+                    setModels(processedModels);
                 })
                 .catch(() => {
                     setError('Failed to load models from OpenRouter');
