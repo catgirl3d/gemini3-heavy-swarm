@@ -15,7 +15,7 @@
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
-  transition: all 0.2s;
+  transition: var(--transition-standard);
 }
 
 .token-help-button:hover {
@@ -27,11 +27,11 @@
   top: 100%;
   right: 0;
   margin-top: 8px;
-  background-color: #fff;
+  background-color: var(--bg-card);
   border: 1px solid var(--model-message-border);
   border-radius: 10px;
   padding: 12px 14px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-lg);
   z-index: 1000;
   min-width: 240px;
   font-size: 0.8rem;
@@ -63,7 +63,7 @@
   gap: 2px;
   padding-top: 10px;
   margin-top: 4px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--model-message-border);
 }
 
 .token-group:first-child {
@@ -122,7 +122,7 @@
 
 .estimated-badge {
   font-size: 0.65rem;
-  background: #f1f5f9;
+  background: var(--bg-tertiary);
   padding: 2px 6px;
   border-radius: 4px;
   margin-left: 6px;
@@ -131,9 +131,9 @@
 }
 
 .token-estimate-notice {
-  background-color: #fffbeb;
-  border: 1px solid #fde68a;
-  color: #92400e;
+  background-color: var(--warning-bg);
+  border: 1px solid var(--warning-color);
+  color: var(--warning-text);
   padding: 8px;
   border-radius: 6px;
   font-size: 0.7rem;

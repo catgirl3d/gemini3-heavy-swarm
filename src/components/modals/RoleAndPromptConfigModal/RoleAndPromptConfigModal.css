@@ -10,7 +10,7 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  background: white;
+  background: var(--bg-card);
   border: 1px solid var(--model-message-border);
   padding: 0.25rem 0.6rem;
   border-radius: 6px;
@@ -18,14 +18,14 @@
   font-weight: 600;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-standard);
 }
 
 .preset-menu-trigger:hover,
 .preset-menu-trigger.active {
-  background-color: #f1f5f9;
+  background-color: var(--bg-tertiary);
   color: var(--text-primary);
-  border-color: #cbd5e1;
+  border-color: var(--input-border);
 }
 
 .preset-menu-trigger:disabled {
@@ -60,7 +60,7 @@
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  background-color: #f8fafc;
+  background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--model-message-border);
 }
 
@@ -75,8 +75,8 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: background-color 0.2s;
-  border-bottom: 1px solid #f1f5f9;
+  transition: var(--transition-standard);
+  border-bottom: 1px solid var(--model-message-border);
 }
 
 .preset-menu-item:last-child {
@@ -84,7 +84,7 @@
 }
 
 .preset-menu-item:hover {
-  background-color: #f8fafc;
+  background-color: var(--bg-secondary);
 }
 
 .preset-name {
@@ -100,7 +100,7 @@
   display: flex;
   align-items: center;
   width: 100%;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--model-message-border);
 }
 
 .preset-menu-item-wrapper:last-child {
@@ -119,8 +119,8 @@
 
 .preset-tag {
   font-size: 0.65rem;
-  background-color: #e0f2fe;
-  color: #0284c7;
+  background-color: var(--accent-bg);
+  color: var(--accent-text);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
   font-weight: 600;
@@ -132,19 +132,19 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  color: #94a3b8;
+  color: var(--input-focus-ring);
   padding: 0.25rem;
   border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: var(--transition-standard);
   flex-shrink: 0;
 }
 
 .preset-delete-btn:hover {
-  background-color: #fee2e2;
-  color: #ef4444;
+  background-color: var(--error-bg);
+  color: var(--error-color);
 }
 
 /* Save Preset */
@@ -160,21 +160,21 @@
 }
 
 .save-confirm-btn {
-  color: #16a34a;
+  color: var(--success-color);
 }
 
 .save-confirm-btn:hover {
-  background-color: #f0fdf4;
-  color: #15803d;
+  background-color: var(--success-bg);
+  color: var(--success-text);
 }
 
 .save-cancel-btn {
-  color: #ef4444;
+  color: var(--error-color);
 }
 
 .save-cancel-btn:hover {
-  background-color: #fef2f2;
-  color: #b91c1c;
+  background-color: var(--error-bg);
+  color: var(--error-text);
 }
 
 /* Textarea */
@@ -191,10 +191,9 @@
   .preset-menu-dropdown {
     max-width: 280px;
   }
-  
+
   .preset-menu-trigger {
     font-size: 0.7rem;
     padding: 0.2rem 0.5rem;
   }
 }
-

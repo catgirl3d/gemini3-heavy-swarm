@@ -3,26 +3,31 @@
   display: grid;
   position: relative;
   margin: 1.25rem 0;
-  background-color: #1e293b;
+  background-color: var(--primary-color);
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid #334155;
+  white-space: pre;
+  border: 1px solid var(--model-message-border);
+  box-shadow: var(--shadow-md);
 }
+
 .code-block-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #0f172a;
+  background-color: var(--text-primary);
   padding: 0.5rem 1rem;
-  color: #cbd5e1;
+  color: var(--model-message-border);
   font-size: 0.8rem;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--model-message-border);
 }
+
 .code-block-header span {
   font-family: var(--code-font-family);
   font-weight: 500;
   text-transform: lowercase;
 }
+
 .code-block-wrapper pre {
   margin: 0 !important;
   padding: 1.25rem !important;
@@ -33,14 +38,15 @@
 
 /* Force light text color inside code blocks */
 .message .code-block-wrapper code {
-  color: #e2e8f0;
+  color: var(--model-message-border);
   background-color: transparent;
   border: none;
   padding: 0;
 }
+
 .copy-button {
-  background-color: #334155;
-  color: #e2e8f0;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
   border: none;
   border-radius: 4px;
   padding: 0.25rem 0.6rem;
@@ -52,9 +58,10 @@
   transition: all 0.2s;
   font-weight: 500;
 }
+
 .copy-button:hover {
-  background-color: #475569;
-  color: #fff;
+  background-color: var(--model-message-border);
+  color: var(--text-primary);
 }
 
 @media (max-width: 768px) {

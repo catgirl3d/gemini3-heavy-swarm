@@ -116,6 +116,8 @@ const MessageListComponent: FC<MessageListProps> = ({
                         work={msg.work || currentWork!}
                         messageId={msg.id}
                         isLive={isActiveGeneration}
+                        isPaused={isPaused}
+                        onContinue={onContinue}
                         onRegenerate={(phase, agentIndex) => onRegenerate(msg.id, phase as StepId, agentIndex)}
                       />
                     )}
@@ -149,6 +151,8 @@ const MessageListComponent: FC<MessageListProps> = ({
                   work={currentWork}
                   isLive={true}
                   messageId={messageId}
+                  isPaused={isPaused}
+                  onContinue={onContinue}
                   onRegenerate={messageId && isPaused ? (phase, agentIndex) => onRegenerate(messageId, phase as StepId, agentIndex) : undefined}
                 />
               </div>

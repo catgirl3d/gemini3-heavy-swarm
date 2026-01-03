@@ -20,5 +20,7 @@ export interface ShowWorkProps {
   work: Work;
   isLive?: boolean;
   messageId?: string;
+  isPaused?: boolean;
+  onContinue?: () => void;
   onRegenerate?: (stepId: StepId, agentIndex: number) => void;
 }

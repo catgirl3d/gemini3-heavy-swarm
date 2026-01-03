@@ -16,7 +16,7 @@
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background-color: #f1f5f9;
+  background-color: var(--bg-tertiary);
   color: var(--primary-color);
   display: flex;
   align-items: center;
@@ -50,7 +50,7 @@
 .info-arrow {
   display: flex;
   justify-content: center;
-  color: #cbd5e1;
+  color: var(--input-border);
   margin: -0.5rem 0;
   padding-left: 24px;
 }
@@ -64,14 +64,17 @@
   .info-step {
     gap: 1rem;
   }
+
   .info-icon-wrapper {
     width: 40px;
     height: 40px;
   }
+
   .info-icon-wrapper svg {
     width: 20px;
     height: 20px;
   }
+
   .info-arrow {
     padding-left: 20px;
   }

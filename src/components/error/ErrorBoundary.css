@@ -16,9 +16,7 @@
   border-radius: 12px;
   padding: 3rem 2rem;
   text-align: center;
-  box-shadow: 
-    0 20px 25px -5px rgba(0, 0, 0, 0.1), 
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-lg);
   border: 1px solid var(--model-message-border);
 }
 
@@ -89,21 +87,21 @@
 
 .error-reset-button {
   background-color: var(--primary-color);
-  color: white;
+  color: var(--white-fixed);
   border: none;
   border-radius: 8px;
   padding: 0.75rem 2rem;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  transition: var(--transition-standard);
+  box-shadow: var(--shadow-sm);
 }
 
 .error-reset-button:hover {
   background-color: var(--text-primary);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 10px rgba(0,0,0,0.15);
+  transform: var(--hover-scale);
+  box-shadow: var(--shadow-md);
 }
 
 .error-reset-button:active {
@@ -114,7 +112,7 @@
   .error-boundary-content {
     padding: 2rem 1.5rem;
   }
-  
+
   .error-boundary-content h1 {
     font-size: 1.25rem;
   }

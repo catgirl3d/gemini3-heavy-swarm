@@ -20,7 +20,7 @@ interface CardMeta {
   debugInfo: Record<string, unknown> | undefined;
 }
 
-export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, onRegenerate }) => {
+export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, isPaused, onContinue, onRegenerate }) => {
   const [modalData, setModalData] = useState<WorkModalData | null>(null);
   const [debugModalData, setDebugModalData] = useState<DebugModalData | null>(null);
   const [thoughtModalData, setThoughtModalData] = useState<ThoughtModalData | null>(null);
@@ -242,6 +242,14 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, o
                     debugInfo={work.debugInfo?.[STEPS.SYNTHESIS]}
                     downloadFilename="Synthesis_Report.md"
                 />
+            </div>
+        )}
+
+        {isPaused && isLive && onContinue && !isEarlyStageWorking && synthesizerState?.status !== 'working' && (
+            <div className="show-work-continue-container">
+                <button className="continue-button" onClick={onContinue}>
+                    Continue
+                </button>
             </div>
         )}
 

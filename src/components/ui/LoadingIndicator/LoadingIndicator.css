@@ -3,26 +3,29 @@
   padding: 1.5rem;
   border: 1px solid var(--model-message-border);
   border-radius: 12px;
-  background-color: #f8fafc;
+  background-color: var(--bg-secondary);
   width: 445px;
 }
+
 .loading-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
 }
+
 .loading-status {
   font-size: 0.95rem;
   color: var(--text-primary);
   font-weight: 600;
 }
+
 .timer-display {
   font-family: var(--code-font-family);
   font-weight: 600;
   color: var(--text-primary);
   font-size: 0.85rem;
-  background: #e2e8f0;
+  background: var(--model-message-border);
   padding: 0.25rem 0.6rem;
   border-radius: 4px;
 }
@@ -44,29 +47,33 @@
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  background: #e2e8f0;
-  color: #64748b;
+  background: var(--model-message-border);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
   font-size: 0.8rem;
   flex-shrink: 0;
-  transition: all 0.3s;
+  transition: var(--transition-standard);
   min-width: 32px;
 }
+
 .agent-icon.working {
   background: var(--text-primary);
-  color: white;
+  color: var(--white-fixed);
 }
+
 .agent-icon.done {
-  background: #16a34a;
-  color: white;
+  background: var(--success-color);
+  color: var(--white-fixed);
 }
+
 .agent-icon.error {
-  background: #ef4444;
-  color: white;
+  background: var(--error-color);
+  color: var(--white-fixed);
 }
+
 .agent-icon svg {
   width: 18px;
   height: 18px;
@@ -84,12 +91,14 @@
   justify-content: space-between;
   align-items: center;
 }
+
 .agent-name {
   font-weight: 600;
   color: var(--text-primary);
   font-size: 0.79rem;
   padding-right: 1rem;
 }
+
 .agent-status-text {
   color: var(--text-secondary);
   font-size: 0.75rem;
@@ -97,7 +106,7 @@
 
 .agent-progress-track {
   height: 6px;
-  background-color: #e2e8f0;
+  background-color: var(--model-message-border);
   border-radius: 3px;
   width: 100%;
   overflow: hidden;
@@ -109,23 +118,27 @@
   border-radius: 3px;
   transition: width 0.3s ease, background-color 0.3s ease;
 }
+
 .agent-progress-fill.done {
   width: 100%;
-  background-color: #16a34a;
+  background-color: var(--success-color);
 }
+
 .agent-progress-fill.waiting {
   width: 0%;
-  background-color: #cbd5e1;
+  background-color: var(--input-border);
 }
+
 .agent-progress-fill.error {
   width: 100%;
-  background-color: #ef4444;
+  background-color: var(--error-color);
 }
 
 @keyframes shimmer {
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(100%);
   }
@@ -135,12 +148,10 @@
   position: absolute;
   width: 100%;
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    #e2e8f0 0%,
-    var(--text-primary) 50%,
-    #e2e8f0 100%
-  );
+  background: linear-gradient(90deg,
+      var(--bg-tertiary) 0%,
+      var(--text-primary) 50%,
+      var(--bg-tertiary) 100%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -159,11 +170,21 @@
 .continue-button {
   padding: 0.25rem 0.75rem;
   font-size: 0.8rem;
-  background-color: #4caf50;
-  color: white;
+  background-color: var(--success-color);
+  color: var(--white-fixed);
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  transition: var(--transition-standard);
+}
+
+.continue-button:hover {
+  filter: var(--hover-brightness);
+  transform: var(--hover-scale);
+}
+
+.continue-button:active {
+  transform: var(--active-scale);
 }
 
 .show-work-wrapper {
@@ -174,13 +195,16 @@
   .loading-status {
     font-size: 0.85rem;
   }
+
   .loading-animation {
     padding: 1rem;
     width: 100%;
   }
+
   .timer-display {
     font-size: 0.75rem;
   }
+
   .agent-name {
     font-size: 0.85rem;
   }
@@ -194,8 +218,8 @@
 .loading-error-banner {
   display: flex;
   gap: 0.75rem;
-  background-color: #fef2f2;
-  border: 1px solid #fee2e2;
+  background-color: var(--error-bg);
+  border: 1px solid var(--error-border);
   border-radius: 8px;
   padding: 1rem;
   margin-bottom: 1rem;
@@ -205,7 +229,7 @@
 .error-icon-svg {
   width: 20px;
   height: 20px;
-  color: #dc2626;
+  color: var(--error-color);
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -218,13 +242,13 @@
 
 .error-title {
   font-weight: 600;
-  color: #991b1b;
+  color: var(--error-text);
   font-size: 0.9rem;
 }
 
 .error-message {
   font-size: 0.85rem;
-  color: #b91c1c;
+  color: var(--error-text);
   line-height: 1.4;
   word-break: break-word;
 }

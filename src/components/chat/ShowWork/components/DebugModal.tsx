@@ -4,7 +4,48 @@ import { BaseModal } from '@/components/modals';
 import { formatDebugInfo } from '@/components/chat/ShowWork/utils';
 
 export const DebugModal: FC<{ title: string; debugInfo: unknown; onClose: () => void }> = ({ title, debugInfo, onClose }) => {
-    const [viewMode, setViewMode] = useState<'formatted' | 'raw'>('formatted');
+    const [viewMode, setViewMode] = useState<'formatted' | 'raw' | 'readable'>('formatted');
+
+    const getReadableJson = (data: any): string => {
+        // Simple YAML-like formatter for better readability
+        const format = (obj: any, level: number = 0): string => {
+            const indent = '  '.repeat(level);
+            
+            if (obj === null) return 'null';
+            if (Array.isArray(obj)) {
+                if (obj.length === 0) return '[]';
+                return '\n' + obj.map(item => `${indent}- ${format(item, level + 1).trim()}`).join('\n');
+            }
+            
+            if (typeof obj === 'object') {
+                const entries = Object.entries(obj);
+                if (entries.length === 0) return '{}';
+                
+                return '\n' + entries.map(([key, value]) => {
+                    // Skip noisy binary data
+                    if (key === 'inlineData') return `${indent}${key}: [Binary Data]`;
+                    
+                    const formattedValue = format(value, level + 1);
+                    const isMultiline = typeof value === 'string' && value.includes('\n');
+                    
+                    if (isMultiline) {
+                        return `${indent}${key}: |\n${value.split('\n').map(line => '  '.repeat(level + 1) + line).join('\n')}`;
+                    }
+                    
+                    return `${indent}${key}:${formattedValue.startsWith('\n') ? formattedValue : ' ' + formattedValue}`;
+                }).join('\n');
+            }
+            
+            if (typeof obj === 'string') {
+                if (obj.length > 2000 && !obj.includes('<')) return `[Long string: ${obj.length} chars]`;
+                return obj;
+            }
+            
+            return String(obj);
+        };
+        
+        return format(data).trim();
+    };
 
     return (
         <BaseModal
@@ -22,6 +63,12 @@ export const DebugModal: FC<{ title: string; debugInfo: unknown; onClose: () => 
                         Formatted
                     </button>
                     <button
+                        className={`toggle-btn ${viewMode === 'readable' ? 'active' : ''}`}
+                        onClick={() => setViewMode('readable')}
+                    >
+                        Readable JSON
+                    </button>
+                    <button
                         className={`toggle-btn ${viewMode === 'raw' ? 'active' : ''}`}
                         onClick={() => setViewMode('raw')}
                     >
@@ -32,7 +79,14 @@ export const DebugModal: FC<{ title: string; debugInfo: unknown; onClose: () => 
             <BaseModal.Body>
                 {viewMode === 'formatted' ? (
                     <MarkdownRenderer content={formatDebugInfo(debugInfo)} />
+                ) : viewMode === 'readable' ? (
+                    <div className="raw-debug-container">
+                        <pre className="raw-debug-view">
+                            {getReadableJson(debugInfo)}
+                        </pre>
+                    </div>
                 ) : (
+
                     <div className="raw-debug-container">
                         <button
                             className="copy-raw-button"
@@ -52,6 +106,7 @@ export const DebugModal: FC<{ title: string; debugInfo: unknown; onClose: () => 
                     </div>
                 )}
             </BaseModal.Body>
+
         </BaseModal>
     );
 };
