@@ -78,7 +78,6 @@
 .prompt-button:hover {
   border-color: var(--accent-color);
   background-color: var(--bg-secondary);
-  filter: var(--hover-brightness);
   transform: var(--hover-scale);
   box-shadow: var(--shadow-md);
 }
