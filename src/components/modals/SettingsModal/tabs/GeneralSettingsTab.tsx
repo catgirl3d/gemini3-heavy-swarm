@@ -112,7 +112,20 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                         </div>
 
                         <div className="modal-form-group">
-                            <label className="modal-label">OpenRouter Model</label>
+                            <label className="modal-label modal-label-flex">
+                                OpenRouter Model
+                                <a 
+                                    href="https://openrouter.ai/models" 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="model-help-link"
+                                    title="View available OpenRouter models"
+                                >
+                                    <svg className="external-link-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                </a>
+                            </label>
                             <ModelSelector
                                 provider={ProviderType.OpenRouter}
                                 value={localSettings.openRouterModel || ''}

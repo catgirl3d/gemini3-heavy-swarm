@@ -747,3 +747,35 @@
   color: var(--error-color);
   font-weight: 600;
 }
+
+.modal-label-flex {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.model-help-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.model-help-link:hover {
+  color: var(--primary-color);
+}
+
+.external-link-icon {
+	width: 16px;
+	height: 16px;
+	stroke: currentColor;
+	transition: opacity 0.2s;
+	opacity: 0.8;
+	margin-bottom: 2px;
+}
+
+.model-help-link:hover .external-link-icon {
+  opacity: 1;
+}
