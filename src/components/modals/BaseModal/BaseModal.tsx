@@ -24,14 +24,31 @@ const BaseModalMain: FC<BaseModalProps> = ({
     onCloseDropdowns = NOOP,
     onEscape
 }) => {
+    const [shouldRender, setShouldRender] = React.useState(isOpen);
+    const [isAnimating, setIsAnimating] = React.useState(false);
+
+    React.useEffect(() => {
+        if (isOpen) {
+            setShouldRender(true);
+            setIsAnimating(false);
+        } else if (shouldRender) {
+            setIsAnimating(true);
+            const timer = setTimeout(() => {
+                setShouldRender(false);
+                setIsAnimating(false);
+            }, 250); // Match animation duration (0.25s)
+            return () => clearTimeout(timer);
+        }
+    }, [isOpen, shouldRender]);
+
     useModalGlobalHandlers({
-        isOpen,
+        isOpen: isOpen || isAnimating,
         onEscape: onEscape || onClose,
         clickOutsideSelectors,
         onCloseDropdowns
     });
 
-    if (!isOpen) return null;
+    if (!shouldRender) return null;
 
     const handleOverlayClick = (e: React.MouseEvent) => {
         if (closeOnOverlayClick && e.target === e.currentTarget) {
@@ -40,9 +57,9 @@ const BaseModalMain: FC<BaseModalProps> = ({
     };
 
     return createPortal(
-        <div className={`modal-overlay ${overlayClassName}`} onClick={handleOverlayClick}>
+        <div className={`modal-overlay ${overlayClassName} ${isAnimating ? 'closing' : ''}`} onClick={handleOverlayClick}>
             <div 
-                className={`modal-container modal-${size} ${className}`} 
+                className={`modal-container modal-${size} ${className} ${isAnimating ? 'closing' : ''}`} 
                 onClick={e => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"

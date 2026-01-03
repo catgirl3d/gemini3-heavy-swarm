@@ -71,3 +71,23 @@ export const RolesIcon = () => (
         <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
     </svg>
 );
+
+export const SortAscIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 19V5" />
+        <path d="M5 12l7-7 7 7" />
+    </svg>
+);
+
+export const SortDescIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 5v14" />
+        <path d="M19 12l-7 7-7-7" />
+    </svg>
+);
+
+export const StarIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+    </svg>
+);

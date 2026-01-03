@@ -97,6 +97,30 @@
   --toast-success-edge: var(--success-color);
   --toast-success-bg: var(--success-bg);
   --toast-success-text: var(--success-text);
+
+  /* Border Radii */
+  --radius-3xs: 2px;
+  --radius-2xs: 3px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-ml: 10px;
+  --radius-ml-inner: 9px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 24px;
+  --radius-4xl: 28px;
+  --radius-full: 9999px;
+
+  /* Animation Tokens */
+  --dropdown-easing: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dropdown-duration: 0.3s;
+  --dropdown-exit-easing: cubic-bezier(0.4, 0, 1, 1);
+  --dropdown-exit-duration: 0.2s;
+
+  --anim-dropdown-appear: dropdown-appear var(--dropdown-duration) var(--dropdown-easing);
+  --anim-dropdown-disappear: dropdown-disappear var(--dropdown-exit-duration) var(--dropdown-exit-easing) forwards;
 }
 
 body {
@@ -127,7 +151,7 @@ body {
   height: 95vh;
   max-height: 1100px;
   background-color: var(--app-background);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
@@ -162,7 +186,7 @@ header {
   align-items: center;
   justify-content: center;
   background: var(--bg-tertiary);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 6px;
   flex-shrink: 0;
 }
@@ -191,7 +215,7 @@ header h1 {
   cursor: pointer;
   color: var(--input-focus-ring);
   padding: 8px;
-  border-radius: 50%;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -265,8 +289,8 @@ header h1 {
   background: var(--user-message-bg);
   color: var(--user-message-text);
   padding: 1rem 1.5rem;
-  border-radius: 12px;
-  border-top-right-radius: 2px;
+  border-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-3xs);
   box-shadow: var(--shadow-md);
 }
 
@@ -303,7 +327,7 @@ header h1 {
 .message-image {
   max-width: 100%;
   max-height: 400px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   margin-bottom: 1rem;
   object-fit: contain;
   align-self: flex-start;
@@ -338,7 +362,7 @@ header h1 {
   font-size: 1rem;
   font-family: var(--font-family);
   color: var(--text-primary);
-  border-radius: 99px;
+  border-radius: var(--radius-full);
   transition: var(--transition-standard);
   box-shadow: var(--shadow-sm);
 }
@@ -355,14 +379,13 @@ header h1 {
 
 .input-area button {
   border: none;
-  border-radius: 50%;
+  border-radius: var(--radius-md);
   width: 52px;
   height: 52px;
   cursor: pointer;
   display: flex;
   justify-content: center;
   align-items: center;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
 }
 
@@ -374,7 +397,8 @@ header h1 {
 
 .send-button:hover:not(:disabled) {
   background: var(--text-primary);
-  transform: var(--hover-scale);
+  transform: scale(1.05);
+  transition: all 0.1s cubic-bezier(.45, .05, .55, .95);
   box-shadow: var(--shadow-md);
 }
 
@@ -403,6 +427,8 @@ header h1 {
   background-color: var(--model-message-border);
   color: var(--text-primary);
   border-color: var(--input-border);
+  transition: all 0.1s cubic-bezier(.45, .05, .55, .95);
+  box-shadow: var(--shadow-md);
 }
 
 .attach-button svg {
@@ -415,7 +441,7 @@ header h1 {
   width: fit-content;
   max-width: 120px;
   margin: 0 auto 1rem auto;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   border: 2px solid var(--bg-card);
   box-shadow: var(--shadow-md);
@@ -434,6 +460,7 @@ header h1 {
   width: 24px;
   height: 24px;
   border-radius: 50%;
+  /* Circular */
   background: var(--bg-overlay);
   color: var(--white-fixed);
   border: none;
@@ -477,6 +504,7 @@ header h1 {
   width: 40px;
   height: 40px;
   border-radius: 50%;
+  /* Circular */
   background-color: var(--bg-card);
   border: 1px solid var(--model-message-border);
   color: var(--text-secondary);
@@ -522,6 +550,44 @@ header h1 {
 
   to {
     opacity: 1;
+  }
+}
+
+@keyframes dropdown-appear {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.95);
+    filter: blur(4px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes dropdown-disappear {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+    filter: blur(4px);
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
   }
 }
 

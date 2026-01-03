@@ -2,6 +2,7 @@ import React, { FC, useState, useEffect, useRef, useMemo } from 'react';
 import { fetchOpenRouterModels } from '@/services/openrouter/modelsService';
 import { RECOMMENDED_MODEL_IDS, FILTERED_MODEL_IDS } from '@/services/openrouter/constants';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
+import { SortAscIcon, SortDescIcon, StarIcon } from '@/components/modals/SettingsModal/icons';
 import { ProviderType } from '@/types';
 import { PortalDropdown } from '@/components/ui/PortalDropdown/PortalDropdown';
 import { getProviderLogo } from '@/utils/logoHelpers';
@@ -218,14 +219,18 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
                                 <button
                                     className={`sort-btn ${sortBy === 'price_asc' ? 'active' : ''}`}
                                     onClick={() => setSortBy('price_asc')}
+                                    title="Price: Low to High"
                                 >
-                                    Price ↓
+                                    Price
+                                    <SortAscIcon />
                                 </button>
                                 <button
                                     className={`sort-btn ${sortBy === 'price_desc' ? 'active' : ''}`}
                                     onClick={() => setSortBy('price_desc')}
+                                    title="Price: High to Low"
                                 >
-                                    Price ↑
+                                    Price
+                                    <SortDescIcon />
                                 </button>
                             </div>
                         )}
@@ -269,7 +274,7 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
                                             >
                                                 <div className="model-option-header">
                                                     <div className="model-option-label">
-                                                        <span className="star-icon">★</span>
+                                                        <span className="star-icon"><StarIcon /></span>
                                                         <img src={getProviderLogo(provider, m.value)} alt="" className="model-option-icon" />
                                                         {m.label}
                                                         {m.supportsReasoning && <img src={thinkingIcon} alt="thinking" className="thinking-indicator" title="Supports reasoning" />}

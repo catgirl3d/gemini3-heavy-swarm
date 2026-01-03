@@ -15,7 +15,7 @@
 .info-icon-wrapper {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background-color: var(--bg-tertiary);
   color: var(--primary-color);
   display: flex;

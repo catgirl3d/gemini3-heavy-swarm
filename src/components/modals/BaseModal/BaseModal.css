@@ -25,13 +25,23 @@
   background-color: var(--bg-card);
   width: 90%;
   height: 85vh;
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: modal-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: var(--anim-dropdown-appear);
+  transform-origin: top center;
 }
+
+.modal-container.closing {
+  animation: var(--anim-dropdown-disappear);
+}
+
+.modal-overlay.closing {
+  animation: fade-out var(--dropdown-exit-duration) ease-in forwards;
+}
+
 
 /* Modal Sizes */
 .modal-sm {
@@ -167,7 +177,7 @@
   cursor: pointer;
   color: var(--text-secondary);
   padding: 0.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -190,7 +200,7 @@
 
 .modal-icon-btn.small {
   padding: 0.25rem;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .modal-icon-btn.small svg {
@@ -201,7 +211,7 @@
 /* Modal Buttons */
 .modal-btn {
   padding: 0.6rem 1.2rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-weight: 600;
   cursor: pointer;
   font-size: 0.9rem;
@@ -318,7 +328,7 @@
   width: 100%;
   padding: 0.75rem;
   border: 1px solid var(--model-message-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-family: var(--font-family);
   font-size: 0.9rem;
   transition: var(--transition-standard);
@@ -346,8 +356,7 @@
   min-width: 240px;
   max-width: 362px;
   background-color: var(--bg-card);
-  border: 1px solid var(--model-message-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   z-index: 100;
   margin-top: 0.25rem;
@@ -368,7 +377,7 @@
   display: flex;
   align-items: center;
   border: 1px solid var(--model-message-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   width: fit-content;
 }
@@ -415,7 +424,7 @@
   gap: 0.75rem;
   margin-bottom: 0.75rem;
   padding: 0rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   transition: var(--transition-standard);
 }
 
@@ -445,7 +454,7 @@
 .modal-card {
   background-color: var(--bg-secondary);
   border: 1px solid var(--model-message-border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 1.25rem;
   margin-bottom: 0.5rem;
 }
@@ -488,7 +497,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   margin-bottom: 1rem;
   font-size: 0.85rem;
   border: 1px solid transparent;
@@ -541,7 +550,7 @@
   color: currentColor;
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -566,7 +575,7 @@
   justify-content: space-between;
   background-color: var(--error-bg);
   border: 1px solid var(--error-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
   color: var(--error-text);
@@ -594,7 +603,7 @@
   border: 1px solid var(--error-border);
   color: var(--error-text);
   padding: 0.4rem 0.8rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;

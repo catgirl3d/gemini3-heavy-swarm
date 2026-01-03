@@ -2,7 +2,7 @@
 .loading-animation {
   padding: 1.5rem;
   border: 1px solid var(--model-message-border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background-color: var(--bg-secondary);
   width: 445px;
 }
@@ -27,7 +27,7 @@
   font-size: 0.85rem;
   background: var(--model-message-border);
   padding: 0.25rem 0.6rem;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .agent-progress-list {
@@ -46,7 +46,7 @@
 .agent-icon {
   width: 32px;
   height: 32px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--model-message-border);
   color: var(--text-secondary);
   display: flex;
@@ -107,7 +107,7 @@
 .agent-progress-track {
   height: 6px;
   background-color: var(--model-message-border);
-  border-radius: 3px;
+  border-radius: var(--radius-2xs);
   width: 100%;
   overflow: hidden;
   position: relative;
@@ -115,7 +115,7 @@
 
 .agent-progress-fill {
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--radius-2xs);
   transition: width 0.3s ease, background-color 0.3s ease;
 }
 
@@ -173,7 +173,7 @@
   background-color: var(--success-color);
   color: var(--white-fixed);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   cursor: pointer;
   transition: var(--transition-standard);
 }
@@ -220,7 +220,7 @@
   gap: 0.75rem;
   background-color: var(--error-bg);
   border: 1px solid var(--error-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 1rem;
   margin-bottom: 1rem;
   align-items: flex-start;

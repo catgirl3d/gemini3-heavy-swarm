@@ -5,3 +5,4 @@ export * from './PortalDropdown';
 export * from './ScrollToBottomButton';
 export * from './TimerDisplay';
 export * from './ModelSelector/ModelSelector';
+export * from './ProviderSelector/ProviderSelector';

@@ -3,7 +3,7 @@ import { AppSettings, ServerStatus, ProviderType } from '@/types';
 import { StepperControl } from '@/components/modals/SettingsModal/components/StepperControl';
 import { TemperatureBanner } from '@/components/modals/SettingsModal/components/TemperatureBanner';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
-import { ModelSelector } from '@/components/ui';
+import { ModelSelector, ProviderSelector } from '@/components/ui';
 
 interface GeneralSettingsTabProps {
     localSettings: AppSettings;
@@ -34,15 +34,12 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                 
                 <div className="modal-form-group">
                     <label className="modal-label">Provider</label>
-                    <select
-                        name="provider"
+                    <ProviderSelector
                         value={localSettings.provider || ProviderType.Gemini}
-                        onChange={handleChange}
-                        className="modal-input"
-                    >
-                        <option value={ProviderType.Gemini}>Google Gemini</option>
-                        <option value={ProviderType.OpenRouter}>OpenRouter</option>
-                    </select>
+                        onChange={(val) => handleChange({ target: { name: 'provider', value: val } } as any)}
+                        isOpen={openDropdownId === 'provider'}
+                        onOpenChange={(open) => setOpenDropdownId(open ? 'provider' : null)}
+                    />
                 </div>
 
                 {localSettings.provider === ProviderType.Gemini ? (

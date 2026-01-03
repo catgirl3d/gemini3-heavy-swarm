@@ -55,7 +55,7 @@
 
 .roles-list-container {
   border-top: none;
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
   padding: 1rem;
   background-color: var(--bg-card);
 }
@@ -64,7 +64,7 @@
   background-color: var(--bg-card);
   border: 1px solid var(--model-message-border);
   padding: 0.4rem 0.8rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
@@ -86,7 +86,7 @@
   margin-bottom: 0.5rem;
   background: var(--bg-secondary);
   padding: 1rem;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--model-message-border);
 }
 
@@ -109,7 +109,7 @@
   font-weight: 600;
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--accent-color);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   width: 100%;
 }
 
@@ -180,7 +180,7 @@
 
 .role-item {
   border: 1px solid var(--model-message-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 1rem;
   background: var(--bg-secondary);
 }
@@ -207,7 +207,7 @@
   color: var(--text-secondary);
   background-color: var(--bg-tertiary);
   padding: 0.2rem 0.5rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   min-width: 28px;
   text-align: center;
   border: 1px solid var(--model-message-border);
@@ -243,7 +243,7 @@
   color: var(--accent-color);
   background-color: var(--accent-bg);
   padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--accent-border);
   max-width: 150px;
   overflow: hidden;
@@ -269,7 +269,7 @@
   font-size: 0.8rem;
   height: auto;
   margin-bottom: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background-color: var(--bg-tertiary);
   border-color: var(--model-message-border);
 }
@@ -288,7 +288,7 @@
   gap: 2px;
   background: var(--bg-tertiary);
   border: 1px solid var(--model-message-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 2px;
 }
 
@@ -310,13 +310,13 @@
 .delete-role-btn:hover {
   background-color: var(--error-bg);
   color: var(--error-color);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .move-role-btn {
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   cursor: pointer;
   padding: 0;
   display: flex;
@@ -356,7 +356,7 @@
 
 .profile-edit-card {
   border: 1px solid var(--model-message-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 1rem;
   background: var(--bg-secondary);
   margin-bottom: 0rem;
@@ -368,7 +368,7 @@
   height: 100%;
   overflow: hidden;
   border: 1px solid var(--model-message-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .warning-banner svg {
@@ -400,7 +400,7 @@
   background: var(--warning-color);
   color: var(--white-fixed);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 0.25rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 600;
@@ -432,7 +432,7 @@
   display: flex;
   background: var(--bg-tertiary);
   padding: 2px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   gap: 2px;
 }
 
@@ -440,7 +440,7 @@
   background: transparent;
   border: none;
   padding: 4px 12px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-secondary);
@@ -467,7 +467,7 @@
   background: var(--warning-text);
   color: var(--white-fixed);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 0.25rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 600;
@@ -666,7 +666,7 @@
   font-weight: 700;
   background: var(--bg-tertiary);
   padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   font-size: 0.9em;
 }
 
@@ -679,7 +679,7 @@
 
 .token-chip {
   padding: 0.4rem 0.8rem;
-  border-radius: 20px;
+  border-radius: var(--radius-2xl);
   border: 1px solid var(--model-message-border);
   background: var(--white-fixed);
   font-size: 0.75rem;
@@ -690,7 +690,7 @@
 }
 
 .token-chip:hover {
-  border-color: var(--primary-color);
+  border-color: var(--accent-color);
   color: var(--primary-color);
   background: var(--bg-secondary);
 }
@@ -708,7 +708,7 @@
   -webkit-appearance: none;
   appearance: none;
   background: var(--model-message-border);
-  border-radius: 3px;
+  border-radius: var(--radius-2xs);
   outline: none;
   margin: 1rem 0;
 }
@@ -718,7 +718,7 @@
   appearance: none;
   width: 18px;
   height: 18px;
-  border-radius: 50%;
+  border-radius: 50%; /* Circular */
   background: var(--primary-color);
   cursor: pointer;
   border: 2px solid var(--white-fixed);
@@ -748,7 +748,7 @@
   color: var(--warning-text);
   background-color: var(--warning-bg);
   padding: 0.5rem 0.75rem;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--warning-color);
 }
 

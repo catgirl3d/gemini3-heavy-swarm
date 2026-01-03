@@ -1,0 +1,124 @@
+.provider-selector-container {
+    width: 100%;
+    position: relative;
+}
+
+.provider-selector-trigger {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--bg-card);
+    border: 1px solid var(--model-message-border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s;
+    font-family: var(--font-family);
+    font-size: 0.9rem;
+}
+
+.provider-selector-trigger:hover:not(.disabled) {
+    border-color: var(--accent-color);
+    background: var(--bg-secondary);
+}
+
+.provider-selector-trigger:focus:not(.disabled) {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.provider-selector-trigger.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: var(--bg-tertiary);
+}
+
+.selected-provider-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+}
+
+.provider-trigger-icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 10px;
+    vertical-align: middle;
+    object-fit: contain;
+}
+
+.chevron {
+    margin-left: 8px;
+    transition: transform 0.2s;
+    opacity: 0.5;
+    color: var(--text-secondary);
+}
+
+.chevron.open {
+    transform: rotate(180deg);
+}
+
+.provider-selector-dropdown {
+    background: var(--bg-card);
+    border: 1px solid var(--model-message-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 4px;
+    animation: var(--anim-dropdown-appear);
+    transform-origin: top center;
+}
+
+.provider-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.provider-option {
+    width: 100%;
+    padding: 0.75rem 0.8rem;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: all 0.1s;
+}
+
+.provider-option:hover {
+    background: var(--bg-tertiary);
+}
+
+.provider-option.selected {
+    background: var(--accent-bg);
+    color: var(--accent-color);
+}
+
+.provider-option-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.provider-option-icon {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+}
+
+.provider-option-label {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+

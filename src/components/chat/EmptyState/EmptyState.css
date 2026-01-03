@@ -10,10 +10,91 @@
 }
 
 .empty-state-icon {
-  width: 82px;
-  height: 82px;
-  color: var(--input-border);
-  margin-bottom: 1.5rem;
+  width: 92px;
+  height: 92px;
+  margin-bottom: 2.8rem;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* Glassmorphic Base */
+  background: var(--bg-card);
+  border-radius: var(--radius-4xl);
+  padding: 18px;
+  box-shadow:
+    0 20px 40px -15px rgba(0, 0, 0, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.03);
+
+  animation: hero-floating 6s infinite ease-in-out;
+  z-index: 1;
+}
+
+/* Layer 1: Core Pulse Aura */
+.empty-state-icon::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  filter: blur(15px);
+  z-index: -1;
+  animation: hero-pulse 4s infinite alternate ease-in-out;
+}
+
+/* Layer 2: Rotating Ethereal Light */
+.empty-state-icon::after {
+  content: "";
+  position: absolute;
+  inset: -40px;
+  background: conic-gradient(from 0deg at 50% 50%,
+      rgba(255, 255, 255, 0.05) 0deg,
+      transparent 90deg,
+      rgba(148, 163, 184, 0.05) 180deg,
+      transparent 270deg,
+      rgba(255, 255, 255, 0.05) 360deg);
+  filter: blur(30px);
+  z-index: -2;
+  animation: hero-rotate 20s infinite linear;
+}
+
+@keyframes hero-floating {
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1.5deg);
+    box-shadow:
+      0 15px 35px -10px rgba(0, 0, 0, 0.1),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  }
+
+  50% {
+    transform: translateY(-16px) rotate(1.5deg);
+    box-shadow:
+      0 35px 65px -15px rgba(0, 0, 0, 0.15),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+  }
+}
+
+@keyframes hero-pulse {
+  0% {
+    opacity: 0.4;
+    transform: scale(0.92);
+  }
+
+  100% {
+    opacity: 0.9;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes hero-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .empty-state-icon img {
@@ -62,7 +143,7 @@
 .prompt-button {
   background-color: var(--bg-card);
   border: 1px solid var(--model-message-border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 1.25rem 1.5rem;
   font-family: var(--font-family);
   font-size: 0.95rem;

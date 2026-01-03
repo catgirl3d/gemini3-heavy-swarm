@@ -8,7 +8,7 @@
     padding: 0.75rem;
     background: var(--bg-card);
     border: 1px solid var(--model-message-border);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     color: var(--text-primary);
     display: flex;
     align-items: center;
@@ -60,13 +60,14 @@
 .model-selector-dropdown {
     background: var(--bg-card);
     border: 1px solid var(--model-message-border);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
     display: flex;
     flex-direction: column;
     max-height: 450px;
     overflow: hidden;
-    animation: fade-in 0.2s ease-out;
+    animation: var(--anim-dropdown-appear);
+    transform-origin: top center;
 }
 
 .model-search-wrapper {
@@ -83,7 +84,7 @@
     padding: 0.6rem 0.8rem;
     background: var(--bg-card);
     border: 1px solid var(--model-message-border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     color: var(--text-primary);
     outline: none;
     font-family: var(--font-family);
@@ -115,12 +116,15 @@
     background: var(--bg-card);
     border: 1px solid var(--model-message-border);
     padding: 0.2rem 0.5rem;
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-secondary);
     cursor: pointer;
     transition: var(--transition-standard);
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .sort-btn:hover {
@@ -130,8 +134,7 @@
 
 .sort-btn.active {
     background: var(--accent-color);
-    color: var(--white-fixed);
-    border-color: var(--accent-color);
+    color: var(--white-fixed);   border-color: var(--accent-color);
 }
 
 .model-options-list {
@@ -145,6 +148,8 @@
     padding: 0.5rem 0.5rem;
     background: transparent;
     border: none;
+    border-radius: var(--radius-md);
+    border-bottom: 1px solid var(--bg-tertiary);
     color: var(--text-primary);
     text-align: left;
     cursor: pointer;
@@ -153,7 +158,6 @@
     gap: 2px;
     transition: all 0.1s;
     margin-bottom: 2px;
-    border-bottom: 1px solid var(--bg-tertiary);
 }
 
 .model-option:hover {
@@ -184,12 +188,12 @@
 }
 
 .model-price-tag {
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: var(--success-text);
-    background: var(--success-bg);
-    padding: 0.1rem 0.3rem;
-    border-radius: 4px;
+	font-size: 0.62rem;
+	font-weight: 700;
+	color: var(--text-primary);
+	background: var(--bg-tertiary);
+	padding: 0.2rem 0.3rem;
+	border-radius: var(--radius-xs);
 }
 
 .model-option.selected .model-price-tag {
@@ -228,6 +232,8 @@
 .star-icon {
     color: var(--warning-color);
     margin-right: 6px;
+    display: flex;
+    align-items: center;
 }
 
 .model-loading,
@@ -250,7 +256,7 @@
     color: var(--white-fixed);
     border: none;
     padding: 0.4rem 1rem;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     font-weight: 600;
     cursor: pointer;
     transition: var(--transition-standard);
@@ -311,7 +317,7 @@
     margin-right: 8px;
     vertical-align: middle;
     object-fit: contain;
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
 }
 
 .model-option-icon {
@@ -320,6 +326,6 @@
     margin-right: 8px;
     vertical-align: middle;
     object-fit: contain;
-    border-radius: 3px;
+    border-radius: var(--radius-2xs);
     opacity: 0.9;
 }
