@@ -497,7 +497,6 @@
 .modal-banner.info {
   background-color: var(--accent-bg);
   border-color: var(--accent-border);
-  color: var(--accent-text);
 }
 
 .modal-banner.warning {

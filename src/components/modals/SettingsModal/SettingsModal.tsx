@@ -14,6 +14,7 @@ import { INSTRUCTION_METADATA } from '@/components/modals/SettingsModal/constant
 import { GeneralSettingsTab } from '@/components/modals/SettingsModal/tabs/GeneralSettingsTab';
 import { PromptsTab } from '@/components/modals/SettingsModal/tabs/PromptsTab';
 import { RolesTab } from '@/components/modals/SettingsModal/tabs/RolesTab';
+import { ConfigIcon, PromptsIcon, RolesIcon } from '@/components/modals/SettingsModal/icons';
 
 import './SettingsModal.css';
 
@@ -194,7 +195,10 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         className={`settings-tab ${activeTab === tab ? 'active' : ''}`}
                         onClick={() => setActiveTab(tab)}
                     >
-                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        {tab === 'general' && <ConfigIcon />}
+                        {tab === 'prompts' && <PromptsIcon />}
+                        {tab === 'roles' && <RolesIcon />}
+                        <span>{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
                     </button>
                 ))}
             </div>

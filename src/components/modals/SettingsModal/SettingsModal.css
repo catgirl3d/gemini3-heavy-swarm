@@ -8,6 +8,9 @@
 }
 
 .settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   padding: 1rem 1.5rem;
   background: transparent;
   border: none;
@@ -17,6 +20,12 @@
   color: var(--text-secondary);
   transition: all 0.2s;
   font-size: 0.9rem;
+}
+
+.settings-tab svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .settings-tab:hover {
