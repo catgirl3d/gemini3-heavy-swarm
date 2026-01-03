@@ -191,6 +191,7 @@ export abstract class BaseStep implements StepDescriptor {
       }
     }
 
+
     // Update usage
     if (usage) {
       const usageKey = `${stepId}_usage`;
@@ -213,7 +214,16 @@ export abstract class BaseStep implements StepDescriptor {
      // Use atomic update to prevent race conditions during parallel execution
      useAgentStore.getState().updateWorkResult(stepId, index, { text, thought, usage });
 
-     if (text.length > 0 && onMessageUpdate && options.streamToMessage) {
+     const hasContent = text.length > 0;
+     const hasThought = !!(thought && thought.length > 0);
+     const hasUsage = !!usage;
+
+     // Allow UI updates even if text is empty!
+     // Issue: Some providers (like OpenRouter with reasoning models) send 'thought' or 'usage' chunks 
+     // BEFORE any actual text content. If we only gate this on (text.length > 0), the UI (TokenUsage panel, 
+     // Thinking state) will remain stale until the first text character arrives.
+     // This ensures the "Show Work" token counter updates immediately during the reasoning phase.
+     if ((hasContent || hasThought || hasUsage) && onMessageUpdate && options.streamToMessage) {
        onMessageUpdate(text, options.isFirstChunk ?? false, thought, usage);
      }
   }

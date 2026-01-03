@@ -176,7 +176,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
     if (synthesisUsage) total += synthesisUsage.totalTokens || 0;
     
     return total;
-  }, [initialUsages, refinedUsages, synthesisUsage]);
+  }, [initialUsages, refinedUsages, synthesisUsage, messageId, isLive]);
 
   // Continue/Retry button logic using shared helpers
   const erroredAgents = useMemo(() => getErroredAgents(allAgents, messageId), [allAgents, messageId]);
