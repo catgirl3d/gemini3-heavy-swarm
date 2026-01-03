@@ -419,7 +419,10 @@ export abstract class BaseStep implements StepDescriptor {
   ): StepDebugInfo[] | StepDebugInfo {
     if (!work.debugInfo) work.debugInfo = {};
     if (!work.debugInfo[stepId]) {
-      (work.debugInfo as any)[stepId] = isArray ? [] : ({} as StepDebugInfo);
+      // Type assertion needed: DebugInfo's index signature requires intersection of array & object types
+      // which is impossible to satisfy. This is safe because we control initialization via isArray.
+      (work.debugInfo as Record<string, StepDebugInfo | StepDebugInfo[]>)[stepId] = 
+        isArray ? [] : ({} as StepDebugInfo);
     }
     return work.debugInfo[stepId] as StepDebugInfo[] | StepDebugInfo;
   }
@@ -710,7 +713,7 @@ export abstract class BaseStep implements StepDescriptor {
 
     // Capture debug info for regeneration
     this.ensureDebugInfo(work, this.id);
-    (work.debugInfo[this.id] as any)[agentIndex] = {
+    (work.debugInfo[this.id] as StepDebugInfo[])[agentIndex] = {
       systemInstruction,
       history: mainChatHistory,
       userTurn

@@ -188,6 +188,18 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
     handleContinueClickHelper(allAgents, messageId, onContinue, onRegenerate);
   }, [allAgents, messageId, onContinue, onRegenerate]);
 
+  // Determine if the continue/retry button should be visible
+  const showContinueButton = useMemo(() => {
+    // Don't show if agents are actively working
+    if (isWorking) return false;
+    
+    // Only show for live, paused messages
+    if (!isLive || !isPaused) return false;
+    
+    // Show if we can continue OR if there are errors and we can regenerate
+    return onContinue !== undefined || (erroredAgents.length > 0 && onRegenerate !== undefined);
+  }, [isPaused, isLive, isWorking, onContinue, erroredAgents.length, onRegenerate]);
+
   return (
     <>
     <details className="show-work-container" ref={detailsRef}>
@@ -277,7 +289,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
             </div>
         )}
 
-        {isPaused && isLive && !isWorking && (onContinue || (erroredAgents.length > 0 && onRegenerate)) && (
+        {showContinueButton && (
             <div className="show-work-continue-container">
                 <button className="continue-button" onClick={handleClick}>
                     {continueButtonText}
