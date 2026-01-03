@@ -42,6 +42,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: flex;
+    align-items: center;
 }
 
 .chevron {
@@ -177,6 +179,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: flex;
+    align-items: center;
 }
 
 .model-price-tag {
@@ -223,7 +227,7 @@
 
 .star-icon {
     color: var(--warning-color);
-    margin-right: 4px;
+    margin-right: 6px;
 }
 
 .model-loading,
@@ -299,4 +303,23 @@
     opacity: 0.7;
     vertical-align: middle;
     display: inline-block;
+}
+
+.model-trigger-icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    vertical-align: middle;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.model-option-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    vertical-align: middle;
+    object-fit: contain;
+    border-radius: 3px;
+    opacity: 0.9;
 }

@@ -4,6 +4,7 @@ import { RECOMMENDED_MODEL_IDS, FILTERED_MODEL_IDS } from '@/services/openrouter
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
 import { ProviderType } from '@/types';
 import { PortalDropdown } from '@/components/ui/PortalDropdown/PortalDropdown';
+import { getProviderLogo } from '@/utils/logoHelpers';
 import thinkingIcon from '@/assets/thinking.png';
 import './ModelSelector.css';
 
@@ -173,6 +174,12 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
                 type="button"
             >
                 <span className="selected-model-label">
+                    <img 
+                      src={getProviderLogo(provider, value)} 
+                      alt="" 
+                      className="model-trigger-icon" 
+                      key={value}
+                    />
                     {displayLabel}
                 </span>
                 <svg className={`chevron ${isOpen ? 'open' : ''}`} xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -262,7 +269,9 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
                                             >
                                                 <div className="model-option-header">
                                                     <div className="model-option-label">
-                                                        <span className="star-icon">★</span> {m.label}
+                                                        <span className="star-icon">★</span>
+                                                        <img src={getProviderLogo(provider, m.value)} alt="" className="model-option-icon" />
+                                                        {m.label}
                                                         {m.supportsReasoning && <img src={thinkingIcon} alt="thinking" className="thinking-indicator" title="Supports reasoning" />}
                                                     </div>
                                                     {m.priceText && <div className="model-price-tag">{m.priceText}</div>}
@@ -283,6 +292,7 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
                                     >
                                         <div className="model-option-header">
                                             <div className="model-option-label">
+                                                <img src={getProviderLogo(provider, m.value)} alt="" className="model-option-icon" />
                                                 {m.label}
                                                 {m.supportsReasoning && <img src={thinkingIcon} alt="thinking" className="thinking-indicator" title="Supports reasoning" />}
                                             </div>

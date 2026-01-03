@@ -1,8 +1,22 @@
 import React, { FC } from 'react';
-import geminiIcon from '@/assets/Google-gemini-icon.png';
+import { ProviderType } from '@/types';
+import { getProviderLogo } from '@/utils/logoHelpers';
 import './EmptyState.css';
 
-export const EmptyState: FC<{ onPromptClick: (prompt: string) => void; modelDisplayName: string }> = ({ onPromptClick, modelDisplayName }) => {
+interface EmptyStateProps {
+  onPromptClick: (prompt: string) => void;
+  modelDisplayName: string;
+  provider: ProviderType;
+  model: string;
+}
+
+export const EmptyState: FC<EmptyStateProps> = ({ 
+  onPromptClick, 
+  modelDisplayName,
+  provider,
+  model
+}) => {
+  const logoSrc = getProviderLogo(provider, model);
   const examplePrompts = [
     "Analyze the impact of Blackwell GPUs on AI scaling laws.",
     "Draft a technical proposal for a multi-agent orchestration layer.",
@@ -11,7 +25,7 @@ export const EmptyState: FC<{ onPromptClick: (prompt: string) => void; modelDisp
   return (
     <div className="empty-state-container">
       <div className="empty-state-icon">
-        <img src={geminiIcon} alt="Gemini Logo" />
+        <img src={logoSrc} alt={`${modelDisplayName} Logo`} key={logoSrc} />
       </div>
       <h2 className="welcome-title">{modelDisplayName}</h2>
       <p className="welcome-subtitle">How can this AI swarm assist you today?</p>

@@ -1,5 +1,5 @@
 import React, { FC, useEffect } from 'react';
-import { AgentState, Work } from '@/types';
+import { AgentState, Work, ProviderType } from '@/types';
 import { StepId, STEPS } from '@/types/steps';
 import { AgentAvatar } from '@/components/chat';
 import { TimerDisplay } from '@/components/ui/TimerDisplay';
@@ -20,7 +20,9 @@ export const LoadingIndicator: FC<{
     onRegenerate?: (stepId: StepId, agentIndex: number) => void;
     noWrapper?: boolean;
     work?: Work;
-}> = ({ status, agentStates, isPaused, messageId, onContinue, onRegenerate, noWrapper, work }) => {
+    provider?: ProviderType;
+    model?: string;
+}> = ({ status, agentStates, isPaused, messageId, onContinue, onRegenerate, noWrapper, work, provider, model }) => {
   // Check for errors in any step to determine button state
   const erroredAgents = getErroredAgents(agentStates, messageId);
   const isWorking = isAnyAgentWorking(agentStates, messageId);
@@ -147,7 +149,7 @@ export const LoadingIndicator: FC<{
 
   return (
     <div className="message-wrapper model loading-state">
-      <AgentAvatar type="model" />
+      <AgentAvatar type="model" provider={provider} model={model} />
       {content}
     </div>
   );

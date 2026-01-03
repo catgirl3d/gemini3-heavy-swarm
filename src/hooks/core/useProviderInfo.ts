@@ -37,7 +37,7 @@ export function getProviderInfo(settings: AppSettings, serverStatus?: ServerStat
 
   // 5. Get display name for the model
   const modelDisplayName = isOpenRouter
-    ? (settings.openRouterModel || 'OpenRouter')
+    ? (settings.openRouterModel ? `${settings.openRouterModel} Swarm` : 'OpenRouter Swarm')
     : getModelDisplayName(settings.model);
 
   // 6. Validation logic for sending messages

@@ -8,12 +8,14 @@
   text-align: center;
   padding: 2rem;
 }
+
 .empty-state-icon {
-  width: 72px;
-  height: 72px;
+  width: 82px;
+  height: 82px;
   color: var(--input-border);
   margin-bottom: 1.5rem;
 }
+
 .empty-state-icon img {
   width: 100%;
   height: 100%;
@@ -27,6 +29,7 @@
   color: var(--text-primary);
   margin: 0;
 }
+
 .welcome-subtitle {
   font-size: 1.2rem;
   color: var(--text-secondary);
@@ -47,6 +50,7 @@
   opacity: 1;
   text-decoration: underline;
 }
+
 .example-prompts {
   display: flex;
   flex-direction: column;
@@ -83,23 +87,28 @@
   .welcome-title {
     font-size: 1.25rem;
   }
+
   .welcome-subtitle {
     font-size: 0.8rem;
     padding: 0 1rem;
   }
+
   .empty-state-container {
     padding: 1rem;
     justify-content: flex-start;
     padding-top: 1.05rem;
   }
+
   .empty-state-icon {
     width: 53px;
     height: 53px;
     margin-bottom: 0.9rem;
   }
+
   .example-prompts {
     max-width: 100%;
   }
+
   .prompt-button {
     padding: 0.7rem;
     font-size: 0.8rem;

@@ -4,7 +4,7 @@ import { EmptyState } from '@/components/chat/EmptyState';
 import { MarkdownRenderer, LoadingIndicator } from '@/components/ui';
 import { ShowWork } from '@/components/chat/ShowWork';
 import { Sources } from '@/components/chat/Sources';
-import { Message, AgentState, Work } from '@/types';
+import { Message, AgentState, Work, ProviderType } from '@/types';
 import { StepId, STEPS } from '@/types/steps';
 import { getStepResults } from '@/utils/swarm/workHelpers';
 
@@ -17,6 +17,8 @@ interface MessageListProps {
   agentStates: AgentState[];
   currentWork: Work | undefined;
   modelDisplayName: string;
+  provider: ProviderType;
+  model: string;
   messageListRef: RefObject<HTMLDivElement>;
   messageId?: string; // ID of the message currently being generated
   onPromptClick: (prompt: string) => void;
@@ -34,6 +36,8 @@ const MessageListComponent: FC<MessageListProps> = ({
   agentStates,
   currentWork,
   modelDisplayName,
+  provider,
+  model,
   messageListRef,
   messageId,
   onPromptClick,
@@ -45,7 +49,12 @@ const MessageListComponent: FC<MessageListProps> = ({
   return (
     <div className="message-list" ref={messageListRef}>
       {messages.length === 0 && !isLoading ? (
-        <EmptyState onPromptClick={onPromptClick} modelDisplayName={modelDisplayName} />
+        <EmptyState 
+          onPromptClick={onPromptClick} 
+          modelDisplayName={modelDisplayName} 
+          provider={provider}
+          model={model}
+        />
       ) : (
         messages.map((msg, index) => {
           const hasText = !!msg.parts?.[0]?.text;
@@ -82,7 +91,7 @@ const MessageListComponent: FC<MessageListProps> = ({
           
           return (
             <div key={msg.id} className={`message-wrapper ${msg.role}`}>
-              <AgentAvatar type={msg.role} />
+              <AgentAvatar type={msg.role} provider={provider} model={model} />
               <div className={`message ${msg.role}`}>
                 {msg.role === 'model' && msg.parts?.[0]?.text && (
                   <div className="agent-label-header">
@@ -108,6 +117,8 @@ const MessageListComponent: FC<MessageListProps> = ({
                         onContinue={onContinue}
                         onRegenerate={(phase, agentIndex) => onRegenerate(msg.id, phase as StepId, agentIndex)}
                         work={msg.work || currentWork}
+                        provider={provider}
+                        model={model}
                       />
                     )}
 
@@ -145,7 +156,7 @@ const MessageListComponent: FC<MessageListProps> = ({
       {/* Show loading indicator at bottom only if generating a NEW message not yet in the list */}
       {isLoading && !messages.some(m => m.id === messageId) && (
         <div className="message-wrapper model loading-state">
-          <AgentAvatar type="model" />
+          <AgentAvatar type="model" provider={provider} model={model} />
           <div className="loading-container-wrapper">
             <LoadingIndicator
               noWrapper
@@ -156,6 +167,8 @@ const MessageListComponent: FC<MessageListProps> = ({
               onContinue={onContinue}
               onRegenerate={messageId ? (phase, agentIndex) => onRegenerate(messageId, phase as StepId, agentIndex) : undefined}
               work={currentWork}
+              provider={provider}
+              model={model}
             />
             {currentWork && (
               <div className="show-work-wrapper">

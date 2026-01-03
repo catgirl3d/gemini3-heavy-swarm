@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, FormEvent, FC, lazy, S
 import { useGeminiSwarm } from '@/hooks/core/useGeminiSwarm';
 import { useServerStatus } from '@/hooks/network/useServerStatus';
 import { useAutoScroll } from '@/hooks/ui/useAutoScroll';
+import { useDynamicFavicon } from '@/hooks/ui/useDynamicFavicon';
 import { useProviderInfo } from '@/hooks/core/useProviderInfo';
 import { ConfigProvider } from '@/providers';
 import { Logger } from '@shared/utils/logger';
@@ -42,6 +43,8 @@ export const App: FC = () => {
   } = useServerStatus();
 
   const providerInfo = useProviderInfo(settings, serverStatus);
+
+  useDynamicFavicon(settings.provider, providerInfo.currentModelId, providerInfo.modelDisplayName);
 
   const {
     messageListRef,
@@ -165,6 +168,8 @@ export const App: FC = () => {
       
       <Header
         modelDisplayName={modelDisplayName}
+        provider={settings.provider}
+        model={providerInfo.currentModelId}
         onInfoClick={() => setIsInfoOpen(true)}
         onSettingsClick={() => setIsSettingsOpen(true)}
       />
@@ -178,6 +183,8 @@ export const App: FC = () => {
         agentStates={agentStates}
         currentWork={currentWork}
         modelDisplayName={modelDisplayName}
+        provider={settings.provider}
+        model={providerInfo.currentModelId}
         messageListRef={messageListRef}
         messageId={currentMessageId}
         onPromptClick={handlePromptClick}

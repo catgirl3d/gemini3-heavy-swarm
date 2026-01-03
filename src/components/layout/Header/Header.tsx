@@ -1,22 +1,29 @@
 import React, { FC } from 'react';
-import geminiIcon from '@/assets/Google-gemini-icon.png';
+import { getProviderLogo } from '@/utils/logoHelpers';
+import { ProviderType } from '@/types';
 
 interface HeaderProps {
   modelDisplayName: string;
+  provider: ProviderType;
+  model: string;
   onInfoClick: () => void;
   onSettingsClick: () => void;
 }
 
 export const Header: FC<HeaderProps> = ({
   modelDisplayName,
+  provider,
+  model,
   onInfoClick,
   onSettingsClick
 }) => {
+  const logoSrc = getProviderLogo(provider, model);
+
   return (
     <header>
       <div className="header-content">
           <div className="header-logo">
-              <img src={geminiIcon} alt="Gemini Logo" />
+              <img src={logoSrc} alt={`${modelDisplayName} Logo`} key={logoSrc} />
           </div>
           <h1>{modelDisplayName}</h1>
       </div>
