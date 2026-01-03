@@ -131,6 +131,7 @@ export function useSwarmRegeneration({
     // Reset global error and update status to reflect the new attempt.
     // This ensures any previous error banner hides and the indicator shows new progress.
     store.setError(null);
+    store.setCurrentMessageId(messageId);
     store.setIsLoading(true);
     store.setLoadingStatus(stepConfig.progressMsg || '');
 
@@ -259,6 +260,17 @@ export function useSwarmRegeneration({
       // Cleanup tracking
       activeRegenerationsRef.current.delete(regenerationKey);
       useAgentStore.getState().unregisterAbortController(controllerKey);
+      
+      // If we are in multi-agent steps, pause to allow user to continue or review
+      // Synthesis step completion usually handles its own cleanup in StepRunner/Orchestrator
+      if (stepId !== STEPS.SYNTHESIS) {
+          useAgentStore.getState().setIsPaused(true);
+      } else {
+          // If synthesis completed successfully, we can finish the global loading state
+          useAgentStore.getState().setIsLoading(false);
+          useAgentStore.getState().setIsPaused(false);
+          useAgentStore.getState().setCurrentMessageId(undefined);
+      }
       
     } catch (error) {
       // ABORT GUARD: If the error is due to user cancellation, don't treat it as a failure

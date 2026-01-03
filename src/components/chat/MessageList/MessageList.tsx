@@ -1,4 +1,4 @@
-import React, { FC, RefObject, memo } from 'react';
+import React, { FC, RefObject, memo, useMemo } from 'react';
 import { AgentAvatar } from '@/components/chat/AgentAvatar';
 import { EmptyState } from '@/components/chat/EmptyState';
 import { MarkdownRenderer, LoadingIndicator } from '@/components/ui';
@@ -107,20 +107,31 @@ const MessageListComponent: FC<MessageListProps> = ({
                         messageId={messageId}
                         onContinue={onContinue}
                         onRegenerate={(phase, agentIndex) => onRegenerate(msg.id, phase as StepId, agentIndex)}
+                        work={msg.work || currentWork}
                       />
                     )}
 
                     {/* 2. Work Content (Live or History) */}
-                    {(msg.work || (isActiveGeneration && currentWork)) && (
-                      <ShowWork
-                        work={msg.work || currentWork!}
-                        messageId={msg.id}
-                        isLive={isActiveGeneration}
-                        isPaused={isPaused}
-                        onContinue={onContinue}
-                        onRegenerate={(phase, agentIndex) => onRegenerate(msg.id, phase as StepId, agentIndex)}
-                      />
-                    )}
+                    {useMemo(() => {
+                      if (!(msg.work || (isActiveGeneration && currentWork))) return null;
+                      
+                      // Allow regeneration only if the message wasn't manually stopped
+                      const canRegenerate = !msg.work?.isStopped;
+                      const handleRegenerate = canRegenerate 
+                        ? (phase: string, agentIndex: number) => onRegenerate(msg.id, phase as StepId, agentIndex)
+                        : undefined;
+                      
+                      return (
+                        <ShowWork
+                          work={msg.work || currentWork!}
+                          messageId={msg.id}
+                          isLive={isActiveGeneration}
+                          isPaused={isPaused}
+                          onContinue={onContinue}
+                          onRegenerate={handleRegenerate}
+                        />
+                      );
+                    }, [msg.work, isActiveGeneration, currentWork, msg.id, isPaused, onContinue, onRegenerate])}
                   </>
                 )}
                 
@@ -144,6 +155,7 @@ const MessageListComponent: FC<MessageListProps> = ({
               messageId={messageId}
               onContinue={onContinue}
               onRegenerate={messageId ? (phase, agentIndex) => onRegenerate(messageId, phase as StepId, agentIndex) : undefined}
+              work={currentWork}
             />
             {currentWork && (
               <div className="show-work-wrapper">

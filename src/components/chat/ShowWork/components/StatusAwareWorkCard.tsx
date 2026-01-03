@@ -28,6 +28,7 @@ interface StatusAwareWorkCardProps {
   
   // Callbacks
   onCardAction: (cardId: string, action: CardActionType) => void;
+  allowRegenerate?: boolean;
 }
 
 export type DisplayStatus = 'waiting' | 'working' | 'done' | 'error';
@@ -46,7 +47,8 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
   debugInfo,
   downloadFilename,
   className,
-  onCardAction
+  onCardAction,
+  allowRegenerate
 }) => {
   const config = getStepConfig(step);
   
@@ -78,6 +80,7 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
       thought={thought}
       debugInfo={debugInfo}
       downloadFilename={downloadFilename}
+      allowRegenerate={allowRegenerate}
     />
   );
 };

@@ -232,6 +232,7 @@ export interface Work {
    * Contains system instructions, chat history, and user prompts for debugging.
    */
   debugInfo?: DebugInfo;
+  isStopped?: boolean;
 }
 
 export interface Message {

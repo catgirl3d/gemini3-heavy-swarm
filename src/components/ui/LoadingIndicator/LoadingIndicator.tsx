@@ -6,6 +6,7 @@ import { TimerDisplay } from '@/components/ui/TimerDisplay';
 import { Logger } from '@shared/utils/logger';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { getErroredAgents, isAnyAgentWorking, isErrorState, getContinueButtonText, handleContinueClick } from '@/utils/swarm/continueHelpers';
+import { isSynthesisComplete } from '@/utils/swarm/workHelpers';
 import './LoadingIndicator.css';
 
 const logger = new Logger('LoadingIndicator');
@@ -18,7 +19,8 @@ export const LoadingIndicator: FC<{
     onContinue?: () => void;
     onRegenerate?: (stepId: StepId, agentIndex: number) => void;
     noWrapper?: boolean;
-}> = ({ status, agentStates, isPaused, messageId, onContinue, onRegenerate, noWrapper }) => {
+    work?: Work;
+}> = ({ status, agentStates, isPaused, messageId, onContinue, onRegenerate, noWrapper, work }) => {
   // Check for errors in any step to determine button state
   const erroredAgents = getErroredAgents(agentStates, messageId);
   const isWorking = isAnyAgentWorking(agentStates, messageId);
@@ -104,7 +106,8 @@ export const LoadingIndicator: FC<{
         <div className={`loading-header ${isError ? 'controls-only' : ''}`}>
             {!isError && <span className="loading-status">{displayStatus}</span>}
             <div className="loading-header-content">
-                {isPaused && !isWorking && (onContinue || (erroredAgents.length > 0 && onRegenerate)) && (
+                {/* Only show Continue/Retry if paused, not working, synthesis incomplete, and actions available */}
+                {isPaused && !isWorking && (onContinue || (erroredAgents.length > 0 && onRegenerate)) && !isSynthesisComplete(work, agentStates) && (
                     <button className="continue-button" onClick={handleClick}>
                         {continueButtonText}
                     </button>

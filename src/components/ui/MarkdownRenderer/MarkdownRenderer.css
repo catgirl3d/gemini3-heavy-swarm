@@ -44,10 +44,8 @@
   font-family: var(--code-font-family);
   background-color: var(--focus-ring);
   padding: 0.2em 0.4em;
-  border-radius: 4px;
-  font-size: 0.9em;
+  font-size: 0.85em;
   color: inherit;
-  border: 1px solid var(--model-message-border);
 }
 
 .message.user .markdown-content code {

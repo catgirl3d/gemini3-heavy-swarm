@@ -1,4 +1,4 @@
-import { Work, TokenUsage } from '@/types';
+import { Work, TokenUsage, AgentState } from '@/types';
 import { StepId, STEPS } from '@/types/steps';
 
 /**
@@ -238,4 +238,25 @@ export function cloneWork(work: Work): Work {
     agentNames: work.agentNames ? [...work.agentNames] : undefined,
     criticNames: work.criticNames ? [...work.criticNames] : undefined,
   };
+}
+
+/**
+ * Determines if the Synthesis step is complete.
+ * Prefers stepMetadata if available, falls back to agentStates.
+ * This ensures consistent behavior across all UI components.
+ * 
+ * @param work - The Work object containing step metadata
+ * @param agentStates - Array of agent states from the store
+ * @returns true if synthesis is complete, false otherwise
+ */
+export function isSynthesisComplete(
+  work: Work | undefined,
+  agentStates: AgentState[]
+): boolean {
+  // Primary source: stepMetadata (persisted in history)
+  const metaStatus = work?.stepMetadata?.find(m => m.id === STEPS.SYNTHESIS)?.status;
+  if (metaStatus) return metaStatus === 'done';
+  
+  // Fallback: live agentStates (for active generations)
+  return agentStates.some(a => a.stepId === STEPS.SYNTHESIS && a.status === 'done');
 }

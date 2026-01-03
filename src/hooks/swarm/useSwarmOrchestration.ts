@@ -90,9 +90,22 @@ export function useSwarmOrchestration({
   const stopGeneration = () => {
     logger.debug('stopGeneration called');
     
+    // (!) Read currentMessageId BEFORE calling abortAll() to prevent race condition
+    // where the ID could be cleared by abort handlers before we use it
+    const currentMsgId = useAgentStore.getState().currentMessageId;
+    
     // Centralized abort - stops ALL active processes (main + regenerations)
     useAgentStore.getState().abortAll();
     
+    // Mark the current message as stopped in the history so UI can hide regenerate buttons
+    if (currentMsgId) {
+      setMessages(prev => prev.map(m => 
+        m.id === currentMsgId 
+          ? { ...m, work: m.work ? { ...m.work, isStopped: true } : undefined } 
+          : m
+      ));
+    }
+
     // Clean up UI state
     useAgentStore.getState().setIsLoading(false);
     useAgentStore.getState().setIsPaused(false);
@@ -258,6 +271,7 @@ export function useSwarmOrchestration({
       logger.debug('Clearing loading state after success');
       useAgentStore.getState().setCurrentWork(undefined);
       useAgentStore.getState().setIsLoading(false);
+      useAgentStore.getState().setIsPaused(false);
       useAgentStore.getState().setCurrentMessageId(undefined);
     } catch (error) {
       logger.error('sendMessage CATCH - handling error', { error });

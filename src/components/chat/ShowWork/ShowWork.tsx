@@ -6,7 +6,7 @@ import { DebugModal } from '@/components/chat/ShowWork/components/DebugModal';
 import { StatusAwareWorkCard } from '@/components/chat/ShowWork/components/StatusAwareWorkCard';
 import { CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
 import { ArrowDownIcon, TokenIcon } from '@/components/chat/ShowWork/icons';
-import { getStepResults, getStepThoughts, getStepUsage, getSynthesisThought, getSynthesisUsage, getSynthesisResult } from '@/utils/swarm/workHelpers';
+import { getStepResults, getStepThoughts, getStepUsage, getSynthesisThought, getSynthesisUsage, getSynthesisResult, isSynthesisComplete } from '@/utils/swarm/workHelpers';
 import { useResolvedSwarmState } from '@/hooks/swarm/useResolvedSwarmState';
 import { getErroredAgents, isAnyAgentWorking, isErrorState, getContinueButtonText, handleContinueClick as handleContinueClickHelper } from '@/utils/swarm/continueHelpers';
 import { useAgentStore } from '@/stores/agentStore';
@@ -190,15 +190,20 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
 
   // Determine if the continue/retry button should be visible
   const showContinueButton = useMemo(() => {
-    // Don't show if agents are actively working
+    // 1. Don't show if agents are actively working
     if (isWorking) return false;
     
-    // Only show for live, paused messages
+    // 2. Only show for live, paused messages
     if (!isLive || !isPaused) return false;
+
+    // 3. CRITICAL: Don't show if synthesis is already done.
+    // This prevents the "ghost" Continue button after full completion.
+    const isSynthesisDone = isSynthesisComplete(work, []);
+    if (isSynthesisDone) return false;
     
-    // Show if we can continue OR if there are errors and we can regenerate
+    // 4. Show if we can continue OR if there are errors and we can regenerate
     return onContinue !== undefined || (erroredAgents.length > 0 && onRegenerate !== undefined);
-  }, [isPaused, isLive, isWorking, onContinue, erroredAgents.length, onRegenerate]);
+  }, [isPaused, isLive, isWorking, onContinue, erroredAgents.length, onRegenerate, work?.stepMetadata]);
 
   return (
     <>
@@ -230,6 +235,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
                   thought={meta?.thought ?? undefined}
                   debugInfo={meta?.debugInfo}
                   downloadFilename={`${name.replace(/\s+/g, '-')}-Initial_Draft.md`}
+                  allowRegenerate={!!onRegenerate}
                 />
               );
             })}
@@ -261,6 +267,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
                     thought={meta?.thought ?? undefined}
                     debugInfo={meta?.debugInfo}
                     downloadFilename={`${name.replace(/\s+/g, '-')}-Refined_Response.md`}
+                    allowRegenerate={!!onRegenerate}
                   />
                 );
               })}
@@ -285,6 +292,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
                     thought={cardMetaMap.get('synthesis')?.thought || undefined}
                     debugInfo={cardMetaMap.get('synthesis')?.debugInfo}
                     downloadFilename="Synthesis_Report.md"
+                    allowRegenerate={!!onRegenerate}
                 />
             </div>
         )}

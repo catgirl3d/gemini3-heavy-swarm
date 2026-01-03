@@ -24,6 +24,12 @@ interface WorkCardProps {
   onShowThought?: () => void;
   onShowDebug?: () => void;
   onRegenerate?: () => void;
+  /**
+   * Controls whether the regenerate action is available.
+   * Defaults to `false` as a secure default to prevent unintended actions
+   * (e.g., for stopped/completed messages or when permission isn't explicitly granted).
+   */
+  allowRegenerate?: boolean;
   downloadFilename: string;
   className?: string;
 }
@@ -117,6 +123,7 @@ const WorkCardComponent: FC<WorkCardProps> = ({
   onShowThought,
   onShowDebug,
   onRegenerate,
+  allowRegenerate = false,
   downloadFilename,
   className = ''
 }) => {
@@ -187,7 +194,7 @@ const WorkCardComponent: FC<WorkCardProps> = ({
     return <MarkdownRenderer content={content} />;
   };
 
-  const canRegenerate = Boolean(onRegenerate || (cardId && onCardAction));
+  const canRegenerate = allowRegenerate && Boolean(onRegenerate || (cardId && onCardAction));
 
   const actions = useMemo(() => [
     ...(thought ? [{
