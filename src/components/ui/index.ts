@@ -1,4 +1,5 @@
 export * from './CodeBlock';
+export * from './CustomSelect';
 export * from './LoadingIndicator';
 export * from './MarkdownRenderer';
 export * from './PortalDropdown';

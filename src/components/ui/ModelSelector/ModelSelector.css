@@ -79,7 +79,7 @@
     gap: 0.5rem;
 }
 
-.model-search-input {
+.model-search-wrapper .custom-select-search-input {
     width: 100%;
     padding: 0.6rem 0.8rem;
     background: var(--bg-card);
@@ -92,7 +92,7 @@
     transition: var(--transition-standard);
 }
 
-.model-search-input:focus {
+.model-search-wrapper .custom-select-search-input:focus {
     border-color: var(--accent-color);
     box-shadow: 0 0 0 3px var(--focus-ring);
 }
@@ -143,36 +143,20 @@
     flex: 1;
 }
 
-.model-option {
+/* Unused model-option styles removed as CustomSelect handles them */
+
+
+.model-option-wrapper {
     width: 100%;
-    padding: 0.5rem 0.5rem;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-md);
-    border-bottom: 1px solid var(--bg-tertiary);
-    color: var(--text-primary);
-    text-align: left;
-    cursor: pointer;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    transition: all 0.1s;
-    margin-bottom: 2px;
-}
-
-.model-option:hover {
-    background: var(--bg-tertiary);
-}
-
-.model-option.selected {
-    background: var(--accent-bg);
-    color: var(--accent-color);
 }
 
 .model-option-header {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
+    width: 100%;
     gap: 0.5rem;
 }
 
@@ -196,7 +180,7 @@
 	border-radius: var(--radius-xs);
 }
 
-.model-option.selected .model-price-tag {
+.custom-select-option.selected .model-price-tag {
     background: var(--bg-card);
     color: var(--accent-color);
 }
@@ -206,7 +190,7 @@
     color: var(--text-secondary);
 }
 
-.model-option.selected .model-option-value {
+.custom-select-option.selected .model-option-value {
     color: var(--accent-color);
     opacity: 0.8;
 }
@@ -221,13 +205,11 @@
     opacity: 0.7;
 }
 
-.model-option.recommended {
-    margin-bottom: 4px;
+.model-option-wrapper.recommended {
+    /* margin-bottom handled by list gap/padding */
 }
 
-.model-option.recommended:hover {
-    background: var(--warning-bg);
-}
+/* Custom hover for recommended models could be applied via CustomSelect dropdownClassName if needed */
 
 .star-icon {
     color: var(--warning-color);

@@ -1,5 +1,6 @@
 import React, { FC } from 'react';
 import { EditIcon } from '@/components/modals/SettingsModal/icons';
+import { ProfileSelector } from './ProfileSelector';
 
 interface ProfileHeaderProps {
     label: string;
@@ -30,6 +31,15 @@ export const ProfileHeader: FC<ProfileHeaderProps> = ({
     onDelete,
     canDelete
 }) => {
+    const handleProfileSelect = (id: string) => {
+        // Convert to synthetic event to match existing signature
+        const syntheticEvent = {
+            target: { value: id },
+            currentTarget: { value: id }
+        } as React.ChangeEvent<HTMLSelectElement>;
+        onProfileChange(syntheticEvent);
+    };
+
     return (
         <div className="profile-header-compact">
             <div className="profile-select-wrapper">
@@ -48,15 +58,11 @@ export const ProfileHeader: FC<ProfileHeaderProps> = ({
                     </div>
                 ) : (
                     <div className="profile-name-edit">
-                        <select
-                            value={activeId}
-                            onChange={onProfileChange}
-                            className="modal-input font-semibold"
-                        >
-                            {profiles.map(p => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                        </select>
+                        <ProfileSelector
+                            profiles={profiles}
+                            activeId={activeId}
+                            onChange={handleProfileSelect}
+                        />
                         <button
                             className="modal-icon-btn"
                             onClick={onStartEditing}

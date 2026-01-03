@@ -1,10 +1,10 @@
-import React, { FC, useState, useEffect, useRef, useMemo } from 'react';
+import React, { FC, useState, useEffect, useMemo } from 'react';
 import { fetchOpenRouterModels } from '@/services/openrouter/modelsService';
 import { RECOMMENDED_MODEL_IDS, FILTERED_MODEL_IDS } from '@/services/openrouter/constants';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
 import { SortAscIcon, SortDescIcon, StarIcon } from '@/components/modals/SettingsModal/icons';
 import { ProviderType } from '@/types';
-import { PortalDropdown } from '@/components/ui/PortalDropdown/PortalDropdown';
+import { CustomSelect, CustomSelectOption } from '@/components/ui/CustomSelect';
 import { getProviderLogo } from '@/utils/logoHelpers';
 import thinkingIcon from '@/assets/thinking.png';
 import './ModelSelector.css';
@@ -32,17 +32,10 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
     placeholder,
     showEmptyOption,
     emptyLabel,
-    isOpen: controlledIsOpen,
+    isOpen,
     onOpenChange,
     isDemoMode = false
 }) => {
-    const [internalIsOpen, setInternalIsOpen] = useState(false);
-    const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
-    const setIsOpen = (open: boolean) => {
-        if (onOpenChange) onOpenChange(open);
-        else setInternalIsOpen(open);
-    };
-
     const [search, setSearch] = useState('');
     const [sortBy, setSortBy] = useState<'name' | 'price_asc' | 'price_desc'>('name');
 
@@ -57,8 +50,6 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
-    const triggerRef = useRef<HTMLButtonElement>(null);
-    const searchInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (provider === ProviderType.Gemini) {
@@ -102,13 +93,6 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
         }
     }, [provider, retryCount]);
 
-    useEffect(() => {
-        if (isOpen) {
-            setSearch('');
-            setTimeout(() => searchInputRef.current?.focus(), 50);
-        }
-    }, [isOpen]);
-
     const sortedAndFilteredModels = useMemo(() => {
         const lowerSearch = search.toLowerCase();
         const isModelFiltered = (id: string) => FILTERED_MODEL_IDS.some(f => id.toLowerCase().includes(f.toLowerCase()));
@@ -138,7 +122,6 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
         }
 
         return result;
-        // FILTERED_MODEL_IDS and RECOMMENDED_MODEL_IDS are external constants
     }, [models, search, sortBy, provider, isDemoMode]);
 
     const recommendedModels = useMemo(() => {
@@ -154,168 +137,107 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
         return filtered.sort((a, b) =>
             RECOMMENDED_MODEL_IDS.indexOf(a.value) - RECOMMENDED_MODEL_IDS.indexOf(b.value)
         );
-        // RECOMMENDED_MODEL_IDS and FILTERED_MODEL_IDS are external constants
     }, [models, search, provider, isDemoMode]);
 
-    const selectedModel = models.find(m => m.value === value) || (value ? { value, label: value } : null);
-    const displayLabel = selectedModel ? selectedModel.label : (value === '' && showEmptyOption ? (emptyLabel || 'None') : (placeholder || 'Select model...'));
+    const options = useMemo(() => {
+        const combined: CustomSelectOption<string>[] = [];
+        
+        if (showEmptyOption && !search) {
+            combined.push({ value: '', label: emptyLabel || 'None' });
+        }
 
-    const handleSelect = (modelValue: string) => {
-        onChange(modelValue);
-        setIsOpen(false);
-    };
+        if (recommendedModels.length > 0) {
+            combined.push({ value: 'header-rec', label: 'Recommended', isHeader: true });
+            recommendedModels.forEach(m => {
+                combined.push({ ...m, isRecommended: true });
+            });
+            combined.push({ value: 'header-all', label: 'All Models', isHeader: true });
+        }
 
-    return (
-        <div className="model-selector-container">
-            <button
-                ref={triggerRef}
-                className={`model-selector-trigger ${disabled ? 'disabled' : ''}`}
-                onClick={() => !disabled && setIsOpen(!isOpen)}
-                disabled={disabled}
-                type="button"
-            >
+        sortedAndFilteredModels.forEach(m => {
+            combined.push(m);
+        });
+
+        return combined;
+    }, [showEmptyOption, emptyLabel, search, recommendedModels, sortedAndFilteredModels]);
+
+    const renderTrigger = (selected: CustomSelectOption<string> | null) => {
+        const logo = getProviderLogo(provider, selected?.value || value);
+        const label = selected ? selected.label : (value || placeholder || 'Select model...');
+        
+        return (
+            <>
                 <span className="selected-model-label">
-                    <img 
-                      src={getProviderLogo(provider, value)} 
-                      alt="" 
-                      className="model-trigger-icon" 
-                      key={value}
-                    />
-                    {displayLabel}
+                    <img src={logo} alt="" className="model-trigger-icon" key={value} />
+                    {label}
                 </span>
                 <svg className={`chevron ${isOpen ? 'open' : ''}`} xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M6 9l6 6 6-6" />
                 </svg>
-            </button>
+            </>
+        );
+    };
 
-            <PortalDropdown isOpen={isOpen} triggerRef={triggerRef}>
-                <div className="model-selector-dropdown">
-                    <div className="model-search-wrapper">
-                        <div className="model-search-row">
-                            <input
-                                ref={searchInputRef}
-                                type="text"
-                                className="model-search-input"
-                                placeholder="Search models..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Escape') setIsOpen(false);
-                                    if (e.key === 'Enter' && search && sortedAndFilteredModels.length > 0) {
-                                        handleSelect(sortedAndFilteredModels[0].value);
-                                    }
-                                }}
-                            />
-                        </div>
-                        {provider === ProviderType.OpenRouter && (
-                            <div className="model-sort-row">
-                                <span className="sort-label">Sort by:</span>
-                                <button
-                                    className={`sort-btn ${sortBy === 'name' ? 'active' : ''}`}
-                                    onClick={() => setSortBy('name')}
-                                >
-                                    Name
-                                </button>
-                                <button
-                                    className={`sort-btn ${sortBy === 'price_asc' ? 'active' : ''}`}
-                                    onClick={() => setSortBy('price_asc')}
-                                    title="Price: Low to High"
-                                >
-                                    Price
-                                    <SortAscIcon />
-                                </button>
-                                <button
-                                    className={`sort-btn ${sortBy === 'price_desc' ? 'active' : ''}`}
-                                    onClick={() => setSortBy('price_desc')}
-                                    title="Price: High to Low"
-                                >
-                                    Price
-                                    <SortDescIcon />
-                                </button>
-                            </div>
-                        )}
+    const renderOption = (option: CustomSelectOption<string>) => {
+        if (option.value === '') {
+            return <div className="model-option-label">{option.label}</div>;
+        }
+
+        return (
+            <div className={`model-option-wrapper ${option.isRecommended ? 'recommended' : ''}`} title={option.description}>
+                <div className="model-option-header">
+                    <div className="model-option-label">
+                        {option.isRecommended && <span className="star-icon"><StarIcon /></span>}
+                        <img src={getProviderLogo(provider, option.value)} alt="" className="model-option-icon" />
+                        {option.label}
+                        {option.supportsReasoning && <img src={thinkingIcon} alt="thinking" className="thinking-indicator" title="Supports reasoning" />}
                     </div>
-                    <div className="model-options-list">
-                        {isLoading ? (
-                            <div className="model-loading">Loading models...</div>
-                        ) : error ? (
-                            <div className="model-error-container">
-                                <div className="model-error-message">{error}</div>
-                                <button 
-                                    className="model-retry-btn"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setRetryCount(prev => prev + 1);
-                                    }}
-                                >
-                                    Retry
-                                </button>
-                            </div>
-                        ) : (
-                            <>
-                                {showEmptyOption && !search && (
-                                    <button
-                                        className={`model-option ${value === '' ? 'selected' : ''}`}
-                                        onClick={() => handleSelect('')}
-                                    >
-                                        <div className="model-option-label">{emptyLabel || 'None'}</div>
-                                    </button>
-                                )}
-
-                                {recommendedModels.length > 0 && (
-                                    <>
-                                        <div className="model-list-section-header">Recommended</div>
-                                        {recommendedModels.map(m => (
-                                            <button
-                                                key={`rec-${m.value}`}
-                                                className={`model-option recommended ${m.value === value ? 'selected' : ''}`}
-                                                onClick={() => handleSelect(m.value)}
-                                                title={m.description}
-                                            >
-                                                <div className="model-option-header">
-                                                    <div className="model-option-label">
-                                                        <span className="star-icon"><StarIcon /></span>
-                                                        <img src={getProviderLogo(provider, m.value)} alt="" className="model-option-icon" />
-                                                        {m.label}
-                                                        {m.supportsReasoning && <img src={thinkingIcon} alt="thinking" className="thinking-indicator" title="Supports reasoning" />}
-                                                    </div>
-                                                    {m.priceText && <div className="model-price-tag">{m.priceText}</div>}
-                                                </div>
-                                                <div className="model-option-value">{m.value}</div>
-                                            </button>
-                                        ))}
-                                        <div className="model-list-section-header">All Models</div>
-                                    </>
-                                )}
-
-                                {sortedAndFilteredModels.map(m => (
-                                    <button
-                                        key={m.value}
-                                        className={`model-option ${m.value === value ? 'selected' : ''}`}
-                                        onClick={() => handleSelect(m.value)}
-                                        title={m.description}
-                                    >
-                                        <div className="model-option-header">
-                                            <div className="model-option-label">
-                                                <img src={getProviderLogo(provider, m.value)} alt="" className="model-option-icon" />
-                                                {m.label}
-                                                {m.supportsReasoning && <img src={thinkingIcon} alt="thinking" className="thinking-indicator" title="Supports reasoning" />}
-                                            </div>
-                                            {m.priceText && <div className="model-price-tag">{m.priceText}</div>}
-                                        </div>
-                                        <div className="model-option-value">{m.value}</div>
-                                    </button>
-                                ))}
-                            </>
-                        )}
-                        {!isLoading && sortedAndFilteredModels.length === 0 && (!showEmptyOption || search) && (
-                            <div className="no-models-found">
-                                {search ? 'No models match your search' : 'No models available'}
-                            </div>
-                        )}
-                    </div>
+                    {option.priceText && <div className="model-price-tag">{option.priceText}</div>}
                 </div>
-            </PortalDropdown>
+                <div className="model-option-value">{option.value}</div>
+            </div>
+        );
+    };
+
+    const dropdownHeader = provider === ProviderType.OpenRouter && (
+        <div className="model-sort-row">
+            <span className="sort-label">Sort by:</span>
+            <button className={`sort-btn ${sortBy === 'name' ? 'active' : ''}`} onClick={() => setSortBy('name')}>Name</button>
+            <button className={`sort-btn ${sortBy === 'price_asc' ? 'active' : ''}`} onClick={() => setSortBy('price_asc')} title="Price: Low to High">Price <SortAscIcon /></button>
+            <button className={`sort-btn ${sortBy === 'price_desc' ? 'active' : ''}`} onClick={() => setSortBy('price_desc')} title="Price: High to Low">Price <SortDescIcon /></button>
         </div>
+    );
+
+    const dropdownFooter = (isLoading || error) && (
+        <div className="model-footer-status">
+            {isLoading && <div className="model-loading">Loading models...</div>}
+            {error && (
+                <div className="model-error-container">
+                    <div className="model-error-message">{error}</div>
+                    <button className="model-retry-btn" onClick={(e) => { e.stopPropagation(); setRetryCount(prev => prev + 1); }}>Retry</button>
+                </div>
+            )}
+        </div>
+    );
+
+    return (
+        <CustomSelect
+            options={options}
+            value={value}
+            onChange={onChange}
+            disabled={disabled}
+            isOpen={isOpen}
+            onOpenChange={onOpenChange}
+            searchable={true}
+            searchPlaceholder="Search models..."
+            searchWrapperClassName="model-search-wrapper"
+            onSearchChange={setSearch}
+            renderTrigger={renderTrigger}
+            renderOption={renderOption}
+            dropdownHeader={dropdownHeader}
+            dropdownFooter={dropdownFooter}
+            className="model-selector-container"
+            dropdownClassName="model-selector-dropdown"
+        />
     );
 };
