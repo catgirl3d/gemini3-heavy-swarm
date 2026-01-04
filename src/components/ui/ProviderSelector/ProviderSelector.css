@@ -17,7 +17,7 @@
     text-align: left;
     transition: all 0.2s;
     font-family: var(--font-family);
-    font-size: 0.9rem;
+    font-size: var(--text-base);
 }
 
 .provider-selector-trigger:hover:not(.disabled) {
@@ -119,6 +119,6 @@
 
 .provider-option-label {
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: var(--text-base);
 }
 

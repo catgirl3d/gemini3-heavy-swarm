@@ -25,27 +25,27 @@ export const RoleItem: FC<RoleItemProps> = ({
     onMoveDown
 }) => {
     return (
-        <div className="role-item compact">
-            <div className="role-compact-row">
-                <div className="role-ordinal">#{index + 1}</div>
+        <div className="modal-item-card compact">
+            <div className="modal-item-row">
+                <div className="modal-item-ordinal">#{index + 1}</div>
 
-                <div className="role-main-content">
-                    <div className="role-info-group">
-                        <div className="role-name-display">
+                <div className="modal-item-main">
+                    <div className="modal-item-info">
+                        <div className="modal-item-name">
                             {role.name || 'Unnamed Role'}
                         </div>
                         {role.model && (
-                            <div className="role-model-tag">
+                            <div className="modal-item-tag">
                                 {role.model}
                             </div>
                         )}
                     </div>
                 </div>
 
-                <div className="role-actions-compact">
-                    <div className="role-move-buttons horizontal">
+                <div className="modal-item-actions">
+                    <div className="modal-item-move-controls horizontal">
                         <button
-                            className="move-role-btn"
+                            className="modal-item-move-btn"
                             onClick={onMoveUp}
                             disabled={isFirst}
                             title="Move Up"
@@ -53,7 +53,7 @@ export const RoleItem: FC<RoleItemProps> = ({
                             <ArrowUpIcon />
                         </button>
                         <button
-                            className="move-role-btn"
+                            className="modal-item-move-btn"
                             onClick={onMoveDown}
                             disabled={isLast}
                             title="Move Down"
@@ -72,7 +72,7 @@ export const RoleItem: FC<RoleItemProps> = ({
 
                     {canDelete && (
                         <button
-                            className="modal-icon-btn delete-role-btn"
+                            className="modal-icon-btn modal-item-delete-btn"
                             onClick={onDelete}
                             title="Delete Role"
                         >

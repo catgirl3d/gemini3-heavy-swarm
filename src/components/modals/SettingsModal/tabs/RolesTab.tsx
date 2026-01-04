@@ -60,40 +60,40 @@ export const RolesTab: FC<RolesTabProps> = ({
                 canDelete={(localSettings.roleProfiles || []).length > 1}
             />
 
-            <div className="roles-section-wrapper">
-                <div className="roles-toolbar">
-                    <div className="roles-toolbar-content">
-                        <div className="role-type-toggle">
+            <div className="modal-card-container">
+                <div className="modal-card-header">
+                    <div className="modal-card-header-content">
+                        <div className="modal-type-toggle">
                             <button
-                                className={`role-type-btn ${activeRoleType === 'drafter' ? 'active' : ''}`}
+                                className={`modal-type-toggle-btn ${activeRoleType === 'drafter' ? 'active' : ''}`}
                                 onClick={() => setActiveRoleType('drafter')}
                             >
                                 Drafters
                             </button>
                             <button
-                                className={`role-type-btn ${activeRoleType === 'critic' ? 'active' : ''}`}
+                                className={`modal-type-toggle-btn ${activeRoleType === 'critic' ? 'active' : ''}`}
                                 onClick={() => setActiveRoleType('critic')}
                             >
                                 Critics
                             </button>
                         </div>
                     </div>
-                    <div className="roles-toolbar-actions">
-                        <button className="add-role-btn-small" onClick={handleRestoreDefaultRoles}>
+                    <div className="modal-card-header-actions">
+                        <button className="modal-btn outline" onClick={handleRestoreDefaultRoles}>
                             Restore Defaults
                         </button>
-                        <button className="add-role-btn-small" onClick={handleAddRole}>+ Add Role</button>
+                        <button className="modal-btn outline" onClick={handleAddRole}>+ Add Role</button>
                     </div>
                 </div>
 
-                <div className="roles-list-container">
+                <div className="modal-card-content">
                     <div className="modal-banner info">
                         <InfoIcon />
                         <span>
                             Roles are applied during the <strong>{activeRoleType === 'drafter' ? 'Initial Draft' : 'Refinement (Critique)'}</strong> phase.
                         </span>
                     </div>
-                    <div className="roles-list">
+                    <div className="modal-section-list">
                         {roles.map((role, index) => (
                             <RoleItem
                                 key={index}
@@ -109,7 +109,7 @@ export const RolesTab: FC<RolesTabProps> = ({
                             />
                         ))}
                         {roles.length === 0 && (
-                            <div className="no-roles-message">
+                            <div className="modal-no-items-message">
                                 No roles defined. Add a role to get started.
                             </div>
                         )}

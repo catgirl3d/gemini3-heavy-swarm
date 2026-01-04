@@ -49,12 +49,12 @@ export const PromptsTab: FC<PromptsTabProps> = ({
                 canDelete={localSettings.profiles.length > 1}
             />
 
-            <div className="roles-section-wrapper">
-                <div className="roles-toolbar">
-                    <h4 className="modal-section-title">System Instructions</h4>
+            <div className="modal-card-container">
+                <div className="modal-card-header">
+                    <h4 className="modal-card-title">System Instructions</h4>
                 </div>
-                <div className="roles-list-container">
-                    <div className="roles-list">
+                <div className="modal-card-content">
+                    <div className="modal-section-list">
                         {([PROMPT_TYPES.INITIAL, PROMPT_TYPES.REFINEMENT, PROMPT_TYPES.SYNTHESIS] as const).map((id, index) => (
                             <InstructionItem
                                 key={id}

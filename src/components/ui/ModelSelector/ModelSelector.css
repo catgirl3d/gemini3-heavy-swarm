@@ -17,7 +17,7 @@
     text-align: left;
     transition: all 0.2s;
     font-family: var(--font-family);
-    font-size: 0.9rem;
+    font-size: var(--text-base);
 }
 
 .model-selector-trigger:hover:not(.disabled) {
@@ -88,7 +88,7 @@
     color: var(--text-primary);
     outline: none;
     font-family: var(--font-family);
-    font-size: 0.9rem;
+    font-size: var(--text-base);
     transition: var(--transition-standard);
 }
 
@@ -105,7 +105,7 @@
 }
 
 .sort-label {
-    font-size: 0.75rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -117,7 +117,7 @@
     border: 1px solid var(--model-message-border);
     padding: 0.2rem 0.5rem;
     border-radius: var(--radius-xs);
-    font-size: 0.75rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     color: var(--text-secondary);
     cursor: pointer;
@@ -162,7 +162,7 @@
 
 .model-option-label {
     font-weight: 600;
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -172,7 +172,7 @@
 }
 
 .model-price-tag {
-	font-size: 0.62rem;
+	font-size: var(--text-2xs);
 	font-weight: 700;
 	color: var(--text-primary);
 	background: var(--bg-tertiary);
@@ -186,7 +186,7 @@
 }
 
 .model-option-value {
-    font-size: 0.75rem;
+    font-size: var(--text-xs);
     color: var(--text-secondary);
 }
 
@@ -196,7 +196,7 @@
 }
 
 .model-list-section-header {
-    font-size: 0.7rem;
+    font-size: var(--text-2xs);
     font-weight: 800;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -205,9 +205,6 @@
     opacity: 0.7;
 }
 
-.model-option-wrapper.recommended {
-    /* margin-bottom handled by list gap/padding */
-}
 
 /* Custom hover for recommended models could be applied via CustomSelect dropdownClassName if needed */
 
@@ -224,7 +221,7 @@
     padding: 2rem;
     text-align: center;
     color: var(--text-secondary);
-    font-size: 0.9rem;
+    font-size: var(--text-base);
 }
 
 .model-error-message {
@@ -255,7 +252,7 @@
 
 .custom-model-hint {
     margin-top: 0.5rem;
-    font-size: 0.8rem;
+    font-size: var(--text-mobile-base);
     font-style: italic;
     opacity: 0.8;
 }

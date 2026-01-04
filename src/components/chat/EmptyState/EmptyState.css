@@ -10,9 +10,9 @@
 }
 
 .empty-state-icon {
-  width: 92px;
-  height: 92px;
-  margin-bottom: 2.8rem;
+  width: 105px;
+  height: 105px;
+  margin-bottom: 2.6rem;
   position: relative;
   display: flex;
   align-items: center;
@@ -29,32 +29,6 @@
 
   animation: hero-floating 6s infinite ease-in-out;
   z-index: 1;
-}
-
-/* Layer 1: Core Pulse Aura */
-.empty-state-icon::before {
-  content: "";
-  position: absolute;
-  inset: -12px;
-  filter: blur(15px);
-  z-index: -1;
-  animation: hero-pulse 4s infinite alternate ease-in-out;
-}
-
-/* Layer 2: Rotating Ethereal Light */
-.empty-state-icon::after {
-  content: "";
-  position: absolute;
-  inset: -40px;
-  background: conic-gradient(from 0deg at 50% 50%,
-      rgba(255, 255, 255, 0.05) 0deg,
-      transparent 90deg,
-      rgba(148, 163, 184, 0.05) 180deg,
-      transparent 270deg,
-      rgba(255, 255, 255, 0.05) 360deg);
-  filter: blur(30px);
-  z-index: -2;
-  animation: hero-rotate 20s infinite linear;
 }
 
 @keyframes hero-floating {
@@ -104,7 +78,7 @@
 }
 
 .welcome-title {
-  font-size: 2.25rem;
+  font-size: var(--text-5xl);
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--text-primary);
@@ -112,13 +86,13 @@
 }
 
 .welcome-subtitle {
-  font-size: 1.2rem;
+  font-size: var(--text-2xl);
   color: var(--text-secondary);
   margin: 0.35rem 0 0.5rem 0;
 }
 
 .creator-credit {
-  font-size: 0.9rem;
+  font-size: var(--text-base);
   color: var(--accent-color);
   text-decoration: none;
   margin-bottom: 1.6rem;
@@ -143,10 +117,10 @@
 .prompt-button {
   background-color: var(--bg-card);
   border: 1px solid var(--model-message-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   padding: 1.25rem 1.5rem;
   font-family: var(--font-family);
-  font-size: 0.95rem;
+  font-size: var(--text-md);
   text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -165,12 +139,11 @@
 
 @media (max-width: 768px) {
   .welcome-title {
-    font-size: 1.25rem;
+    font-size: var(--text-mobile-3xl);
   }
 
   .welcome-subtitle {
-    font-size: 0.8rem;
-    padding: 0 1rem;
+    font-size: var(--text-mobile-base);
   }
 
   .empty-state-container {
@@ -180,9 +153,12 @@
   }
 
   .empty-state-icon {
-    width: 53px;
-    height: 53px;
-    margin-bottom: 0.9rem;
+    width: 55px;
+    height: 55px;
+    margin-bottom: 0.5rem;
+    padding: 8px;
+    animation: none;
+    border: none;
   }
 
   .example-prompts {
@@ -191,6 +167,11 @@
 
   .prompt-button {
     padding: 0.7rem;
-    font-size: 0.8rem;
+    font-size: var(--text-mobile-base);
+  }
+
+  .creator-credit {
+    font-size: var(--text-mobile-2xs);
+    margin-bottom: 1.4rem;
   }
 }

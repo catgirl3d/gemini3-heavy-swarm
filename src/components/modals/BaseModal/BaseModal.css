@@ -89,7 +89,7 @@
 
 /* Header */
 .modal-header {
-  padding: 0.75rem 1.5rem;
+  padding: .75rem 1.5rem;
   border-bottom: 1px solid var(--model-message-border);
   display: flex;
   justify-content: space-between;
@@ -99,7 +99,7 @@
 
 .modal-header h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: var(--text-xl);
   color: var(--text-primary);
   font-weight: 600;
 }
@@ -127,6 +127,7 @@
   overflow-y: auto;
   padding: 1rem 1.25rem;
   color: var(--text-primary);
+  background: var(--bg-card);
 }
 
 .modal-body ol li p {
@@ -214,7 +215,7 @@
   border-radius: var(--radius-md);
   font-weight: 600;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: var(--text-base);
   border: none;
   transition: var(--transition-standard);
   display: inline-flex;
@@ -224,8 +225,8 @@
 }
 
 .modal-btn.reset {
-  background-color: var(--bg-tertiary);
-  color: var(--text-secondary);
+  background-color: var(--bg-quaternary);
+  color: var(--text-primary);
 }
 
 .modal-btn.reset:hover {
@@ -263,30 +264,37 @@
 .modal-btn.danger:hover {
   background-color: var(--error-bg);
   color: var(--error-color);
-  filter: var(--hover-brightness);
 }
 
 .modal-btn.small {
   padding: 0.4rem 0.8rem;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
 }
 
 /* Form Elements */
 .modal-form-group {
-  margin-bottom: 1rem;
+  margin-bottom: var(--modal-group-padding);
 }
 
 .modal-label {
   display: block;
   font-weight: 600;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--modal-label-padding);
   color: var(--text-primary);
-  font-size: 0.95rem;
+  font-size: var(--text-md);
+}
+
+.modal-label-flex {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .modal-help-text {
-  margin: 0.25rem 0.2rem 0.5rem;
-  font-size: 0.75rem;
+  margin-top: var(--modal-help-text-padding);
+  margin-bottom: 0;
+  margin-left: 0.1rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   line-height: 1.4;
 }
@@ -317,6 +325,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  margin: 0;
 }
 
 .modal-label.no-margin {
@@ -326,18 +335,24 @@
 .modal-input,
 .modal-textarea {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0 0.75rem;
   border: 1px solid var(--model-message-border);
   border-radius: var(--radius-md);
   font-family: var(--font-family);
-  font-size: 0.9rem;
+  font-size: var(--text-base);
   transition: var(--transition-standard);
+  background: var(--input-background);
+}
+
+.modal-input {
+  height: var(--input-height-desktop);
 }
 
 .modal-textarea {
   min-height: 100px;
   resize: vertical;
   line-height: 1.5;
+  padding: 0.75rem;
 }
 
 .modal-input:focus,
@@ -380,12 +395,13 @@
   border-radius: var(--radius-md);
   overflow: hidden;
   width: fit-content;
+  height: var(--input-height-desktop);
 }
 
 .stepper-btn {
   background: var(--bg-secondary);
   border: none;
-  padding: 0.5rem 1rem;
+  padding: 0 1rem;
   cursor: pointer;
   color: var(--text-primary);
   font-size: 1.2rem;
@@ -395,6 +411,8 @@
   align-items: center;
   justify-content: center;
   min-width: 40px;
+  height: 100%;
+
 }
 
 .stepper-btn:hover:not(:disabled) {
@@ -408,13 +426,17 @@
 }
 
 .stepper-value {
-  padding: 0.5rem 1rem;
-  font-weight: 600;
+  padding: 0 1rem;
+  height: 100%;
   min-width: 40px;
+  font-weight: 600;
   text-align: center;
   border-left: 1px solid var(--model-message-border);
   border-right: 1px solid var(--model-message-border);
   background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Checkboxes */
@@ -422,10 +444,14 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 0.75rem;
   padding: 0rem;
   border-radius: var(--radius-md);
   transition: var(--transition-standard);
+  margin-bottom: var(--space-xl);
+}
+
+.checkbox-group:last-child {
+  margin-bottom: 0;
 }
 
 .checkbox-group:hover {
@@ -455,13 +481,19 @@
   background-color: var(--bg-secondary);
   border: 1px solid var(--model-message-border);
   border-radius: var(--radius-lg);
-  padding: 1.25rem;
+  padding: var(--modal-group-padding);
   margin-bottom: 0.5rem;
 }
 
-.modal-card-title,
-.modal-section-title {
-  font-size: 0.75rem;
+.modal-card .modal-form-group:last-child,
+.modal-card .settings-row:last-child,
+.modal-card .checkbox-group:last-child {
+  margin-bottom: 0;
+  width: 100%;
+}
+
+.modal-card-title {
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -470,21 +502,29 @@
   display: block;
 }
 
-.modal-section-title {
-  margin: 0;
+.modal-card-header .modal-card-title {
+	margin: 0px;
 }
 
 /* Utilities */
-.align-center {
-  align-items: center;
-}
-
-.justify-between {
-  justify-content: space-between;
+.align-end {
+  align-items: flex-end;
 }
 
 .flex-1 {
   flex: 1;
+}
+
+.flex-2 {
+  flex: 2;
+}
+
+.flex-none {
+  flex: none;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
 }
 
 .w-full {
@@ -499,7 +539,7 @@
   padding: 0.75rem 1rem;
   border-radius: var(--radius-md);
   margin-bottom: 1rem;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   border: 1px solid transparent;
 }
 
@@ -579,7 +619,7 @@
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
   color: var(--error-text);
-  font-size: 0.9rem;
+  font-size: var(--text-base);
   animation: fade-in 0.3s ease-out;
 }
 
@@ -604,7 +644,7 @@
   color: var(--error-text);
   padding: 0.4rem 0.8rem;
   border-radius: var(--radius-sm);
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
   transition: var(--transition-standard);
@@ -655,12 +695,21 @@
 
   .modal-banner {
     padding: 0.75rem;
-    font-size: 0.69rem;
+    font-size: var(--text-mobile-2xs);
+  }
+
+  .modal-banner.global {
+    padding: 0.12rem 1rem;
   }
 
   .modal-banner button {
     margin-left: 0 !important;
-    margin-top: 0.5rem;
+  }
+
+  .modal-banner svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
   }
 
   .modal-footer {
@@ -671,6 +720,61 @@
   .modal-btn {
     width: 100%;
     padding: 0.5rem;
-    font-size: 0.8rem;
+    font-size: var(--text-mobile-base);
   }
+
+  /* Universal Modal Form Elements */
+  .modal-form-group {
+    margin-top: var(--modal-group-padding-mobile);
+  }
+
+  .modal-label {
+    font-size: var(--text-mobile-base);
+  }
+
+  .modal-input,
+  .modal-textarea {
+    padding: 0 0.6rem;
+    font-size: var(--text-mobile-base);
+  }
+
+  .modal-input {
+    height: var(--input-height-mobile);
+  }
+
+  .modal-textarea {
+    padding: 0.6rem;
+  }
+
+  .modal-divider {
+    margin: 0.75rem 0;
+  }
+
+  .checkbox-group {
+    margin-bottom: 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .checkbox-label {
+    font-size: var(--text-mobile-base);
+  }
+
+  .stepper-btn {
+    padding: 0 0.8rem;
+  }
+
+  .stepper-value {
+    padding: 0 0.8rem;
+    height: 100%;
+    font-size: var(--text-mobile-base);
+  }
+
+  .stepper-control {
+    height: var(--input-height-mobile);
+  }
+
+  .checkbox-group input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+}
 }

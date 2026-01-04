@@ -11,16 +11,16 @@ interface InstructionItemProps {
 
 export const InstructionItem: FC<InstructionItemProps> = ({ index, label, help, model, onEdit }) => {
     return (
-        <div className="role-item compact">
-            <div className="role-compact-row">
-                <div className="role-ordinal">#{index + 1}</div>
+        <div className="modal-item-card compact">
+            <div className="modal-item-row">
+                <div className="modal-item-ordinal">#{index + 1}</div>
 
-                <div className="role-main-content">
-                    <div className="role-info-group">
-                        <div className="role-name-display">
+                <div className="modal-item-main">
+                    <div className="modal-item-info">
+                        <div className="modal-item-name">
                             {label}
                             {model && (
-                                <span className="role-model-tag">
+                                <span className="modal-item-tag">
                                     {model}
                                 </span>
                             )}
@@ -31,7 +31,7 @@ export const InstructionItem: FC<InstructionItemProps> = ({ index, label, help, 
                     </div>
                 </div>
 
-                <div className="role-actions-compact">
+                <div className="modal-item-actions">
                     <button
                         className="modal-icon-btn"
                         onClick={onEdit}

@@ -34,7 +34,7 @@
   --success-color: #10b981;
   --success-bg: #f0fdf4;
   --success-border: #bbf7d0;
-  --success-text: #065f46;
+  --success-text: #22a15a;
 
   --error-color: #ef4444;
   --error-bg: #fef2f2;
@@ -58,6 +58,7 @@
   /* UI Surface & Backgrounds */
   --bg-secondary: #f8fafc;
   --bg-tertiary: #f1f5f9;
+  --bg-quaternary: #ececec;
   --bg-card: #ffffff;
 
   /* Shadows */
@@ -113,6 +114,53 @@
   --radius-4xl: 28px;
   --radius-full: 9999px;
 
+  /* Input/Control Element Heights */
+  --input-height-desktop: 42px;
+  --input-height-stepper: 35px;
+  --input-height-mobile: 36px;
+
+  /* Desktop Typography Scale */
+  --text-2xs: 0.7rem;      /* 11.2px - Micro labels */
+  --text-xs: 0.75rem;      /* 12px - Help text, captions, small labels */
+  --text-sm: 0.85rem;      /* ~13.6px - Secondary content, muted text */
+  --text-base: 0.9rem;     /* ~14.4px - Default UI text, buttons */
+  --text-md: 0.95rem;      /* ~15.2px - Emphasized labels, modal headers */
+  --text-lg: 1rem;         /* 16px - Standard body text */
+  --text-xl: 1.1rem;       /* ~17.6px (Modal headers) */
+  --text-2xl: 1.25rem;     /* 20px (Section titles) */
+  --text-3xl: 1.5rem;      /* 24px */
+  --text-4xl: 1.875rem;    /* 30px */
+  --text-5xl: 2.25rem;     /* 36px (Welcome Title) */
+  
+  /* Mobile Typography Scale (full mirror) */
+  --text-mobile-2xs: 0.65rem;   /* 10.4px - Micro labels */
+  --text-mobile-xs: 0.7rem;     /* 11.2px - Help text, captions */
+  --text-mobile-sm: 0.75rem;    /* 12px - Secondary content */
+  --text-mobile-base: 0.8rem;   /* 12.8px - Default UI text */
+  --text-mobile-md: 0.85rem;    /* 13.6px - Emphasized labels */
+  --text-mobile-lg: 0.9rem;     /* 14.4px - Body text */
+  --text-mobile-xl: 0.95rem;    /* 15.2px - Modal headers */
+  --text-mobile-2xl: 1.1rem;    /* 17.6px - Section titles */
+  --text-mobile-3xl: 1.25rem;   /* 20px */
+  --text-mobile-4xl: 1.5rem;    /* 24px */
+  --text-mobile-5xl: 1.75rem;   /* 28px - Welcome title */
+
+  /* Spacing Scale (Internal Component Padding/Gaps) */
+  --space-xs: 0.25rem;     /* Minimal spacing */
+  --space-sm: 0.4rem;      /* Tight spacing for chips/badges */
+  --space-md: 0.5rem;      /* Button/control padding */
+  --space-lg: 0.6rem;      /* Input padding */
+  --space-xl: 0.75rem;     /* General padding */
+  --space-2xl: 1rem;       /* Large containers */
+  --space-3xl: 1.25rem;    /* Section spacing */
+
+    /* Modal Specific Padding */
+  --modal-group-padding-mobile: var(--space-xl);
+  --modal-header-padding-y: var(--space-xl);
+  --modal-help-text-padding: var(--space-sm);
+  --modal-label-padding: var(--space-md);
+  --modal-group-padding: var(--space-2xl);
+  
   /* Animation Tokens */
   --dropdown-easing: cubic-bezier(0.34, 1.56, 0.64, 1);
   --dropdown-duration: 0.3s;
@@ -200,7 +248,7 @@ header {
 
 header h1 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-primary);
@@ -362,7 +410,7 @@ header h1 {
   font-size: 1rem;
   font-family: var(--font-family);
   color: var(--text-primary);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-md);
   transition: var(--transition-standard);
   box-shadow: var(--shadow-sm);
 }
@@ -656,7 +704,7 @@ header h1 {
   }
 
   header h1 {
-    font-size: 0.95rem;
+    font-size: var(--text-mobile-xl);
     max-width: 100%;
   }
 
@@ -673,7 +721,7 @@ header h1 {
   }
 
   .message {
-    font-size: 0.95rem;
+    font-size: var(--text-mobile-md);
     padding: 0;
   }
 
@@ -683,7 +731,7 @@ header h1 {
 
   /* Input Area */
   .input-container {
-    padding: 0.75rem;
+    padding: 0.6rem;
   }
 
   .input-area {
@@ -692,13 +740,13 @@ header h1 {
 
   .input-area input[type="text"] {
     padding: 0.75rem 1rem;
-    font-size: 1rem;
+    font-size: var(--text-mobile-base);
     min-width: 0;
   }
 
   .input-area button {
-    width: 44px;
-    height: 44px;
+    width: 38px;
+    height: 38px;
     flex-shrink: 0;
   }
 
