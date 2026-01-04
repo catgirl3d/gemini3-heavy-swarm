@@ -245,9 +245,9 @@
 }
 
 .modal-btn.outline {
-  background-color: transparent;
   border: 1px solid var(--model-message-border);
   color: var(--text-primary);
+  background-color: var(--btn-secondary-color);
 }
 
 .modal-btn.outline:hover {

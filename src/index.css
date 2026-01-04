@@ -7,9 +7,11 @@
 :root {
   /* Heavy/Professional Theme */
   --primary-color: #1e293b;
+
   /* Dark Slate */
   --primary-gradient: linear-gradient(135deg, #0f172a 0%, #334155 100%);
   --accent-color: #3b82f6;
+
   /* Blue for interactions */
   --accent-bg: #eff6ff;
   --accent-border: #dbeafe;
@@ -30,6 +32,7 @@
 
   --text-primary: #0f172a;
   --text-secondary: #64748b;
+
   /* Status Colors */
   --success-color: #10b981;
   --success-bg: #f0fdf4;
@@ -60,6 +63,9 @@
   --bg-tertiary: #f1f5f9;
   --bg-quaternary: #ececec;
   --bg-card: #ffffff;
+
+  /* Buttons */
+  --btn-secondary-color: #fff;
 
   /* Shadows */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
