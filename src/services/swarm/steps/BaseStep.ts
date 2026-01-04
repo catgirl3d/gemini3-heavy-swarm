@@ -15,6 +15,7 @@ import { withRetry } from '@/utils/common/retryStrategy';
 import { useAgentStore } from '@/stores/agentStore';
 import { updateAgentStatus, updateAgentStatusIfChanged } from '@/utils/swarm/statusHelpers';
 import { AppSettings } from '@/types';
+import { createFirstTextJumpTracker } from '@/utils/swarm/jumpHelper';
 
 export abstract class BaseStep implements StepDescriptor {
   abstract id: StepId;
@@ -731,6 +732,9 @@ export abstract class BaseStep implements StepDescriptor {
 
     const config = getStepConfig(this.id);
     
+    // Create jump tracker if callback is provided (used for synthesis regeneration)
+    const jumpTracker = createFirstTextJumpTracker(onFirstTextChunk);
+    
     // Set initial 'working' status - Step manages its own lifecycle
     updateAgentStatus(this.id, agentIndex, 'working', messageId);
 
@@ -759,20 +763,25 @@ export abstract class BaseStep implements StepDescriptor {
         },
         {
           onChunk: (text, thought, usage) => {
-            // Trigger first text chunk callback (for synthesis jump)
-            if (text.length > 0 && onFirstTextChunk) {
-              onFirstTextChunk();
-              onFirstTextChunk = undefined; // Only call once
-            }
+            // Use jumpTracker to manage first text chunk detection
+            const shouldTriggerCallback = jumpTracker.processChunk(text);
             
+            // CRITICAL: Update store with text BEFORE triggering callback
+            // ShowWork's useEffect needs synthesisText to be present
             this.handleStreamChunk(context, agentIndex, text, thought, usage, {
               isFirstChunk: false,
               streamToMessage: true,
               agentStates: currentAgentStates,
               statusMsg: config.progressMsg
             });
+            
+            // Trigger first text chunk callback AFTER store is updated (for synthesis jump)
+            if (shouldTriggerCallback) {
+              jumpTracker.executeJump();
+            }
           },
           onRetry: (attempt) => {
+            jumpTracker.reset(); // Reset tracker on retry
             currentAgentStates = this.handleRetryProgress(context, agentIndex, attempt, currentAgentStates);
           }
         }

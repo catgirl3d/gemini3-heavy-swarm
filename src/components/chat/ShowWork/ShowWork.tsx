@@ -11,7 +11,11 @@ import { useResolvedSwarmState } from '@/hooks/swarm/useResolvedSwarmState';
 import { getErroredAgents, isAnyAgentWorking, isErrorState, getContinueButtonText, handleContinueClick as handleContinueClickHelper } from '@/utils/swarm/continueHelpers';
 import { useAgentStore } from '@/stores/agentStore';
 import { StepDebugInfo } from '@/types/app-types';
+import { Logger } from '@shared/utils/logger';
+import { useAutoCollapse } from '@/hooks/ui/useAutoCollapse';
 import './ShowWork.css';
+
+const logger = new Logger('ShowWork');
 
 // Card metadata for stable callback resolution
 interface CardMeta {
@@ -40,40 +44,42 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
     isEarlyStageWorking
   } = useResolvedSwarmState(messageId, work);
 
-  const synthesisResult = useMemo(() => getSynthesisResult(work), [work]);
+  // Subscribe to live work from store for real-time updates during streaming
+  // The work prop may lag behind store updates during active generation
+  // NOTE: We check currentMessageId instead of isLive because isLive becomes false
+  // after setIsLoading(false), but we still need the live synthesisText for collapse
+  const liveWork = useAgentStore(state => state.currentWork);
+  const currentMessageId = useAgentStore(state => state.currentMessageId);
+  const isCurrentMessage = currentMessageId === messageId;
+  const effectiveWork = (isLive || isCurrentMessage) && liveWork ? liveWork : work;
+
+  const synthesisResult = useMemo(() => getSynthesisResult(effectiveWork), [effectiveWork]);
   const initialResults = useMemo(() => getStepResults(work, STEPS.INITIAL), [work]);
-  const refinedResults = useMemo(() => getStepResults(work, STEPS.REFINEMENT), [work]);
+  const refinementResults = useMemo(() => getStepResults(work, STEPS.REFINEMENT), [work]);
 
   // Cache helper results to avoid repeated calls in .map()
   const initialUsages = useMemo(() => getStepUsage(work, STEPS.INITIAL), [work]);
   const initialThoughts = useMemo(() => getStepThoughts(work, STEPS.INITIAL), [work]);
-  const refinedUsages = useMemo(() => getStepUsage(work, STEPS.REFINEMENT), [work]);
-  const refinedThoughts = useMemo(() => getStepThoughts(work, STEPS.REFINEMENT), [work]);
-  const synthesisUsage = useMemo(() => getSynthesisUsage(work), [work]);
-  const synthesisThought = useMemo(() => getSynthesisThought(work), [work]);
+  const refinementUsages = useMemo(() => getStepUsage(work, STEPS.REFINEMENT), [work]);
+  const refinementThoughts = useMemo(() => getStepThoughts(work, STEPS.REFINEMENT), [work]);
+  const synthesisUsage = useMemo(() => getSynthesisUsage(effectiveWork), [effectiveWork]);
+  const synthesisThought = useMemo(() => getSynthesisThought(effectiveWork), [effectiveWork]);
 
   const synthesisText: string | null =
     typeof synthesisResult === 'string'
       ? synthesisResult
       : synthesisResult?.text ?? null;
 
-  // Auto-collapse when synthesis starts in live mode OR during synthesis regeneration
-  useEffect(() => {
-    const isWorking = synthesizerState?.status === 'working';
-    const isOurMessage = synthesizerState?.messageId === messageId;
-    
-    // CRITICAL: Only collapse if we actually have some synthesis text (chunks arrived).
-    // This prevents the "Synthesis Jump" from happening if an error occurs immediately
-    // during regeneration, while still allowing the progress bar to move (working status).
-    const hasContent = !!(synthesisText && synthesisText.length > 0);
-
-    // Collapse cards when synthesizer is working AND has content
-    if ((isLive || isOurMessage) && isWorking && !isEarlyStageWorking && hasContent) {
-      if (detailsRef.current && detailsRef.current.open) {
-        detailsRef.current.open = false;
-      }
-    }
-  }, [isLive, messageId, synthesizerState?.status, synthesizerState?.messageId, isEarlyStageWorking, synthesisText]);
+  // Manage automatic collapsing of agent work details via custom hook
+  useAutoCollapse({
+    detailsRef,
+    isLive,
+    isCurrentMessage,
+    messageId,
+    synthesizerState,
+    isEarlyStageWorking,
+    synthesisText
+  });
 
   // Build card metadata map for stable action resolution
   const cardMetaMap = useMemo(() => {
@@ -94,7 +100,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
     });
     
     // Refinement step cards
-    refinedResults.forEach((resp, i) => {
+    refinementResults.forEach((resp, i) => {
       const name = work.criticNames?.[i] || `Critic ${i + 1}`;
       map.set(`refined-${i}`, {
         step: STEPS.REFINEMENT,
@@ -102,7 +108,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
         title: `${name} - Refined Response`,
         agentName: name,
         content: resp,
-        thought: refinedThoughts[i],
+        thought: refinementThoughts[i],
         debugInfo: work.debugInfo?.[STEPS.REFINEMENT]?.[i]
       });
     });
@@ -119,7 +125,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
     });
     
     return map;
-  }, [work, initialResults, refinedResults, synthesisText, initialThoughts, refinedThoughts]);
+  }, [work, initialResults, refinementResults, synthesisText, initialThoughts, refinementThoughts]);
 
   // Unified stable callback for all card actions
   const handleCardAction = useCallback((cardId: string, action: CardActionType) => {
@@ -170,13 +176,13 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
     initialUsages.forEach(u => total += u?.totalTokens || 0);
     
     // Sum refinement step usage (use cached values)
-    refinedUsages.forEach(u => total += u?.totalTokens || 0);
+    refinementUsages.forEach(u => total += u?.totalTokens || 0);
     
     // Add synthesis usage
     if (synthesisUsage) total += synthesisUsage.totalTokens || 0;
     
     return total;
-  }, [initialUsages, refinedUsages, synthesisUsage, messageId, isLive]);
+  }, [initialUsages, refinementUsages, synthesisUsage, messageId, isLive]);
 
   // Continue/Retry button logic using shared helpers
   const erroredAgents = useMemo(() => getErroredAgents(allAgents, messageId), [allAgents, messageId]);
@@ -243,11 +249,11 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
         </div>
 
         {/* Only show refinement section if step has started OR if we have historical data */}
-        {(refinementStarted || refinedResults.some(r => r)) && (
+        {(refinementStarted || refinementResults.some(r => r)) && (
           <div className="work-category">
             <h4 className="work-category-title">Critiques & Refinements</h4>
-            <div className={`work-grid ${refinedResults.length === 1 ? 'single-column' : ''}`}>
-              {refinedResults.map((_, i) => {
+            <div className={`work-grid ${refinementResults.length === 1 ? 'single-column' : ''}`}>
+              {refinementResults.map((_, i) => {
                 const cardId = `refined-${i}`;
                 const meta = cardMetaMap.get(cardId);
                 const name = work.criticNames?.[i] || `Critic ${i + 1}`;
@@ -263,7 +269,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
                     className="refinement-step"
                     title={name}
                     content={meta?.content ?? null}
-                    tokenUsage={refinedUsages[i] ?? undefined}
+                    tokenUsage={refinementUsages[i] ?? undefined}
                     thought={meta?.thought ?? undefined}
                     debugInfo={meta?.debugInfo}
                     downloadFilename={`${name.replace(/\s+/g, '-')}-Refined_Response.md`}

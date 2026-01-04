@@ -9,6 +9,7 @@ import { Logger } from '@shared/utils/logger';
 import { useAgentStore } from '@/stores/agentStore';
 import { updateAgentStatus } from '@/utils/swarm/statusHelpers';
 import { formatSystemInstruction, formatDrafts, buildSynthesisContext } from '@/utils/swarm/promptHelpers';
+import { createFirstTextJumpTracker } from '@/utils/swarm/jumpHelper';
 
 export class SynthesisStep extends BaseStep {
   id: StepId = STEPS.SYNTHESIS;
@@ -83,7 +84,9 @@ export class SynthesisStep extends BaseStep {
 
       logger.debug('Starting model stream');
 
-      let isFirstTextChunk = true;
+      // Create jump tracker to manage first-text-chunk behavior
+      const jumpTracker = createFirstTextJumpTracker(context.onSynthesisJump);
+      
       const { text: finalResponseText, groundingChunks } = await this.runModelStream(
         {
           ai, settings, model: this.getStepModel(context),
@@ -97,7 +100,10 @@ export class SynthesisStep extends BaseStep {
         },
         {
           onChunk: (text, thought, usage) => {
-            if (text.length > 0 && isFirstTextChunk) {
+            // Check if this is the first text chunk
+            const shouldTriggerJump = jumpTracker.processChunk(text);
+            
+            if (shouldTriggerJump) {
               // Transition to working status on first text chunk (initiates Synthesis Jump)
               currentAgentStates = this.updateAgentStateById(currentAgentStates, `${messageId}-synthesizer_agent`, {
                 status: 'working',
@@ -107,28 +113,35 @@ export class SynthesisStep extends BaseStep {
               });
               
               updateAgentStatus(STEPS.SYNTHESIS, 0, 'working', messageId, config.labels.working);
-              
-              /**
-               * SYNTHESIS JUMP BEHAVIOR
-               * When first chunk arrives, we trigger onSynthesisJump to hide loading indicators.
-               * Card collapse is handled by ShowWork observing both 'working' status AND
-               * the presence of actual content (synthesisText).
-               */
-              context.onSynthesisJump?.();
             }
 
+            // CRITICAL: Update store with synthesis text BEFORE triggering jump
+            // ShowWork's useEffect needs both 'working' status AND synthesisText to collapse cards
             this.handleStreamChunk(context, -1, text, thought, usage, {
-              isFirstChunk: isFirstTextChunk,
+              isFirstChunk: false, // We handle first chunk logic via jumpTracker
               streamToMessage: true,
               agentStates: currentAgentStates,
               statusMsg: config.progressMsg
             });
             
-            if (text.length > 0) isFirstTextChunk = false;
+            // Trigger jump AFTER store is updated so synthesisText is available
+            if (shouldTriggerJump) {
+              /**
+               * SYNTHESIS JUMP BEHAVIOR
+               * When first TEXT chunk arrives, we trigger onSynthesisJump to hide loading indicators.
+               * Card collapse is handled by ShowWork observing both 'working' status AND
+               * the presence of actual content (synthesisText).
+               * 
+               * Note: We intentionally wait for first TEXT (not thought/usage) because:
+               * 1. Reasoning models may send thought chunks before any text
+               * 2. We want the jump to happen when user-visible content starts appearing
+               */
+              jumpTracker.executeJump();
+            }
           },
           onRetry: (attempt) => {
-            // Reset jump trigger flag so it can fire again on the next successful attempt
-            isFirstTextChunk = true;
+            // Reset jump tracker so it can fire again on the next successful attempt
+            jumpTracker.reset();
             
             // Use centralized retry handler from BaseStep (handles status and LoadingIndicator)
             currentAgentStates = this.handleRetryProgress(context, 0, attempt, currentAgentStates);
