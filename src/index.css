@@ -163,7 +163,7 @@
     /* Modal Specific Padding */
   --modal-group-padding-mobile: var(--space-xl);
   --modal-header-padding-y: var(--space-xl);
-  --modal-help-text-padding: var(--space-sm);
+  --modal-help-text-padding: 0.28rem;
   --modal-label-padding: var(--space-md);
   --modal-group-padding: var(--space-2xl);
   

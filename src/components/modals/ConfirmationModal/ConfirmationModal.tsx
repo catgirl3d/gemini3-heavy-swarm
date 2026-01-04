@@ -8,6 +8,7 @@ interface ConfirmationModalProps {
     confirmLabel: string;
     cancelLabel: string;
     discardLabel?: string;
+    confirmVariant?: 'save' | 'danger';
     onConfirm: () => void;
     onCancel: () => void;
     onDiscard?: () => void;
@@ -20,6 +21,7 @@ export const ConfirmationModal: FC<ConfirmationModalProps> = ({
     confirmLabel,
     cancelLabel,
     discardLabel,
+    confirmVariant = 'save',
     onConfirm,
     onCancel,
     onDiscard
@@ -33,7 +35,7 @@ export const ConfirmationModal: FC<ConfirmationModalProps> = ({
         >
             <BaseModal.Header title={title} onClose={onCancel} />
             <BaseModal.Body>
-                <p>{message}</p>
+                <p className="modal-confirmation-text">{message}</p>
             </BaseModal.Body>
             <BaseModal.Footer>
                 <div className="modal-footer-actions">
@@ -42,7 +44,7 @@ export const ConfirmationModal: FC<ConfirmationModalProps> = ({
                     )}
                     <button className="modal-btn outline" onClick={onCancel}>{cancelLabel}</button>
                 </div>
-                <button className="modal-btn save" onClick={onConfirm}>{confirmLabel}</button>
+                <button className={`modal-btn ${confirmVariant}`} onClick={onConfirm}>{confirmLabel}</button>
             </BaseModal.Footer>
         </BaseModal>
     );

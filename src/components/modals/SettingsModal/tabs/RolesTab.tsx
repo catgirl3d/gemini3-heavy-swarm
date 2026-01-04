@@ -62,6 +62,7 @@ export const RolesTab: FC<RolesTabProps> = ({
 
             <div className="modal-card-container">
                 <div className="modal-card-header">
+                    <span className="modal-card-title">Roles</span>
                     <div className="modal-card-header-content">
                         <div className="modal-type-toggle">
                             <button
@@ -77,12 +78,6 @@ export const RolesTab: FC<RolesTabProps> = ({
                                 Critics
                             </button>
                         </div>
-                    </div>
-                    <div className="modal-card-header-actions">
-                        <button className="modal-btn outline" onClick={handleRestoreDefaultRoles}>
-                            Restore Defaults
-                        </button>
-                        <button className="modal-btn outline" onClick={handleAddRole}>+ Add Role</button>
                     </div>
                 </div>
 
@@ -113,6 +108,12 @@ export const RolesTab: FC<RolesTabProps> = ({
                                 No roles defined. Add a role to get started.
                             </div>
                         )}
+                    </div>
+                    <div className="modal-card-footer-actions">
+                        <button className="modal-btn outline" onClick={handleRestoreDefaultRoles}>
+                            Restore Defaults
+                        </button>
+                        <button className="modal-btn outline" onClick={handleAddRole}>+ Add Role</button>
                     </div>
                 </div>
             </div>

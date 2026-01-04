@@ -138,6 +138,13 @@
   white-space: normal;
 }
 
+.modal-confirmation-text {
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--text-primary);
+  text-align: center;
+}
+
 /* Footer */
 .modal-footer {
   padding: 1.25rem 1.5rem;
@@ -498,12 +505,8 @@
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 1rem;
+  margin: 0;
   display: block;
-}
-
-.modal-card-header .modal-card-title {
-	margin: 0px;
 }
 
 /* Utilities */
@@ -662,10 +665,7 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-
-  .modal-container,
-  .work-modal,
-  .settings-modal {
+  .modal-container {
     width: 100%;
     height: 100%;
     border-radius: 0;
@@ -674,8 +674,20 @@
     flex-direction: column;
   }
 
+  .modal-container.modal-sm {
+    width: calc(100% - 2rem);
+    height: auto;
+    max-height: 90vh;
+    border-radius: var(--radius-xl);
+    flex-grow: 0;
+  }
+
   .modal-header {
-    padding: 0.1rem 1rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .modal-header h3{
+    font-size: var(--text-mobile-md);
   }
 
   .modal-icon-btn svg,
@@ -699,7 +711,7 @@
   }
 
   .modal-banner.global {
-    padding: 0.12rem 1rem;
+    padding: 0.2rem 1rem;
   }
 
   .modal-banner button {
@@ -715,18 +727,39 @@
   .modal-footer {
     padding: 1rem;
     gap: 0.75rem;
+    flex-direction: row;
+    justify-content: stretch;
   }
 
-  .modal-btn {
+  .modal-footer-actions,
+  .save-preset-container,
+  .modal-actions-right {
+    flex: 1;
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .modal-footer-actions .modal-btn,
+  .save-preset-container .modal-btn,
+  .modal-actions-right .modal-btn,
+  .modal-footer > .modal-btn {
+    flex: 1;
     width: 100%;
     padding: 0.5rem;
-    font-size: var(--text-mobile-base);
+    font-size: var(--text-mobile-sm);
   }
 
-  /* Universal Modal Form Elements */
-  .modal-form-group {
-    margin-top: var(--modal-group-padding-mobile);
-  }
+  .modal-form-group:last-child {
+	margin-bottom: 0;
+}
+
+  .modal-form-group.flex-none {
+	margin: 0;
+}
+
+  .modal-form-group.flex-1 {
+	margin-top: var(--modal-group-padding-mobile);
+}
 
   .modal-label {
     font-size: var(--text-mobile-base);
@@ -749,6 +782,10 @@
   .modal-divider {
     margin: 0.75rem 0;
   }
+
+  .modal-confirmation-text {
+  font-size: var(--text-mobile-base);
+}
 
   .checkbox-group {
     margin-bottom: 0.5rem;
@@ -777,4 +814,5 @@
   width: 1.1rem;
   height: 1.1rem;
 }
+
 }

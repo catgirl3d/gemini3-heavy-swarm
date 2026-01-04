@@ -35,6 +35,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     const [isInstructionPresetDropdownOpen, setIsInstructionPresetDropdownOpen] = useState(false);
     const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
     const [showConfirmClose, setShowConfirmClose] = useState(false);
+    const [roleIndexToDelete, setRoleIndexToDelete] = useState<number | null>(null);
 
     const hasChanges = useMemo(() => {
         try {
@@ -243,7 +244,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         handleCreateRoleProfile={profileMgr.handleCreateRoleProfile}
                         handleDeleteRoleProfile={profileMgr.handleDeleteRoleProfile}
                         handleAddRole={roleMgr.handleAddRole}
-                        handleDeleteRole={roleMgr.handleDeleteRole}
+                        handleDeleteRole={(index) => setRoleIndexToDelete(index)}
                         handleMoveRole={roleMgr.handleMoveRole}
                         handleRestoreDefaultRoles={roleMgr.handleRestoreDefaultRoles}
                         setEditingRoleIndex={setEditingRoleIndex}
@@ -338,6 +339,22 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                     setShowConfirmClose(false);
                     onClose();
                 }}
+            />
+        )}
+        
+        {roleIndexToDelete !== null && (
+            <ConfirmationModal
+                isOpen={true}
+                title="Delete Role"
+                message={`Are you sure you want to delete the role "${((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[roleIndexToDelete]?.name || 'Unnamed Role'}"?`}
+                confirmLabel="Delete"
+                confirmVariant="danger"
+                cancelLabel="Cancel"
+                onConfirm={() => {
+                    roleMgr.handleDeleteRole(roleIndexToDelete);
+                    setRoleIndexToDelete(null);
+                }}
+                onCancel={() => setRoleIndexToDelete(null)}
             />
         )}
         </>

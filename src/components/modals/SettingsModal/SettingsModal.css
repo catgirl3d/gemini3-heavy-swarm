@@ -52,14 +52,12 @@
   padding: 0.75rem 1rem;
 }
 
-
 .modal-card-content {
   border-top: none;
   border-radius: 0 0 var(--radius-md) var(--radius-md);
   padding: 1rem;
   background-color: var(--bg-card);
 }
-
 
 .profile-manager-content {
   display: flex;
@@ -78,7 +76,6 @@
   flex-direction: column;
   gap: 0.25rem;
 }
-
 
 .profile-name-edit {
   display: flex;
@@ -105,9 +102,11 @@
 
 .settings-row .modal-form-group {
   margin-bottom: 0;
-  margin-top: 0rem;
 }
 
+.settings-row .modal-form-group:last-child {
+    margin-bottom: 0;
+  }
 
 .profile-actions {
   display: flex;
@@ -212,7 +211,6 @@
   padding: 0.3rem 0.5rem;
   font-size: var(--text-sm);
   height: auto;
-  margin-bottom: 0;
   border-radius: var(--radius-sm);
   background-color: var(--bg-tertiary);
   border-color: var(--model-message-border);
@@ -293,7 +291,6 @@
 /* Prompt Profiles Settings */
 .profile-select-group {
   flex: 1;
-  margin-bottom: 0;
 }
 
 .profile-edit-card {
@@ -301,7 +298,6 @@
   border-radius: var(--radius-md);
   padding: 1rem;
   background: var(--bg-secondary);
-  margin-bottom: 0rem;
 }
 
 .modal-card-container {
@@ -311,7 +307,7 @@
   overflow: hidden;
   border: 1px solid var(--model-message-border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .warning-banner svg {
@@ -430,7 +426,6 @@
   margin-bottom: 0;
 }
 
-
 .modal-card-header-content {
   display: flex;
   align-items: baseline;
@@ -440,6 +435,15 @@
 .modal-card-header-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+.modal-card-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--model-message-border);
 }
 
 /* Token Settings Styles */
@@ -553,8 +557,6 @@
   border-radius: var(--radius-full);
 }
 
-
-
 .modal-label-flex {
   display: flex;
   align-items: center;
@@ -592,17 +594,16 @@
   /* Settings Row */
   .settings-row {
     flex-direction: column;
-    margin-top: 0;
   }
 
   .settings-row .modal-form-group {
     width: 100%;
-    margin-top: var(--modal-group-padding-mobile);
+    margin-bottom: var(--modal-group-padding-mobile);
   }
 
   /* General Tab Mobile Optimization */
   .settings-section {
-    gap: 0.75rem;
+    gap: 1.15rem;
   }
 
   .settings-tab svg {
@@ -626,6 +627,7 @@
   .settings-tab {
     padding: 0.5rem 1rem;
     flex-shrink: 0;
+    font-size: var(--text-mobile-md);
   }
 
   /* Profile & Roles Mobile Optimization */
@@ -673,7 +675,7 @@
   .modal-card-header {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.75rem;
+    gap: 0.8rem;
   }
 
   .modal-card-header-content {
@@ -682,7 +684,8 @@
     justify-content: center;
   }
 
-  .modal-card-header-actions {
+  .modal-card-header-actions,
+  .modal-card-footer-actions {
     width: 100%;
     flex-direction: column;
   }
@@ -693,6 +696,7 @@
 
   .modal-type-toggle-btn {
     flex: 1;
+    font-size: var(--text-mobile-sm);
   }
 
   .modal-card-header button:not(.modal-type-toggle-btn) {
