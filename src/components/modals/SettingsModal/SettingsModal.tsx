@@ -346,7 +346,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
             <ConfirmationModal
                 isOpen={true}
                 title="Delete Role"
-                message={`Are you sure you want to delete the role "${((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[roleIndexToDelete]?.name || 'Unnamed Role'}"?`}
+                message={<>Are you sure you want to delete the role <strong>"{((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[roleIndexToDelete]?.name || 'Unnamed Role'}"</strong>?</>}
                 confirmLabel="Delete"
                 confirmVariant="danger"
                 cancelLabel="Cancel"

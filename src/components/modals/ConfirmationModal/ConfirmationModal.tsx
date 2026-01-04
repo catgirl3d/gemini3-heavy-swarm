@@ -4,7 +4,7 @@ import { BaseModal } from '@/components/modals/BaseModal';
 interface ConfirmationModalProps {
     isOpen: boolean;
     title: string;
-    message: string;
+    message: string | React.ReactNode;
     confirmLabel: string;
     cancelLabel: string;
     discardLabel?: string;
