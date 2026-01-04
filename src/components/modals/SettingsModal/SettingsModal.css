@@ -311,7 +311,7 @@
   overflow: hidden;
   border: 1px solid var(--model-message-border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
 }
 
 .warning-banner svg {
