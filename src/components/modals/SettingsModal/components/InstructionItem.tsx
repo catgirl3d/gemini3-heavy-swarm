@@ -1,15 +1,19 @@
 import React, { FC } from 'react';
 import { ConfigIcon } from '@/components/modals/SettingsModal/icons';
+import { formatModelTag } from '@/utils/common/modelUtils';
+import { ProviderType } from '@/types';
+import { getProviderLogo } from '@/utils/logoHelpers';
 
 interface InstructionItemProps {
     index: number;
     label: string;
     help: string;
     model?: string;
+    provider: ProviderType;
     onEdit: () => void;
 }
 
-export const InstructionItem: FC<InstructionItemProps> = ({ index, label, help, model, onEdit }) => {
+export const InstructionItem: FC<InstructionItemProps> = ({ index, label, help, model, provider, onEdit }) => {
     return (
         <div className="modal-item-card compact">
             <div className="modal-item-row">
@@ -21,7 +25,12 @@ export const InstructionItem: FC<InstructionItemProps> = ({ index, label, help, 
                             {label}
                             {model && (
                                 <span className="modal-item-tag">
-                                    {model}
+                                    <img 
+                                        src={getProviderLogo(provider, model)} 
+                                        alt="" 
+                                        className="role-model-icon"
+                                    />
+                                    {formatModelTag(model)}
                                 </span>
                             )}
                         </div>

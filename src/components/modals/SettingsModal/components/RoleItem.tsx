@@ -1,9 +1,13 @@
 import React, { FC } from 'react';
 import { ArrowUpIcon, ArrowDownIcon, ConfigIcon, TrashIcon } from '@/components/modals/SettingsModal/icons';
+import { formatModelTag } from '@/utils/common/modelUtils';
+import { ProviderType } from '@/types';
+import { getProviderLogo } from '@/utils/logoHelpers';
 
 interface RoleItemProps {
     index: number;
     role: { name: string; instruction: string; model?: string };
+    provider: ProviderType;
     isFirst: boolean;
     isLast: boolean;
     canDelete: boolean;
@@ -16,6 +20,7 @@ interface RoleItemProps {
 export const RoleItem: FC<RoleItemProps> = ({
     index,
     role,
+    provider,
     isFirst,
     isLast,
     canDelete,
@@ -33,12 +38,17 @@ export const RoleItem: FC<RoleItemProps> = ({
                     <div className="modal-item-info">
                         <div className="modal-item-name">
                             {role.name || 'Unnamed Role'}
+                            {role.model && (
+                                <span className="modal-item-tag">
+                                    <img 
+                                        src={getProviderLogo(provider, role.model)} 
+                                        alt="" 
+                                        className="role-model-icon"
+                                    />
+                                    {formatModelTag(role.model)}
+                                </span>
+                            )}
                         </div>
-                        {role.model && (
-                            <div className="modal-item-tag">
-                                {role.model}
-                            </div>
-                        )}
                     </div>
                 </div>
 

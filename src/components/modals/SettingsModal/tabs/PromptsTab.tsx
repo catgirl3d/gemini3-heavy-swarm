@@ -62,6 +62,7 @@ export const PromptsTab: FC<PromptsTabProps> = ({
                                 label={INSTRUCTION_METADATA[id].label}
                                 help={INSTRUCTION_METADATA[id].help}
                                 model={localSettings[INSTRUCTION_METADATA[id].modelKey] as string}
+                                provider={localSettings.provider}
                                 onEdit={() => setEditingInstruction(id)}
                             />
                         ))}

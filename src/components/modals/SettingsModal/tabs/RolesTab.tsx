@@ -97,6 +97,7 @@ export const RolesTab: FC<RolesTabProps> = ({
                                 isFirst={index === 0}
                                 isLast={index === roles.length - 1}
                                 canDelete={roles.length > 1}
+                                provider={localSettings.provider}
                                 onEdit={() => setEditingRoleIndex(index)}
                                 onDelete={() => handleDeleteRole(index)}
                                 onMoveUp={() => handleMoveRole(index, 'up')}

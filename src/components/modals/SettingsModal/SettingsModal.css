@@ -169,6 +169,7 @@
   flex-direction: column;
   gap: 0.1rem;
   overflow: hidden;
+  justify-content: center;
 }
 
 .modal-item-name {
@@ -192,8 +193,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   margin-left: 10px;
+}
+
+.role-model-icon {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .modal-item-actions {

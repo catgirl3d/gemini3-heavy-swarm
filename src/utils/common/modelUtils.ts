@@ -13,3 +13,11 @@ export const getModelDisplayName = (model: string): string => {
 
   return model || 'Default Model';
 };
+
+export const formatModelTag = (model: string): string => {
+  if (!model) return 'Default';
+  if (model.includes('/')) {
+    return model.split('/').pop() || model;
+  }
+  return model;
+};
