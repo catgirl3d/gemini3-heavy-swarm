@@ -1,9 +1,18 @@
 import { GenerationConfig, ThinkingLevel } from '@google/genai';
+import { Logger } from '@shared/utils/logger';
+
+const logger = new Logger('geminiConfig');
+
+// Minimum output tokens for thinking models to ensure enough space for actual text after reasoning
+const MIN_OUTPUT_TOKENS_FOR_THINKING = 4000;
 
 /**
  * Generates the correct configuration depending on the model version.
  * Gemini 3.0 Pro requires thinking_level and default temperature.
  * Gemini 2.5 / 2.0 use thinking_budget.
+ * 
+ * CRITICAL: Thinking models require a minimum output token budget (4000+) to ensure
+ * they have space for actual text output after the reasoning phase completes.
  */
 export const getGenerationConfig = (
   model: string,
@@ -14,9 +23,21 @@ export const getGenerationConfig = (
   const isGemini3 = model.includes('gemini-3');
   const isThinkingModel = model.toLowerCase().includes('thinking') || isGemini3;
 
+  // CRITICAL: Enforce minimum tokens for thinking models
+  // Without sufficient output tokens, thinking models may consume all tokens in reasoning
+  // and return no actual text (only thoughts), causing empty responses.
+  let effectiveMaxTokens = userMaxOutputTokens;
+  if (isThinkingModel && userMaxOutputTokens < MIN_OUTPUT_TOKENS_FOR_THINKING) {
+    logger.warn(
+      `Thinking model "${model}" requires minimum ${MIN_OUTPUT_TOKENS_FOR_THINKING} output tokens. ` +
+      `User setting (${userMaxOutputTokens}) is too low, enforcing minimum.`
+    );
+    effectiveMaxTokens = MIN_OUTPUT_TOKENS_FOR_THINKING;
+  }
+
   // Base config
   const config: GenerationConfig = {
-    maxOutputTokens: userMaxOutputTokens,
+    maxOutputTokens: effectiveMaxTokens,
   };
 
   if (isGemini3) {

@@ -283,6 +283,10 @@
   margin-bottom: var(--modal-group-padding);
 }
 
+.modal-form-group:last-child {
+	margin-bottom: 0;
+}
+
 .modal-label {
   display: block;
   font-weight: 600;

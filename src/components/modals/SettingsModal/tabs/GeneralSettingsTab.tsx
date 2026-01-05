@@ -1,4 +1,4 @@
-import React, { FC, ChangeEvent } from 'react';
+import React, { FC, ChangeEvent, useEffect } from 'react';
 import { AppSettings, ServerStatus, ProviderType } from '@/types';
 import { StepperControl } from '@/components/modals/SettingsModal/components/StepperControl';
 import { TemperatureBanner } from '@/components/modals/SettingsModal/components/TemperatureBanner';
@@ -12,6 +12,8 @@ const ERROR_SIMULATION_OPTIONS: CustomSelectOption[] = [
     { value: '503', label: '503 - Service Unavailable' },
     { value: 'timeout', label: 'Request Timeout' },
 ];
+
+const MIN_OUTPUT_TOKENS_FOR_THINKING = 4000;
 
 interface GeneralSettingsTabProps {
     localSettings: AppSettings;
@@ -34,6 +36,20 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
 }) => {
     const model = localSettings.model ?? 'gemini-3-flash-preview';
     const isGeminiDemo = !localSettings.apiKey && isModelUnlocked && serverStatus?.proxyMode !== 'private';
+
+    // Auto-enforce minimum tokens for thinking models when model changes
+    useEffect(() => {
+        const isThinkingModel = 
+            (localSettings.provider === ProviderType.Gemini && (model.includes('gemini-3') || model.toLowerCase().includes('thinking'))) ||
+            (localSettings.provider === ProviderType.OpenRouter && localSettings.openRouterModel?.toLowerCase().includes('thinking'));
+        
+        if (isThinkingModel && localSettings.maxOutputTokens < MIN_OUTPUT_TOKENS_FOR_THINKING) {
+            setLocalSettings(prev => ({
+                ...prev,
+                maxOutputTokens: MIN_OUTPUT_TOKENS_FOR_THINKING
+            }));
+        }
+    }, [localSettings.provider, localSettings.model, localSettings.openRouterModel, localSettings.maxOutputTokens, setLocalSettings, model]);
 
     return (
         <div className="settings-section fade-in">
@@ -210,49 +226,89 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                         <label className="modal-label">
                             Max Output Tokens: <span className="token-value-highlight">{(localSettings.maxOutputTokens / 1000).toFixed(1)}k</span> ({localSettings.maxOutputTokens.toLocaleString()})
                         </label>
-                            <input
-                                type="range"
-                                name="maxOutputTokens"
-                                min="10"
-                                max="65536"
-                                step="1"
-                                value={localSettings.maxOutputTokens || 65536}
-                                onChange={handleChange}
-                                className="modal-range-slider"
-                                style={{ 
-                                    '--range-progress': `${((localSettings.maxOutputTokens - 10) / (65536 - 10)) * 100}%` 
-                                } as React.CSSProperties}
-                            />
+                            {(() => {
+                                // Determine if current model is a thinking model
+                                const isThinkingModel = 
+                                    (localSettings.provider === ProviderType.Gemini && (model.includes('gemini-3') || model.toLowerCase().includes('thinking'))) ||
+                                    (localSettings.provider === ProviderType.OpenRouter && localSettings.openRouterModel?.toLowerCase().includes('thinking'));
+                                
+                                const minTokens = isThinkingModel ? MIN_OUTPUT_TOKENS_FOR_THINKING : 10;
+                                const maxTokens = 65536;
+                                
+                                return (
+                                    <input
+                                        type="range"
+                                        name="maxOutputTokens"
+                                        min={minTokens}
+                                        max={maxTokens}
+                                        step="1"
+                                        value={Math.max(localSettings.maxOutputTokens, minTokens)}
+                                        onChange={handleChange}
+                                        className="modal-range-slider"
+                                        style={{ 
+                                            '--range-progress': `${((Math.max(localSettings.maxOutputTokens, minTokens) - minTokens) / (maxTokens - minTokens)) * 100}%` 
+                                        } as React.CSSProperties}
+                                    />
+                                );
+                            })()}
                             <div className="token-presets">
-                                {[16384, 32768, 65536].map(val => (
-                                    <button
-                                        key={val}
-                                        type="button"
-                                        className={`token-chip ${localSettings.maxOutputTokens === val ? 'active' : ''}`}
-                                        onClick={() => setLocalSettings(prev => ({ ...prev, maxOutputTokens: val }))}
-                                    >
-                                        {val === 65536 ? '64k (Max)' : `${(val / 1024).toFixed(0)}k`}
-                                    </button>
-                                ))}
-                                <button
-                                    type="button"
-                                    className="token-chip"
-                                    onClick={() => {
-                                        const val = window.prompt('Enter custom Max Output Tokens (10 - 65536):', localSettings.maxOutputTokens.toString());
-                                        if (val) {
-                                            const num = parseInt(val);
-                                            if (!isNaN(num) && num >= 10 && num <= 65536) {
-                                                setLocalSettings(prev => ({ ...prev, maxOutputTokens: num }));
-                                            }
-                                        }
-                                    }}
-                                >
-                                    ✎ Custom
-                                </button>
+                                {(() => {
+                                    const isThinkingModel = 
+                                        (localSettings.provider === ProviderType.Gemini && (model.includes('gemini-3') || model.toLowerCase().includes('thinking'))) ||
+                                        (localSettings.provider === ProviderType.OpenRouter && localSettings.openRouterModel?.toLowerCase().includes('thinking'));
+                                    
+                                    const presets = isThinkingModel ? [MIN_OUTPUT_TOKENS_FOR_THINKING, 16384, 32768, 65536] : [16384, 32768, 65536];
+                                    const minTokens = isThinkingModel ? MIN_OUTPUT_TOKENS_FOR_THINKING : 10;
+                                    
+                                    return (
+                                        <>
+                                            {presets.map(val => (
+                                                <button
+                                                    key={val}
+                                                    type="button"
+                                                    className={`token-chip ${localSettings.maxOutputTokens === val ? 'active' : ''}`}
+                                                    onClick={() => setLocalSettings(prev => ({ ...prev, maxOutputTokens: val }))}
+                                                >
+                                                    {val === 65536 ? '64k (Max)' : val === MIN_OUTPUT_TOKENS_FOR_THINKING ? '4k (Min)' : `${(val / 1024).toFixed(0)}k`}
+                                                </button>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                className="token-chip"
+                                                onClick={() => {
+                                                    const val = window.prompt(`Enter custom Max Output Tokens (${minTokens.toLocaleString()} - 65536):`, localSettings.maxOutputTokens.toString());
+                                                    if (val) {
+                                                        const num = parseInt(val);
+                                                        if (!isNaN(num) && num >= minTokens && num <= 65536) {
+                                                            setLocalSettings(prev => ({ ...prev, maxOutputTokens: num }));
+                                                        }
+                                                    }
+                                                }}
+                                            >
+                                                ✎ Custom
+                                            </button>
+                                        </>
+                                    );
+                                })()}
                             </div>
-                            <p className="modal-help-text">
-                                Maximum tokens the model can generate. The limit is 65,536 tokens.
-                            </p>
+                            {(() => {
+                                const isThinkingModel = 
+                                    (localSettings.provider === ProviderType.Gemini && (model.includes('gemini-3') || model.toLowerCase().includes('thinking'))) ||
+                                    (localSettings.provider === ProviderType.OpenRouter && localSettings.openRouterModel?.toLowerCase().includes('thinking'));
+                                
+                                return (
+                                    <>
+                                        <p className="modal-help-text">
+                                            Maximum tokens the model can generate. {isThinkingModel ? `Thinking models require minimum ${MIN_OUTPUT_TOKENS_FOR_THINKING.toLocaleString()} tokens.` : 'Range: 10 - 65,536 tokens.'}
+                                        </p>
+                                        {isThinkingModel && localSettings.maxOutputTokens < MIN_OUTPUT_TOKENS_FOR_THINKING && (
+                                            <p className="modal-help-text warning">
+                                                ⚠️ Current setting ({localSettings.maxOutputTokens.toLocaleString()}) is below the minimum for thinking models. It will be automatically increased to {MIN_OUTPUT_TOKENS_FOR_THINKING.toLocaleString()} tokens to prevent empty responses.
+                                            </p>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>
