@@ -1,6 +1,7 @@
 import React from 'react';
 import { AppSettings, RoleProfile } from '@/types';
 import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
+import { updateRoleModel } from '@/utils/settings/providerPersistence';
 
 export function useRoleManagement(
     localSettings: AppSettings,
@@ -10,6 +11,12 @@ export function useRoleManagement(
 ) {
     const handleRoleChange = (index: number, field: 'name' | 'instruction' | 'model', value: string) => {
         setLocalSettings(prev => {
+            // Special handling for model field - use centralized function
+            if (field === 'model') {
+                return updateRoleModel(prev, activeRoleProfile.id, activeRoleType, index, value || undefined);
+            }
+            
+            // For name and instruction, update directly
             const targetId = activeRoleProfile.id;
             const newProfiles = (prev.roleProfiles || []).map(p => {
                 if (p.id === targetId) {
@@ -19,20 +26,27 @@ export function useRoleManagement(
                     if (newRoles[index]) {
                         newRoles[index] = { 
                             ...newRoles[index], 
-                            [field]: field === 'model' ? (value || undefined) : value 
+                            [field]: value 
                         };
                     }
                     return { ...p, [roleKey]: newRoles };
                 }
                 return p;
             });
-            return { ...prev, roleProfiles: newProfiles, activeRoleProfileId: targetId };
+            
+            return { 
+                ...prev, 
+                roleProfiles: newProfiles, 
+                activeRoleProfileId: targetId
+            };
         });
     };
 
     const handleApplyRole = (index: number, role: { name: string, instruction: string, model?: string }) => {
         setLocalSettings(prev => {
             const targetId = activeRoleProfile.id;
+            
+            // Update name and instruction directly
             const newProfiles = (prev.roleProfiles || []).map(p => {
                 if (p.id === targetId) {
                     const roleKey = activeRoleType === 'drafter' ? 'roles' : 'criticRoles';
@@ -43,14 +57,26 @@ export function useRoleManagement(
                             ...newRoles[index], 
                             name: role.name, 
                             instruction: role.instruction,
-                            model: role.model // Add model support for applying roles
+                            model: role.model // Will be synced by updateRoleModel if needed
                         };
                     }
                     return { ...p, [roleKey]: newRoles };
                 }
                 return p;
             });
-            return { ...prev, roleProfiles: newProfiles, activeRoleProfileId: targetId };
+            
+            const updated = {
+                ...prev,
+                roleProfiles: newProfiles,
+                activeRoleProfileId: targetId
+            };
+            
+            // If model is being set, use centralized function to sync providerModels
+            if (role.model !== undefined) {
+                return updateRoleModel(updated, targetId, activeRoleType, index, role.model || undefined);
+            }
+            
+            return updated;
         });
     };
 

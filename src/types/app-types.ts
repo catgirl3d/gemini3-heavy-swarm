@@ -77,6 +77,39 @@ export interface SavedRole {
 
 export type SimulateError = 'none' | '429' | '500' | '503' | 'timeout';
 
+/**
+ * Provider-specific model storage for roles and steps.
+ * Allows switching between providers while preserving model selections.
+ */
+export interface ProviderModels {
+  // Step models per provider
+  stepModels?: {
+    [ProviderType.Gemini]?: {
+      initial?: string;
+      refinement?: string;
+      synthesis?: string;
+    };
+    [ProviderType.OpenRouter]?: {
+      initial?: string;
+      refinement?: string;
+      synthesis?: string;
+    };
+  };
+  // Role profile models per provider
+  roleModels?: {
+    [profileId: string]: {
+      [ProviderType.Gemini]?: {
+        roles?: Record<number, string>; // role index -> model
+        criticRoles?: Record<number, string>;
+      };
+      [ProviderType.OpenRouter]?: {
+        roles?: Record<number, string>;
+        criticRoles?: Record<number, string>;
+      };
+    };
+  };
+}
+
 export interface AppSettings {
   provider: ProviderType;
   numAgents: number;
@@ -110,6 +143,8 @@ export interface AppSettings {
   initialModel?: string;
   refinementModel?: string;
   synthesisModel?: string;
+  // Provider-specific model storage
+  providerModels?: ProviderModels;
 }
 
 export interface Source {

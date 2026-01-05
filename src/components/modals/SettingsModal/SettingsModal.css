@@ -189,7 +189,7 @@
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-xs);
   border: 1px solid var(--accent-border);
-  max-width: 150px;
+  max-width: 190px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

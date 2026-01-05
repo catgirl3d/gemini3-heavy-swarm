@@ -1,8 +1,9 @@
 import React, { FC, useState, useEffect, useMemo } from 'react';
 import { AppSettings, PROMPT_TYPES, ProviderType } from '@/types';
-import { DEFAULT_SETTINGS, IS_FORCED_PROXY } from '@/constants';
+import { DEFAULT_SETTINGS } from '@/constants';
 import { useProviderInfo, getProviderInfo } from '@/hooks/core/useProviderInfo';
 
+// Shared Components
 import { RoleAndPromptConfigModal, BaseModal, ConfirmationModal } from '@/components/modals';
 
 // Local parts
@@ -16,8 +17,10 @@ import { PromptsTab } from '@/components/modals/SettingsModal/tabs/PromptsTab';
 import { RolesTab } from '@/components/modals/SettingsModal/tabs/RolesTab';
 import { ConfigIcon, PromptsIcon, RolesIcon } from '@/components/modals/SettingsModal/icons';
 
-import './SettingsModal.css';
+// Hooks & Utils
+import { persistProviderModels, sanitizeLoadedSettings, updateStepModel } from '@/utils/settings/providerPersistence';
 
+import './SettingsModal.css';
 
 export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, serverStatus, onShowError }) => {
     const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
@@ -46,7 +49,9 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     }, [localSettings, settings]);
 
     useEffect(() => {
-        setLocalSettings(settings);
+        // Sanitize settings on load to handle legacy data or corruption
+        const sanitized = sanitizeLoadedSettings(settings);
+        setLocalSettings(sanitized);
     }, [settings, isOpen]);
 
     const handleClose = () => {
@@ -73,6 +78,13 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
         const checked = (e.target as HTMLInputElement).checked;
+        
+        if (name === 'provider') {
+            setLocalSettings(prev => persistProviderModels(prev, value as ProviderType));
+            return;
+        }
+        
+        // Normal handling for other fields
         setLocalSettings(prev => ({
             ...prev,
             [name]: type === 'checkbox' ? checked : (name === 'numAgents' || name === 'maxOutputTokens' ? parseInt(value) || 1 : name === 'temperature' ? parseFloat(value) : value)
@@ -162,6 +174,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
         if (finalSettings.maxOutputTokens > 65536) finalSettings.maxOutputTokens = 65536;
         if (finalSettings.maxOutputTokens < 1) finalSettings.maxOutputTokens = 1;
 
+        // Provider switching logic handles all model persistence
         onSave(finalSettings);
         onClose();
         setShowConfirmClose(false);
@@ -310,10 +323,8 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         isModelUnlocked={isModelUnlocked}
                         isDemoMode={currentIsDemoMode}
                         onModelChange={(model) => {
-                            setLocalSettings(prev => ({
-                                ...prev,
-                                [INSTRUCTION_METADATA[editingInstruction!].modelKey]: model || undefined
-                            }));
+                            const modelKey = INSTRUCTION_METADATA[editingInstruction!].modelKey as 'initialModel' | 'refinementModel' | 'synthesisModel';
+                            setLocalSettings(prev => updateStepModel(prev, modelKey, model || undefined));
                         }}
                     />
                 )}
