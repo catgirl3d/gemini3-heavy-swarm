@@ -480,24 +480,6 @@
   transform: scale(1.1);
 }
 
-.refinement-step .expand-work-button {
-  color: var(--accent-border);
-}
-
-.refinement-step .expand-work-button:hover {
-  background-color: var(--accent-bg);
-  color: var(--accent-text);
-}
-
-.synthesis_step .expand-work-button {
-  color: var(--success-border);
-}
-
-.synthesis_step .expand-work-button:hover {
-  background-color: var(--success-bg);
-  color: var(--success-text);
-}
-
 .expand-work-button svg {
   width: 18px;
   height: 18px;
