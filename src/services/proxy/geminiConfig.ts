@@ -1,10 +1,12 @@
 import { GenerationConfig, ThinkingLevel } from '@google/genai';
 import { Logger } from '@shared/utils/logger';
+import { isThinkingModel as checkIsThinkingModel } from '@/utils/common/modelUtils';
+import { ProviderType } from '@/types';
 
 const logger = new Logger('geminiConfig');
 
 // Minimum output tokens for thinking models to ensure enough space for actual text after reasoning
-const MIN_OUTPUT_TOKENS_FOR_THINKING = 4000;
+export const MIN_OUTPUT_TOKENS_FOR_THINKING = 4000;
 
 /**
  * Generates the correct configuration depending on the model version.
@@ -21,7 +23,7 @@ export const getGenerationConfig = (
   unsafeTemperature: boolean = false
 ): GenerationConfig => {
   const isGemini3 = model.includes('gemini-3');
-  const isThinkingModel = model.toLowerCase().includes('thinking') || isGemini3;
+  const isThinkingModel = checkIsThinkingModel(ProviderType.Gemini, model);
 
   // CRITICAL: Enforce minimum tokens for thinking models
   // Without sufficient output tokens, thinking models may consume all tokens in reasoning

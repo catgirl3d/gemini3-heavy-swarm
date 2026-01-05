@@ -1,5 +1,8 @@
-import React, { FC, ChangeEvent, useEffect } from 'react';
+import React, { FC, ChangeEvent, useEffect, useMemo } from 'react';
 import { AppSettings, ServerStatus, ProviderType } from '@/types';
+import { isThinkingModel as checkIsThinkingModel } from '@/utils/common/modelUtils';
+import { getCachedModels } from '@/services/openrouter/modelsCache';
+import { MIN_OUTPUT_TOKENS_FOR_THINKING } from '@/services/proxy/geminiConfig';
 import { StepperControl } from '@/components/modals/SettingsModal/components/StepperControl';
 import { TemperatureBanner } from '@/components/modals/SettingsModal/components/TemperatureBanner';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
@@ -12,8 +15,6 @@ const ERROR_SIMULATION_OPTIONS: CustomSelectOption[] = [
     { value: '503', label: '503 - Service Unavailable' },
     { value: 'timeout', label: 'Request Timeout' },
 ];
-
-const MIN_OUTPUT_TOKENS_FOR_THINKING = 4000;
 
 interface GeneralSettingsTabProps {
     localSettings: AppSettings;
@@ -37,19 +38,24 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
     const model = localSettings.model ?? 'gemini-3-flash-preview';
     const isGeminiDemo = !localSettings.apiKey && isModelUnlocked && serverStatus?.proxyMode !== 'private';
 
+    const isThinkingModel = useMemo(() => {
+        const openRouterModels = localSettings.provider === ProviderType.OpenRouter ? getCachedModels() || undefined : undefined;
+        return checkIsThinkingModel(
+            localSettings.provider || ProviderType.Gemini,
+            localSettings.provider === ProviderType.OpenRouter ? (localSettings.openRouterModel || '') : model,
+            openRouterModels
+        );
+    }, [localSettings.provider, model, localSettings.openRouterModel]);
+
     // Auto-enforce minimum tokens for thinking models when model changes
     useEffect(() => {
-        const isThinkingModel = 
-            (localSettings.provider === ProviderType.Gemini && (model.includes('gemini-3') || model.toLowerCase().includes('thinking'))) ||
-            (localSettings.provider === ProviderType.OpenRouter && localSettings.openRouterModel?.toLowerCase().includes('thinking'));
-        
         if (isThinkingModel && localSettings.maxOutputTokens < MIN_OUTPUT_TOKENS_FOR_THINKING) {
             setLocalSettings(prev => ({
                 ...prev,
                 maxOutputTokens: MIN_OUTPUT_TOKENS_FOR_THINKING
             }));
         }
-    }, [localSettings.provider, localSettings.model, localSettings.openRouterModel, localSettings.maxOutputTokens, setLocalSettings, model]);
+    }, [isThinkingModel, localSettings.maxOutputTokens, setLocalSettings]);
 
     return (
         <div className="settings-section fade-in">
@@ -227,11 +233,6 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                             Max Output Tokens: <span className="token-value-highlight">{(localSettings.maxOutputTokens / 1000).toFixed(1)}k</span> ({localSettings.maxOutputTokens.toLocaleString()})
                         </label>
                             {(() => {
-                                // Determine if current model is a thinking model
-                                const isThinkingModel = 
-                                    (localSettings.provider === ProviderType.Gemini && (model.includes('gemini-3') || model.toLowerCase().includes('thinking'))) ||
-                                    (localSettings.provider === ProviderType.OpenRouter && localSettings.openRouterModel?.toLowerCase().includes('thinking'));
-                                
                                 const minTokens = isThinkingModel ? MIN_OUTPUT_TOKENS_FOR_THINKING : 10;
                                 const maxTokens = 65536;
                                 
@@ -253,10 +254,6 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                             })()}
                             <div className="token-presets">
                                 {(() => {
-                                    const isThinkingModel = 
-                                        (localSettings.provider === ProviderType.Gemini && (model.includes('gemini-3') || model.toLowerCase().includes('thinking'))) ||
-                                        (localSettings.provider === ProviderType.OpenRouter && localSettings.openRouterModel?.toLowerCase().includes('thinking'));
-                                    
                                     const presets = isThinkingModel ? [MIN_OUTPUT_TOKENS_FOR_THINKING, 16384, 32768, 65536] : [16384, 32768, 65536];
                                     const minTokens = isThinkingModel ? MIN_OUTPUT_TOKENS_FOR_THINKING : 10;
                                     
@@ -292,10 +289,6 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                                 })()}
                             </div>
                             {(() => {
-                                const isThinkingModel = 
-                                    (localSettings.provider === ProviderType.Gemini && (model.includes('gemini-3') || model.toLowerCase().includes('thinking'))) ||
-                                    (localSettings.provider === ProviderType.OpenRouter && localSettings.openRouterModel?.toLowerCase().includes('thinking'));
-                                
                                 return (
                                     <>
                                         <p className="modal-help-text">

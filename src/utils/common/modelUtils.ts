@@ -1,3 +1,29 @@
+import { ProviderType } from '@/types';
+import { ModelOption as OpenRouterModelOption } from '@/services/openrouter/modelsCache';
+
+export const isThinkingModel = (
+  provider: ProviderType,
+  modelId: string,
+  openRouterModels?: OpenRouterModelOption[]
+): boolean => {
+  if (provider === ProviderType.Gemini) {
+    return modelId.includes('gemini-3') || modelId.toLowerCase().includes('thinking');
+  }
+
+  if (provider === ProviderType.OpenRouter && modelId) {
+    // 1. Check by metadata if available (most reliable)
+    if (openRouterModels) {
+      const model = openRouterModels.find(m => m.value === modelId);
+      if (model) return !!model.supportsReasoning;
+    }
+
+    // 2. Fallback to name check
+    return modelId.toLowerCase().includes('thinking');
+  }
+
+  return false;
+};
+
 export const getModelDisplayName = (model: string): string => {
   const modelNames: Record<string, string> = {
     'gemini-2.5-flash-lite': 'Gemini 2.5 Flash-Lite Swarm',
