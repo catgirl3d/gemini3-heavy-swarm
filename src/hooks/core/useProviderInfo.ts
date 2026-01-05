@@ -36,9 +36,10 @@ export function getProviderInfo(settings: AppSettings, serverStatus?: ServerStat
   const isDemoMode = isUsingProxy && isUnlocked && serverStatus?.proxyMode !== 'private';
 
   // 5. Get display name for the model
-  const modelDisplayName = isOpenRouter
-    ? (settings.openRouterModel ? `${settings.openRouterModel} Swarm` : 'OpenRouter Swarm')
-    : getModelDisplayName(settings.model);
+  const modelDisplayName = getModelDisplayName(
+    isOpenRouter ? settings.openRouterModel : settings.model,
+    { withSwarmSuffix: true }
+  ) || (isOpenRouter ? 'OpenRouter Swarm' : 'AI Swarm');
 
   // 6. Validation logic for sending messages
   const canSend = (userInput: string, hasImage: boolean) => {

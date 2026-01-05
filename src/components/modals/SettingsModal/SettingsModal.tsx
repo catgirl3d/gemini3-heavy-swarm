@@ -1,6 +1,6 @@
 import React, { FC, useState, useEffect, useMemo } from 'react';
 import { AppSettings, PROMPT_TYPES, ProviderType } from '@/types';
-import { DEFAULT_SETTINGS } from '@/constants';
+import { DEFAULT_SETTINGS, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 import { useProviderInfo, getProviderInfo } from '@/hooks/core/useProviderInfo';
 
 // Shared Components
@@ -171,7 +171,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
         if (finalSettings.simulateSynthesisErrorAttempts < 1) finalSettings.simulateSynthesisErrorAttempts = 1;
 
         // Validation: Max output tokens limits
-        if (finalSettings.maxOutputTokens > 65536) finalSettings.maxOutputTokens = 65536;
+        if (finalSettings.maxOutputTokens > MAX_OUTPUT_TOKENS_LIMIT) finalSettings.maxOutputTokens = MAX_OUTPUT_TOKENS_LIMIT;
         if (finalSettings.maxOutputTokens < 1) finalSettings.maxOutputTokens = 1;
 
         // Provider switching logic handles all model persistence

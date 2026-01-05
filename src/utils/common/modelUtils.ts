@@ -1,5 +1,6 @@
 import { ProviderType } from '@/types';
 import { ModelOption as OpenRouterModelOption } from '@/services/openrouter/modelsCache';
+import { MODEL_DISPLAY_NAMES } from '@/constants/models';
 
 export const isThinkingModel = (
   provider: ProviderType,
@@ -24,26 +25,55 @@ export const isThinkingModel = (
   return false;
 };
 
-export const getModelDisplayName = (model: string): string => {
-  const modelNames: Record<string, string> = {
-    'gemini-2.5-flash-lite': 'Gemini 2.5 Flash-Lite Swarm',
-    'gemini-2.5-flash': 'Gemini 2.5 Flash Swarm',
-    'gemini-2.5-pro': 'Gemini 2.5 Pro Swarm',
-    'gemini-3-flash-preview': 'Gemini 3 Flash Swarm',
-    'gemini-3-pro-preview': 'Gemini 3 Pro Swarm',
-  };
-  if (modelNames[model]) return modelNames[model];
-  
-  // If it's a path-like model (e.g. provider/model), it's likely OpenRouter
-  if (model.includes('/')) return model;
+export interface ModelDisplayNameOptions {
+  /** Return only the model name, stripping provider prefix and 'Swarm' suffix */
+  short?: boolean;
+  /** Ensure ' Swarm' suffix is present in the display name */
+  withSwarmSuffix?: boolean;
+}
 
-  return model || 'Default Model';
+/**
+ * Returns a human-readable name for the model.
+ * 1. Checks MODEL_DISPLAY_NAMES for a "pretty" name (e.g., 'Gemini 3 Flash Swarm').
+ * 2. If not found and is in 'provider/model' format, returns just the 'model' part.
+ * 3. Otherwise returns the model ID as is.
+ *
+ * Options allow for consistent short tags or ensuring the ' Swarm' suffix.
+ * Used for main UI titles (Header, EmptyState) and small tags.
+ */
+export const getModelDisplayName = (model: string, options: ModelDisplayNameOptions = {}): string => {
+  if (!model || model.trim() === '') {
+    return '';
+  }
+  
+  // 1. Try to get name from constants
+  let displayName = MODEL_DISPLAY_NAMES[model];
+  
+  // 2. Fallback to processing the ID
+  if (!displayName) {
+    displayName = model.includes('/') ? model.split('/').pop() || model : model;
+  }
+
+  // 3. Handle 'short' option (strip ' Swarm' suffix)
+  if (options.short) {
+    return displayName.replace(/ Swarm$/, '');
+  }
+
+  // 4. Handle 'withSwarmSuffix' option
+  if (options.withSwarmSuffix && !displayName.endsWith(' Swarm')) {
+    return `${displayName} Swarm`;
+  }
+
+  return displayName;
 };
 
+/**
+ * Returns a compact tag for the model.
+ * Wrapper around getModelDisplayName with { short: true }.
+ *
+ * Used for small UI tags (InstructionItem, RoleItem).
+ */
 export const formatModelTag = (model: string): string => {
   if (!model) return 'Default';
-  if (model.includes('/')) {
-    return model.split('/').pop() || model;
-  }
-  return model;
+  return getModelDisplayName(model, { short: true });
 };

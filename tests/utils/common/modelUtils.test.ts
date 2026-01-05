@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isThinkingModel } from '@/utils/common/modelUtils';
+import { isThinkingModel, getModelDisplayName } from '@/utils/common/modelUtils';
 import { ProviderType } from '@/types';
 
 describe('modelUtils', () => {
@@ -42,6 +42,47 @@ describe('modelUtils', () => {
     it('should return false for unknown providers or empty models', () => {
       expect(isThinkingModel('unknown' as any, 'some-model')).toBe(false);
       expect(isThinkingModel(ProviderType.OpenRouter, '')).toBe(false);
+    });
+  });
+
+  describe('getModelDisplayName', () => {
+    it('should return empty string for empty input', () => {
+      expect(getModelDisplayName('')).toBe('');
+      expect(getModelDisplayName('   ')).toBe('');
+      expect(getModelDisplayName(null as any)).toBe('');
+    });
+
+    it('should return display name from MODEL_DISPLAY_NAMES if exists', () => {
+      expect(getModelDisplayName('gemini-3-flash-preview')).toBe('Gemini 3 Flash');
+    });
+
+    it('should handle provider/model format', () => {
+      expect(getModelDisplayName('anthropic/claude-3-opus')).toBe('claude-3-opus');
+      expect(getModelDisplayName('openai/gpt-4o')).toBe('gpt-4o');
+    });
+
+    it('should return the model itself if no provider slash and not in constants', () => {
+      expect(getModelDisplayName('unknown-model')).toBe('unknown-model');
+    });
+
+    it('should handle multiple slashes by taking the last part', () => {
+      expect(getModelDisplayName('provider/subprovider/model-name')).toBe('model-name');
+    });
+
+    it('should handle short option by stripping Swarm suffix', () => {
+      // From constants
+      expect(getModelDisplayName('gemini-3-flash-preview', { short: true })).toBe('Gemini 3 Flash');
+      // From ID
+      expect(getModelDisplayName('my-custom-swarm Swarm', { short: true })).toBe('my-custom-swarm');
+    });
+
+    it('should handle withSwarmSuffix option', () => {
+      // From constants (suffix added dynamically)
+      expect(getModelDisplayName('gemini-3-flash-preview', { withSwarmSuffix: true })).toBe('Gemini 3 Flash Swarm');
+      // Doesn't have suffix
+      expect(getModelDisplayName('anthropic/claude-3', { withSwarmSuffix: true })).toBe('claude-3 Swarm');
+      // Doesn't have suffix (custom)
+      expect(getModelDisplayName('custom-model', { withSwarmSuffix: true })).toBe('custom-model Swarm');
     });
   });
 });

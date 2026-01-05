@@ -2,7 +2,7 @@ import { GenerationConfig, ThinkingLevel } from '@google/genai';
 import { Logger } from '@shared/utils/logger';
 import { isThinkingModel as checkIsThinkingModel } from '@/utils/common/modelUtils';
 import { ProviderType } from '@/types';
-import { MIN_OUTPUT_TOKENS_FOR_THINKING } from '@/constants';
+import { MIN_OUTPUT_TOKENS_FOR_THINKING, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 
 const logger = new Logger('geminiConfig');
 
@@ -17,7 +17,7 @@ const logger = new Logger('geminiConfig');
 export const getGenerationConfig = (
   model: string,
   userTemperature: number | undefined,
-  userMaxOutputTokens: number = 65536,
+  userMaxOutputTokens: number = MAX_OUTPUT_TOKENS_LIMIT,
   unsafeTemperature: boolean = false
 ): GenerationConfig => {
   const isGemini3 = model.includes('gemini-3');

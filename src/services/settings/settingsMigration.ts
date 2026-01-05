@@ -1,5 +1,5 @@
 import { AppSettings, RoleProfile, SavedInstruction, LegacySavedInstruction, AgentRole, PROMPT_TYPES, PromptTypeId, ProviderType } from '@/types';
-import { DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES } from '@/constants';
+import { DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 
 /**
  * Represents settings from older versions of the application for migration purposes.
@@ -159,7 +159,7 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
 
   // Migration 11: Ensure maxOutputTokens exists
   if (migrated.maxOutputTokens === undefined) {
-    migrated.maxOutputTokens = 65536;
+    migrated.maxOutputTokens = MAX_OUTPUT_TOKENS_LIMIT;
   }
 
   // Migration 12: Ensure search tool flags exist

@@ -2,6 +2,7 @@ import { AppSettings, ProviderType } from '@/types';
 import { IS_FORCED_PROXY } from './env';
 import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
 import { DEFAULT_PROFILES } from '@/constants/prompts';
+import { MAX_OUTPUT_TOKENS_LIMIT } from '@/constants/models';
 
 // Determine default model based on environment (Proxy vs Direct)
 // If proxy is forced, we default to flash-lite (demo mode)
@@ -30,7 +31,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   activeProfileId: 'default',
   profiles: DEFAULT_PROFILES,
   temperature: 0.7,
-  maxOutputTokens: 65536,
+  maxOutputTokens: MAX_OUTPUT_TOKENS_LIMIT,
   unsafeTemperature: false,
   dynamicAgentRoles: true,
   activeRoleProfileId: 'default-roles',

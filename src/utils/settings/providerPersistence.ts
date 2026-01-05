@@ -30,10 +30,10 @@ export function persistProviderModels(prev: AppSettings, newProvider: ProviderTy
     // Don't process if not actually changing
     if (oldProvider === newProvider) return prev;
     
-    // Initialize providerModels if it doesn't exist
+    // Initialize providerModels if it doesn't exist, and ensure sub-objects are initialized
     const providerModels = prev.providerModels || { stepModels: {}, roleModels: {} };
-    const stepModels = { ...providerModels.stepModels };
-    const roleModels = { ...providerModels.roleModels };
+    const stepModels = { ...(providerModels.stepModels || {}) };
+    const roleModels = { ...(providerModels.roleModels || {}) };
     
     // === STEP 1: SAVE current provider's step models ===
     stepModels[oldProvider] = {

@@ -1,4 +1,5 @@
 import React, { FC, useState, useEffect, useMemo } from 'react';
+import { getModelDisplayName } from '@/utils/common/modelUtils';
 import { fetchOpenRouterModels } from '@/services/openrouter/modelsService';
 import { RECOMMENDED_MODEL_IDS, FILTERED_MODEL_IDS } from '@/services/openrouter/constants';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
@@ -163,7 +164,7 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
 
     const renderTrigger = (selected: CustomSelectOption<string> | null) => {
         const logo = getProviderLogo(provider, selected?.value || value);
-        const label = selected ? selected.label : (value || placeholder || 'Select model...');
+        const label = selected ? selected.label : (getModelDisplayName(value) || placeholder || 'Select model...');
         
         return (
             <>

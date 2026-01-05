@@ -2,7 +2,7 @@ import React, { FC, ChangeEvent, useEffect, useMemo } from 'react';
 import { AppSettings, ServerStatus, ProviderType } from '@/types';
 import { isThinkingModel as checkIsThinkingModel } from '@/utils/common/modelUtils';
 import { getCachedModels } from '@/services/openrouter/modelsCache';
-import { MIN_OUTPUT_TOKENS_FOR_THINKING } from '@/constants';
+import { MIN_OUTPUT_TOKENS_FOR_THINKING, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 import { StepperControl } from '@/components/modals/SettingsModal/components/StepperControl';
 import { TemperatureBanner } from '@/components/modals/SettingsModal/components/TemperatureBanner';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
@@ -234,7 +234,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                         </label>
                             {(() => {
                                 const minTokens = isThinkingModel ? MIN_OUTPUT_TOKENS_FOR_THINKING : 10;
-                                const maxTokens = 65536;
+                                const maxTokens = MAX_OUTPUT_TOKENS_LIMIT;
                                 
                                 return (
                                     <input
@@ -266,17 +266,17 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                                                     className={`token-chip ${localSettings.maxOutputTokens === val ? 'active' : ''}`}
                                                     onClick={() => setLocalSettings(prev => ({ ...prev, maxOutputTokens: val }))}
                                                 >
-                                                    {val === 65536 ? '64k (Max)' : val === MIN_OUTPUT_TOKENS_FOR_THINKING ? '4k (Min)' : `${(val / 1024).toFixed(0)}k`}
+                                                    {val === MAX_OUTPUT_TOKENS_LIMIT ? '64k (Max)' : val === MIN_OUTPUT_TOKENS_FOR_THINKING ? '4k (Min)' : `${(val / 1024).toFixed(0)}k`}
                                                 </button>
                                             ))}
                                             <button
                                                 type="button"
                                                 className="token-chip"
                                                 onClick={() => {
-                                                    const val = window.prompt(`Enter custom Max Output Tokens (${minTokens.toLocaleString()} - 65536):`, localSettings.maxOutputTokens.toString());
+                                                    const val = window.prompt(`Enter custom Max Output Tokens (${minTokens.toLocaleString()} - ${MAX_OUTPUT_TOKENS_LIMIT}):`, localSettings.maxOutputTokens.toString());
                                                     if (val) {
                                                         const num = parseInt(val);
-                                                        if (!isNaN(num) && num >= minTokens && num <= 65536) {
+                                                        if (!isNaN(num) && num >= minTokens && num <= MAX_OUTPUT_TOKENS_LIMIT) {
                                                             setLocalSettings(prev => ({ ...prev, maxOutputTokens: num }));
                                                         }
                                                     }
