@@ -322,7 +322,7 @@ export abstract class BaseStep implements StepDescriptor {
         failures.push(reason);
         logger.error(`Agent ${i + 1} failed:`, reason);
         
-        logger.debug(`[Agent ${i}] FAILURE DETAILS:`, {
+        logger.debug(`[Agent ${i + 1}] FAILURE DETAILS:`, {
           error: reason instanceof Error ? reason.message : String(reason),
           textLength: results[i]?.length || 0,
           hasContent: (results[i]?.length || 0) > 0
@@ -528,7 +528,7 @@ export abstract class BaseStep implements StepDescriptor {
     callbacks: StreamCallbacks
   ): Promise<StreamResult> {
     const { ai, settings, model, contents, systemInstruction, tools, signal, agentIndex, devModeDuration, simulateError, simulateErrorAttempts, work: configWork } = config;
-    const logger = new Logger(`${this.id}${agentIndex !== undefined ? `:Agent${agentIndex}` : ''}`, settings.debugMode);
+    const logger = new Logger(`${this.id}${agentIndex !== undefined ? `:Agent${agentIndex + 1}` : ''}`, settings.debugMode);
 
     // Persistent error simulation logic (works across manual regenerations)
     if (simulateError && simulateError !== 'none') {
