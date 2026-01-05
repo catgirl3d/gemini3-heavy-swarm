@@ -99,9 +99,16 @@ export function useSwarmOrchestration({
     
     // Mark the current message as stopped in the history so UI can hide regenerate buttons
     if (currentMsgId) {
+      // 1. Update the store's currentWork so the catch block in sendMessage picks it up
+      const store = useAgentStore.getState();
+      if (store.currentWork) {
+        store.setCurrentWork({ ...store.currentWork, isStopped: true });
+      }
+
+      // 2. Update the message in history
       setMessages(prev => prev.map(m => 
         m.id === currentMsgId 
-          ? { ...m, work: m.work ? { ...m.work, isStopped: true } : undefined } 
+          ? { ...m, work: m.work ? { ...m.work, isStopped: true } : { isStopped: true } } 
           : m
       ));
     }

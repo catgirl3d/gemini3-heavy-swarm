@@ -34,6 +34,11 @@ export function updateTargetMessage<T extends Partial<Message>>(
     updatedWork = msg.work || options.workContext;
   }
   
+  // CRITICAL: Preserve isStopped flag if it was already set on the message's work
+  if (msg.work?.isStopped && updatedWork) {
+    updatedWork = { ...updatedWork, isStopped: true };
+  }
+  
   // Apply updates
   newMessages[targetIndex] = {
     ...msg,
