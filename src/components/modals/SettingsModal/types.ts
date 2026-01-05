@@ -5,6 +5,7 @@ export interface SettingsModalProps {
     onClose: () => void;
     settings: AppSettings;
     onSave: (newSettings: AppSettings) => void;
+    onReset?: () => void;
     serverStatus?: ServerStatus;
     onShowError?: (message: string) => void; // Optional callback for showing validation errors
 }

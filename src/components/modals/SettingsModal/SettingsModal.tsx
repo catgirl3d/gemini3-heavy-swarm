@@ -22,7 +22,7 @@ import { persistProviderModels, sanitizeLoadedSettings, updateStepModel } from '
 
 import './SettingsModal.css';
 
-export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, serverStatus, onShowError }) => {
+export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, onReset, serverStatus, onShowError }) => {
     const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
     const [activeTab, setActiveTab] = useState<'general' | 'prompts' | 'roles'>('general');
     
@@ -39,6 +39,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
     const [showConfirmClose, setShowConfirmClose] = useState(false);
     const [roleIndexToDelete, setRoleIndexToDelete] = useState<number | null>(null);
+    const [showConfirmReset, setShowConfirmReset] = useState(false);
 
     const hasChanges = useMemo(() => {
         try {
@@ -331,7 +332,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
             </BaseModal.Body>
 
             <BaseModal.Footer>
-                <button className="modal-btn reset" onClick={() => setLocalSettings(DEFAULT_SETTINGS)}>Reset to Defaults</button>
+                <button className="modal-btn reset" onClick={() => setShowConfirmReset(true)}>Reset to Defaults</button>
                 <button className="modal-btn save" onClick={handleSave}>Save Changes</button>
             </BaseModal.Footer>
         </BaseModal>
@@ -366,6 +367,27 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                     setRoleIndexToDelete(null);
                 }}
                 onCancel={() => setRoleIndexToDelete(null)}
+            />
+        )}
+        
+        {showConfirmReset && (
+            <ConfirmationModal
+                isOpen={true}
+                title="Reset Settings"
+                message="Are you sure you want to reset all settings to defaults? This will clear your saved configuration."
+                confirmLabel="Reset Everything"
+                confirmVariant="danger"
+                cancelLabel="Cancel"
+                onConfirm={() => {
+                    setShowConfirmReset(false);
+                    if (onReset) {
+                        onReset();
+                        onClose();
+                    } else {
+                        setLocalSettings(DEFAULT_SETTINGS);
+                    }
+                }}
+                onCancel={() => setShowConfirmReset(false)}
             />
         )}
         </>

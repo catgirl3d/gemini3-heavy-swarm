@@ -27,6 +27,7 @@ export const App: FC = () => {
     settingsLoaded,
     error,
     setSettings,
+    resetSettings,
     sendMessage,
     stopGeneration,
     retry,
@@ -217,6 +218,10 @@ export const App: FC = () => {
           onClose={() => setIsSettingsOpen(false)}
           settings={settings}
           onSave={setSettings}
+          onReset={() => {
+            resetSettings();
+            setToast({ message: "Settings reset successfully", type: 'success' });
+          }}
           serverStatus={serverStatus}
           onShowError={(message) => setToast({ message, type: 'error' })}
         />

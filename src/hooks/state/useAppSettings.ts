@@ -30,5 +30,11 @@ export function useAppSettings() {
     }
   }, [settings, settingsLoaded]);
 
-  return { settings, setSettings, settingsLoaded };
+  const resetSettings = () => {
+    new Logger('AppSettings').info('Settings reset to defaults');
+    localStorage.removeItem('gemini3-settings');
+    setSettings(DEFAULT_SETTINGS);
+  };
+
+  return { settings, setSettings, settingsLoaded, resetSettings };
 }
