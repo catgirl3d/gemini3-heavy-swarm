@@ -56,4 +56,28 @@ describe('updateTargetMessage', () => {
         const result = updateTargetMessage(userOnlyMessages, 0, STEPS.INITIAL, {});
         expect(result).toBeNull();
     });
+
+    it('should preserve isStopped flag if it was already set on the message', () => {
+        const stoppedMessages: Message[] = [
+            { 
+                id: 'm1', 
+                role: 'model', 
+                parts: [{ text: 'stopped response' }], 
+                work: { isStopped: true, agentNames: ['Agent 1'] } 
+            }
+        ];
+        
+        const updates = {
+            parts: [{ text: 'late chunk update' }],
+            work: { agentNames: ['Agent 1'], results: { [STEPS.INITIAL]: ['partial results'] } }
+        };
+        
+        const result = updateTargetMessage(stoppedMessages, 0, STEPS.INITIAL, updates);
+        
+        expect(result).not.toBeNull();
+        if (result) {
+            expect(result[0].work?.isStopped).toBe(true);
+            expect(result[0].parts[0].text).toBe('late chunk update');
+        }
+    });
 });
