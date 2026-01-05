@@ -2,11 +2,9 @@ import { GenerationConfig, ThinkingLevel } from '@google/genai';
 import { Logger } from '@shared/utils/logger';
 import { isThinkingModel as checkIsThinkingModel } from '@/utils/common/modelUtils';
 import { ProviderType } from '@/types';
+import { MIN_OUTPUT_TOKENS_FOR_THINKING } from '@/constants';
 
 const logger = new Logger('geminiConfig');
-
-// Minimum output tokens for thinking models to ensure enough space for actual text after reasoning
-export const MIN_OUTPUT_TOKENS_FOR_THINKING = 4000;
 
 /**
  * Generates the correct configuration depending on the model version.

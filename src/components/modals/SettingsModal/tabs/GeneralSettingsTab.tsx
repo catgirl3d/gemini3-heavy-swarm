@@ -2,7 +2,7 @@ import React, { FC, ChangeEvent, useEffect, useMemo } from 'react';
 import { AppSettings, ServerStatus, ProviderType } from '@/types';
 import { isThinkingModel as checkIsThinkingModel } from '@/utils/common/modelUtils';
 import { getCachedModels } from '@/services/openrouter/modelsCache';
-import { MIN_OUTPUT_TOKENS_FOR_THINKING } from '@/services/proxy/geminiConfig';
+import { MIN_OUTPUT_TOKENS_FOR_THINKING } from '@/constants';
 import { StepperControl } from '@/components/modals/SettingsModal/components/StepperControl';
 import { TemperatureBanner } from '@/components/modals/SettingsModal/components/TemperatureBanner';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
