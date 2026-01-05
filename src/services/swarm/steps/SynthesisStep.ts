@@ -48,7 +48,8 @@ export class SynthesisStep extends BaseStep {
     
     // Persistent error count check for synthesis
     const errorCountKey = this.getErrorCountKey(undefined);
-    const errorCount = (work.results?.[errorCountKey] as number) || 0;
+    const errorCountData = work.results?.[errorCountKey];
+    const errorCount = Array.isArray(errorCountData) ? (errorCountData[0] || 0) : (errorCountData as number || 0);
     const isSimulatingError = settings.simulateSynthesisError !== 'none' && errorCount < settings.simulateSynthesisErrorAttempts;
     const isRetrying = hadError || isSimulatingError;
 
@@ -94,6 +95,7 @@ export class SynthesisStep extends BaseStep {
           systemInstruction,
           tools: settings.useSearchInSynthesis ? [{ googleSearch: {} }] : undefined,
           signal,
+          agentIndex: 0, // Synthesis always uses agent index 0
           simulateError: settings.simulateSynthesisError,
           simulateErrorAttempts: settings.simulateSynthesisErrorAttempts,
           work: context.work

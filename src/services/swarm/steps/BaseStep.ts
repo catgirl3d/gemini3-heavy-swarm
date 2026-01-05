@@ -150,6 +150,15 @@ export abstract class BaseStep implements StepDescriptor {
     // Ensure storage is ready
     this.ensureResults(work);
 
+    /**
+     * INDEX NORMALIZATION
+     * - 'index' is the execution index (0 to N). For synthesis, it's always 0.
+     * - 'storageIndex' is the persistence index. 
+     * - CRITICAL: Synthesis ALWAYS uses -1 in results storage to maintain its 
+     *   distinct object-based structure {text, sources} vs agent result arrays.
+     */
+    const storageIndex = (stepId === STEPS.SYNTHESIS) ? -1 : index;
+
     // Update main text results
     if (options.localResults) {
       options.localResults[index] = text;
@@ -157,7 +166,13 @@ export abstract class BaseStep implements StepDescriptor {
     } else {
       // In regeneration, localResults is usually missing, so update work.results directly
       const current = work.results[stepId];
-      if (index === -1) {
+      if (storageIndex === -1) {
+          /**
+           * SYNTHESIS DATA STRUCTURE
+           * Synthesis results are stored as a single object (not a string array)
+           * because they optionally contain metadata like 'sources' or 'error' info.
+           * This object shape is expected by getStepResults() helpers.
+           */
           // Synthesis/Single agent
           // Always maintain object shape for synthesis - { text, sources? }
           if (typeof current === 'object' && !Array.isArray(current) && current !== null) {
@@ -167,28 +182,28 @@ export abstract class BaseStep implements StepDescriptor {
               (work.results[stepId] as any) = { text };
           }
       } else {
-          // Multi-agent array
+          // Multi-agent array (Drafters/Critics)
           const newArray = Array.isArray(current) ? [...current] : Array(settings.numAgents).fill('');
           // Ensure array is large enough (e.g. if numAgents changed or migration)
-          if (newArray.length < settings.numAgents) {
-            const padding = Array(settings.numAgents - newArray.length).fill('');
+          if (newArray.length <= storageIndex) {
+            const padding = Array(Math.max(settings.numAgents, storageIndex+1) - newArray.length).fill('');
             newArray.push(...padding);
           }
-          newArray[index] = text;
+          newArray[storageIndex] = text;
           work.results[stepId] = newArray;
       }
     }
 
     // Update thoughts
     if (thought) {
-      const thoughtsKey = index === -1 ? `${stepId}_thought` : `${stepId}_thoughts`;
-      if (index === -1) {
+      const thoughtsKey = storageIndex === -1 ? `${stepId}_thought` : `${stepId}_thoughts`;
+      if (storageIndex === -1) {
         work.results[thoughtsKey] = thought;
       } else {
         if (!work.results[thoughtsKey] || !Array.isArray(work.results[thoughtsKey])) {
           work.results[thoughtsKey] = Array(settings.numAgents).fill('');
         }
-        (work.results[thoughtsKey] as string[])[index] = thought;
+        (work.results[thoughtsKey] as string[])[storageIndex] = thought;
       }
     }
 
@@ -196,11 +211,11 @@ export abstract class BaseStep implements StepDescriptor {
     // Update usage
     if (usage) {
       const usageKey = `${stepId}_usage`;
-      if (index === -1) {
+      if (storageIndex === -1) {
         work.results[usageKey] = usage;
       } else {
         this.ensureStepUsage(work, stepId, settings.numAgents);
-        (work.results[usageKey] as any[])[index] = usage;
+        (work.results[usageKey] as any[])[storageIndex] = usage;
       }
     }
 
@@ -213,7 +228,13 @@ export abstract class BaseStep implements StepDescriptor {
 
      // SYNC: Ensure work results are updated in the global store for live streaming visibility
      // Use atomic update to prevent race conditions during parallel execution
-     useAgentStore.getState().updateWorkResult(stepId, index, { text, thought, usage });
+     /**
+      * SYNC WARNING
+      * We MUST use storageIndex here. If we use 'index' (0) for synthesis, the store
+      * will incorrectly create an array [text] instead of an object {text, sources}.
+      * This breaks 'synthesisText' retrieval in the UI (ShowWork).
+      */
+     useAgentStore.getState().updateWorkResult(stepId, storageIndex, { text, thought, usage });
 
      const hasContent = text.length > 0;
      const hasThought = !!(thought && thought.length > 0);
@@ -546,8 +567,22 @@ export abstract class BaseStep implements StepDescriptor {
         if (agentIndex === undefined) {
           currentCount = (targetWork.results[errorKey] as number) || 0;
         } else {
+          /**
+           * ERROR SIMULATION PERSISTENCE MODEL
+           * Synthesis models use a scalar 'number' for errors (since there is only 1 agent).
+           * Multi-agent steps (Initial/Refinement) use an 'Array<number>'.
+           * 
+           * MIGRATION LOGIC:
+           * If we encounter a scalar where an array is expected (e.g. if a step was 
+           * converted from single to multi-agent), we migrate it on-the-fly to 
+           * prevent regeneration from seeing a stale "failed" state globally.
+           */
           if (!Array.isArray(targetWork.results[errorKey])) {
-            targetWork.results[errorKey] = Array(settings.numAgents).fill(0);
+            const previousValue = (targetWork.results[errorKey] as number) || 0;
+            const migratedArray = Array(settings.numAgents).fill(0);
+            if (agentIndex === 0) migratedArray[0] = previousValue;
+            targetWork.results[errorKey] = migratedArray;
+            logger.debug(`SIMULATION: Migrated scalar error count (${previousValue}) to array for agent ${agentIndex}`);
           }
           currentCount = (targetWork.results[errorKey] as number[])[agentIndex] || 0;
         }
@@ -741,7 +776,35 @@ export abstract class BaseStep implements StepDescriptor {
     // Clear previous usage to avoid displaying stale data during regeneration
     this.ensureStepUsage(work, this.id, settings.numAgents);
     (work.results[`${this.id}_usage`] as any[])[agentIndex] = null;
-    useAgentStore.getState().updateWorkResult(this.id, agentIndex, { usage: null });
+    
+    /**
+     * STATE CLEARING FOR REGENERATION
+     * When regenerating, we MUST clear BOTH text and usage.
+     * 
+     * CRITICAL for Synthesis:
+     * If synthesis text is NOT cleared, ShowWork will see 'isWorking=true' AND 
+     * 'hasContent=true' (from the old text) and collapse the cards IMMEDIATELY
+     * before the new first chunk arrives. Clearing text ensures cards stay open
+     * until the new synthesis actually starts producing text.
+     */
+    const storageIndex = (this.id === STEPS.SYNTHESIS) ? -1 : agentIndex;
+    if (this.id === STEPS.SYNTHESIS) {
+      // Maintain object structure {text, sources} but clear text
+      const current = work.results[this.id];
+      work.results[this.id] = typeof current === 'object' && !Array.isArray(current) && current !== null
+        ? { ...current, text: '' } 
+        : { text: '' };
+    } else {
+      // Multi-agent array - clear specific agent's text
+      const arr = Array.isArray(work.results[this.id]) 
+        ? [...work.results[this.id] as string[]] 
+        : Array(settings.numAgents).fill('');
+      arr[agentIndex] = '';
+      work.results[this.id] = arr;
+    }
+    
+    // Clear store as well (usage AND text)
+    useAgentStore.getState().updateWorkResult(this.id, storageIndex, { usage: null, text: '' });
     
     // Determine model
     const model = roleType 

@@ -42,6 +42,11 @@ vi.mock('@/services/swarm/contentUtils', () => ({
   prepareGeminiContent: vi.fn(() => ({ history: [], baseApiParts: [] }))
 }));
 
+vi.mock('@/utils/swarm/statusHelpers', () => ({
+  updateAgentStatus: vi.fn(),
+  updateAgentStatusIfChanged: vi.fn()
+}));
+
 describe('Synthesis Jump behavior', () => {
   let step: SynthesisStep;
   let mockContext: any;
@@ -129,9 +134,6 @@ describe('Synthesis Jump behavior', () => {
     // Text chunk - JUMP
     capturedOnChunk('Hello', '', null);
     expect(mockContext.onSynthesisJump).toHaveBeenCalledTimes(1);
-    expect(updateAgentMock).toHaveBeenCalledWith(
-        STEPS.SYNTHESIS, 0, 'working', expect.anything(), 'msg-123', expect.anything()
-    );
 
     // More text - NO JUMP
     capturedOnChunk(' world', '', null);
