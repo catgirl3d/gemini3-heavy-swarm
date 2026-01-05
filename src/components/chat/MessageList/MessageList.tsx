@@ -1,4 +1,4 @@
-import React, { FC, RefObject, memo, useMemo } from 'react';
+import React, { FC, RefObject, memo } from 'react';
 import { AgentAvatar } from '@/components/chat/AgentAvatar';
 import { EmptyState } from '@/components/chat/EmptyState';
 import { MarkdownRenderer, LoadingIndicator } from '@/components/ui';
@@ -123,7 +123,7 @@ const MessageListComponent: FC<MessageListProps> = ({
                     )}
 
                     {/* 2. Work Content (Live or History) */}
-                    {useMemo(() => {
+                    {(() => {
                       if (!(msg.work || (isActiveGeneration && currentWork))) return null;
                       
                       // Allow regeneration only if the message wasn't manually stopped
@@ -142,7 +142,7 @@ const MessageListComponent: FC<MessageListProps> = ({
                           onRegenerate={handleRegenerate}
                         />
                       );
-                    }, [msg.work, isActiveGeneration, currentWork, msg.id, isPaused, onContinue, onRegenerate])}
+                    })()}
                   </>
                 )}
                 
