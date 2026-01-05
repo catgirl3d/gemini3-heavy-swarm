@@ -3,10 +3,41 @@ import { AgentAvatar } from '@/components/chat/AgentAvatar';
 import { EmptyState } from '@/components/chat/EmptyState';
 import { MarkdownRenderer, LoadingIndicator } from '@/components/ui';
 import { ShowWork } from '@/components/chat/ShowWork';
+import { ActionMenu } from '@/components/chat/ShowWork/components/ActionMenu';
+import { DownloadIcon, CopyIcon, CheckIcon } from '@/components/chat/ShowWork/icons';
+import { downloadContent } from '@/components/chat/ShowWork/utils';
 import { Sources } from '@/components/chat/Sources';
 import { Message, AgentState, Work, ProviderType } from '@/types';
 import { StepId, STEPS } from '@/types/steps';
 import { getStepResults } from '@/utils/swarm/workHelpers';
+
+interface ActionButtonProps {
+  onClick: () => void;
+  icon: React.ReactNode;
+  successIcon: React.ReactNode;
+  title: string;
+  successTitle: string;
+}
+
+const ActionButton: FC<ActionButtonProps> = ({ onClick, icon, successIcon, title, successTitle }) => {
+  const [complete, setComplete] = React.useState(false);
+
+  const handleClick = () => {
+    onClick();
+    setComplete(true);
+    setTimeout(() => setComplete(false), 2000);
+  };
+
+  return (
+    <button
+      className={`message-action-btn ${complete ? 'complete' : ''}`}
+      onClick={handleClick}
+      title={complete ? successTitle : title}
+    >
+      {complete ? successIcon : icon}
+    </button>
+  );
+};
 
 interface MessageListProps {
   messages: Message[];
@@ -96,6 +127,22 @@ const MessageListComponent: FC<MessageListProps> = ({
                 {msg.role === 'model' && msg.parts?.[0]?.text && (
                   <div className="agent-label-header">
                     <span className="agent-label">Synthesizer Agent</span>
+                    <div className="message-actions-group">
+                      <ActionButton 
+                        onClick={() => navigator.clipboard.writeText(msg.parts![0].text!)}
+                        icon={<CopyIcon />}
+                        successIcon={<CheckIcon />}
+                        title="Copy Response"
+                        successTitle="Copied!"
+                      />
+                      <ActionButton 
+                        onClick={() => downloadContent('Synthesis_Report.md', msg.parts![0].text!)}
+                        icon={<DownloadIcon />}
+                        successIcon={<CheckIcon />}
+                        title="Export Response"
+                        successTitle="Exported!"
+                      />
+                    </div>
                   </div>
                 )}
                 {msg.image && <img src={msg.image} alt="User upload" className="message-image" />}

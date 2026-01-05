@@ -46,18 +46,84 @@
 
 .agent-label-header {
   margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
 }
 
 .agent-label {
   font-weight: 700;
   font-size: 0.7rem;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  background-color: var(--bg-tertiary);
-  padding: 0.25rem 0.6rem;
-  border-radius: var(--radius-xs);
+  letter-spacing: 0.1em;
+  background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--model-message-border);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.message-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+  padding: 2px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--model-message-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.message-wrapper:hover .message-actions-group {
+  opacity: 1;
+}
+
+.message-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  padding: 4px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.message-action-btn:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.message-action-btn:active {
+  opacity: 0.7;
+}
+
+.message-action-btn.complete {
+  color: #10b981; /* Success green */
+}
+
+@keyframes bounce-in {
+  0% { transform: scale(0.5); opacity: 0; }
+  70% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.message-action-btn.complete svg {
+  animation: bounce-in 0.3s ease-out forwards;
+}
+
+.message-action-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 @media (max-width: 768px) {
