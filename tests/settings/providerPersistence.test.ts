@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AppSettings, ProviderType } from '@/types';
-import { persistProviderModels, sanitizeLoadedSettings, updateStepModel, updateRoleModel } from '@/utils/settings/providerPersistence';
+import { persistProviderModels, updateStepModel, updateRoleModel } from '@/utils/settings/providerPersistence';
 
 describe('Provider Persistence Logic', () => {
     const initialSettings: AppSettings = {
@@ -33,11 +33,11 @@ describe('Provider Persistence Logic', () => {
                 id: '1',
                 name: 'Default',
                 roles: [
-                    { name: 'Drafter 1', instruction: 'instr', model: 'gemini-model-1' },
-                    { name: 'Drafter 2', instruction: 'instr' }
+                    { id: 'drafter-1', name: 'Drafter 1', instruction: 'instr', model: 'gemini-model-1' },
+                    { id: 'drafter-2', name: 'Drafter 2', instruction: 'instr' }
                 ],
                 criticRoles: [
-                    { name: 'Critic 1', instruction: 'instr', model: 'gemini-critic-1' }
+                    { id: 'critic-1', name: 'Critic 1', instruction: 'instr', model: 'gemini-critic-1' }
                 ]
             }
         ],
@@ -74,8 +74,8 @@ describe('Provider Persistence Logic', () => {
             });
             
             expect(pm.roleModels!['1'][ProviderType.Gemini]).toEqual({
-                roles: { 0: 'gemini-model-1' },
-                criticRoles: { 0: 'gemini-critic-1' }
+                roles: { 'drafter-1': 'gemini-model-1' },
+                criticRoles: { 'critic-1': 'gemini-critic-1' }
             });
         });
 
@@ -109,7 +109,7 @@ describe('Provider Persistence Logic', () => {
             });
             
             expect(pm.roleModels!['1'][ProviderType.OpenRouter]).toEqual({
-                roles: { 0: 'or-model-1' },
+                roles: { 'drafter-1': 'or-model-1' },
                 criticRoles: undefined
             });
         });
@@ -129,99 +129,82 @@ describe('Provider Persistence Logic', () => {
         });
     });
 
-    describe('sanitizeLoadedSettings', () => {
-        it('should preserve settings that have providerModels', () => {
-            const settingsWithProviderModels = {
-                ...initialSettings,
-                providerModels: { stepModels: {}, roleModels: {} }
-            };
 
-            const result = sanitizeLoadedSettings(settingsWithProviderModels);
-            
-            // Should return unchanged
-            expect(result).toEqual(settingsWithProviderModels);
-        });
-
-        it('should clear all custom models for legacy settings without providerModels', () => {
-            const legacySettings = { ...initialSettings };
-            delete legacySettings.providerModels;
-
-            const result = sanitizeLoadedSettings(legacySettings);
-
-            // All custom models should be cleared
-            expect(result.initialModel).toBeUndefined();
-            expect(result.refinementModel).toBeUndefined();
-            expect(result.synthesisModel).toBeUndefined();
-            expect(result.roleProfiles![0].roles[0].model).toBeUndefined();
-            expect(result.roleProfiles![0].criticRoles![0].model).toBeUndefined();
-
-            // Should have initialized providerModels
-            expect(result.providerModels).toEqual({ stepModels: {}, roleModels: {} });
-        });
-    });
 
     describe('updateStepModel', () => {
         it('should update initialModel and sync with providerModels', () => {
             const result = updateStepModel(initialSettings, 'initialModel', 'new-gemini-initial');
             
-            expect(result.initialModel).toBe('new-gemini-initial');
-            expect(result.providerModels?.stepModels?.[ProviderType.Gemini]?.initial).toBe('new-gemini-initial');
+            expect(result.success).toBe(true);
+            expect(result.settings.initialModel).toBe('new-gemini-initial');
+            expect(result.settings.providerModels?.stepModels?.[ProviderType.Gemini]?.initial).toBe('new-gemini-initial');
         });
 
         it('should update refinementModel and sync with providerModels', () => {
             const result = updateStepModel(initialSettings, 'refinementModel', 'new-gemini-refinement');
             
-            expect(result.refinementModel).toBe('new-gemini-refinement');
-            expect(result.providerModels?.stepModels?.[ProviderType.Gemini]?.refinement).toBe('new-gemini-refinement');
+            expect(result.success).toBe(true);
+            expect(result.settings.refinementModel).toBe('new-gemini-refinement');
+            expect(result.settings.providerModels?.stepModels?.[ProviderType.Gemini]?.refinement).toBe('new-gemini-refinement');
         });
 
         it('should update synthesisModel and sync with providerModels', () => {
             const result = updateStepModel(initialSettings, 'synthesisModel', 'new-gemini-synthesis');
             
-            expect(result.synthesisModel).toBe('new-gemini-synthesis');
-            expect(result.providerModels?.stepModels?.[ProviderType.Gemini]?.synthesis).toBe('new-gemini-synthesis');
+            expect(result.success).toBe(true);
+            expect(result.settings.synthesisModel).toBe('new-gemini-synthesis');
+            expect(result.settings.providerModels?.stepModels?.[ProviderType.Gemini]?.synthesis).toBe('new-gemini-synthesis');
         });
 
         it('should handle clearing models (undefined)', () => {
             const result = updateStepModel(initialSettings, 'initialModel', undefined);
             
-            expect(result.initialModel).toBeUndefined();
-            expect(result.providerModels?.stepModels?.[ProviderType.Gemini]?.initial).toBeUndefined();
+            expect(result.success).toBe(true);
+            expect(result.settings.initialModel).toBeUndefined();
+            expect(result.settings.providerModels?.stepModels?.[ProviderType.Gemini]?.initial).toBeUndefined();
         });
     });
 
     describe('updateRoleModel', () => {
         it('should update drafter role model and sync with providerModels', () => {
-            const result = updateRoleModel(initialSettings, '1', 'drafter', 0, 'new-role-model');
+            const result = updateRoleModel(initialSettings, '1', 'drafter', 'drafter-1', 'new-role-model');
             
-            expect(result.roleProfiles![0].roles[0].model).toBe('new-role-model');
-            expect(result.providerModels?.roleModels?.['1']?.[ProviderType.Gemini]?.roles?.[0]).toBe('new-role-model');
+            expect(result.success).toBe(true);
+            expect(result.settings.roleProfiles![0].roles[0].model).toBe('new-role-model');
+            expect(result.settings.providerModels?.roleModels?.['1']?.[ProviderType.Gemini]?.roles?.['drafter-1']).toBe('new-role-model');
         });
 
         it('should update critic role model and sync with providerModels', () => {
-            const result = updateRoleModel(initialSettings, '1', 'critic', 0, 'new-critic-model');
+            const result = updateRoleModel(initialSettings, '1', 'critic', 'critic-1', 'new-critic-model');
             
-            expect(result.roleProfiles![0].criticRoles![0].model).toBe('new-critic-model');
-            expect(result.providerModels?.roleModels?.['1']?.[ProviderType.Gemini]?.criticRoles?.[0]).toBe('new-critic-model');
+            expect(result.success).toBe(true);
+            expect(result.settings.roleProfiles![0].criticRoles![0].model).toBe('new-critic-model');
+            expect(result.settings.providerModels?.roleModels?.['1']?.[ProviderType.Gemini]?.criticRoles?.['critic-1']).toBe('new-critic-model');
         });
 
         it('should handle clearing role models (undefined)', () => {
-            const result = updateRoleModel(initialSettings, '1', 'drafter', 0, undefined);
+            const result = updateRoleModel(initialSettings, '1', 'drafter', 'drafter-1', undefined);
             
-            expect(result.roleProfiles![0].roles[0].model).toBeUndefined();
-            expect(result.providerModels?.roleModels?.['1']?.[ProviderType.Gemini]?.roles?.[0]).toBeUndefined();
+            expect(result.success).toBe(true);
+            expect(result.settings.roleProfiles![0].roles[0].model).toBeUndefined();
+            expect(result.settings.providerModels?.roleModels?.['1']?.[ProviderType.Gemini]?.roles).toBeUndefined();
         });
         
         it('should handle multiple roles and indices', () => {
-            let state = updateRoleModel(initialSettings, '1', 'drafter', 0, 'model-0');
-            state = updateRoleModel(state, '1', 'drafter', 1, 'model-1');
+            let result = updateRoleModel(initialSettings, '1', 'drafter', 'drafter-1', 'model-0');
+            expect(result.success).toBe(true);
+            let state = result.settings;
+            
+            result = updateRoleModel(state, '1', 'drafter', 'drafter-2', 'model-1');
+            expect(result.success).toBe(true);
+            state = result.settings;
             
             expect(state.roleProfiles![0].roles[0].model).toBe('model-0');
             expect(state.roleProfiles![0].roles[1].model).toBe('model-1');
             
             const saved = state.providerModels?.roleModels?.['1']?.[ProviderType.Gemini]?.roles;
-            expect(saved?.[0]).toBe('model-0');
-            expect(saved?.[1]).toBe('model-1');
+            expect(saved?.['drafter-1']).toBe('model-0');
+            expect(saved?.['drafter-2']).toBe('model-1');
         });
     });
 });

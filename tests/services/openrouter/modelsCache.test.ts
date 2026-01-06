@@ -93,7 +93,7 @@ describe('modelsCache', () => {
 
         setCachedModels(mockModels);
         
-        expect(consoleSpy).toHaveBeenCalledWith('Failed to cache OpenRouter models:', expect.any(Error));
+        expect(consoleSpy).toHaveBeenCalledWith('[WARN:ModelsCache] Failed to cache OpenRouter models:', expect.any(Error));
         
         setItemSpy.mockRestore();
         consoleSpy.mockRestore();

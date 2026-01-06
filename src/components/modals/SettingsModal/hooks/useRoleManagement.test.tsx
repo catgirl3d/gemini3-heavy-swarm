@@ -1,0 +1,281 @@
+import { describe, it, expect } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import { useRoleManagement } from '@/components/modals/SettingsModal/hooks/useRoleManagement';
+import { AppSettings, ProviderType } from '@/types';
+import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
+import { useState } from 'react';
+import { createMockSettings } from '@/test/utils/settingsMocks';
+
+describe('useRoleManagement', () => {
+  const setupHook = (initialSettings: AppSettings, roleType: 'drafter' | 'critic' = 'drafter') => {
+    return renderHook(() => {
+      const [settings, setSettings] = useState(initialSettings);
+      const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) 
+        || settings.roleProfiles?.[0] 
+        || { id: 'test', name: 'Test', roles: [], criticRoles: [] };
+      
+      const hook = useRoleManagement(
+        settings,
+        setSettings,
+        activeRoleProfile,
+        roleType
+      );
+      
+      return { settings, hook };
+    });
+  };
+
+  describe('handleAddRole', () => {
+    it('should add new role with generated ID', () => {
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [{ id: 'role-1', name: 'Existing', instruction: 'Test' }],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleAddRole();
+      });
+
+      const profile = result.current.settings.roleProfiles![0];
+      expect(profile.roles).toHaveLength(2);
+      expect(profile.roles[1].id).toBeTruthy();
+      expect(profile.roles[1].id).not.toBe('role-1');
+    });
+
+    it('should generate unique IDs for multiple new roles', () => {
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleAddRole();
+        result.current.hook.handleAddRole();
+      });
+
+      const profile = result.current.settings.roleProfiles![0];
+      expect(profile.roles).toHaveLength(2);
+      expect(profile.roles[0].id).not.toBe(profile.roles[1].id);
+    });
+  });
+
+  describe('handleDeleteRole', () => {
+    it('should delete role at specified index', () => {
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [
+            { id: 'role-1', name: 'R1', instruction: '' },
+            { id: 'role-2', name: 'R2', instruction: '' },
+            { id: 'role-3', name: 'R3', instruction: '' }
+          ],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleDeleteRole(1); // Delete middle
+      });
+
+      const profile = result.current.settings.roleProfiles![0];
+      expect(profile.roles).toHaveLength(2);
+      expect(profile.roles[0].id).toBe('role-1');
+      expect(profile.roles[1].id).toBe('role-3');
+    });
+  });
+
+  describe('handleMoveRole', () => {
+    it('should move role up', () => {
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [
+            { id: 'role-1', name: 'R1', instruction: '' },
+            { id: 'role-2', name: 'R2', instruction: '' }
+          ],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleMoveRole(1, 'up');
+      });
+
+      const profile = result.current.settings.roleProfiles![0];
+      expect(profile.roles[0].id).toBe('role-2');
+      expect(profile.roles[1].id).toBe('role-1');
+    });
+  });
+
+  describe('handleRestoreDefaultRoles', () => {
+    it('should restore default roles with NEW unique IDs to prevent conflicts across profiles', () => {
+      const settings = createMockSettings({
+        activeRoleProfileId: 'default-roles',
+        roleProfiles: [{
+          id: 'default-roles',
+          name: 'Default Roles',
+          roles: [{ id: 'custom', name: 'Custom', instruction: '' }],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleRestoreDefaultRoles();
+      });
+
+      const profile = result.current.settings.roleProfiles![0];
+      const defaultProfile = DEFAULT_ROLE_PROFILES.find(p => p.id === 'default-roles')!;
+      
+      // Should have same number of roles as default
+      expect(profile.roles).toHaveLength(defaultProfile.roles.length);
+      
+      // CRITICAL: IDs should be DIFFERENT from DEFAULT_ROLE_PROFILES to prevent collisions
+      // If we restore defaults to multiple profiles, they would all share the same IDs otherwise
+      expect(profile.roles[0].id).not.toBe(defaultProfile.roles[0].id);
+      
+      // Names and instructions should match defaults
+      expect(profile.roles[0].name).toBe(defaultProfile.roles[0].name);
+      expect(profile.roles[0].instruction).toBe(defaultProfile.roles[0].instruction);
+      
+      // Deep clone check (object reference should be different)
+      expect(profile.roles[0]).not.toBe(defaultProfile.roles[0]);
+    });
+
+    it('should generate unique IDs across multiple profile restorations', () => {
+      // This test verifies that if we restore defaults to two different profiles,
+      // they won't have conflicting role IDs in providerModels
+      const settings = createMockSettings({
+        activeRoleProfileId: 'default-roles',
+        roleProfiles: [
+          {
+            id: 'default-roles',
+            name: 'Profile 1',
+            roles: [{ id: 'old-1', name: 'Old', instruction: '' }],
+            criticRoles: []
+          }
+        ]
+      });
+
+      const { result } = setupHook(settings);
+
+      // Restore to first profile
+      act(() => {
+        result.current.hook.handleRestoreDefaultRoles();
+      });
+
+      const profile1Ids = result.current.settings.roleProfiles![0].roles.map(r => r.id);
+      const defaultProfile = DEFAULT_ROLE_PROFILES.find(p => p.id === 'default-roles')!;
+
+      // All IDs should be unique (not from DEFAULT_ROLE_PROFILES)
+      profile1Ids.forEach(id => {
+        expect(defaultProfile.roles.some(r => r.id === id)).toBe(false);
+      });
+
+      // Simulate restoring to another profile with same defaults
+      const settings2 = createMockSettings({
+        activeRoleProfileId: 'default-roles',
+        roleProfiles: [
+          {
+            id: 'default-roles',
+            name: 'Profile 2',
+            roles: [{ id: 'old-2', name: 'Old', instruction: '' }],
+            criticRoles: []
+          }
+        ]
+      });
+
+      const { result: result2 } = setupHook(settings2);
+
+      act(() => {
+        result2.current.hook.handleRestoreDefaultRoles();
+      });
+
+      const profile2Ids = result2.current.settings.roleProfiles![0].roles.map(r => r.id);
+
+      // CRITICAL: Both profiles should have completely different IDs
+      // This prevents providerModels collision: profileId -> provider -> roleId
+      profile1Ids.forEach(id1 => {
+        expect(profile2Ids).not.toContain(id1);
+      });
+    });
+  });
+
+  describe('Rapid Sequential Updates', () => {
+    it('should correctly update a newly added role model without stale closure issues', () => {
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        // Rapid sequential calls
+        result.current.hook.handleAddRole();
+        // Here, if it was a stale closure, it would use the old (empty) roles list
+        // and fail to find the role at index 0.
+        result.current.hook.handleRoleChange(0, 'model', 'new-model');
+      });
+
+      const profile = result.current.settings.roleProfiles![0];
+      expect(profile.roles).toHaveLength(1);
+      expect(profile.roles[0].model).toBe('new-model');
+      
+      // Verify providerModels sync
+      const roleId = profile.roles[0].id;
+      expect(result.current.settings.providerModels?.roleModels?.['test-profile']?.[ProviderType.Gemini]?.roles?.[roleId]).toBe('new-model');
+    });
+
+    it('should correctly handle multiple rapid moves', () => {
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [
+            { id: 'role-1', name: 'R1', instruction: '' },
+            { id: 'role-2', name: 'R2', instruction: '' },
+            { id: 'role-3', name: 'R3', instruction: '' }
+          ],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        // Move role 3 to the top rapidly
+        result.current.hook.handleMoveRole(2, 'up'); // [R1, R3, R2]
+        result.current.hook.handleMoveRole(1, 'up'); // [R3, R1, R2]
+      });
+
+      const profile = result.current.settings.roleProfiles![0];
+      expect(profile.roles[0].id).toBe('role-3');
+      expect(profile.roles[1].id).toBe('role-1');
+      expect(profile.roles[2].id).toBe('role-2');
+    });
+  });
+});
