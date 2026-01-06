@@ -382,12 +382,8 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                 cancelLabel="Cancel"
                 onConfirm={() => {
                     setShowConfirmReset(false);
-                    if (onReset) {
-                        onReset();
-                        onClose();
-                    } else {
-                        setLocalSettings(DEFAULT_SETTINGS);
-                    }
+                    onReset(); // Immediately clears localStorage and resets state
+                    onClose();
                 }}
                 onCancel={() => setShowConfirmReset(false)}
             />

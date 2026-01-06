@@ -5,7 +5,7 @@ export interface SettingsModalProps {
     onClose: () => void;
     settings: AppSettings;
     onSave: (newSettings: AppSettings) => void;
-    onReset?: () => void;
+    onReset: () => void; // Required: Must immediately clear localStorage and reset state
     serverStatus?: ServerStatus;
     onShowError?: (message: string) => void; // Optional callback for showing validation errors
 }
