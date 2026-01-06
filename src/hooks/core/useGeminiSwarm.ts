@@ -15,7 +15,7 @@ import { useAgentStore } from '@/stores/agentStore';
  */
 export const useGeminiSwarm = () => {
   // 1. Compose State Hooks
-  const { settings, settingsLoaded, setSettings, resetSettings } = useAppSettings();
+  const { settings, settingsLoaded, setSettings, resetSettings, loadError, clearLoadError } = useAppSettings();
   const { messages, setMessages, messagesRef } = useMessages();
   
   // Zustand Store - All swarm state in one place
@@ -81,10 +81,12 @@ export const useGeminiSwarm = () => {
     settingsLoaded,
     error,
     currentMessageId,
+    loadError,
     
     // Actions
     setSettings,
     resetSettings,
+    clearLoadError,
     sendMessage: orchestration.sendMessage,
     stopGeneration: orchestration.stopGeneration,
     retry: orchestration.retry,

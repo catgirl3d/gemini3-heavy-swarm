@@ -16,7 +16,7 @@ import { AgentRole } from '@/types';
  * @throws Error if role.id is missing or empty
  */
 export function assertRoleHasId(role: AgentRole, context?: string): asserts role is AgentRole & { id: string } {
-  if (!role.id || role.id.trim() === '') {
+  if (!hasValidId(role)) {
     const contextStr = context ? ` (${context})` : '';
     throw new Error(
       `Role is missing required ID${contextStr}. ` +
@@ -27,6 +27,17 @@ export function assertRoleHasId(role: AgentRole, context?: string): asserts role
 }
 
 /**
+ * Checks if an object has a valid, non-empty string ID.
+ * Generic helper for roles, instructions, and other entities.
+ * 
+ * @param entity - The object to check
+ * @returns true if id is present and not whitespace
+ */
+export const hasValidId = (entity: { id?: string }): entity is { id: string } => {
+  return !!entity.id && entity.id.trim() !== '';
+};
+
+/**
  * Safe version that returns a boolean instead of throwing.
  * Useful for validation checks without try-catch blocks.
  *
@@ -34,5 +45,5 @@ export function assertRoleHasId(role: AgentRole, context?: string): asserts role
  * @returns true if role has a valid ID, false otherwise
  */
 export const hasValidRoleId = (role: AgentRole): role is AgentRole & { id: string } => {
-  return !!role.id && role.id.trim() !== '';
+  return hasValidId(role);
 };
