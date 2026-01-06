@@ -39,10 +39,10 @@ export const ConfirmationModal: FC<ConfirmationModalProps> = ({
             </BaseModal.Body>
             <BaseModal.Footer>
                 <div className="modal-footer-actions">
+                    <button className="modal-btn outline" onClick={onCancel}>{cancelLabel}</button>
                     {onDiscard && discardLabel && (
                         <button className="modal-btn danger" onClick={onDiscard}>{discardLabel}</button>
                     )}
-                    <button className="modal-btn outline" onClick={onCancel}>{cancelLabel}</button>
                 </div>
                 <button className={`modal-btn ${confirmVariant}`} onClick={onConfirm}>{confirmLabel}</button>
             </BaseModal.Footer>

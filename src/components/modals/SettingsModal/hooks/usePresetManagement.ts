@@ -4,11 +4,11 @@ import { DEFAULT_SETTINGS } from '@/constants';
 import { InstructionType } from '@/components/modals/SettingsModal/types';
 import { INSTRUCTION_METADATA } from '@/components/modals/SettingsModal/constants';
 
-export function usePresetManagement(
+export const usePresetManagement = (
     localSettings: AppSettings,
     setLocalSettings: React.Dispatch<React.SetStateAction<AppSettings>>,
     activeProfile: PromptProfile
-) {
+) => {
     const getRolePresets = (profileId: string, type: 'drafter' | 'critic') => {
         const defaultProfile = DEFAULT_SETTINGS.roleProfiles.find(p => p.id === profileId);
         const defaultRoles = defaultProfile ? (type === 'drafter' ? defaultProfile.roles : (defaultProfile.criticRoles || [])) : [];

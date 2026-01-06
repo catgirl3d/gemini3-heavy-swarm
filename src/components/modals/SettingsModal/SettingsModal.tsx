@@ -18,12 +18,15 @@ import { RolesTab } from '@/components/modals/SettingsModal/tabs/RolesTab';
 import { ConfigIcon, PromptsIcon, RolesIcon } from '@/components/modals/SettingsModal/icons';
 
 // Hooks & Utils
-import { persistProviderModels, sanitizeLoadedSettings, updateStepModel } from '@/utils/settings/providerPersistence';
+import { persistProviderModels, updateStepModel } from '@/utils/settings/providerPersistence';
+import { createErrorHandler } from '@shared/utils/errorHandler';
 
 import './SettingsModal.css';
 
 export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, onReset, serverStatus, onShowError }) => {
     const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
+    const showError = createErrorHandler(onShowError);
+
     const [activeTab, setActiveTab] = useState<'general' | 'prompts' | 'roles'>('general');
     
     // UI states
@@ -40,6 +43,8 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     const [showConfirmClose, setShowConfirmClose] = useState(false);
     const [roleIndexToDelete, setRoleIndexToDelete] = useState<number | null>(null);
     const [showConfirmReset, setShowConfirmReset] = useState(false);
+    const [showCreateProfileConfirm, setShowCreateProfileConfirm] = useState(false);
+    const [showCreateRoleProfileConfirm, setShowCreateRoleProfileConfirm] = useState(false);
 
     const hasChanges = useMemo(() => {
         try {
@@ -50,9 +55,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     }, [localSettings, settings]);
 
     useEffect(() => {
-        // Sanitize settings on load to handle legacy data or corruption
-        const sanitized = sanitizeLoadedSettings(settings);
-        setLocalSettings(sanitized);
+        setLocalSettings(settings);
     }, [settings, isOpen]);
 
     const handleClose = () => {
@@ -72,8 +75,8 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     const { isUnlocked: isModelUnlocked, isDemoMode: currentIsDemoMode } = localProviderInfo;
 
     // Hooks
-    const profileMgr = useProfileManagement(localSettings, setLocalSettings, activeProfile, activeRoleProfile, setIsEditingProfileName, setIsEditingRoleName);
-    const roleMgr = useRoleManagement(localSettings, setLocalSettings, activeRoleProfile, activeRoleType);
+    const profileMgr = useProfileManagement(localSettings, setLocalSettings, activeProfile, activeRoleProfile, setIsEditingProfileName, setIsEditingRoleName, onShowError);
+    const roleMgr = useRoleManagement(localSettings, setLocalSettings, activeRoleProfile, activeRoleType, onShowError);
     const presetMgr = usePresetManagement(localSettings, setLocalSettings, activeProfile);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -107,11 +110,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
             // Check if ANY API key is available (user's or server's)
             if (!finalSettings.openRouterApiKey && !isUnlockedFinal) {
                 const errorMsg = 'OpenRouter requires an API key. Please add your own API key in settings, or ensure the server has one configured.';
-                if (onShowError) {
-                    onShowError(errorMsg);
-                } else {
-                    alert(errorMsg); // Fallback if no toast available
-                }
+                showError(errorMsg);
                 return; // Block saving - this is a critical error
             }
         } else if (finalSettings.provider === ProviderType.Gemini) {
@@ -122,11 +121,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
             // 3. OR Direct mode is active and process.env.GEMINI_API_KEY exists
             if (!finalSettings.apiKey && !isUnlockedFinal) {
                 const errorMsg = 'Gemini requires an API key. Please add your own API key in settings, or ensure the server has one configured.';
-                if (onShowError) {
-                    onShowError(errorMsg);
-                } else {
-                    alert(errorMsg); // Fallback if no toast available
-                }
+                showError(errorMsg);
                 return; // Block saving - this is a critical error
             }
         }
@@ -240,7 +235,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         setIsEditingProfileName={setIsEditingProfileName}
                         handleRenameProfile={profileMgr.handleRenameProfile}
                         handleProfileChange={profileMgr.handleProfileChange}
-                        handleCreateProfile={profileMgr.handleCreateProfile}
+                        handleCreateProfile={() => setShowCreateProfileConfirm(true)}
                         handleDeleteProfile={profileMgr.handleDeleteProfile}
                         setEditingInstruction={setEditingInstruction}
                     />
@@ -255,7 +250,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         setActiveRoleType={setActiveRoleType}
                         handleRenameRoleProfile={profileMgr.handleRenameRoleProfile}
                         handleRoleProfileChange={profileMgr.handleRoleProfileChange}
-                        handleCreateRoleProfile={profileMgr.handleCreateRoleProfile}
+                        handleCreateRoleProfile={() => setShowCreateRoleProfileConfirm(true)}
                         handleDeleteRoleProfile={profileMgr.handleDeleteRoleProfile}
                         handleAddRole={roleMgr.handleAddRole}
                         handleDeleteRole={(index) => setRoleIndexToDelete(index)}
@@ -325,7 +320,14 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         isDemoMode={currentIsDemoMode}
                         onModelChange={(model) => {
                             const modelKey = INSTRUCTION_METADATA[editingInstruction!].modelKey as 'initialModel' | 'refinementModel' | 'synthesisModel';
-                            setLocalSettings(prev => updateStepModel(prev, modelKey, model || undefined));
+                            
+                            const result = updateStepModel(localSettings, modelKey, model || undefined);
+                            
+                            if (result.success) {
+                                setLocalSettings(result.settings);
+                            } else {
+                                showError(result.error || 'Failed to update step model. Please try again.');
+                            }
                         }}
                     />
                 )}
@@ -388,6 +390,46 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                     }
                 }}
                 onCancel={() => setShowConfirmReset(false)}
+            />
+        )}
+
+        {showCreateProfileConfirm && (
+            <ConfirmationModal
+                isOpen={true}
+                title="Create New Profile"
+                message="Would you like to create a completely new profile or a copy of the current one?"
+                confirmLabel="Copy Current"
+                discardLabel="Completely New"
+                cancelLabel="Cancel"
+                onConfirm={() => {
+                    profileMgr.handleCreateProfile(true);
+                    setShowCreateProfileConfirm(false);
+                }}
+                onDiscard={() => {
+                    profileMgr.handleCreateProfile(false);
+                    setShowCreateProfileConfirm(false);
+                }}
+                onCancel={() => setShowCreateProfileConfirm(false)}
+            />
+        )}
+
+        {showCreateRoleProfileConfirm && (
+            <ConfirmationModal
+                isOpen={true}
+                title="Create New Role Set"
+                message="Would you like to create a completely new role set or a copy of the current one?"
+                confirmLabel="Copy Current"
+                discardLabel="Completely New"
+                cancelLabel="Cancel"
+                onConfirm={() => {
+                    profileMgr.handleCreateRoleProfile(true);
+                    setShowCreateRoleProfileConfirm(false);
+                }}
+                onDiscard={() => {
+                    profileMgr.handleCreateRoleProfile(false);
+                    setShowCreateRoleProfileConfirm(false);
+                }}
+                onCancel={() => setShowCreateRoleProfileConfirm(false)}
             />
         )}
         </>

@@ -11,7 +11,7 @@ import { getAgentRole } from '@/utils/chat/roleUtils';
  * @param settings - The application settings
  * @returns A formatted agent name (e.g., "Agent 1 (Researcher)")
  */
-export function getUpdatedAgentName(index: number, stepId: StepId, settings: AppSettings): string {
+export const getUpdatedAgentName = (index: number, stepId: StepId, settings: AppSettings): string => {
   const config = getStepConfig(stepId);
   
   // Synthesis step has no indexed agents
@@ -22,17 +22,17 @@ export function getUpdatedAgentName(index: number, stepId: StepId, settings: App
   // Always apply dynamic agent roles
   const role = getAgentRole(index, settings, config.roleKey);
   return `${config.namePrefix} ${index + 1} (${role.name})`;
-}
+};
 
 /**
  * Recovers agent states for a message from the legacy message or reconstruction.
  * First tries to load saved agentStates, then tries to reconstruct from work.results.
  */
-export function getMissingAgentsForMessage(
+export const getMissingAgentsForMessage = (
   messageId: string,
   workContext: Work,
   stepId: StepId
-): AgentState[] {
+): AgentState[] => {
   // Only use saved states. Legacy reconstruction from text results is removed.
   if (workContext.agentStates?.length) {
     // Filter by messageId to ensure we don't leak states from other messages

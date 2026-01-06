@@ -1,5 +1,5 @@
 import { StepDescriptor, StepContext, StepId, STEPS, StreamConfig, StreamCallbacks, StreamResult, AgentInstruction, MultiAgentConfig } from '@/types/steps';
-import { SimulateError, ProviderType } from '@/types';
+import { SimulateError, ProviderType, RoleType } from '@/types';
 import { Tool, Content } from '@google/genai';
 import { getStepConfig, StepConfig } from '@/utils/swarm/stepConstants';
 import type { GroundingChunk } from './utils/streamUtils';
@@ -93,7 +93,7 @@ export abstract class BaseStep implements StepDescriptor {
    * Returns the model for the current agent based on role and step configuration.
    * Priority: Role model > Step model > Global model
    */
-  protected getRoleModel(context: StepContext, agentIndex: number, roleType: 'roles' | 'criticRoles'): string {
+  protected getRoleModel(context: StepContext, agentIndex: number, roleType: RoleType): string {
     const { settings } = context;
     // Early return if no role profiles
     if (!settings.roleProfiles || settings.roleProfiles.length === 0) {
@@ -745,7 +745,7 @@ export abstract class BaseStep implements StepDescriptor {
     agentIndex: number,
     instruction: AgentInstruction,
     agentStates: AgentState[],
-    roleType?: 'roles' | 'criticRoles',
+    roleType?: RoleType,
     tools?: Tool[],
     onFirstTextChunk?: () => void,
     simulateError?: SimulateError,

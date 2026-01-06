@@ -113,7 +113,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
       });
     });
     
-    // Synthesis card
+    // Synthesis card - use effectiveWork for live debug info updates
     map.set('synthesis', {
       step: STEPS.SYNTHESIS,
       index: 0,
@@ -121,11 +121,11 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
       agentName: 'Synthesizer',
       content: synthesisText,
       thought: synthesisThought,
-      debugInfo: work.debugInfo?.[STEPS.SYNTHESIS]
+      debugInfo: effectiveWork.debugInfo?.[STEPS.SYNTHESIS]
     });
     
     return map;
-  }, [work, initialResults, refinementResults, synthesisText, initialThoughts, refinementThoughts]);
+  }, [work, effectiveWork, initialResults, refinementResults, synthesisText, initialThoughts, refinementThoughts, synthesisThought]);
 
   // Unified stable callback for all card actions
   const handleCardAction = useCallback((cardId: string, action: CardActionType) => {

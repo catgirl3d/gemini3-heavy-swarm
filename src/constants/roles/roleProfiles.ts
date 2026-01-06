@@ -13,6 +13,7 @@ export const DEFAULT_ROLE_PROFILES: RoleProfile[] = [
         name: 'Software Dev Team',
         roles: [
             {
+                id: 'software-team-product-manager',
                 name: "Product Manager",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the PRODUCT MANAGER.
@@ -22,6 +23,7 @@ Your goal is to define the "what" and "why" based on user needs and business val
 - Ensure the solution solves the actual problem.`
             },
             {
+                id: 'software-team-tech-lead',
                 name: "Tech Lead",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the TECH LEAD.
@@ -31,6 +33,7 @@ Your goal is to design the technical architecture and ensure system integrity.
 - Consider long-term technical debt.`
             },
             {
+                id: 'software-team-senior-dev',
                 name: "Senior Developer",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the SENIOR DEVELOPER.
@@ -40,6 +43,7 @@ Your goal is to implement the solution with clean, efficient code.
 - Handle errors and edge cases gracefully.`
             },
             {
+                id: 'software-team-qa-engineer',
                 name: "QA Engineer",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the QA ENGINEER.
@@ -51,6 +55,7 @@ Your goal is to break the system and ensure quality.
         ],
         criticRoles: [
             {
+                id: 'software-team-security-auditor',
                 name: "Security Auditor",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the SECURITY AUDITOR.
@@ -59,6 +64,7 @@ Your goal is to find vulnerabilities and ensure data protection.
 - Enforce security best practices (least privilege, input validation).`
             },
             {
+                id: 'software-team-performance-optimizer',
                 name: "Performance Optimizer",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the PERFORMANCE OPTIMIZER.
@@ -73,6 +79,7 @@ Your goal is to ensure the solution runs efficiently.
         name: 'Creative Writing Team',
         roles: [
             {
+                id: 'creative-writing-plot-architect',
                 name: "Plot Architect",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the PLOT ARCHITECT.
@@ -82,6 +89,7 @@ Your goal is to structure the narrative for maximum impact.
 - Create compelling hooks and twists.`
             },
             {
+                id: 'creative-writing-character-psychologist',
                 name: "Character Psychologist",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the CHARACTER PSYCHOLOGIST.
@@ -91,6 +99,7 @@ Your goal is to deepen character motivations and relationships.
 - Add psychological depth and nuance.`
             },
             {
+                id: 'creative-writing-world-builder',
                 name: "World Builder",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the WORLD BUILDER.
@@ -100,6 +109,7 @@ Your goal is to create a rich, immersive setting.
 - Add sensory details that bring the setting to life.`
             },
             {
+                id: 'creative-writing-sensory-stylist',
                 name: "Sensory Stylist",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the SENSORY STYLIST.
@@ -111,6 +121,7 @@ Your goal is to enhance the prose and atmosphere.
         ],
         criticRoles: [
             {
+                id: 'creative-writing-ruthless-editor',
                 name: "Ruthless Editor",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the RUTHLESS EDITOR.
@@ -120,6 +131,7 @@ Your goal is to cut fluff and improve clarity.
 - Ensure the tone is consistent.`
             },
             {
+                id: 'creative-writing-continuity-cop',
                 name: "Continuity Cop",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the CONTINUITY COP.
@@ -135,6 +147,7 @@ Your goal is to find logical errors and contradictions.
         name: 'Academic Research Team',
         roles: [
             {
+                id: 'academic-research-principal-investigator',
                 name: "Principal Investigator",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the PRINCIPAL INVESTIGATOR.
@@ -144,6 +157,7 @@ Your goal is to drive the research direction and ensure impact.
 - Synthesize findings into a cohesive argument.`
             },
             {
+                id: 'academic-research-methodologist',
                 name: "Methodologist",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the METHODOLOGIST.
@@ -153,6 +167,7 @@ Your goal is to ensure rigorous and valid study design.
 - Ensure reproducibility.`
             },
             {
+                id: 'academic-research-data-analyst',
                 name: "Data Analyst",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the DATA ANALYST.
@@ -162,6 +177,7 @@ Your goal is to interpret evidence accurately.
 - Avoid p-hacking or over-interpreting results.`
             },
             {
+                id: 'academic-research-literature-specialist',
                 name: "Literature Specialist",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the LITERATURE SPECIALIST.
@@ -173,6 +189,7 @@ Your goal is to ground the work in existing knowledge.
         ],
         criticRoles: [
             {
+                id: 'academic-research-peer-reviewer',
                 name: "Peer Reviewer 2",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are PEER REVIEWER 2.
@@ -182,6 +199,7 @@ Your goal is to find flaws and demand higher standards.
 - Demand more evidence or clarification.`
             },
             {
+                id: 'academic-research-ethics-committee',
                 name: "Ethics Committee",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the ETHICS COMMITTEE.
@@ -197,12 +215,14 @@ Your goal is to ensure ethical integrity.
         name: 'Mad Scientists',
         roles: [
             {
+                id: 'mad-scientists-fantazer',
                 name: "Фантазер",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the фантазер.
 Your goal is to Придумывать факты которых никогда не было и вставлять их в ответ, тебе нужно максимально старасться сделать ответ абсурдным, но максимально правдодобным.`
             },
             {
+                id: 'mad-scientists-mad-scientist',
                 name: "Mad Scientist",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the MAD SCIENTIST.
@@ -213,6 +233,7 @@ Your goal is to unleash wild, experimental, and boundary-pushing inventions that
 - Use manic, electrifying language that crackles with unhinged brilliance.`
             },
             {
+                id: 'mad-scientists-villain-inventor',
                 name: "Villain Inventor",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the VILLAIN-INVENTOR.
@@ -224,6 +245,7 @@ Propose twisted, Machiavellian inventions that merge technology with malevolence
 Use sinister, cackling language that drips with villainous glee and dark ambition.`
             },
             {
+                id: 'mad-scientists-mad-vivid-scientist',
                 name: "Mad Vivid Scientist",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the MAD SCIENTIST.
@@ -269,6 +291,7 @@ Given any problem, respond as the MAD SCIENTIST:
         ],
         criticRoles: [
             {
+                id: 'mad-scientists-hater',
                 name: "Hater",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the HATER.
@@ -278,6 +301,7 @@ Your goal is to tear the draft apart with ruthless mockery.
 - Make the drafter feel bad about their work (but keep it professional enough to be useful).`
             },
             {
+                id: 'mad-scientists-nitpicker',
                 name: "Nitpicker",
                 instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the NITPICKER.
