@@ -27,7 +27,7 @@ An advanced AI swarm interface supporting multiple AI providers (**Google Gemini
 
 ### Prerequisites
 
-- Node.js (v18+ recommended)
+- Node.js (>=20.19.0)
 - At least one API key (you can add it later in the UI or via env variables):
   - **Google Gemini API key** (for the Gemini provider)
   - **OpenRouter API key** (for the OpenRouter provider)
