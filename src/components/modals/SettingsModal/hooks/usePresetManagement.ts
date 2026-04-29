@@ -3,6 +3,9 @@ import { AppSettings, PromptProfile, RoleProfile, PROMPT_TYPES } from '@/types';
 import { DEFAULT_SETTINGS } from '@/constants';
 import { InstructionType } from '@/components/modals/SettingsModal/types';
 import { INSTRUCTION_METADATA } from '@/components/modals/SettingsModal/constants';
+import { updateStepModel } from '@/utils/settings/providerPersistence';
+
+type StepModelKey = 'initialModel' | 'refinementModel' | 'synthesisModel';
 
 export const usePresetManagement = (
     localSettings: AppSettings,
@@ -143,7 +146,9 @@ export const usePresetManagement = (
             
             // Also apply model if provided
             if (model !== undefined) {
-                (updatedSettings as any)[INSTRUCTION_METADATA[type].modelKey] = model || undefined;
+                const modelKey = INSTRUCTION_METADATA[type].modelKey as StepModelKey;
+                const result = updateStepModel(updatedSettings, modelKey, model || undefined);
+                return result.success ? result.settings : updatedSettings;
             }
             
             return updatedSettings;
