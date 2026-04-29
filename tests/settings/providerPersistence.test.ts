@@ -190,7 +190,7 @@ describe('Provider Persistence Logic', () => {
             expect(result.settings.providerModels?.roleModels?.['1']?.[ProviderType.Gemini]?.roles).toBeUndefined();
         });
         
-        it('should handle multiple roles and indices', () => {
+        it('should handle multiple role IDs', () => {
             let result = updateRoleModel(initialSettings, '1', 'drafter', 'drafter-1', 'model-0');
             expect(result.success).toBe(true);
             let state = result.settings;

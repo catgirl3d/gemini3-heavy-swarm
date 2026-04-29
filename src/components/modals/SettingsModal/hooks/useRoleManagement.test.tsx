@@ -97,6 +97,59 @@ describe('useRoleManagement', () => {
       expect(profile.roles[0].id).toBe('role-1');
       expect(profile.roles[1].id).toBe('role-3');
     });
+
+    it('should remove deleted role model mappings across providers', () => {
+      const settings = createMockSettings({
+        provider: ProviderType.Gemini,
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [
+            { id: 'role-1', name: 'R1', instruction: '' },
+            { id: 'role-2', name: 'R2', instruction: '' }
+          ],
+          criticRoles: [
+            { id: 'critic-1', name: 'C1', instruction: '' }
+          ]
+        }],
+        providerModels: {
+          stepModels: {},
+          roleModels: {
+            'test-profile': {
+              [ProviderType.Gemini]: {
+                roles: {
+                  'role-1': 'gemini-role-1',
+                  'role-2': 'gemini-role-2'
+                },
+                criticRoles: {
+                  'critic-1': 'gemini-critic-1'
+                }
+              },
+              [ProviderType.OpenRouter]: {
+                roles: {
+                  'role-2': 'openrouter-role-2'
+                }
+              }
+            }
+          }
+        }
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleDeleteRole(1);
+      });
+
+      const providerData = result.current.settings.providerModels?.roleModels?.['test-profile'];
+      expect(providerData?.[ProviderType.Gemini]?.roles).toEqual({
+        'role-1': 'gemini-role-1'
+      });
+      expect(providerData?.[ProviderType.Gemini]?.criticRoles).toEqual({
+        'critic-1': 'gemini-critic-1'
+      });
+      expect(providerData?.[ProviderType.OpenRouter]?.roles).toBeUndefined();
+    });
   });
 
   describe('handleMoveRole', () => {
@@ -161,9 +214,46 @@ describe('useRoleManagement', () => {
       expect(profile.roles[0]).not.toBe(defaultProfile.roles[0]);
     });
 
+    it('should clear stale providerModels when restoring default roles', () => {
+      const settings = createMockSettings({
+        activeRoleProfileId: 'default-roles',
+        roleProfiles: [{
+          id: 'default-roles',
+          name: 'Default Roles',
+          roles: [{ id: 'old-role', name: 'Old Role', instruction: '' }],
+          criticRoles: [{ id: 'old-critic', name: 'Old Critic', instruction: '' }]
+        }],
+        providerModels: {
+          stepModels: {},
+          roleModels: {
+            'default-roles': {
+              [ProviderType.Gemini]: {
+                roles: { 'old-role': 'gemini-old-role' },
+                criticRoles: { 'old-critic': 'gemini-old-critic' }
+              },
+              [ProviderType.OpenRouter]: {
+                roles: { 'old-role': 'openrouter-old-role' },
+                criticRoles: { 'old-critic': 'openrouter-old-critic' }
+              }
+            }
+          }
+        }
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleRestoreDefaultRoles();
+      });
+
+      const profile = result.current.settings.roleProfiles![0];
+      expect(profile.roles[0].id).not.toBe('old-role');
+      expect(profile.criticRoles![0].id).not.toBe('old-critic');
+      expect(result.current.settings.providerModels?.roleModels?.['default-roles']).toEqual({});
+    });
+
     it('should generate unique IDs across multiple profile restorations', () => {
-      // This test verifies that if we restore defaults to two different profiles,
-      // they won't have conflicting role IDs in providerModels
+      // Independent restorations should not reuse the static DEFAULT_ROLE_PROFILES IDs.
       const settings = createMockSettings({
         activeRoleProfileId: 'default-roles',
         roleProfiles: [
@@ -191,7 +281,7 @@ describe('useRoleManagement', () => {
         expect(defaultProfile.roles.some(r => r.id === id)).toBe(false);
       });
 
-      // Simulate restoring to another profile with same defaults
+      // Simulate another independent restoration with the same defaults.
       const settings2 = createMockSettings({
         activeRoleProfileId: 'default-roles',
         roleProfiles: [
@@ -212,8 +302,7 @@ describe('useRoleManagement', () => {
 
       const profile2Ids = result2.current.settings.roleProfiles![0].roles.map(r => r.id);
 
-      // CRITICAL: Both profiles should have completely different IDs
-      // This prevents providerModels collision: profileId -> provider -> roleId
+      // CRITICAL: both restorations should produce different IDs.
       profile1Ids.forEach(id1 => {
         expect(profile2Ids).not.toContain(id1);
       });

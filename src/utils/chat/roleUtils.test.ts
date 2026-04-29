@@ -124,7 +124,7 @@ describe('roleUtils', () => {
       expect(role.name).toBe('Fallback Role');
     });
 
-    it('should generate unique IDs for multiple fallback roles', () => {
+    it('should generate distinct deterministic IDs for different fallback indexes', () => {
       const settings = createMockSettings({
         roleProfiles: [{
           id: 'test-profile',

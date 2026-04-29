@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useProfileManagement } from '@/components/modals/SettingsModal/hooks/useProfileManagement';
-import { AppSettings } from '@/types';
+import { AppSettings, ProviderType } from '@/types';
 import { useState } from 'react';
 import { createMockSettings } from '@/test/utils/settingsMocks';
 
@@ -121,6 +121,74 @@ describe('useProfileManagement', () => {
       expect(newProfile.criticRoles![0].model).toBe('gemini-pro');
     });
 
+    it('should clone provider-specific role models using the new role IDs', () => {
+      const settings = createMockSettings({
+        provider: ProviderType.Gemini,
+        activeRoleProfileId: 'original',
+        roleProfiles: [{
+          id: 'original',
+          name: 'Original Profile',
+          roles: [
+            { id: 'original-role-1', name: 'Engineer', instruction: 'Code', model: 'gemini-engineer' },
+            { id: 'original-role-2', name: 'Designer', instruction: 'Design', model: 'gemini-designer' }
+          ],
+          criticRoles: [
+            { id: 'original-critic-1', name: 'Reviewer', instruction: 'Review', model: 'gemini-reviewer' }
+          ]
+        }],
+        providerModels: {
+          stepModels: {},
+          roleModels: {
+            original: {
+              [ProviderType.Gemini]: {
+                roles: {
+                  'original-role-1': 'gemini-engineer',
+                  'original-role-2': 'gemini-designer'
+                },
+                criticRoles: {
+                  'original-critic-1': 'gemini-reviewer'
+                }
+              },
+              [ProviderType.OpenRouter]: {
+                roles: {
+                  'original-role-1': 'openrouter-engineer'
+                },
+                criticRoles: {
+                  'original-critic-1': 'openrouter-reviewer'
+                }
+              }
+            }
+          }
+        }
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleCreateRoleProfile(true);
+      });
+
+      const newSettings = result.current.settings;
+      const newProfile = newSettings.roleProfiles![1];
+      const clonedModels = newSettings.providerModels?.roleModels?.[newProfile.id];
+
+      expect(clonedModels?.[ProviderType.Gemini]?.roles).toEqual({
+        [newProfile.roles[0].id]: 'gemini-engineer',
+        [newProfile.roles[1].id]: 'gemini-designer'
+      });
+      expect(clonedModels?.[ProviderType.Gemini]?.criticRoles).toEqual({
+        [newProfile.criticRoles![0].id]: 'gemini-reviewer'
+      });
+      expect(clonedModels?.[ProviderType.OpenRouter]?.roles).toEqual({
+        [newProfile.roles[0].id]: 'openrouter-engineer'
+      });
+      expect(clonedModels?.[ProviderType.OpenRouter]?.criticRoles).toEqual({
+        [newProfile.criticRoles![0].id]: 'openrouter-reviewer'
+      });
+      expect(clonedModels?.[ProviderType.Gemini]?.roles?.['original-role-1']).toBeUndefined();
+      expect(newSettings.providerModels?.roleModels?.original).toBeDefined();
+    });
+
     it('should create fresh role profile when clone is false', () => {
       const settings = createMockSettings({
         activeRoleProfileId: 'original',
@@ -212,6 +280,46 @@ describe('useProfileManagement', () => {
       expect(newSettings.roleProfiles).toHaveLength(1);
       expect(newSettings.roleProfiles![0].id).toBe('profile-1');
       expect(newSettings.activeRoleProfileId).toBe('profile-1');
+    });
+
+    it('should remove providerModels for the deleted role profile', () => {
+      const settings = createMockSettings({
+        activeRoleProfileId: 'profile-2',
+        roleProfiles: [
+          { id: 'profile-1', name: 'Profile 1', roles: [{ id: 'role-1', name: 'R1', instruction: '' }], criticRoles: [] },
+          { id: 'profile-2', name: 'Profile 2', roles: [{ id: 'role-2', name: 'R2', instruction: '' }], criticRoles: [] }
+        ],
+        providerModels: {
+          stepModels: {},
+          roleModels: {
+            'profile-1': {
+              [ProviderType.Gemini]: {
+                roles: { 'role-1': 'gemini-profile-1' }
+              }
+            },
+            'profile-2': {
+              [ProviderType.Gemini]: {
+                roles: { 'role-2': 'gemini-profile-2' }
+              },
+              [ProviderType.OpenRouter]: {
+                roles: { 'role-2': 'openrouter-profile-2' }
+              }
+            }
+          }
+        }
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleDeleteRoleProfile();
+      });
+
+      const roleModels = result.current.settings.providerModels?.roleModels;
+      expect(roleModels?.['profile-2']).toBeUndefined();
+      expect(roleModels?.['profile-1']?.[ProviderType.Gemini]?.roles).toEqual({
+        'role-1': 'gemini-profile-1'
+      });
     });
   });
 });

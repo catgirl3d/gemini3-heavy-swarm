@@ -24,34 +24,8 @@ export function updateRoleModel(
 ): UpdateResult<AppSettings> {
     try {
         const provider = settings.provider;
-        const providerModels = settings.providerModels || { stepModels: {}, roleModels: {} };
-        const roleModels = { ...providerModels.roleModels };
-        
-        // Initialize if needed
-        if (!roleModels[profileId]) {
-            roleModels[profileId] = {};
-        }
-        if (!roleModels[profileId][provider]) {
-            roleModels[profileId][provider] = {};
-        }
-        
         const roleTypeKey = roleType === 'drafter' ? 'roles' : 'criticRoles';
-        const currentProviderRoleModels = { ...(roleModels[profileId][provider][roleTypeKey] || {}) };
-        
-        // Update or remove the model using role ID
-        if (model) {
-            currentProviderRoleModels[roleId] = model;
-            logger.info(`Updated role model for role "${roleId}" in profile "${profileId}" to "${model}" (provider: ${provider})`);
-        } else {
-            delete currentProviderRoleModels[roleId];
-            logger.info(`Cleared role model for role "${roleId}" in profile "${profileId}" (provider: ${provider})`);
-        }
-        
-        roleModels[profileId][provider] = {
-            ...roleModels[profileId][provider],
-            [roleTypeKey]: Object.keys(currentProviderRoleModels).length > 0 ? currentProviderRoleModels : undefined
-        };
-        
+
         // Update the actual role profile using role ID to find the role
         let roleFound = false;
         const updatedRoleProfiles = settings.roleProfiles?.map(profile => {
@@ -85,6 +59,27 @@ export function updateRoleModel(
                 error: warnMsg
             };
         }
+
+        const providerModels = settings.providerModels || { stepModels: {}, roleModels: {} };
+        const roleModels = { ...(providerModels.roleModels || {}) };
+        const profileRoleModels = { ...(roleModels[profileId] || {}) };
+        const providerRoleModels = { ...(profileRoleModels[provider] || {}) };
+        const currentProviderRoleModels = { ...(providerRoleModels[roleTypeKey] || {}) };
+        
+        // Update or remove the model using role ID
+        if (model) {
+            currentProviderRoleModels[roleId] = model;
+            logger.info(`Updated role model for role "${roleId}" in profile "${profileId}" to "${model}" (provider: ${provider})`);
+        } else {
+            delete currentProviderRoleModels[roleId];
+            logger.info(`Cleared role model for role "${roleId}" in profile "${profileId}" (provider: ${provider})`);
+        }
+
+        profileRoleModels[provider] = {
+            ...providerRoleModels,
+            [roleTypeKey]: Object.keys(currentProviderRoleModels).length > 0 ? currentProviderRoleModels : undefined
+        };
+        roleModels[profileId] = profileRoleModels;
         
         return {
             settings: {

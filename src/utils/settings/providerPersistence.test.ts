@@ -118,6 +118,61 @@ describe('providerPersistence with Role IDs', () => {
         'role-2': 'claude-3'
       });
     });
+
+    it('should fail without mutating settings when role ID does not exist', () => {
+      const settings = createMockSettings({
+        provider: ProviderType.Gemini,
+        providerModels: {
+          stepModels: {},
+          roleModels: {
+            'test-profile': {
+              [ProviderType.Gemini]: {
+                roles: { 'role-1': 'gpt-4' }
+              }
+            }
+          }
+        },
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [
+            { id: 'role-1', name: 'Role 1', instruction: 'Test', model: 'gpt-4' }
+          ],
+          criticRoles: []
+        }]
+      });
+
+      const result = updateRoleModel(settings, 'test-profile', 'drafter', 'missing-role', 'claude-3');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('missing-role');
+      expect(result.settings).toBe(settings);
+      expect(settings.providerModels?.roleModels?.['test-profile']?.[ProviderType.Gemini]?.roles).toEqual({
+        'role-1': 'gpt-4'
+      });
+    });
+
+    it('should fail without mutating settings when profile ID does not exist', () => {
+      const settings = createMockSettings({
+        provider: ProviderType.Gemini,
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [
+            { id: 'role-1', name: 'Role 1', instruction: 'Test' }
+          ],
+          criticRoles: []
+        }]
+      });
+
+      const result = updateRoleModel(settings, 'missing-profile', 'drafter', 'role-1', 'gpt-4');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('missing-profile');
+      expect(result.settings).toBe(settings);
+      expect(settings.providerModels).toBeUndefined();
+      expect(settings.roleProfiles?.[0]?.roles?.[0]?.model).toBeUndefined();
+    });
   });
 
   describe('persistProviderModels', () => {
@@ -199,8 +254,7 @@ describe('providerPersistence with Role IDs', () => {
     });
 
     it('should handle role reordering correctly with ID-based mapping', () => {
-      // Set up settings with role-1 = gemini-pro, role-2 = gemini-flash
-      // And roles already in a specific order
+      // Set up settings with role-1 = gemini-pro, role-2 = gemini-flash.
       const settings = createMockSettings({
         provider: ProviderType.Gemini,
         roleProfiles: [{
@@ -214,14 +268,11 @@ describe('providerPersistence with Role IDs', () => {
         }]
       });
 
-      // Switch to OpenRouter (this saves the Gemini models)
-      const switched = persistProviderModels(settings, ProviderType.Gemini);
-      
-      // Now reorder the roles while still on Gemini
+      // Reorder the roles while still on Gemini.
       const reordered = {
-        ...switched,
+        ...settings,
         roleProfiles: [{
-          ...switched.roleProfiles![0],
+          ...settings.roleProfiles![0],
           // Roles are now in REVERSE order, but IDs stay the same
           roles: [
             { id: 'role-2', name: 'Role 2', instruction: 'Test', model: 'gemini-flash' },
@@ -230,9 +281,9 @@ describe('providerPersistence with Role IDs', () => {
         }]
       };
 
-      // Switch to OpenRouter
+      // Switch to OpenRouter to save the reordered Gemini models.
       const switchedToOR = persistProviderModels(reordered, ProviderType.OpenRouter);
-      // Switch back to gemini
+      // Switch back to Gemini and restore by role ID.
       const switchedBack = persistProviderModels(switchedToOR, ProviderType.Gemini);
 
       // Models should be restored to correct roles by ID, not by index

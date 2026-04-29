@@ -129,16 +129,15 @@ describe('settingsMigration', () => {
 
   describe('Global Constant Integrity', () => {
     it('should not mutate DEFAULT_ROLE_PROFILES when adding custom profiles', () => {
+      const defaultProfilesBeforeMigration = structuredClone(DEFAULT_ROLE_PROFILES);
       const settings = createMockSettings({
         roleProfiles: undefined, // Force default loaded
         agentRoles: [{ name: 'Legacy Role', instruction: 'Legacy' }] // Trigger custom profile creation
-      });
+      } as any);
 
       migrateSettings(settings);
 
-      // Verify DEFAULT_ROLE_PROFILES length hasn't changed
-      // (It should rely on the import, assuming it was 5 in the original file view)
-      expect(DEFAULT_ROLE_PROFILES.length).toBeGreaterThan(0);
+      expect(DEFAULT_ROLE_PROFILES).toEqual(defaultProfilesBeforeMigration);
       
       const customProfileInDefault = DEFAULT_ROLE_PROFILES.find((p: RoleProfile) => p.id === 'custom-roles-migrated');
       expect(customProfileInDefault).toBeUndefined();
@@ -149,7 +148,7 @@ describe('settingsMigration', () => {
     it('should ensure savedRoles have IDs', () => {
       const settings = createMockSettings({
         savedRoles: [
-            { name: 'Role 1', instruction: 'Inst 1', model: 'gpt-4' }, // Missing ID
+            { name: 'Role 1', instruction: 'Inst 1', model: 'gpt-4' } as any, // Missing ID
             { id: 'existing-id', name: 'Role 2', instruction: 'Inst 2' }
         ]
       });
@@ -167,7 +166,7 @@ describe('settingsMigration', () => {
     it('should ensure savedInstructions have IDs', () => {
       const settings = createMockSettings({
         savedInstructions: [
-          { name: 'Inst 1', type: 'initial_prompt', content: 'Test' }, // Missing ID
+          { name: 'Inst 1', type: 'initial_prompt', content: 'Test' } as any, // Missing ID
           { id: 'existing-inst-id', name: 'Inst 2', type: 'refinement_prompt', content: 'Test 2' }
         ]
       });
@@ -188,7 +187,7 @@ describe('settingsMigration', () => {
         agentRoles: [
           { id: 'legacy-role-1', name: 'Legacy Role', instruction: 'Test' }
         ]
-      });
+      } as any);
 
       const result = migrateSettings(settings);
 

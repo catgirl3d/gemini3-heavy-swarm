@@ -176,7 +176,7 @@ describe('useAppSettings', () => {
   });
 
   describe('resetSettings', () => {
-    it('should reset settings to defaults and clear localStorage', () => {
+    it('should reset settings to defaults and persist defaults to localStorage', () => {
       localStorage.setItem('gemini3-settings', JSON.stringify({ ...DEFAULT_SETTINGS, numAgents: 10 }));
       
       const { result } = renderHook(() => useAppSettings());
@@ -190,8 +190,7 @@ describe('useAppSettings', () => {
       // After reset, settings in state should be defaults
       expect(result.current.settings.numAgents).toBe(DEFAULT_SETTINGS.numAgents);
       
-      // The state update to DEFAULT_SETTINGS triggers the useEffect save.
-      // So localStorage should now contain the stringified DEFAULT_SETTINGS, not be null.
+      // The state update to DEFAULT_SETTINGS triggers the save effect.
       const saved = localStorage.getItem('gemini3-settings');
       expect(saved).not.toBeNull();
       if (saved) {
