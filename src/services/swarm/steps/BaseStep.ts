@@ -107,7 +107,8 @@ export abstract class BaseStep implements StepDescriptor {
     }
 
     const roleList = roleType === 'roles' ? activeRoleProfile.roles : activeRoleProfile.criticRoles;
-    const role = roleList?.[agentIndex];
+    const roleIndex = roleList?.length ? agentIndex % roleList.length : agentIndex;
+    const role = roleList?.[roleIndex];
     
     if (role?.model) {
         return role.model;

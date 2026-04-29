@@ -25,7 +25,7 @@ describe('roleUtils', () => {
       expect(role.instruction).toBe('Code');
     });
 
-    it('should return fallback role when index exceeds role count', () => {
+    it('should cycle roles when index exceeds role count', () => {
       const settings = createMockSettings({
         roleProfiles: [{
           id: 'test-profile',
@@ -38,12 +38,32 @@ describe('roleUtils', () => {
         }]
       });
 
-      // Index 2 is out of bounds (length 2) -> Fallback
+      // Index 2 wraps to 0 for a two-role profile.
       const role = getAgentRole(2, settings, 'roles');
       
-      expect(role.id).toBe('fallback-roles-2');
-      expect(role.name).toBe('Agent 3');
-      expect(role.instruction).toBe('');
+      expect(role.id).toBe('role-1');
+      expect(role.name).toBe('Engineer');
+      expect(role.instruction).toBe('Code');
+    });
+
+    it('should cycle critic roles when index exceeds critic role count', () => {
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [],
+          criticRoles: [
+            { id: 'critic-1', name: 'Reviewer', instruction: 'Review' },
+            { id: 'critic-2', name: 'Auditor', instruction: 'Audit' }
+          ]
+        }]
+      });
+
+      const role = getAgentRole(3, settings, 'criticRoles');
+
+      expect(role.id).toBe('critic-2');
+      expect(role.name).toBe('Auditor');
+      expect(role.instruction).toBe('Audit');
     });
 
     it('should return fallback role with ID when no roles exist', () => {

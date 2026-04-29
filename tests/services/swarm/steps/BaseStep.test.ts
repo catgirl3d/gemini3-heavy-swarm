@@ -274,7 +274,7 @@ describe('BaseStep', () => {
       expect(result).toBe('critic-role-model');
     });
 
-    it('should fallback to step model when role index is out of bounds', () => {
+    it('should cycle role models when role index is out of bounds', () => {
       const context = {
         settings: {
           model: 'global-model',
@@ -290,10 +290,10 @@ describe('BaseStep', () => {
         ai: null
       } as StepContext;
 
-      // Request agent index 1, but only 1 role exists (index 0)
+      // Request agent index 1, but only 1 role exists, so it cycles to index 0.
       const result = step.testGetRoleModel(context, 1, 'roles');
 
-      expect(result).toBe('step-model');
+      expect(result).toBe('role-1-model');
     });
   });
 

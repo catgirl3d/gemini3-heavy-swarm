@@ -7,7 +7,8 @@ const logger = new Logger('RoleUtils');
 
 /**
  * Gets the agent role by index from the active RoleProfile.
- * Returns a fallback role if the role at index is missing or invalid.
+ * Cycles through configured roles when there are more agents than roles.
+ * Returns a fallback role only when no configured role exists or the selected role is invalid.
  * 
  * @param index - Agent index
  * @param settings - Application settings
@@ -28,8 +29,10 @@ export const getAgentRole = (
     
   const fallbackName = roleType === 'criticRoles' ? `Critic ${index + 1}` : `Agent ${index + 1}`;
   
-  // Return the specific role for this index if it exists AND has valid structure
-  const roleAtIndex = perspectives[index];
+  const normalizedIndex = perspectives.length > 0 ? index % perspectives.length : index;
+
+  // Return the selected role if it exists AND has valid structure.
+  const roleAtIndex = perspectives[normalizedIndex];
   if (roleAtIndex && hasValidRoleId(roleAtIndex) && roleAtIndex.name && roleAtIndex.instruction !== undefined) {
     return roleAtIndex;
   }
