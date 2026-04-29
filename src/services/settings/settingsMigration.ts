@@ -133,7 +133,7 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
     migrated.savedInstructions = migrated.savedInstructions.map((inst: any) => {
       if (!hasValidId(inst)) {
          instructionsChanged = true;
-         return { ...inst, id: inst.id || generateUUID() };
+         return { ...inst, id: generateUUID() };
       }
       return inst;
     });
@@ -150,7 +150,7 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
     migrated.savedRoles = migrated.savedRoles.map((role: any) => {
       if (!hasValidId(role)) {
         savedRolesChanged = true;
-        return { ...role, id: role.id || generateUUID() };
+        return { ...role, id: generateUUID() };
       }
       return role;
     });
@@ -290,8 +290,8 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
   // Migration 16: Migrate legacy settings to providerModels structure and ensure all roles have IDs
   // This logic was moved from providerPersistence.ts to simplify the loading process.
   const allRolesHaveIds = (migrated.roleProfiles as RoleProfile[])?.every(profile =>
-    profile.roles?.every(role => role.id) &&
-    profile.criticRoles?.every(role => role.id)
+    profile.roles?.every(hasValidId) &&
+    profile.criticRoles?.every(hasValidId)
   );
 
   if (!migrated.providerModels || !allRolesHaveIds) {

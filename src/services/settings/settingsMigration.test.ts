@@ -160,6 +160,20 @@ describe('settingsMigration', () => {
       expect(result.savedRoles[0].id).not.toBe('');
       expect(result.savedRoles[1].id).toBe('existing-id');
     });
+
+    it('should replace whitespace-only savedRole IDs', () => {
+      const settings = createMockSettings({
+        savedRoles: [
+          { id: '   ', name: 'Whitespace Role', instruction: 'Inst' } as any
+        ]
+      });
+
+      const result = migrateSettings(settings);
+
+      expect(result.savedRoles[0].id).toBeDefined();
+      expect(result.savedRoles[0].id.trim()).not.toBe('');
+      expect(result.savedRoles[0].id).not.toBe('   ');
+    });
   });
 
   describe('Migration 4.1: Saved Instructions IDs', () => {
@@ -177,6 +191,20 @@ describe('settingsMigration', () => {
       expect(result.savedInstructions[0].id).toBeDefined();
       expect(result.savedInstructions[0].id).not.toBe('');
       expect(result.savedInstructions[1].id).toBe('existing-inst-id');
+    });
+
+    it('should replace whitespace-only savedInstruction IDs', () => {
+      const settings = createMockSettings({
+        savedInstructions: [
+          { id: '   ', name: 'Whitespace Inst', type: 'initial_prompt', content: 'Test' } as any
+        ]
+      });
+
+      const result = migrateSettings(settings);
+
+      expect(result.savedInstructions[0].id).toBeDefined();
+      expect(result.savedInstructions[0].id.trim()).not.toBe('');
+      expect(result.savedInstructions[0].id).not.toBe('   ');
     });
   });
 
@@ -261,6 +289,7 @@ describe('settingsMigration', () => {
 
     it('should regenerate IDs even if they are whitespace-only strings', () => {
       const settings = createMockSettings({
+        providerModels: { stepModels: {}, roleModels: {} },
         roleProfiles: [{
           id: 'whitespace-id',
           name: 'Whitespace',
@@ -276,6 +305,7 @@ describe('settingsMigration', () => {
       
       expect(role.id).toBeDefined();
       expect(role.id.trim()).not.toBe('');
+      expect(role.id).not.toBe('   ');
     });
   });
 });
