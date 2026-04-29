@@ -113,6 +113,22 @@ describe('agentStore', () => {
     });
   });
 
+  it('preserves an existing agent name when later updates omit the name', () => {
+    const store = useAgentStore.getState();
+
+    store.updateAgent(STEPS.INITIAL, 0, 'working', 'Working', 'msg-1', 'Research Agent');
+    store.updateAgent(STEPS.INITIAL, 0, 'done', 'Done', 'msg-1');
+
+    expect(useAgentStore.getState().agents).toEqual([
+      expect.objectContaining({
+        id: 'msg-1-initial_step-agent-0',
+        name: 'Research Agent',
+        status: 'done',
+        label: 'Done',
+      }),
+    ]);
+  });
+
   it('hydrates agents and clear resets app state while leaving abort controllers untouched', () => {
     const hydratedAgents = [
       createAgent({ id: 'a', name: 'Hydrated A' }),
@@ -187,6 +203,30 @@ describe('agentStore', () => {
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
   });
 
+  it('aborts controllers without changing unrelated store state', () => {
+    const store = useAgentStore.getState();
+    const work: Work = { results: { [STEPS.INITIAL]: ['draft'] } };
+
+    store.setCurrentWork(work);
+    store.setIsLoading(true);
+    store.setIsPaused(true);
+    store.setLoadingStatus('Paused for retry');
+    store.setError('Previous error');
+    store.setCurrentMessageId('msg-keep');
+    store.registerAbortController('request-1', new AbortController());
+
+    store.abortAll();
+
+    const state = useAgentStore.getState();
+    expect(state.currentWork).toBe(work);
+    expect(state.isLoading).toBe(true);
+    expect(state.isPaused).toBe(true);
+    expect(state.loadingStatus).toBe('Paused for retry');
+    expect(state.error).toBe('Previous error');
+    expect(state.currentMessageId).toBe('msg-keep');
+    expect(state.abortControllers.size).toBe(0);
+  });
+
   it('does nothing when updating work without currentWork', () => {
     useAgentStore.getState().updateWorkResult(STEPS.INITIAL, 0, { text: 'ignored' });
 
@@ -249,5 +289,41 @@ describe('agentStore', () => {
     expect(updatedWork?.results?.[`${STEPS.SYNTHESIS}_usage`]).toBe(usage);
     expect(updatedWork?.results?.unrelated).toEqual(['keep']);
     expect(initialWork.results?.[STEPS.SYNTHESIS]).toEqual({ text: 'old synthesis', sources });
+  });
+
+  it('replaces legacy synthesis string data with object text shape', () => {
+    const initialWork: Work = {
+      results: {
+        [STEPS.SYNTHESIS]: 'legacy synthesis' as never,
+      },
+    };
+    const store = useAgentStore.getState();
+
+    store.setCurrentWork(initialWork);
+    store.updateWorkResult(STEPS.SYNTHESIS, -1, { text: 'normalized synthesis' });
+
+    expect(useAgentStore.getState().currentWork?.results?.[STEPS.SYNTHESIS]).toEqual({
+      text: 'normalized synthesis',
+    });
+  });
+
+  it('accepts usage null updates to clear multi-agent and synthesis usage', () => {
+    const initialWork: Work = {
+      results: {
+        [STEPS.INITIAL]: ['draft 1'],
+        [`${STEPS.INITIAL}_usage`]: [createUsage(12)],
+        [STEPS.SYNTHESIS]: { text: 'synthesis' },
+        [`${STEPS.SYNTHESIS}_usage`]: createUsage(24),
+      },
+    };
+    const store = useAgentStore.getState();
+
+    store.setCurrentWork(initialWork);
+    store.updateWorkResult(STEPS.INITIAL, 0, { usage: null as never });
+    store.updateWorkResult(STEPS.SYNTHESIS, -1, { usage: null as never });
+
+    const results = useAgentStore.getState().currentWork?.results;
+    expect(results?.[`${STEPS.INITIAL}_usage`]).toEqual([null]);
+    expect(results?.[`${STEPS.SYNTHESIS}_usage`]).toBeNull();
   });
 });
