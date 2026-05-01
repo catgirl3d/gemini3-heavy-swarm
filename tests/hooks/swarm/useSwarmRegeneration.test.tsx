@@ -317,6 +317,17 @@ describe('useSwarmRegeneration', () => {
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
   });
 
+  it('falls back to the hook messages when messagesRef.current is unavailable', async () => {
+    const { result, regenerateResponse, messagesState } = renderRegeneration();
+    messagesState.messagesRef.current = null as any;
+
+    await act(async () => {
+      await result.current.regenerateAgentResponse('model-1', STEPS.INITIAL, 1);
+    });
+
+    expect(getRegenerateResponseCall(regenerateResponse).history).toEqual([createConversation()[0]]);
+  });
+
   it('recovers work from currentWork only when it belongs to the requested message', async () => {
     const fallbackWork = createBaseWork({
       results: {
@@ -406,6 +417,18 @@ describe('useSwarmRegeneration', () => {
 
     expect(useAgentStore.getState().agents).toEqual([matchingAgent]);
     expect(getRegenerateResponseCall(regenerateResponse).agentStates).toEqual([matchingAgent]);
+  });
+
+  it('skips hydration when no matching agents can be recovered from workContext', async () => {
+    const work = createBaseWork({ agentStates: [] });
+    const { result, regenerateResponse } = renderRegeneration({ initialMessages: createConversation(work) });
+
+    await act(async () => {
+      await result.current.regenerateAgentResponse('model-1', STEPS.INITIAL, 1);
+    });
+
+    expect(useAgentStore.getState().agents).toEqual([]);
+    expect(getRegenerateResponseCall(regenerateResponse).agentStates).toEqual([]);
   });
 
   it('does not call the orchestrator when the original user prompt cannot be found', async () => {
@@ -546,6 +569,27 @@ describe('useSwarmRegeneration', () => {
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
   });
 
+  it('adds missing step metadata when the existing message has no metadata for the regenerated step', async () => {
+    const workWithoutMetadata = createBaseWork({ stepMetadata: [] });
+    const regenerateResponse = vi.fn(async () => ({
+      text: 'new agent 1',
+      sources: [],
+      work: createRegeneratedWork(),
+    }));
+    const { result, messagesState } = renderRegeneration({
+      initialMessages: createConversation(workWithoutMetadata),
+      regenerateResponse,
+    });
+
+    await act(async () => {
+      await result.current.regenerateAgentResponse('model-1', STEPS.INITIAL, 1);
+    });
+
+    expect(messagesState.messages[1].work?.stepMetadata).toEqual([
+      expect.objectContaining({ id: STEPS.INITIAL, status: 'done', label: `Regenerated ${STEPS.INITIAL}` }),
+    ]);
+  });
+
   it('preserves existing sources when regeneration returns no replacement sources', async () => {
     const regenerateResponse = vi.fn(async () => {
       return {
@@ -588,6 +632,26 @@ describe('useSwarmRegeneration', () => {
   it('cleans up abort state without turning user cancellation into an error', async () => {
     const regenerateResponse = vi.fn(async () => {
       throw new DOMException('The operation was aborted.', 'AbortError');
+    });
+    const { result } = renderRegeneration({ regenerateResponse });
+
+    await act(async () => {
+      await result.current.regenerateAgentResponse('model-1', STEPS.INITIAL, 1);
+    });
+
+    expect(useAgentStore.getState()).toMatchObject({
+      isLoading: false,
+      isPaused: false,
+      error: null,
+      loadingStatus: '',
+      currentMessageId: undefined,
+    });
+    expect(useAgentStore.getState().abortControllers.size).toBe(0);
+  });
+
+  it('cleans up abort state for plain Error("Aborted") cancellations too', async () => {
+    const regenerateResponse = vi.fn(async () => {
+      throw new Error('Aborted');
     });
     const { result } = renderRegeneration({ regenerateResponse });
 

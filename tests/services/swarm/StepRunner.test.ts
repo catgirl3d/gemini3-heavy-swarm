@@ -261,4 +261,47 @@ describe('StepRunner', () => {
     expect(finalWork.stepMetadata?.find(m => m.id === 'step1')?.status).toBe('done');
     expect(finalWork.stepMetadata?.find(m => m.id === 'step2')?.status).toBe('done');
   });
+
+  it('initializes missing work containers, falls back to step.name for status, and pauses without onPause callback', async () => {
+    const step: StepDescriptor = {
+      id: 'name-fallback-step' as any,
+      name: 'Name Fallback Step',
+      execute: vi.fn().mockResolvedValue('done')
+    };
+    const { getStepConfig } = await import('@/utils/swarm/stepConstants');
+    vi.mocked(getStepConfig).mockImplementation((id: string) => {
+      if (id === 'name-fallback-step') {
+        return {
+          allowPause: true,
+          pauseSettingKey: 'pauseAfterInitial',
+        } as any;
+      }
+
+      return {
+        progressMsg: `Progress for ${id}`
+      } as any;
+    });
+
+    const runner = new StepRunner([step]);
+    const onStatusUpdate = vi.fn();
+    const context = {
+      work: { id: 'test-work' },
+      settings: { ...mockSettings, pauseAfterInitial: true },
+      signal: new AbortController().signal
+    } as any;
+
+    const runPromise = runner.run(context, pauseResolverRef, undefined, onStatusUpdate);
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(onStatusUpdate).toHaveBeenCalledWith('Name Fallback Step');
+    expect(pauseResolverRef.current).toBeDefined();
+
+    pauseResolverRef.current();
+    const finalWork = await runPromise;
+
+    expect(finalWork.results).toEqual({ 'name-fallback-step': 'done' });
+    expect(finalWork.stepMetadata).toEqual([
+      { id: 'name-fallback-step', status: 'done', label: 'Name Fallback Step' }
+    ]);
+  });
 });

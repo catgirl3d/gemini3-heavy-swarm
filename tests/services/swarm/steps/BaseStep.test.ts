@@ -5,6 +5,7 @@ import { AppSettings } from '@/types';
 import { StepContext } from '@/types/steps';
 import { GroundingChunk } from '@google/genai';
 import { useAgentStore } from '@/stores/agentStore';
+import { AppError, ErrorCode } from '@/utils/errors/AppError';
 
 // Mock dependencies
 vi.mock('@/stores/agentStore', () => {
@@ -139,6 +140,60 @@ class TestStep extends BaseStep {
 
   public async testRunModelStream(config: any, callbacks: any): Promise<any> {
     return this.runModelStream(config, callbacks);
+  }
+
+  public testHandleRetryProgress(context: StepContext, index: number, attempt: number, states: AgentState[]): AgentState[] {
+    return this.handleRetryProgress(context, index, attempt, states);
+  }
+
+  public testFinalizeStep(context: StepContext, results: string[], agentStates: AgentState[], failures: unknown[]): string[] {
+    return this.finalizeStep(context, results, agentStates, failures);
+  }
+
+  public testExecuteMultiAgent(context: StepContext, config: any): Promise<string[]> {
+    return this.executeMultiAgent(context, config);
+  }
+
+  public testRunAgentRegeneration(
+    context: StepContext,
+    agentIndex: number,
+    instruction: any,
+    agentStates: AgentState[],
+    roleType?: 'roles' | 'criticRoles',
+    tools?: any[],
+    onFirstTextChunk?: () => void,
+    simulateError?: any,
+    simulateErrorAttempts?: number
+  ): Promise<{ text: string; work: Work; groundingChunks?: GroundingChunk[] }> {
+    return this.runAgentRegeneration(
+      context,
+      agentIndex,
+      instruction,
+      agentStates,
+      roleType,
+      tools,
+      onFirstTextChunk,
+      simulateError,
+      simulateErrorAttempts
+    );
+  }
+
+  public testRunSynthesisRegeneration(
+    context: StepContext,
+    instruction: any,
+    agentStates: AgentState[],
+    tools?: any[]
+  ): Promise<{ text: string; sources?: Source[]; work: Work }> {
+    return this.runSynthesisRegeneration(context, instruction, agentStates, tools);
+  }
+}
+
+class RetryCallbackStep extends TestStep {
+  protected async runModelStream(_config: any, callbacks: any): Promise<any> {
+    callbacks.onChunk('', '', null);
+    callbacks.onRetry(2);
+    callbacks.onChunk('retried text', '', null);
+    return { text: 'retried text', usage: null, groundingChunks: [] };
   }
 }
 
@@ -476,6 +531,36 @@ describe('BaseStep', () => {
 
       expect(onMessageUpdate).toHaveBeenCalledWith('streaming text', true, 'thought', usage);
     });
+
+    it('should call onMessageUpdate for thought or usage chunks even when text is empty', () => {
+      const work: Work = {
+        results: {}
+      };
+      const usage = { totalTokens: 7, promptTokens: 3, candidatesTokens: 4 };
+      const onMessageUpdate = vi.fn();
+
+      const context = {
+        work,
+        settings: { numAgents: 2 } as AppSettings,
+        messageId: 'msg-1',
+        onMessageUpdate
+      } as any;
+
+      step.testHandleStreamChunk(context, 0, '', 'reasoning first', usage, {
+        isFirstChunk: false,
+        streamToMessage: true
+      });
+
+      expect(work.results[STEPS.INITIAL]).toEqual(['', '']);
+      expect(work.results[`${STEPS.INITIAL}_thoughts`]).toEqual(['reasoning first', '']);
+      expect(work.results[`${STEPS.INITIAL}_usage`]).toEqual([usage, null]);
+      expect(useAgentStore.getState().updateWorkResult).toHaveBeenCalledWith(
+        STEPS.INITIAL,
+        0,
+        { text: '', thought: 'reasoning first', usage }
+      );
+      expect(onMessageUpdate).toHaveBeenCalledWith('', false, 'reasoning first', usage);
+    });
   });
 
   describe('ensureResults', () => {
@@ -673,7 +758,108 @@ describe('BaseStep', () => {
     });
   });
 
+  describe('handleRetryProgress', () => {
+    it('should keep synthesis status stable while marking non-synthesis agents as working during retry', () => {
+      const context = { messageId: 'msg-1' } as StepContext;
+      const states: AgentState[] = [
+        { id: '1', name: 'Agent 1', stepId: STEPS.INITIAL, status: 'error', label: 'Failed', messageId: 'msg-1' }
+      ];
+
+      const updated = step.testHandleRetryProgress(context, 0, 2, states);
+
+      expect(updated[0]).toMatchObject({
+        status: 'working',
+        label: 'Retrying (Attempt 2)...',
+        messageId: 'msg-1'
+      });
+      expect(useAgentStore.getState().setIsLoading).toHaveBeenCalledWith(true);
+
+      step.id = STEPS.SYNTHESIS;
+      const synthesisStates: AgentState[] = [
+        { id: 'synth', name: 'Synthesizer', stepId: STEPS.SYNTHESIS, status: 'done', label: 'Synthesized', messageId: 'msg-1' }
+      ];
+
+      const synthesisUpdated = step.testHandleRetryProgress(context, 0, 3, synthesisStates);
+
+      expect(synthesisUpdated[0]).toMatchObject({
+        status: 'done',
+        label: 'Retrying (Attempt 3)...'
+      });
+    });
+  });
+
+  describe('finalizeStep', () => {
+    it('should persist results and rethrow when every agent fails with rate limit', () => {
+      const rateLimitError = new AppError('rate limit', ErrorCode.RATE_LIMIT, null, 429);
+      const work: Work = { results: {} };
+      const context = {
+        work,
+        settings: { numAgents: 2 } as AppSettings
+      } as StepContext;
+
+      expect(() => step.testFinalizeStep(
+        context,
+        ['partial 1', 'partial 2'],
+        [],
+        [rateLimitError, rateLimitError]
+      )).toThrow(rateLimitError);
+
+      expect(work.results?.[STEPS.INITIAL]).toEqual(['partial 1', 'partial 2']);
+      expect(useAgentStore.getState().setCurrentWork).toHaveBeenCalledWith({ ...work });
+    });
+  });
+
+  describe('executeMultiAgent', () => {
+    it('should initialize persistent simulated error counts before running agents', async () => {
+      const work: Work = {};
+      const context = {
+        ai: null,
+        settings: { debugMode: false, numAgents: 2, model: 'model' } as AppSettings,
+        work,
+        signal: new AbortController().signal,
+        messageId: 'msg-1'
+      } as StepContext;
+
+      await expect(step.testExecuteMultiAgent(context, {
+        simulateError: '503',
+        simulateErrorAttempts: 1,
+        prepareAgent: () => ({
+          systemInstruction: 'system',
+          userTurn: { role: 'user', parts: [{ text: 'prompt' }] },
+          mainChatHistory: []
+        })
+      })).rejects.toMatchObject({ code: ErrorCode.SERVICE_OVERLOADED });
+
+      expect(work.results?.[`${STEPS.INITIAL}_error_counts`]).toEqual([1, 1]);
+    });
+  });
+
   describe('runModelStream', () => {
+    it('should use dev mode streaming without requiring an AI provider', async () => {
+      const callbacks = {
+        onChunk: vi.fn()
+      };
+
+      const result = await step.testRunModelStream({
+        ai: null,
+        settings: { debugMode: false, devMode: true } as AppSettings,
+        model: 'unused-model',
+        contents: [],
+        systemInstruction: 'unused',
+        signal: new AbortController().signal,
+        agentIndex: 1,
+        devModeDuration: 1,
+        work: { results: {} }
+      }, callbacks);
+
+      expect(result.text).toContain('[DEV MODE] Initial draft from Agent 2');
+      expect(result.thought).toBe('');
+      expect(result.usage).toBeNull();
+      expect(result.groundingChunks).toEqual([]);
+      expect(callbacks.onChunk).toHaveBeenCalled();
+      expect(callbacks.onChunk.mock.calls.at(-1)?.[0].trim()).toBe(result.text);
+    });
+
     it('should successfully run model stream and return accumulated text', async () => {
       const mockAi = {
         getProvider: vi.fn(),
@@ -716,6 +902,152 @@ describe('BaseStep', () => {
       expect(callbacks.onChunk).toHaveBeenCalledTimes(2);
       expect(callbacks.onChunk).toHaveBeenNthCalledWith(1, 'Hello', '', expect.anything());
       expect(callbacks.onChunk).toHaveBeenNthCalledWith(2, 'Hello World', '', expect.anything());
+    });
+
+    it('should accumulate thought, final usage, and grounding chunks from streamed metadata', async () => {
+      const usage1 = { totalTokens: 5, promptTokens: 2, candidatesTokens: 3 };
+      const usage2 = { totalTokens: 9, promptTokens: 4, candidatesTokens: 5 };
+      const groundingChunk1 = { web: { uri: 'https://first.test', title: 'First' } } as GroundingChunk;
+      const groundingChunk2 = { web: { uri: 'https://second.test', title: 'Second' } } as GroundingChunk;
+      const mockProvider = {
+        models: {
+          generateContentStream: vi.fn().mockResolvedValue({
+            stream: (async function* () {
+              yield { text: '', thought: 'Reason ', usage: usage1, groundingChunks: [groundingChunk1] };
+              yield { text: 'Answer', thought: 'continues', usage: usage2, groundingChunks: [groundingChunk2] };
+            })()
+          })
+        }
+      };
+
+      const callbacks = {
+        onChunk: vi.fn()
+      };
+
+      const result = await step.testRunModelStream({
+        ai: mockProvider,
+        settings: { debugMode: false } as AppSettings,
+        model: 'test-model',
+        contents: [],
+        signal: new AbortController().signal,
+        work: { results: {} }
+      } as any, callbacks);
+
+      expect(result).toEqual({
+        text: 'Answer',
+        thought: 'Reason continues',
+        usage: usage2,
+        groundingChunks: [groundingChunk1, groundingChunk2]
+      });
+      expect(callbacks.onChunk).toHaveBeenNthCalledWith(1, '', 'Reason ', usage1);
+      expect(callbacks.onChunk).toHaveBeenNthCalledWith(2, 'Answer', 'Reason continues', usage2);
+    });
+
+    it('should migrate scalar simulated error counts to per-agent counts and persist the failed attempt', async () => {
+      const work: Work = {
+        results: {
+          [`${STEPS.INITIAL}_error_counts`]: 2
+        }
+      };
+
+      await expect(step.testRunModelStream({
+        ai: null,
+        settings: { debugMode: false, numAgents: 3 } as AppSettings,
+        model: 'unused-model',
+        contents: [],
+        signal: new AbortController().signal,
+        agentIndex: 1,
+        simulateError: '503',
+        simulateErrorAttempts: 1,
+        work
+      } as any, { onChunk: vi.fn() })).rejects.toMatchObject({
+        code: ErrorCode.SERVICE_OVERLOADED,
+        status: 503
+      } satisfies Partial<AppError>);
+
+      expect(work.results?.[`${STEPS.INITIAL}_error_counts`]).toEqual([0, 1, 0]);
+      expect(useAgentStore.getState().setCurrentWork).toHaveBeenCalledWith(expect.objectContaining({
+        results: work.results
+      }));
+    });
+
+    it('should stream normally after simulated error attempts are already exhausted', async () => {
+      const work: Work = {
+        results: {
+          [`${STEPS.INITIAL}_error_counts`]: [1]
+        }
+      };
+      const mockProvider = {
+        models: {
+          generateContentStream: vi.fn().mockResolvedValue({
+            stream: (async function* () {
+              yield { text: 'Recovered', thought: '', usage: null };
+            })()
+          })
+        }
+      };
+      const callbacks = { onChunk: vi.fn() };
+
+      const result = await step.testRunModelStream({
+        ai: mockProvider,
+        settings: { debugMode: false, numAgents: 1 } as AppSettings,
+        model: 'test-model',
+        contents: [],
+        signal: new AbortController().signal,
+        agentIndex: 0,
+        simulateError: '429',
+        simulateErrorAttempts: 1,
+        work
+      } as any, callbacks);
+
+      expect(result.text).toBe('Recovered');
+      expect(work.results?.[`${STEPS.INITIAL}_error_counts`]).toEqual([1]);
+      expect(mockProvider.models.generateContentStream).toHaveBeenCalledTimes(1);
+      expect(callbacks.onChunk).toHaveBeenCalledWith('Recovered', '', null);
+    });
+
+    it('should throw invalid settings when direct streaming has no AI provider', async () => {
+      await expect(step.testRunModelStream({
+        ai: null,
+        settings: { debugMode: false, devMode: false } as AppSettings,
+        model: 'test-model',
+        contents: [],
+        signal: new AbortController().signal,
+        work: { results: {} }
+      } as any, { onChunk: vi.fn() })).rejects.toMatchObject({
+        code: ErrorCode.INVALID_SETTINGS
+      });
+    });
+
+    it.each([
+      ['429', ErrorCode.RATE_LIMIT, 429],
+      ['500', ErrorCode.PROXY_ERROR, 500],
+      ['timeout', ErrorCode.NETWORK_ERROR, undefined],
+      ['custom', undefined, undefined],
+    ])('should classify simulated %s errors before streaming', async (simulateError, code, status) => {
+      const work: Work = { results: {} };
+
+      const expectation = expect(step.testRunModelStream({
+        ai: null,
+        settings: { debugMode: false, numAgents: 1 } as AppSettings,
+        model: 'unused-model',
+        contents: [],
+        signal: new AbortController().signal,
+        simulateError,
+        simulateErrorAttempts: 1,
+        work
+      } as any, { onChunk: vi.fn() })).rejects;
+
+      if (code) {
+        await expectation.toMatchObject({
+          code,
+          ...(status ? { status } : {})
+        });
+      } else {
+        await expectation.toThrow('custom Simulated error');
+      }
+
+      expect(work.results?.[`${STEPS.INITIAL}_error_counts`]).toBe(1);
     });
 
     it('should abort active stream during processing', async () => {
@@ -838,6 +1170,186 @@ describe('BaseStep', () => {
       expect(callbacks.onChunk).toHaveBeenCalledTimes(2);
     });
 
+  });
+
+  describe('runAgentRegeneration', () => {
+    const createInstruction = () => ({
+      systemInstruction: 'system',
+      userTurn: { role: 'user', parts: [{ text: 'prompt' }] },
+      mainChatHistory: []
+    });
+
+    const createProvider = (stream: AsyncGenerator<any>) => ({
+      name: 'mock',
+      isProxy: false,
+      getDefaultModel: vi.fn(() => 'mock-model'),
+      models: {
+        generateContentStream: vi.fn().mockResolvedValue({ stream })
+      }
+    });
+
+    it('should clear stale agent output, stream regenerated text, save final usage, and update metadata', async () => {
+      const finalUsage = { totalTokens: 42, promptTokens: 20, candidatesTokens: 22 };
+      const provider = createProvider((async function* () {
+        yield { text: 'new agent text', thought: 'new thought', usage: finalUsage };
+      })());
+      const work: Work = {
+        results: {
+          [STEPS.INITIAL]: ['old agent 0', 'old agent 1'],
+          [`${STEPS.INITIAL}_usage`]: [null, { totalTokens: 9, promptTokens: 4, candidatesTokens: 5 }]
+        },
+        stepMetadata: [{ id: STEPS.INITIAL, status: 'error', label: 'Initial Step' }]
+      };
+      const context = {
+        ai: provider,
+        settings: { debugMode: false, numAgents: 2, model: 'global-model' } as AppSettings,
+        work,
+        signal: new AbortController().signal,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn()
+      } as any;
+
+      const result = await step.testRunAgentRegeneration(
+        context,
+        1,
+        createInstruction(),
+        [
+          { id: 'a0', name: 'Agent 1', status: 'done', label: 'Done', messageId: 'msg-1' },
+          { id: 'a1', name: 'Agent 2', status: 'error', label: 'Failed', messageId: 'msg-1' }
+        ]
+      );
+
+      expect(result.text).toBe('new agent text');
+      expect(work.results?.[STEPS.INITIAL]).toEqual(['old agent 0', 'new agent text']);
+      expect(work.results?.[`${STEPS.INITIAL}_usage`]).toEqual([null, finalUsage]);
+      expect(work.stepMetadata?.[0]).toMatchObject({ id: STEPS.INITIAL, status: 'done' });
+      expect(useAgentStore.getState().updateWorkResult).toHaveBeenCalledWith(
+        STEPS.INITIAL,
+        1,
+        { usage: null, text: '' }
+      );
+      expect(useAgentStore.getState().updateWorkResult).toHaveBeenCalledWith(
+        STEPS.INITIAL,
+        1,
+        { usage: finalUsage }
+      );
+    });
+
+    it('should reject regeneration before mutating work when AI provider is missing', async () => {
+      const work: Work = { results: { [STEPS.INITIAL]: ['old'] } };
+
+      await expect(step.testRunAgentRegeneration(
+        {
+          ai: null,
+          settings: { debugMode: false, numAgents: 1, model: 'global-model' } as AppSettings,
+          work,
+          signal: new AbortController().signal,
+          messageId: 'msg-1'
+        } as any,
+        0,
+        createInstruction(),
+        []
+      )).rejects.toMatchObject({ code: ErrorCode.INVALID_SETTINGS });
+
+      expect(work.results?.[STEPS.INITIAL]).toEqual(['old']);
+    });
+
+    it('should mark the regenerated agent as failed and persist work when streaming fails', async () => {
+      const provider = createProvider((async function* () {
+        yield { text: 'partial', thought: '', usage: null };
+        throw new Error('regeneration stream failed');
+      })());
+      const work: Work = { results: { [STEPS.INITIAL]: ['old agent 0', 'old agent 1'] } };
+      const context = {
+        ai: provider,
+        settings: { debugMode: false, numAgents: 2, model: 'global-model' } as AppSettings,
+        work,
+        signal: new AbortController().signal,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn()
+      } as any;
+
+      await expect(step.testRunAgentRegeneration(
+        context,
+        1,
+        createInstruction(),
+        []
+      )).rejects.toThrow('regeneration stream failed');
+
+      expect(work.results?.[STEPS.INITIAL]).toEqual(['old agent 0', 'partial']);
+      expect(useAgentStore.getState().setCurrentWork).toHaveBeenCalledWith({ ...work });
+    });
+
+    it('should route retry callbacks through retry progress during regeneration', async () => {
+      const retryStep = new RetryCallbackStep();
+      const work: Work = { results: { [STEPS.INITIAL]: ['old'] } };
+
+      const result = await retryStep.testRunAgentRegeneration(
+        {
+          ai: { name: 'mock', isProxy: false, getDefaultModel: vi.fn(() => 'mock-model'), models: {} },
+          settings: { debugMode: false, numAgents: 1, model: 'global-model' } as AppSettings,
+          work,
+          signal: new AbortController().signal,
+          messageId: 'msg-1',
+          onMessageUpdate: vi.fn()
+        } as any,
+        0,
+        createInstruction(),
+        [{ id: 'a0', name: 'Agent 1', status: 'error', label: 'Failed', messageId: 'msg-1' }]
+      );
+
+      expect(result.text).toBe('retried text');
+      expect(useAgentStore.getState().setIsLoading).toHaveBeenCalledWith(true);
+    });
+  });
+
+  describe('runSynthesisRegeneration', () => {
+    it('should attach extracted sources and trigger synthesis jump on first text chunk', async () => {
+      step.id = STEPS.SYNTHESIS;
+      const source = { web: { uri: 'https://source.test', title: 'Source' } } as GroundingChunk;
+      const provider = {
+        name: 'mock',
+        isProxy: false,
+        getDefaultModel: vi.fn(() => 'mock-model'),
+        models: {
+          generateContentStream: vi.fn().mockResolvedValue({
+            stream: (async function* () {
+              yield { text: 'final answer', thought: '', usage: null, groundingChunks: [source] };
+            })()
+          })
+        }
+      };
+      const work: Work = { results: { [STEPS.SYNTHESIS]: { text: 'old final' } } };
+      const onSynthesisJump = vi.fn();
+
+      const result = await step.testRunSynthesisRegeneration(
+        {
+          ai: provider,
+          settings: { debugMode: false, numAgents: 1, model: 'global-model' } as AppSettings,
+          work,
+          signal: new AbortController().signal,
+          messageId: 'msg-1',
+          onMessageUpdate: vi.fn(),
+          onSynthesisJump
+        } as any,
+        {
+          systemInstruction: 'system',
+          userTurn: { role: 'user', parts: [{ text: 'prompt' }] },
+          mainChatHistory: []
+        },
+        [{ id: 'synth', name: 'Synthesizer', status: 'done', label: 'Done', messageId: 'msg-1' }]
+      );
+
+      expect(result).toMatchObject({
+        text: 'final answer',
+        sources: [{ uri: 'https://source.test', title: 'Source' }]
+      });
+      expect(work.results?.[STEPS.SYNTHESIS]).toEqual({
+        text: 'final answer',
+        sources: [{ uri: 'https://source.test', title: 'Source' }]
+      });
+      expect(onSynthesisJump).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

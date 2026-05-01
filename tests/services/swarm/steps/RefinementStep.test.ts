@@ -126,4 +126,63 @@ describe('RefinementStep', () => {
     const roleReminder = instructionArg.userTurn.parts[2].text;
     expect(roleReminder).toContain('Remember your assigned role');
   });
+
+  it('delegates execute to executeMultiAgent with and without refinement search tools', async () => {
+    const executeMultiAgentSpy = vi.spyOn(step as any, 'executeMultiAgent').mockResolvedValue(['refined']);
+
+    mockContext.settings.useSearchInRefinement = true;
+    await step.execute(mockContext);
+    expect(executeMultiAgentSpy.mock.calls[0][1]).toMatchObject({
+      tools: [{ googleSearch: {} }],
+      simulateError: mockContext.settings.simulateRefinementError,
+      simulateErrorAttempts: mockContext.settings.simulateRefinementErrorAttempts,
+    });
+
+    mockContext.settings.useSearchInRefinement = false;
+    await step.execute(mockContext);
+    expect(executeMultiAgentSpy.mock.calls[1][1]).toMatchObject({
+      tools: undefined,
+      simulateError: mockContext.settings.simulateRefinementError,
+      simulateErrorAttempts: mockContext.settings.simulateRefinementErrorAttempts,
+    });
+  });
+
+  it('throws when execute is asked to run without initial drafts', async () => {
+    mockContext.work.results.initial_step = [];
+
+    await expect(step.execute(mockContext)).rejects.toThrow('Cannot run refinement step without initial drafts');
+  });
+
+  it('throws when regeneration is requested without initial drafts', async () => {
+    mockContext.work.results.initial_step = [];
+
+    await expect(step.regenerate(mockContext, 0, [])).rejects.toThrow('Cannot regenerate refinement without initial drafts');
+  });
+
+  it('uses search tools during regeneration and falls back to the first prompt profile', async () => {
+    const runRegenSpy = vi.spyOn(step as any, 'runAgentRegeneration').mockResolvedValue({
+      text: 'refined response',
+      work: mockContext.work,
+    });
+    mockContext.settings.useSearchInRefinement = true;
+    mockContext.settings.profiles = [
+      { id: 'fallback', refinementInstruction: 'Fallback refine' },
+      { id: 'other', refinementInstruction: 'Other refine' },
+    ];
+    mockContext.settings.activeProfileId = 'missing-profile';
+
+    await step.regenerate(mockContext, 0, []);
+
+    const [, , instructionArg, , , toolsArg] = runRegenSpy.mock.calls[0] as any[];
+    expect(instructionArg.systemInstruction).toContain('Fallback refine');
+    expect(toolsArg).toEqual([{ googleSearch: {} }]);
+  });
+
+  it('falls back to an empty my_draft when the current agent draft is missing entirely', () => {
+    const sparseDrafts = ['draft 1'];
+    const instruction = (step as any).prepareRefinement(mockContext, 1, sparseDrafts);
+    const internalContext = instruction.userTurn.parts[1].text;
+
+    expect(internalContext).toContain('<my_draft>\n\n  </my_draft>');
+  });
 });

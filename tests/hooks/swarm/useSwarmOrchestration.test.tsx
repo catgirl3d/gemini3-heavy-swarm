@@ -512,6 +512,19 @@ describe('useSwarmOrchestration', () => {
     expect(toRunSwarmCall(runSwarm.mock.calls[1]).imageFile).toBe(imageFile);
   });
 
+  it('does nothing when continueGeneration falls back to an empty message list', async () => {
+    const { result, runSwarm, messagesState } = renderOrchestration({
+      initialMessages: [{ id: 'user-1', role: 'user', parts: [{ text: 'hello' }] }],
+    });
+    messagesState.messagesRef.current = null as any;
+
+    await act(async () => {
+      await result.current.continueGeneration();
+    });
+
+    expect(runSwarm).not.toHaveBeenCalled();
+  });
+
   it('clears lastInput.imageFile during resume when the triggering user image no longer matches', async () => {
     mocks.generateUUID.mockReturnValueOnce('model-1').mockReturnValueOnce('user-1');
     const imageFile = new File(['image'], 'resume-mismatch.png', { type: 'image/png' });
@@ -581,6 +594,103 @@ describe('useSwarmOrchestration', () => {
       currentWork: expect.objectContaining({ isStopped: true }),
     });
     expect(messagesState.messages[1].work).toEqual(expect.objectContaining({ isStopped: true }));
+  });
+
+  it('marks a history message as stopped even when store.currentWork is missing', () => {
+    const controller = new AbortController();
+    const abortSpy = vi.spyOn(controller, 'abort');
+    const initialMessages: Message[] = [
+      { id: 'user-1', role: 'user', parts: [{ text: 'hello' }] },
+      { id: 'model-1', role: 'model', parts: [{ text: 'partial' }] },
+    ];
+    const { result, messagesState } = renderOrchestration({ initialMessages });
+    const store = useAgentStore.getState();
+
+    store.setCurrentMessageId('model-1');
+    store.setIsLoading(true);
+    store.setIsPaused(true);
+    store.registerAbortController('main-model-1', controller);
+
+    act(() => {
+      result.current.stopGeneration();
+    });
+
+    expect(abortSpy).toHaveBeenCalledTimes(1);
+    expect(messagesState.messages[1].work).toEqual({ isStopped: true });
+    expect(useAgentStore.getState().currentWork).toBeUndefined();
+  });
+
+  it('pushes a model message from streaming updates when resuming a message id that is not in history', async () => {
+    const existingWork = createWork({
+      stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'pending' }],
+      agentStates: [],
+    });
+    const initialMessages: Message[] = [
+      { id: 'user-1', role: 'user', parts: [{ text: 'hello' }] },
+    ];
+    const runSwarm = vi.fn(async (...args: any[]) => {
+      const { onMessageUpdate } = toRunSwarmCall(args);
+      onMessageUpdate('streamed after missing resume id', true);
+      return { text: 'final', sources: [], work: createWork() };
+    });
+    const { result, messagesState } = renderOrchestration({ initialMessages, runSwarm });
+
+    await act(async () => {
+      await result.current.sendMessage('hello again', null, null, false, 'missing-resume-id', existingWork);
+    });
+
+    const resumeCall = getRunSwarmCall(runSwarm);
+    expect(resumeCall.history).toEqual(initialMessages);
+    expect(messagesState.messages).toEqual([
+      initialMessages[0],
+      expect.objectContaining({ id: 'missing-resume-id', role: 'model', parts: [{ text: 'streamed after missing resume id' }] }),
+    ]);
+  });
+
+  it('keeps the last non-model message in retry history and omits failedWork when retrying after a user tail message', async () => {
+    mocks.generateUUID.mockReturnValueOnce('model-1').mockReturnValueOnce('user-1').mockReturnValueOnce('model-2');
+    const runSwarm = vi.fn(async () => ({ text: 'final', sources: [], work: createWork() }));
+    const { result, messagesState } = renderOrchestration({ runSwarm });
+
+    await act(async () => {
+      await result.current.sendMessage('hello', null, null);
+    });
+
+    act(() => {
+      messagesState.setMessages(prev => [...prev, { id: 'user-tail', role: 'user', parts: [{ text: 'follow up' }] }]);
+      result.current.retry();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const retryCall = toRunSwarmCall(runSwarm.mock.calls[1]);
+    expect(retryCall.history).toEqual(messagesState.messages.slice(0, -1));
+    expect(retryCall.existingWork).toBeUndefined();
+    expect(messagesState.messages[messagesState.messages.length - 1]).toMatchObject({ id: 'model-2', role: 'model' });
+  });
+
+  it('handles aborted swarm runs as user cancellation and returns early from catch cleanup', async () => {
+    mocks.generateUUID.mockReturnValueOnce('model-aborted').mockReturnValueOnce('user-aborted');
+    const runSwarm = vi.fn(async (...args: any[]) => {
+      const { onPause, onSynthesisJump } = toRunSwarmCall(args);
+      onPause();
+      onSynthesisJump();
+      throw new Error('Aborted');
+    });
+    const { result, mainAbort } = renderOrchestration({ runSwarm });
+
+    await act(async () => {
+      await result.current.sendMessage('hello', null, null);
+    });
+
+    expect(useAgentStore.getState()).toMatchObject({
+      isLoading: false,
+      loadingStatus: 'Stopped by user',
+    });
+    expect(useAgentStore.getState().abortControllers.size).toBe(0);
+    expect(mainAbort.ref.current).toBeNull();
   });
 
   it('stops without mutating message history when there is no current message id', () => {
