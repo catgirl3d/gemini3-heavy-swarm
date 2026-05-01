@@ -53,14 +53,19 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
     const [retryCount, setRetryCount] = useState(0);
 
     useEffect(() => {
+        let isCurrent = true;
+
         if (provider === ProviderType.Gemini) {
             setModels(AVAILABLE_MODELS.map(m => ({ value: m.value, label: m.label })));
             setError(null);
+            setIsLoading(false);
         } else if (provider === ProviderType.OpenRouter) {
+            setModels(getCachedModels() || []);
             setIsLoading(true);
             setError(null);
             fetchOpenRouterModels()
                 .then(fetchedModels => {
+                    if (!isCurrent) return;
                     const processedModels = fetchedModels.map(m => {
                         const completionPrice = parseFloat(m.pricing.completion) || 0;
                         
@@ -87,11 +92,19 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
                     setModels(processedModels);
                 })
                 .catch(() => {
+                    if (!isCurrent) return;
                     setError('Failed to load models from OpenRouter');
-                    setModels([]);
                 })
-                .finally(() => setIsLoading(false));
+                .finally(() => {
+                    if (isCurrent) {
+                        setIsLoading(false);
+                    }
+                });
         }
+
+        return () => {
+            isCurrent = false;
+        };
     }, [provider, retryCount]);
 
     const sortedAndFilteredModels = useMemo(() => {
