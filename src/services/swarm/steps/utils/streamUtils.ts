@@ -77,15 +77,20 @@ export interface StreamChunkResult {
   thought: string;
 }
 
+const isObjectRecord = (value: unknown): value is Record<string, unknown> => (
+  typeof value === 'object' && value !== null
+);
+
 /**
  * Type guard to check if an object is a valid stream chunk.
  */
 export function isValidStreamChunk(chunk: unknown): chunk is StreamChunk {
-  return (
-    typeof chunk === 'object' &&
-    chunk !== null &&
-    ('candidates' in chunk || 'usageMetadata' in chunk)
-  );
+  if (!isObjectRecord(chunk)) return false;
+
+  const hasValidCandidates = 'candidates' in chunk && Array.isArray(chunk.candidates);
+  const hasValidUsageMetadata = 'usageMetadata' in chunk && isObjectRecord(chunk.usageMetadata);
+
+  return hasValidCandidates || hasValidUsageMetadata;
 }
 
 /**
@@ -93,7 +98,8 @@ export function isValidStreamChunk(chunk: unknown): chunk is StreamChunk {
  */
 export function extractPartsFromChunk(chunk: unknown): GeminiPart[] | undefined {
   if (!isValidStreamChunk(chunk)) return undefined;
-  return chunk.candidates?.[0]?.content?.parts;
+  const parts = chunk.candidates?.[0]?.content?.parts;
+  return Array.isArray(parts) ? parts : undefined;
 }
 
 /**
@@ -101,7 +107,7 @@ export function extractPartsFromChunk(chunk: unknown): GeminiPart[] | undefined 
  */
 export function extractUsageMetadataFromChunk(chunk: unknown): GeminiUsageMetadata | undefined {
   if (!isValidStreamChunk(chunk)) return undefined;
-  return chunk.usageMetadata;
+  return isObjectRecord(chunk.usageMetadata) ? chunk.usageMetadata as GeminiUsageMetadata : undefined;
 }
 
 /**
@@ -109,7 +115,8 @@ export function extractUsageMetadataFromChunk(chunk: unknown): GeminiUsageMetada
  */
 export function extractGroundingChunksFromChunk(chunk: unknown): GroundingChunk[] | undefined {
   if (!isValidStreamChunk(chunk)) return undefined;
-  return chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+  const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+  return Array.isArray(groundingChunks) ? groundingChunks : undefined;
 }
 
 /**
