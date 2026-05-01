@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { migrateSettings } from './settingsMigration';
-import { RoleProfile, ProviderType } from '@/types';
+import { PROMPT_TYPES, RoleProfile, ProviderType } from '@/types';
 import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
 import { createMockSettings } from '@/test/utils/settingsMocks';
+import { DEFAULT_PROFILES, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 
 describe('settingsMigration', () => {
   describe('Migration 16: providerModels and Role IDs', () => {
@@ -222,6 +223,292 @@ describe('settingsMigration', () => {
       const customProfile = result.roleProfiles.find((p: RoleProfile) => p.id === 'custom-roles-migrated');
       expect(customProfile).toBeDefined();
       expect(customProfile?.criticRoles).toEqual([]);
+    });
+  });
+
+  describe('Legacy profile and default-value migration', () => {
+    it('keeps the default prompt profile active when legacy instructions already match defaults', () => {
+      const result = migrateSettings({
+        ...createMockSettings({
+          profiles: undefined as any,
+        }),
+        initialInstruction: DEFAULT_PROFILES[0].initialInstruction,
+        refinementInstruction: DEFAULT_PROFILES[0].refinementInstruction,
+        synthesizerInstruction: DEFAULT_PROFILES[0].synthesizerInstruction,
+      } as any);
+
+      expect(result.activeProfileId).toBe('default');
+      expect(result.profiles).toEqual([DEFAULT_PROFILES[0]]);
+      expect(result.profiles.find((profile) => profile.id === 'custom-migrated')).toBeUndefined();
+    });
+
+    it('creates migrated prompt and role profiles from legacy settings without mutating the input', () => {
+      const legacySettings = {
+        ...createMockSettings({
+          profiles: undefined as any,
+          roleProfiles: undefined as any,
+          savedInstructions: undefined as any,
+          savedRoles: undefined as any,
+          providerModels: undefined as any,
+          provider: undefined as any,
+          openRouterApiKey: undefined as any,
+          openRouterModel: undefined as any,
+          initialModel: undefined as any,
+          refinementModel: undefined as any,
+          synthesisModel: undefined as any,
+          useSearchInInitial: undefined as any,
+          useSearchInRefinement: undefined as any,
+          useSearchInSynthesis: undefined as any,
+          pauseAfterRefinement: undefined as any,
+          dynamicAgentRoles: undefined as any,
+          simulateInitialErrorAttempts: undefined as any,
+          simulateRefinementErrorAttempts: undefined as any,
+          simulateSynthesisErrorAttempts: undefined as any,
+          maxOutputTokens: undefined as any,
+          numAgents: 8,
+        }),
+        initialInstruction: 'Legacy initial',
+        refinementInstruction: 'Legacy refinement',
+        synthesizerInstruction: 'Legacy synthesis',
+        agentRoles: [
+          { name: 'Legacy Role', instruction: 'Legacy role instruction' } as any,
+        ],
+      } as any;
+      const original = structuredClone(legacySettings);
+
+      const result = migrateSettings(legacySettings);
+
+      expect(legacySettings).toEqual(original);
+      expect(result.activeProfileId).toBe('custom-migrated');
+      expect(result.profiles[0]).toEqual(DEFAULT_PROFILES[0]);
+      expect(result.profiles.find((profile) => profile.id === 'custom-migrated')).toMatchObject({
+        initialInstruction: 'Legacy initial',
+        refinementInstruction: 'Legacy refinement',
+        synthesizerInstruction: 'Legacy synthesis',
+      });
+      expect(result.activeRoleProfileId).toBe('custom-roles-migrated');
+      expect(result.roleProfiles.find((profile) => profile.id === 'custom-roles-migrated')).toMatchObject({
+        roles: [{ name: 'Legacy Role', instruction: 'Legacy role instruction' }],
+        criticRoles: [],
+      });
+      expect(result.savedInstructions).toEqual([]);
+      expect(result.savedRoles).toEqual([]);
+      expect(result.provider).toBe(ProviderType.Gemini);
+      expect(result.openRouterApiKey).toBe('');
+      expect(result.openRouterModel).toBe('');
+      expect(result.initialModel).toBe('');
+      expect(result.refinementModel).toBe('');
+      expect(result.synthesisModel).toBe('');
+      expect(result.useSearchInInitial).toBe(true);
+      expect(result.useSearchInRefinement).toBe(true);
+      expect(result.useSearchInSynthesis).toBe(true);
+      expect(result.pauseAfterRefinement).toBe(false);
+      expect(result.dynamicAgentRoles).toBe(true);
+      expect(result.simulateInitialErrorAttempts).toBe(1);
+      expect(result.simulateRefinementErrorAttempts).toBe(1);
+      expect(result.simulateSynthesisErrorAttempts).toBe(1);
+      expect(result.maxOutputTokens).toBe(MAX_OUTPUT_TOKENS_LIMIT);
+      expect(result.numAgents).toBe(5);
+    });
+
+    it('adds missing mad-scientists profile to existing role profiles', () => {
+      const settings = createMockSettings({
+        roleProfiles: [
+          structuredClone(DEFAULT_ROLE_PROFILES.find((profile) => profile.id === 'default-roles')!),
+        ],
+      });
+
+      const result = migrateSettings(settings);
+
+      expect(result.roleProfiles.some((profile) => profile.id === 'mad-scientists')).toBe(true);
+    });
+
+    it('backfills criticRoles from the matching default profile when missing', () => {
+      const softwareTeam = structuredClone(DEFAULT_ROLE_PROFILES.find((profile) => profile.id === 'software-team')!);
+      const settings = createMockSettings({
+        roleProfiles: [
+          {
+            ...softwareTeam,
+            criticRoles: undefined as any,
+          },
+        ],
+      });
+
+      const result = migrateSettings(settings);
+
+      expect(result.roleProfiles[0].criticRoles).toEqual(softwareTeam.criticRoles);
+      expect(result.roleProfiles[0].criticRoles).not.toBe(softwareTeam.criticRoles);
+    });
+
+    it('initializes missing criticRoles to an empty array for custom profiles without defaults', () => {
+      const result = migrateSettings(createMockSettings({
+        roleProfiles: [{
+          id: 'custom-no-default',
+          name: 'Custom No Default',
+          roles: [{ id: 'role-1', name: 'Role 1', instruction: 'Test' }],
+          criticRoles: undefined as any,
+        }],
+      }));
+
+      expect(result.roleProfiles[0].criticRoles).toEqual([]);
+    });
+
+    it('migrates legacy saved instruction types to prompt type identifiers', () => {
+      const result = migrateSettings(createMockSettings({
+        savedInstructions: [
+          { id: 'one', name: 'Initial', type: 'initial', content: 'A' } as any,
+          { id: 'two', name: 'Refine', type: 'refinement', content: 'B' } as any,
+          { id: 'three', name: 'Synth', type: 'synthesizer', content: 'C' } as any,
+        ],
+      }));
+
+      expect(result.savedInstructions.map((instruction) => instruction.type)).toEqual([
+        PROMPT_TYPES.INITIAL,
+        PROMPT_TYPES.REFINEMENT,
+        PROMPT_TYPES.SYNTHESIS,
+      ]);
+    });
+
+    it('preserves existing providerModels and backfills missing role mappings for other profiles', () => {
+      const settings = createMockSettings({
+        provider: ProviderType.Gemini,
+        refinementModel: 'migration-backfill-refinement',
+        synthesisModel: 'migration-backfill-synthesis',
+        providerModels: {
+          stepModels: {
+            [ProviderType.Gemini]: {
+              initial: 'existing-initial',
+            } as any,
+          },
+          roleModels: {
+            'profile-a': {
+              [ProviderType.Gemini]: {
+                roles: { 'shared-id': 'preserved-model' },
+              },
+            },
+          },
+        },
+        roleProfiles: [
+          {
+            id: 'profile-a',
+            name: 'Profile A',
+            roles: [{ id: 'shared-id', name: 'Role A', instruction: 'A', model: 'legacy-model-a' }],
+            criticRoles: [],
+          },
+          {
+            id: 'profile-b',
+            name: 'Profile B',
+            roles: [{ id: 'shared-id', name: 'Role B', instruction: 'B', model: 'legacy-model-b' }],
+            criticRoles: [{ id: 'critic-b', name: 'Critic B', instruction: 'CB', model: 'legacy-critic-b' }],
+          },
+        ],
+      });
+
+      const result = migrateSettings(settings);
+
+      expect(result.roleProfiles[0].roles[0].id).toBe('shared-id');
+      expect(result.roleProfiles[1].roles[0].id).toBe('shared-id');
+      expect(result.providerModels?.stepModels?.[ProviderType.Gemini]).toEqual({
+        initial: 'existing-initial',
+        refinement: 'migration-backfill-refinement',
+        synthesis: 'migration-backfill-synthesis',
+      });
+      expect(result.providerModels?.roleModels?.['profile-a']?.[ProviderType.Gemini]?.roles?.['shared-id']).toBe('preserved-model');
+      expect(result.providerModels?.roleModels?.['profile-b']?.[ProviderType.Gemini]?.roles?.['shared-id']).toBe('legacy-model-b');
+      expect(result.providerModels?.roleModels?.['profile-b']?.[ProviderType.Gemini]?.criticRoles?.['critic-b']).toBe('legacy-critic-b');
+    });
+
+    it('backfills missing current-provider models for OpenRouter without overwriting preserved values', () => {
+      const settings = createMockSettings({
+        provider: ProviderType.OpenRouter,
+        initialModel: 'legacy-openrouter-initial',
+        refinementModel: 'legacy-openrouter-refinement',
+        synthesisModel: 'legacy-openrouter-synthesis',
+        providerModels: {
+          stepModels: {
+            [ProviderType.Gemini]: {
+              initial: 'gemini-initial',
+              refinement: 'gemini-refinement',
+              synthesis: 'gemini-synthesis',
+            },
+            [ProviderType.OpenRouter]: {
+              initial: 'preserved-openrouter-initial',
+            } as any,
+          },
+          roleModels: {
+            'profile-openrouter': {
+              [ProviderType.Gemini]: {
+                roles: { 'role-1': 'gemini-role-1' },
+              },
+            },
+          },
+        },
+        roleProfiles: [{
+          id: 'profile-openrouter',
+          name: 'OpenRouter Profile',
+          roles: [{ id: 'role-1', name: 'Role 1', instruction: 'Test', model: 'openrouter-role-1' }],
+          criticRoles: [{ id: 'critic-1', name: 'Critic 1', instruction: 'Review', model: 'openrouter-critic-1' }],
+        }],
+      });
+
+      const result = migrateSettings(settings);
+
+      expect(result.providerModels?.stepModels?.[ProviderType.OpenRouter]).toEqual({
+        initial: 'preserved-openrouter-initial',
+        refinement: 'legacy-openrouter-refinement',
+        synthesis: 'legacy-openrouter-synthesis',
+      });
+      expect(result.providerModels?.stepModels?.[ProviderType.Gemini]).toEqual({
+        initial: 'gemini-initial',
+        refinement: 'gemini-refinement',
+        synthesis: 'gemini-synthesis',
+      });
+      expect(result.providerModels?.roleModels?.['profile-openrouter']?.[ProviderType.OpenRouter]).toEqual({
+        roles: { 'role-1': 'openrouter-role-1' },
+        criticRoles: { 'critic-1': 'openrouter-critic-1' },
+      });
+      expect(result.providerModels?.roleModels?.['profile-openrouter']?.[ProviderType.Gemini]?.roles?.['role-1']).toBe('gemini-role-1');
+    });
+
+    it('allows duplicate role IDs across different profiles during providerModels migration', () => {
+      const settings = createMockSettings({
+        providerModels: undefined as any,
+        roleProfiles: [
+          {
+            id: 'profile-a',
+            name: 'Profile A',
+            roles: [{ id: 'shared-id', name: 'Role A', instruction: 'A', model: 'legacy-model-a' }],
+            criticRoles: [],
+          },
+          {
+            id: 'profile-b',
+            name: 'Profile B',
+            roles: [{ id: 'shared-id', name: 'Role B', instruction: 'B', model: 'legacy-model-b' }],
+            criticRoles: [],
+          },
+        ],
+      });
+
+      const result = migrateSettings(settings);
+
+      expect(result.roleProfiles[0].roles[0].id).toBe('shared-id');
+      expect(result.roleProfiles[1].roles[0].id).toBe('shared-id');
+      expect(result.providerModels?.roleModels?.['profile-a']?.[ProviderType.Gemini]?.roles?.['shared-id']).toBe('legacy-model-a');
+      expect(result.providerModels?.roleModels?.['profile-b']?.[ProviderType.Gemini]?.roles?.['shared-id']).toBe('legacy-model-b');
+    });
+
+    it('cleans empty string role models to undefined', () => {
+      const result = migrateSettings(createMockSettings({
+        roleProfiles: [{
+          id: 'cleanup-models',
+          name: 'Cleanup Models',
+          roles: [{ id: 'role-1', name: 'Role 1', instruction: 'Test', model: '' } as any],
+          criticRoles: [{ id: 'critic-1', name: 'Critic 1', instruction: 'Test', model: '' } as any],
+        }],
+      }));
+
+      expect(result.roleProfiles[0].roles[0].model).toBeUndefined();
+      expect(result.roleProfiles[0].criticRoles?.[0].model).toBeUndefined();
     });
   });
 

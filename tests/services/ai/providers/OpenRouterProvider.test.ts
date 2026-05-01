@@ -98,6 +98,38 @@ describe('OpenRouterProvider', () => {
     });
   });
 
+  it('should recover thought content from candidates parts when the raw chunk has no top-level thought', async () => {
+    const mockChunk = {
+      text: vi.fn(() => 'answer'),
+      candidates: [{
+        content: {
+          parts: [
+            { text: 'Reasoning 1', thought: true },
+            { text: 'Reasoning 2', thought: true },
+            { text: 'answer' }
+          ]
+        }
+      }],
+      usageMetadata: null
+    };
+    mockGenerateContentStream.mockResolvedValue({
+      stream: (async function* () { yield mockChunk; })()
+    });
+
+    const result = await provider.models.generateContentStream({ model: 'or-model', contents: [] });
+    const chunks: any[] = [];
+    for await (const chunk of result.stream) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks[0]).toMatchObject({
+      text: 'answer',
+      thought: 'Reasoning 1Reasoning 2',
+      usage: null,
+      raw: mockChunk,
+    });
+  });
+
   it('should propagate isEstimated: false correctly', async () => {
     const mockChunk = { 
         text: vi.fn(() => 'final text'),

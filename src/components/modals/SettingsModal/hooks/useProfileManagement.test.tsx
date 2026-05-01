@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useProfileManagement } from '@/components/modals/SettingsModal/hooks/useProfileManagement';
 import { AppSettings, ProviderType } from '@/types';
@@ -6,10 +6,13 @@ import { useState } from 'react';
 import { createMockSettings } from '@/test/utils/settingsMocks';
 
 describe('useProfileManagement', () => {
-  const setupHook = (initialSettings: AppSettings) => {
+  const setupHook = (
+    initialSettings: AppSettings,
+    options: { onShowError?: (message: string) => void } = {}
+  ) => {
     return renderHook(() => {
       const [settings, setSettings] = useState(initialSettings);
-      const activeProfile = settings.profiles[0];
+      const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
       const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) || settings.roleProfiles?.[0] || { id: 'test', name: 'Test', roles: [], criticRoles: [] };
       
       const hook = useProfileManagement(
@@ -18,12 +21,57 @@ describe('useProfileManagement', () => {
         activeProfile,
         activeRoleProfile,
         () => {},
-        () => {}
+        () => {},
+        options.onShowError
       );
       
       return { settings, hook };
     });
   };
+
+  const setupHookWithFailingSetter = (initialSettings: AppSettings, onShowError: (message: string) => void) => {
+    return renderHook(() => {
+      const activeProfile = initialSettings.profiles.find(p => p.id === initialSettings.activeProfileId) || initialSettings.profiles[0];
+      const activeRoleProfile = initialSettings.roleProfiles?.find(p => p.id === initialSettings.activeRoleProfileId) || initialSettings.roleProfiles?.[0] || { id: 'test', name: 'Test', roles: [], criticRoles: [] };
+
+      return useProfileManagement(
+        initialSettings,
+        (() => { throw new Error('setter failed'); }) as any,
+        activeProfile,
+        activeRoleProfile,
+        () => {},
+        () => {},
+        onShowError
+      );
+    });
+  };
+
+  describe('change handlers', () => {
+    it('switches active prompt and role profiles from select events', () => {
+      const settings = createMockSettings({
+        activeProfileId: 'profile-1',
+        activeRoleProfileId: 'role-1',
+        profiles: [
+          { id: 'profile-1', name: 'Profile 1', initialInstruction: '', refinementInstruction: '', synthesizerInstruction: '' },
+          { id: 'profile-2', name: 'Profile 2', initialInstruction: '', refinementInstruction: '', synthesizerInstruction: '' },
+        ],
+        roleProfiles: [
+          { id: 'role-1', name: 'Role 1', roles: [], criticRoles: [] },
+          { id: 'role-2', name: 'Role 2', roles: [], criticRoles: [] },
+        ],
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleProfileChange({ target: { value: 'profile-2' } } as any);
+        result.current.hook.handleRoleProfileChange({ target: { value: 'role-2' } } as any);
+      });
+
+      expect(result.current.settings.activeProfileId).toBe('profile-2');
+      expect(result.current.settings.activeRoleProfileId).toBe('role-2');
+    });
+  });
 
   describe('handleCreateProfile', () => {
     it('should clone current profile when clone is true', () => {
@@ -320,6 +368,102 @@ describe('useProfileManagement', () => {
       expect(roleModels?.['profile-1']?.[ProviderType.Gemini]?.roles).toEqual({
         'role-1': 'gemini-profile-1'
       });
+    });
+  });
+
+  describe('handleDeleteProfile', () => {
+    it('does not delete the last remaining prompt profile and reports the error', () => {
+      const onShowError = vi.fn();
+      const settings = createMockSettings({
+        profiles: [{ id: 'only-profile', name: 'Only', initialInstruction: '', refinementInstruction: '', synthesizerInstruction: '' }],
+        activeProfileId: 'only-profile',
+      });
+
+      const { result } = setupHook(settings, { onShowError });
+
+      act(() => {
+        result.current.hook.handleDeleteProfile();
+      });
+
+      expect(result.current.settings.profiles).toHaveLength(1);
+      expect(onShowError).toHaveBeenCalledWith('Cannot delete the last remaining prompt profile.');
+    });
+
+    it('deletes the active prompt profile and activates the first remaining one', () => {
+      const settings = createMockSettings({
+        activeProfileId: 'profile-2',
+        profiles: [
+          { id: 'profile-1', name: 'Profile 1', initialInstruction: '', refinementInstruction: '', synthesizerInstruction: '' },
+          { id: 'profile-2', name: 'Profile 2', initialInstruction: '', refinementInstruction: '', synthesizerInstruction: '' },
+        ],
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleDeleteProfile();
+      });
+
+      expect(result.current.settings.profiles).toHaveLength(1);
+      expect(result.current.settings.profiles[0].id).toBe('profile-1');
+      expect(result.current.settings.activeProfileId).toBe('profile-1');
+    });
+  });
+
+  describe('rename handlers', () => {
+    it('trims and saves prompt and role profile names', () => {
+      const settings = createMockSettings({
+        activeProfileId: 'profile-1',
+        activeRoleProfileId: 'role-1',
+        profiles: [{ id: 'profile-1', name: 'Old Prompt', initialInstruction: '', refinementInstruction: '', synthesizerInstruction: '' }],
+        roleProfiles: [{ id: 'role-1', name: 'Old Role', roles: [], criticRoles: [] }],
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleRenameProfile('  New Prompt Name  ');
+        result.current.hook.handleRenameRoleProfile('  New Role Name  ');
+      });
+
+      expect(result.current.settings.profiles[0].name).toBe('New Prompt Name');
+      expect(result.current.settings.roleProfiles?.[0].name).toBe('New Role Name');
+    });
+
+    it('rejects blank prompt and role profile names', () => {
+      const onShowError = vi.fn();
+      const settings = createMockSettings({
+        activeProfileId: 'profile-1',
+        activeRoleProfileId: 'role-1',
+        profiles: [{ id: 'profile-1', name: 'Old Prompt', initialInstruction: '', refinementInstruction: '', synthesizerInstruction: '' }],
+        roleProfiles: [{ id: 'role-1', name: 'Old Role', roles: [], criticRoles: [] }],
+      });
+
+      const { result } = setupHook(settings, { onShowError });
+
+      act(() => {
+        result.current.hook.handleRenameProfile('   ');
+        result.current.hook.handleRenameRoleProfile('');
+      });
+
+      expect(result.current.settings.profiles[0].name).toBe('Old Prompt');
+      expect(result.current.settings.roleProfiles?.[0].name).toBe('Old Role');
+      expect(onShowError).toHaveBeenCalledWith('Profile name cannot be empty.');
+      expect(onShowError).toHaveBeenCalledWith('Role profile name cannot be empty.');
+    });
+  });
+
+  describe('error callback paths', () => {
+    it('reports creation failures through onShowError', () => {
+      const onShowError = vi.fn();
+      const settings = createMockSettings();
+      const { result } = setupHookWithFailingSetter(settings, onShowError);
+
+      act(() => {
+        result.current.handleCreateProfile(true);
+      });
+
+      expect(onShowError).toHaveBeenCalledWith('Failed to create prompt profile. Please try again.');
     });
   });
 });

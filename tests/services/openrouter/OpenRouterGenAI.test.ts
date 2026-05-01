@@ -60,6 +60,46 @@ describe('OpenRouterGenAI', () => {
       );
       expect(chunks[0].text()).toBe('Hello');
     });
+
+    it('should call OpenRouter directly with auth headers and object-form system instructions', async () => {
+      const directClient = new OpenRouterGenAI({ model: 'fallback-model', isProxy: false, apiKey: 'or-key' });
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Direct"}}]}\n\n'));
+            controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+            controller.close();
+          }
+        })
+      });
+      global.fetch = fetchMock;
+
+      const result = await directClient.models.generateContentStream({
+        model: 'request-model',
+        config: { systemInstruction: { parts: [{ text: 'Object system instruction' }] } },
+        contents: [{ role: 'user', parts: [{ text: 'Hi direct' }] }]
+      } as any);
+
+      const chunks = [];
+      for await (const chunk of result.stream) {
+        chunks.push(chunk);
+      }
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://openrouter.ai/api/v1/chat/completions',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer or-key',
+            'HTTP-Referer': window.location.origin,
+            'X-Title': 'Gemini Swarm'
+          }),
+          body: expect.stringContaining('Object system instruction')
+        })
+      );
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe('request-model');
+      expect(chunks[0].text()).toBe('Direct');
+    });
   });
 
   describe('Stream Processing and Metadata', () => {
@@ -94,7 +134,7 @@ describe('OpenRouterGenAI', () => {
         ok: true,
         body: new ReadableStream({
           start(controller) {
-            controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Hi"}}], "usage":{"prompt_tokens":10, "completion_tokens":5, "total_tokens":15}}\n\n'));
+            controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Hi"}}], "usage":{"prompt_tokens":10, "completion_tokens":5, "total_tokens":15, "reasoning_tokens":2}}\n\n'));
             controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
             controller.close();
           }
@@ -112,7 +152,7 @@ describe('OpenRouterGenAI', () => {
         promptTokenCount: 10,
         candidatesTokenCount: 5,
         totalTokenCount: 15,
-        thoughtsTokenCount: undefined,
+        thoughtsTokenCount: 2,
         isEstimated: false
       });
     });
@@ -175,9 +215,50 @@ describe('OpenRouterGenAI', () => {
       expect(lastUsage.candidatesTokenCount).toBe(10);
       expect(lastUsage.totalTokenCount).toBe(30);
     });
+
+    it('should ignore malformed SSE lines and continue streaming later valid chunks', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('data: {not-json}\n\n'));
+            controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Recovered"}}]}\n\n'));
+            controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+            controller.close();
+          }
+        })
+      });
+      global.fetch = fetchMock;
+
+      const result = await client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any);
+      const chunks = [];
+      for await (const chunk of result.stream) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks.some(chunk => chunk.text() === 'Recovered')).toBe(true);
+    });
   });
 
   describe('Error Handling', () => {
+    it('should wrap fetch failures and reject responses without a body', async () => {
+      global.fetch = vi.fn().mockRejectedValueOnce(new Error('offline'));
+
+      await expect(client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any))
+        .rejects.toMatchObject({
+          code: ErrorCode.NETWORK_ERROR,
+          message: 'Network or connection error: offline'
+        });
+
+      global.fetch = vi.fn().mockResolvedValueOnce({ ok: true, body: null });
+
+      await expect(client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any))
+        .rejects.toMatchObject({
+          code: ErrorCode.PROXY_ERROR,
+          message: 'No response body from OpenRouter'
+        });
+    });
+
     it('should throw AppError on non-200 response', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: false,

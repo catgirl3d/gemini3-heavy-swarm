@@ -1,6 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { calculateUpdatedStateForRegeneration } from '../../src/utils/swarm/regenerationHelpers';
+import { calculateUpdatedStateForRegeneration, updateWorkForStep } from '../../src/utils/swarm/regenerationHelpers';
 import { STEPS } from '../../src/types/steps';
 import { Message, Work, AppSettings, TokenUsage, ProviderType } from '../../src/types';
 
@@ -129,6 +129,86 @@ describe('calculateUpdatedStateForRegeneration', () => {
         
         expect(updated[0].parts[0].text).toBe(text);
         expect(updated[0].work?.results[stepId]).toBeDefined();
+    });
+
+    it('creates a new model message for synthesis when no target model exists yet', () => {
+        const messages: Message[] = [
+            { id: 'user-1', role: 'user', parts: [{ text: 'Prompt text' }] }
+        ];
+
+        const updated = calculateUpdatedStateForRegeneration(
+            messages,
+            0,
+            STEPS.SYNTHESIS,
+            0,
+            mockWork,
+            'Fresh synthesis',
+            mockSettings,
+            true,
+            'msg-1'
+        );
+
+        expect(updated).toHaveLength(2);
+        expect(updated[1]).toMatchObject({
+            role: 'model',
+            parts: [{ text: 'Fresh synthesis' }]
+        });
+        expect((updated[1].work?.results?.[STEPS.SYNTHESIS] as { text?: string })?.text).toBe('Fresh synthesis');
+    });
+
+    it('falls back to workContext when the target message has no work of its own', () => {
+        const messages: Message[] = [{
+            id: 'msg-2',
+            role: 'model',
+            parts: [{ text: 'Old content' }]
+        }];
+
+        const updated = calculateUpdatedStateForRegeneration(
+            messages,
+            0,
+            STEPS.INITIAL,
+            1,
+            mockWork,
+            'Recovered text',
+            mockSettings,
+            false,
+            'msg-2',
+            undefined,
+            null
+        );
+
+        expect(updated[0].work?.results?.[STEPS.INITIAL]).toEqual(['', 'Recovered text']);
+        expect(updated[0].work?.results?.[`${STEPS.INITIAL}_usage` as any]).toBeUndefined();
+    });
+
+    it('returns the original collection when no message or work can be resolved', () => {
+        expect(calculateUpdatedStateForRegeneration(
+            [],
+            0,
+            STEPS.INITIAL,
+            0,
+            undefined,
+            'ignored',
+            mockSettings,
+            true,
+            'missing-msg'
+        )).toEqual([]);
+    });
+
+    it('normalizes null usage metadata to undefined in work updates', () => {
+        const updated = updateWorkForStep(
+            mockWork,
+            STEPS.INITIAL,
+            0,
+            'Updated text',
+            mockSettings,
+            'msg-1',
+            'Thought',
+            null
+        );
+
+        expect(updated.results?.[STEPS.INITIAL]).toEqual(['Updated text']);
+        expect(updated.results?.[`${STEPS.INITIAL}_usage` as any]).toBeUndefined();
     });
 });
 

@@ -1,13 +1,24 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useRoleManagement } from '@/components/modals/SettingsModal/hooks/useRoleManagement';
 import { AppSettings, ProviderType } from '@/types';
 import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
 import { useState } from 'react';
 import { createMockSettings } from '@/test/utils/settingsMocks';
+import * as providerPersistence from '@/utils/settings/providerPersistence';
+import * as uuidModule from '@/utils/common/uuid';
 
 describe('useRoleManagement', () => {
-  const setupHook = (initialSettings: AppSettings, roleType: 'drafter' | 'critic' = 'drafter') => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const setupHook = (
+    initialSettings: AppSettings,
+    roleType: 'drafter' | 'critic' = 'drafter',
+    onShowError?: (message: string) => void
+  ) => {
     return renderHook(() => {
       const [settings, setSettings] = useState(initialSettings);
       const activeRoleProfile = settings.roleProfiles?.find(p => p.id === settings.activeRoleProfileId) 
@@ -18,7 +29,8 @@ describe('useRoleManagement', () => {
         settings,
         setSettings,
         activeRoleProfile,
-        roleType
+        roleType,
+        onShowError
       );
       
       return { settings, hook };
@@ -176,6 +188,268 @@ describe('useRoleManagement', () => {
       expect(profile.roles[0].id).toBe('role-2');
       expect(profile.roles[1].id).toBe('role-1');
     });
+
+    it('should leave the order unchanged when moving beyond list boundaries', () => {
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [
+            { id: 'role-1', name: 'R1', instruction: '' },
+            { id: 'role-2', name: 'R2', instruction: '' }
+          ],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleMoveRole(0, 'up');
+        result.current.hook.handleMoveRole(1, 'down');
+      });
+
+      expect(result.current.settings.roleProfiles?.[0].roles.map(role => role.id)).toEqual(['role-1', 'role-2']);
+    });
+  });
+
+  describe('handleRoleChange', () => {
+    it('updates non-model fields inline', () => {
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [{ id: 'role-1', name: 'Old Name', instruction: 'Old instruction' }],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleRoleChange(0, 'name', 'New Name');
+        result.current.hook.handleRoleChange(0, 'instruction', 'New instruction');
+      });
+
+      expect(result.current.settings.roleProfiles?.[0].roles[0]).toMatchObject({
+        name: 'New Name',
+        instruction: 'New instruction'
+      });
+    });
+
+    it('reports an error when model update targets a missing role', async () => {
+      vi.useFakeTimers();
+      const onShowError = vi.fn();
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings, 'drafter', onShowError);
+
+      act(() => {
+        result.current.hook.handleRoleChange(0, 'model', 'new-model');
+      });
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(onShowError).toHaveBeenCalledWith(expect.stringContaining('Invalid role data at index 0'));
+      expect(result.current.settings.roleProfiles?.[0].roles).toEqual([]);
+    });
+
+    it('reports an error when model update targets a role with an invalid id', async () => {
+      vi.useFakeTimers();
+      const onShowError = vi.fn();
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [{ id: '   ', name: 'Broken Role', instruction: '' } as any],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings, 'drafter', onShowError);
+
+      act(() => {
+        result.current.hook.handleRoleChange(0, 'model', 'new-model');
+      });
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(onShowError).toHaveBeenCalledWith(expect.stringContaining('Cannot update role "Broken Role"'));
+      expect(result.current.settings.roleProfiles?.[0].roles[0]).toMatchObject({
+        id: '   ',
+        name: 'Broken Role',
+      });
+      expect(result.current.settings.roleProfiles?.[0].roles[0]).not.toHaveProperty('model');
+    });
+
+    it('reports persistence failures returned by updateRoleModel', async () => {
+      vi.useFakeTimers();
+      vi.spyOn(providerPersistence, 'updateRoleModel').mockReturnValue({
+        settings: createMockSettings(),
+        success: false,
+        error: 'Failed to persist role model'
+      });
+      const onShowError = vi.fn();
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [{ id: 'role-1', name: 'Role', instruction: '' }],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings, 'drafter', onShowError);
+
+      act(() => {
+        result.current.hook.handleRoleChange(0, 'model', 'broken-model');
+      });
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(onShowError).toHaveBeenCalledWith('Failed to persist role model');
+      expect(result.current.settings.roleProfiles?.[0].roles[0].model).toBeUndefined();
+    });
+  });
+
+  describe('handleApplyRole', () => {
+    it('applies critic role presets and syncs provider model mappings', () => {
+      const settings = createMockSettings({
+        activeRoleProfileId: 'test-profile',
+        provider: ProviderType.Gemini,
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [],
+          criticRoles: [{ id: 'critic-1', name: 'Old Critic', instruction: 'Old instruction' }]
+        }]
+      });
+
+      const { result } = setupHook(settings, 'critic');
+
+      act(() => {
+        result.current.hook.handleApplyRole(0, {
+          name: 'Security Auditor',
+          instruction: 'Audit security',
+          model: 'gemini-security'
+        });
+      });
+
+      expect(result.current.settings.roleProfiles?.[0].criticRoles?.[0]).toMatchObject({
+        name: 'Security Auditor',
+        instruction: 'Audit security',
+        model: 'gemini-security'
+      });
+      expect(result.current.settings.providerModels?.roleModels?.['test-profile']?.[ProviderType.Gemini]?.criticRoles?.['critic-1'])
+        .toBe('gemini-security');
+    });
+
+    it('reports an error when applying a preset to a missing role index', async () => {
+      vi.useFakeTimers();
+      const onShowError = vi.fn();
+      const settings = createMockSettings({
+        activeRoleProfileId: 'test-profile',
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [{ id: 'role-1', name: 'Existing', instruction: '' }],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings, 'drafter', onShowError);
+
+      act(() => {
+        result.current.hook.handleApplyRole(3, { name: 'Preset', instruction: 'Preset instruction', model: 'model-x' });
+      });
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(onShowError).toHaveBeenCalledWith('Cannot apply role preset: Invalid role data at index. Please try again or contact support.');
+      expect(result.current.settings.roleProfiles?.[0].roles[0]).toMatchObject({ name: 'Existing', instruction: '' });
+    });
+
+    it('updates name and instruction without syncing providerModels when the preset has no model', () => {
+      const settings = createMockSettings({
+        activeRoleProfileId: 'test-profile',
+        provider: ProviderType.Gemini,
+        providerModels: {
+          stepModels: {},
+          roleModels: {
+            'test-profile': {
+              [ProviderType.Gemini]: {
+                roles: { 'role-1': 'existing-model' }
+              }
+            }
+          }
+        },
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [{ id: 'role-1', name: 'Old Role', instruction: 'Old instruction', model: 'existing-model' }],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings, 'drafter');
+
+      act(() => {
+        result.current.hook.handleApplyRole(0, {
+          name: 'Preset Role',
+          instruction: 'Preset instruction'
+        });
+      });
+
+      expect(result.current.settings.roleProfiles?.[0].roles[0]).toMatchObject({
+        id: 'role-1',
+        name: 'Preset Role',
+        instruction: 'Preset instruction',
+        model: undefined,
+      });
+      expect(result.current.settings.providerModels?.roleModels?.['test-profile']?.[ProviderType.Gemini]?.roles?.['role-1'])
+        .toBe('existing-model');
+    });
+
+    it('reports invalid role data when applying a preset to a role with an invalid id', async () => {
+      vi.useFakeTimers();
+      const onShowError = vi.fn();
+      const settings = createMockSettings({
+        activeRoleProfileId: 'test-profile',
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [{ id: '   ', name: 'Broken Role', instruction: 'Broken instruction' } as any],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings, 'drafter', onShowError);
+
+      act(() => {
+        result.current.hook.handleApplyRole(0, { name: 'Preset', instruction: 'Preset instruction', model: 'model-x' });
+      });
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(onShowError).toHaveBeenCalledWith('Cannot apply role preset: Invalid role data. Please try again or contact support.');
+      expect(result.current.settings.roleProfiles?.[0].roles[0]).toMatchObject({
+        id: '   ',
+        name: 'Broken Role',
+        instruction: 'Broken instruction'
+      });
+    });
   });
 
   describe('handleRestoreDefaultRoles', () => {
@@ -307,6 +581,29 @@ describe('useRoleManagement', () => {
         expect(profile2Ids).not.toContain(id1);
       });
     });
+
+    it('falls back to the first default role profile when the active profile id is unknown', () => {
+      const settings = createMockSettings({
+        activeRoleProfileId: 'custom-profile',
+        roleProfiles: [{
+          id: 'custom-profile',
+          name: 'Custom Profile',
+          roles: [{ id: 'old-role', name: 'Old', instruction: '' }],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleRestoreDefaultRoles();
+      });
+
+      const restoredProfile = result.current.settings.roleProfiles?.[0];
+      const fallbackDefaults = DEFAULT_ROLE_PROFILES[0];
+      expect(restoredProfile?.roles).toHaveLength(fallbackDefaults.roles.length);
+      expect(restoredProfile?.roles[0].name).toBe(fallbackDefaults.roles[0].name);
+    });
   });
 
   describe('Rapid Sequential Updates', () => {
@@ -337,6 +634,30 @@ describe('useRoleManagement', () => {
       // Verify providerModels sync
       const roleId = profile.roles[0].id;
       expect(result.current.settings.providerModels?.roleModels?.['test-profile']?.[ProviderType.Gemini]?.roles?.[roleId]).toBe('new-model');
+    });
+
+    it('shows an error when UUID generation fails while adding a role', () => {
+      vi.spyOn(uuidModule, 'generateUUID').mockImplementation(() => {
+        throw new Error('uuid failed');
+      });
+      const onShowError = vi.fn();
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings, 'drafter', onShowError);
+
+      act(() => {
+        result.current.hook.handleAddRole();
+      });
+
+      expect(onShowError).toHaveBeenCalledWith('Failed to generate unique ID for the new role. Please try again.');
+      expect(result.current.settings.roleProfiles?.[0].roles).toEqual([]);
     });
 
     it('should correctly handle multiple rapid moves', () => {
