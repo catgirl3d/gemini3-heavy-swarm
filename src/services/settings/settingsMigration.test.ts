@@ -210,6 +210,18 @@ describe('settingsMigration', () => {
   });
 
   describe('Migration 2: Custom Role Profile Initialization', () => {
+    it('loads only default role profiles when legacy roleProfiles are missing but no agentRoles exist', () => {
+      const result = migrateSettings({
+        ...createMockSettings({
+          roleProfiles: undefined as any,
+        }),
+        agentRoles: undefined,
+      } as any);
+
+      expect(result.activeRoleProfileId).toBe('default-roles');
+      expect(result.roleProfiles.find((profile) => profile.id === 'custom-roles-migrated')).toBeUndefined();
+    });
+
     it('should initialize criticRoles for custom-roles-migrated profile', () => {
       const settings = createMockSettings({
         roleProfiles: undefined,
@@ -227,6 +239,24 @@ describe('settingsMigration', () => {
   });
 
   describe('Legacy profile and default-value migration', () => {
+    it('falls back to default prompt instructions when migrated legacy fields are empty or undefined', () => {
+      const result = migrateSettings({
+        ...createMockSettings({
+          profiles: undefined as any,
+        }),
+        initialInstruction: '',
+        refinementInstruction: 'Custom refinement',
+        synthesizerInstruction: undefined,
+      } as any);
+
+      const customProfile = result.profiles.find((profile) => profile.id === 'custom-migrated');
+      expect(customProfile).toMatchObject({
+        initialInstruction: DEFAULT_PROFILES[0].initialInstruction,
+        refinementInstruction: 'Custom refinement',
+        synthesizerInstruction: DEFAULT_PROFILES[0].synthesizerInstruction,
+      });
+    });
+
     it('keeps the default prompt profile active when legacy instructions already match defaults', () => {
       const result = migrateSettings({
         ...createMockSettings({
@@ -321,6 +351,16 @@ describe('settingsMigration', () => {
       const result = migrateSettings(settings);
 
       expect(result.roleProfiles.some((profile) => profile.id === 'mad-scientists')).toBe(true);
+    });
+
+    it('leaves the mad-scientists profile untouched when it is already present', () => {
+      const settings = createMockSettings({
+        roleProfiles: structuredClone(DEFAULT_ROLE_PROFILES),
+      });
+
+      const result = migrateSettings(settings);
+
+      expect(result.roleProfiles.filter((profile) => profile.id === 'mad-scientists')).toHaveLength(1);
     });
 
     it('backfills criticRoles from the matching default profile when missing', () => {
@@ -468,6 +508,58 @@ describe('settingsMigration', () => {
         criticRoles: { 'critic-1': 'openrouter-critic-1' },
       });
       expect(result.providerModels?.roleModels?.['profile-openrouter']?.[ProviderType.Gemini]?.roles?.['role-1']).toBe('gemini-role-1');
+    });
+
+    it('leaves already-migrated current-provider models untouched when no backfill is needed', () => {
+      const settings = createMockSettings({
+        provider: ProviderType.OpenRouter,
+        openRouterApiKey: 'openrouter-key',
+        openRouterModel: 'openrouter/global-model',
+        roleProfiles: structuredClone(DEFAULT_ROLE_PROFILES),
+        savedInstructions: [{ id: 'instruction-1', name: 'Saved', type: 'initial_prompt', content: 'Saved content' }],
+        providerModels: {
+          stepModels: {
+            [ProviderType.OpenRouter]: {
+              initial: 'openrouter-initial',
+              refinement: 'openrouter-refinement',
+              synthesis: 'openrouter-synthesis',
+            },
+          },
+          roleModels: {},
+        },
+      });
+
+      const result = migrateSettings(settings);
+
+      expect(result.providerModels).toEqual(settings.providerModels);
+      expect(result.openRouterApiKey).toBe('openrouter-key');
+      expect(result.savedInstructions).toEqual(settings.savedInstructions);
+      expect(result.roleProfiles).toEqual(settings.roleProfiles);
+    });
+
+    it('handles already-migrated profiles that omit roles arrays without creating provider mappings', () => {
+      const result = migrateSettings(createMockSettings({
+        providerModels: {
+          stepModels: {
+            [ProviderType.Gemini]: {
+              initial: '',
+              refinement: '',
+              synthesis: '',
+            },
+          },
+          roleModels: {},
+        },
+        roleProfiles: [{
+          id: 'missing-roles-shape',
+          name: 'Missing Roles Shape',
+          roles: undefined as any,
+          criticRoles: undefined as any,
+        }],
+      }));
+
+      expect(result.roleProfiles[0].roles).toEqual([]);
+      expect(result.roleProfiles[0].criticRoles).toEqual([]);
+      expect(result.providerModels?.roleModels?.['missing-roles-shape']).toBeUndefined();
     });
 
     it('allows duplicate role IDs across different profiles during providerModels migration', () => {

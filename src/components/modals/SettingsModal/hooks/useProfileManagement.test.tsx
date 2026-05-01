@@ -465,5 +465,59 @@ describe('useProfileManagement', () => {
 
       expect(onShowError).toHaveBeenCalledWith('Failed to create prompt profile. Please try again.');
     });
+
+    it('reports role-profile creation failures through onShowError', () => {
+      const onShowError = vi.fn();
+      const settings = createMockSettings();
+      const { result } = setupHookWithFailingSetter(settings, onShowError);
+
+      act(() => {
+        result.current.handleCreateRoleProfile(true);
+      });
+
+      expect(onShowError).toHaveBeenCalledWith('Failed to create role profile due to an internal error. Please try again.');
+    });
+
+    it('reports rename failures through onShowError when the setter throws', () => {
+      const onShowError = vi.fn();
+      const settings = createMockSettings({
+        activeProfileId: 'profile-1',
+        activeRoleProfileId: 'role-1',
+        profiles: [{ id: 'profile-1', name: 'Prompt', initialInstruction: '', refinementInstruction: '', synthesizerInstruction: '' }],
+        roleProfiles: [{ id: 'role-1', name: 'Role', roles: [], criticRoles: [] }],
+      });
+      const { result } = setupHookWithFailingSetter(settings, onShowError);
+
+      act(() => {
+        result.current.handleRenameProfile('New Prompt');
+        result.current.handleRenameRoleProfile('New Role');
+      });
+
+      expect(onShowError).toHaveBeenCalledWith('Failed to rename prompt profile. Please try again.');
+      expect(onShowError).toHaveBeenCalledWith('Failed to rename role profile. Please try again.');
+    });
+  });
+
+  describe('targeted rename behavior', () => {
+    it('renames only the active role profile and leaves the others unchanged', () => {
+      const settings = createMockSettings({
+        activeRoleProfileId: 'role-2',
+        roleProfiles: [
+          { id: 'role-1', name: 'Keep Me', roles: [], criticRoles: [] },
+          { id: 'role-2', name: 'Rename Me', roles: [], criticRoles: [] },
+        ],
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleRenameRoleProfile('Updated Active Role');
+      });
+
+      expect(result.current.settings.roleProfiles?.map(profile => profile.name)).toEqual([
+        'Keep Me',
+        'Updated Active Role',
+      ]);
+    });
   });
 });

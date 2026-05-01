@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { createMockSettings } from '@/test/utils/settingsMocks';
 import * as providerPersistence from '@/utils/settings/providerPersistence';
 import * as uuidModule from '@/utils/common/uuid';
+import * as roleUtils from '@/utils/chat/roleUtils';
 
 describe('useRoleManagement', () => {
   afterEach(() => {
@@ -211,6 +212,29 @@ describe('useRoleManagement', () => {
 
       expect(result.current.settings.roleProfiles?.[0].roles.map(role => role.id)).toEqual(['role-1', 'role-2']);
     });
+
+    it('should move role down', () => {
+      const settings = createMockSettings({
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [
+            { id: 'role-1', name: 'R1', instruction: '' },
+            { id: 'role-2', name: 'R2', instruction: '' },
+            { id: 'role-3', name: 'R3', instruction: '' }
+          ],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleMoveRole(0, 'down');
+      });
+
+      expect(result.current.settings.roleProfiles?.[0].roles.map(role => role.id)).toEqual(['role-2', 'role-1', 'role-3']);
+    });
   });
 
   describe('handleRoleChange', () => {
@@ -319,6 +343,22 @@ describe('useRoleManagement', () => {
 
       expect(onShowError).toHaveBeenCalledWith('Failed to persist role model');
       expect(result.current.settings.roleProfiles?.[0].roles[0].model).toBeUndefined();
+    });
+
+    it('leaves settings unchanged when the active profile cannot be found during model updates', () => {
+      const settings = createMockSettings({
+        activeRoleProfileId: 'missing-profile',
+        roleProfiles: []
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleRoleChange(0, 'model', 'ignored-model');
+      });
+
+      expect(result.current.settings.roleProfiles).toEqual([]);
+      expect(result.current.settings.activeRoleProfileId).toBe('missing-profile');
     });
   });
 
@@ -449,6 +489,62 @@ describe('useRoleManagement', () => {
         name: 'Broken Role',
         instruction: 'Broken instruction'
       });
+    });
+
+    it('reports model persistence failures when applying a preset but keeps the renamed role data', async () => {
+      vi.useFakeTimers();
+      vi.spyOn(providerPersistence, 'updateRoleModel').mockReturnValue({
+        settings: createMockSettings(),
+        success: false,
+        error: 'Failed to apply role preset model'
+      });
+      const onShowError = vi.fn();
+      const settings = createMockSettings({
+        activeRoleProfileId: 'test-profile',
+        roleProfiles: [{
+          id: 'test-profile',
+          name: 'Test',
+          roles: [{ id: 'role-1', name: 'Old Role', instruction: 'Old instruction' }],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings, 'drafter', onShowError);
+
+      act(() => {
+        result.current.hook.handleApplyRole(0, {
+          name: 'Preset Role',
+          instruction: 'Preset instruction',
+          model: 'broken-model'
+        });
+      });
+
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(onShowError).toHaveBeenCalledWith('Failed to apply role preset model');
+      expect(result.current.settings.roleProfiles?.[0].roles[0]).toMatchObject({
+        id: 'role-1',
+        name: 'Preset Role',
+        instruction: 'Preset instruction',
+        model: 'broken-model'
+      });
+    });
+
+    it('leaves settings unchanged when the active profile is missing during preset application', () => {
+      const settings = createMockSettings({
+        activeRoleProfileId: 'missing-profile',
+        roleProfiles: []
+      });
+
+      const { result } = setupHook(settings);
+
+      act(() => {
+        result.current.hook.handleApplyRole(0, { name: 'Ignored', instruction: 'Ignored', model: 'ignored' });
+      });
+
+      expect(result.current.settings.roleProfiles).toEqual([]);
     });
   });
 
@@ -603,6 +699,31 @@ describe('useRoleManagement', () => {
       const fallbackDefaults = DEFAULT_ROLE_PROFILES[0];
       expect(restoredProfile?.roles).toHaveLength(fallbackDefaults.roles.length);
       expect(restoredProfile?.roles[0].name).toBe(fallbackDefaults.roles[0].name);
+    });
+
+    it('reports restore failures when role cloning throws', () => {
+      vi.spyOn(roleUtils, 'cloneRolesWithNewIds').mockImplementation(() => {
+        throw new Error('clone failed');
+      });
+      const onShowError = vi.fn();
+      const settings = createMockSettings({
+        activeRoleProfileId: 'default-roles',
+        roleProfiles: [{
+          id: 'default-roles',
+          name: 'Default Roles',
+          roles: [{ id: 'old-role', name: 'Old', instruction: '' }],
+          criticRoles: []
+        }]
+      });
+
+      const { result } = setupHook(settings, 'drafter', onShowError);
+
+      act(() => {
+        result.current.hook.handleRestoreDefaultRoles();
+      });
+
+      expect(onShowError).toHaveBeenCalledWith('Failed to restore default roles due to an internal error. Please try again.');
+      expect(result.current.settings.roleProfiles?.[0].roles[0].id).toBe('old-role');
     });
   });
 
