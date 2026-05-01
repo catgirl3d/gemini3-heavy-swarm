@@ -1,4 +1,4 @@
-import { useRef, useMemo, useEffect } from 'react';
+import { useRef, useMemo } from 'react';
 import { SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { AiProviderFactory } from '@/services/ai';
 import { useAppSettings } from '@/hooks/state/useAppSettings';
@@ -37,13 +37,10 @@ export const useGeminiSwarm = () => {
     [settings.provider, settings.apiKey, settings.openRouterApiKey, settings.openRouterModel]
   );
 
-  const orchestratorRef = useRef<SwarmOrchestrator>(new SwarmOrchestrator(provider));
+  const orchestrator = useMemo(() => new SwarmOrchestrator(provider), [provider]);
+  const orchestratorRef = useRef<SwarmOrchestrator>(orchestrator);
+  orchestratorRef.current = orchestrator;
   const pauseResolverRef = useRef<(() => void) | null>(null);
-
-  // Update orchestrator when provider changes
-  useEffect(() => {
-    orchestratorRef.current = new SwarmOrchestrator(provider);
-  }, [provider]);
 
   // 3. Specialized Orchestration Hook (SendMessage, Stop, Retry, Continue)
   const orchestration = useSwarmOrchestration({
@@ -93,6 +90,6 @@ export const useGeminiSwarm = () => {
     continueGeneration: orchestration.continueGeneration,
     // Bind pauseResolverRef to regenerateAgentResponse for cleaner API
     regenerateAgentResponse: (messageId: string, stepId: import('@/types/steps').StepId, agentIndex: number) =>
-      regeneration.regenerateAgentResponse(messageId, stepId, agentIndex)
+      regeneration.regenerateAgentResponse(messageId, stepId, agentIndex, pauseResolverRef)
   };
 };
