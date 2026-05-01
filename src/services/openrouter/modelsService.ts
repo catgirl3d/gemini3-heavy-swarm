@@ -48,6 +48,10 @@ export async function fetchOpenRouterModels(): Promise<OpenRouterModel[]> {
         throw new Error(`Failed to fetch models: ${response.statusText}`);
       }
       const data = await response.json();
+      if (!Array.isArray(data?.data)) {
+        throw new Error('Invalid OpenRouter models response');
+      }
+
       modelsCache = data.data as OpenRouterModel[];
       lastFetchTime = Date.now();
       return modelsCache;
