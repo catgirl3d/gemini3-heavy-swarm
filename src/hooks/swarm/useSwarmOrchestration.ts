@@ -129,6 +129,10 @@ export function useSwarmOrchestration({
     existingWork?: Work
   ) => {
     if (!userInput.trim() && !image) return;
+    const orchestrator = orchestratorRef.current;
+    if (!orchestrator) {
+      throw new Error('SwarmOrchestrator not initialized');
+    }
     
     // Use existing ID for resume, or generate new one
     const modelMessageId = resumeMessageId || generateUUID();
@@ -216,14 +220,8 @@ export function useSwarmOrchestration({
     const controllerKey = `main-${modelMessageId}`;
     useAgentStore.getState().registerAbortController(controllerKey, controller);
 
-    const lastUserMessageIndex = historyForSwarm.length - 1;
-
-    if (!orchestratorRef.current) {
-      throw new Error('SwarmOrchestrator not initialized');
-    }
-
     try {
-      const { text: finalMessageText, sources, work } = await orchestratorRef.current.runSwarm(
+      const { text: finalMessageText, sources, work } = await orchestrator.runSwarm(
         settings,
         userInput,
         image,
