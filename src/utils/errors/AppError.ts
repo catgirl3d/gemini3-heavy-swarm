@@ -113,7 +113,7 @@ export class AppError extends Error {
       }
 
       // Safety blocks
-      if (s.includes('safety') || s.includes('finish_reason_safety') || s.includes('blocked')) {
+      if (s.includes('finish_reason_safety') || s.includes('safety')) {
         return ErrorCode.SAFETY_BLOCK;
       }
       

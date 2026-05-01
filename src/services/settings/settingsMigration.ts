@@ -293,22 +293,49 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
     profile.roles?.every(hasValidId) &&
     profile.criticRoles?.every(hasValidId)
   );
+  const currentProvider = migrated.provider || ProviderType.Gemini;
+  const currentProviderStepModels = migrated.providerModels?.stepModels?.[currentProvider];
+  const needsStepModelBackfill = !currentProviderStepModels ||
+    currentProviderStepModels.initial === undefined ||
+    currentProviderStepModels.refinement === undefined ||
+    currentProviderStepModels.synthesis === undefined;
+  const needsRoleModelBackfill = (migrated.roleProfiles as RoleProfile[] | undefined)?.some(profile => {
+    const providerRoleModels = migrated.providerModels?.roleModels?.[profile.id]?.[currentProvider];
+    const isMissingMappedModel = (role: AgentRole, typeKey: RoleType) => {
+      if (!role.model || !hasValidId(role)) return false;
+      return !providerRoleModels?.[typeKey]?.[role.id];
+    };
 
-  if (!migrated.providerModels || !allRolesHaveIds) {
-    const currentProvider = migrated.provider || ProviderType.Gemini;
-    
+    return (
+      profile.roles?.some(role => isMissingMappedModel(role, 'roles')) ||
+      profile.criticRoles?.some(role => isMissingMappedModel(role, 'criticRoles'))
+    );
+  });
+
+  if (!migrated.providerModels || !allRolesHaveIds || needsStepModelBackfill || needsRoleModelBackfill) {
     // Create new structures to avoid mutation
     const stepModels = { ...(migrated.providerModels?.stepModels || {}) };
     const roleModels = { ...(migrated.providerModels?.roleModels || {}) };
 
-    // Ensure current provider has step models in the map
-    if (!stepModels[currentProvider]) {
+    // Ensure current provider has every step model in the map without overwriting newer values.
+    const providerStepModels = { ...(stepModels[currentProvider] || {}) };
+    let stepModelsUpdated = false;
+    if (providerStepModels.initial === undefined) {
+      providerStepModels.initial = migrated.initialModel;
+      stepModelsUpdated = true;
+    }
+    if (providerStepModels.refinement === undefined) {
+      providerStepModels.refinement = migrated.refinementModel;
+      stepModelsUpdated = true;
+    }
+    if (providerStepModels.synthesis === undefined) {
+      providerStepModels.synthesis = migrated.synthesisModel;
+      stepModelsUpdated = true;
+    }
+
+    if (stepModelsUpdated || !stepModels[currentProvider]) {
       hasChanges = true;
-      stepModels[currentProvider] = {
-        initial: migrated.initialModel,
-        refinement: migrated.refinementModel,
-        synthesis: migrated.synthesisModel
-      };
+      stepModels[currentProvider] = providerStepModels;
     }
 
     // Migrate and ensure IDs for all roles
