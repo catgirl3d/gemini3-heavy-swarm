@@ -76,11 +76,13 @@ export function getSynthesisUsage(work: Work): TokenUsage | null {
  *          - An object with optional text, error, and sources properties
  *          - null if not available
  */
-export function getSynthesisResult(work: Work): { text?: string; error?: boolean } | string | null {
+export function getSynthesisResult(
+  work: Work
+): NonNullable<NonNullable<Work['results']>[typeof STEPS.SYNTHESIS]> | string | null {
   const raw = work.results?.[STEPS.SYNTHESIS as keyof NonNullable<Work['results']>];
   if (typeof raw === 'string') return raw;
-  if (raw && typeof raw === 'object' && ('text' in raw || 'error' in raw)) {
-    return raw as { text?: string; error?: boolean };
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && ('text' in raw || 'error' in raw || 'sources' in raw)) {
+    return raw as NonNullable<NonNullable<Work['results']>[typeof STEPS.SYNTHESIS]>;
   }
   return null;
 }
@@ -94,7 +96,7 @@ export function getSynthesisResult(work: Work): { text?: string; error?: boolean
 export function getSynthesisErrorMessage(work: Work): string | null {
   const raw = work.results?.[STEPS.SYNTHESIS as keyof NonNullable<Work['results']>];
   if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'errorMessage' in raw) {
-    return (raw as any).errorMessage as string;
+    return typeof (raw as any).errorMessage === 'string' ? (raw as any).errorMessage : null;
   }
   return null;
 }
@@ -139,7 +141,9 @@ export function updateStepResult(
       : {};
     updatedStepData = { ...base, text };
   } else {
-    const currentArray = (currentResults[stepId] as string[] | undefined) ?? [];
+    const currentArray = Array.isArray(currentResults[stepId])
+      ? [...currentResults[stepId] as string[]]
+      : [];
     const newArray = [...currentArray];
     newArray[agentIndex] = text;
     updatedStepData = newArray;
