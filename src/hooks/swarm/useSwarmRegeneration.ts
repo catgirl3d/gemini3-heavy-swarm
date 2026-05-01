@@ -280,8 +280,11 @@ export function useSwarmRegeneration({
       ) {
         regenLogger.info('Regeneration aborted by user - cleanup', { stepId, agentIndex });
         
-        // Simple cleanup: just clear loading state
+        // Clear live regeneration state so ShowWork falls back to the historical snapshot.
         useAgentStore.getState().setIsLoading(false);
+        useAgentStore.getState().setIsPaused(false);
+        useAgentStore.getState().setLoadingStatus('');
+        useAgentStore.getState().setCurrentMessageId(undefined);
         
         activeRegenerationsRef.current.delete(regenerationKey);
         useAgentStore.getState().unregisterAbortController(controllerKey);
