@@ -1,6 +1,21 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { useRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { PortalDropdown } from '@/components/ui/PortalDropdown/PortalDropdown';
 import { BaseModal } from './BaseModal';
+
+const PortalDropdownHarness = () => {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  return (
+    <>
+      <button ref={triggerRef} type="button">Trigger dropdown</button>
+      <PortalDropdown isOpen triggerRef={triggerRef}>
+        <button type="button">Dropdown action</button>
+      </PortalDropdown>
+    </>
+  );
+};
 
 afterEach(() => {
   cleanup();
@@ -152,8 +167,21 @@ describe('BaseModal', () => {
     expect(onHeaderClose).toHaveBeenCalledTimes(1);
   });
 
-  it('forwards clickOutsideSelectors and outside-click closing callbacks to the global handler', () => {
+  it('treats registered portal content as inside and closes dropdowns on other clicks', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 16,
+      left: 24,
+      bottom: 56,
+      right: 124,
+      width: 100,
+      height: 40,
+      toJSON: () => ({}),
+    } as DOMRect);
+
     const onCloseDropdowns = vi.fn();
+    const onClose = vi.fn();
     const outside = document.createElement('button');
     outside.textContent = 'Outside';
     document.body.appendChild(outside);
@@ -161,16 +189,49 @@ describe('BaseModal', () => {
     render(
       <BaseModal
         isOpen
-        onClose={vi.fn()}
-        clickOutsideSelectors={['.dropdown']}
+        onClose={onClose}
+        hasActiveDropdown
+        onCloseDropdowns={onCloseDropdowns}
+      >
+        <PortalDropdownHarness />
+        <button type="button">Body action</button>
+      </BaseModal>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dropdown action' }));
+
+    expect(onCloseDropdowns).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Body action' }));
+
+    expect(onCloseDropdowns).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(outside);
+
+    expect(onCloseDropdowns).toHaveBeenCalledTimes(2);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes the active dropdown before the modal on overlay clicks', () => {
+    const onClose = vi.fn();
+    const onCloseDropdowns = vi.fn();
+
+    render(
+      <BaseModal
+        isOpen
+        onClose={onClose}
+        hasActiveDropdown
         onCloseDropdowns={onCloseDropdowns}
       >
         <div>Dropdown Modal</div>
       </BaseModal>
     );
 
-    fireEvent.click(outside);
+    fireEvent.click(document.querySelector('.modal-overlay') as Element);
 
     expect(onCloseDropdowns).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

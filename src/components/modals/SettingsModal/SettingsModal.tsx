@@ -37,8 +37,6 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     const [editingInstruction, setEditingInstruction] = useState<InstructionType | null>(null);
     
     // Preset states
-    const [isRolePresetDropdownOpen, setIsRolePresetDropdownOpen] = useState(false);
-    const [isInstructionPresetDropdownOpen, setIsInstructionPresetDropdownOpen] = useState(false);
     const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
     const [showConfirmClose, setShowConfirmClose] = useState(false);
     const [roleIndexToDelete, setRoleIndexToDelete] = useState<number | null>(null);
@@ -183,17 +181,17 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
             onClose={handleClose}
             size="lg"
             className=""
-            clickOutsideSelectors={['.model-selector-container', '.modal-dropdown-portal']}
+            hasActiveDropdown={openDropdownId !== null}
             onCloseDropdowns={() => {
                 setOpenDropdownId(null);
-                setIsRolePresetDropdownOpen(false);
-                setIsInstructionPresetDropdownOpen(false);
             }}
             onEscape={() => {
-                if (openDropdownId) setOpenDropdownId(null);
-                else if (isRolePresetDropdownOpen) setIsRolePresetDropdownOpen(false);
-                else if (isInstructionPresetDropdownOpen) setIsInstructionPresetDropdownOpen(false);
-                else handleClose();
+                if (openDropdownId) {
+                    setOpenDropdownId(null);
+                    return;
+                }
+
+                handleClose();
             }}
         >
             <BaseModal.Header title="Swarm Configuration" onClose={handleClose} />
@@ -267,7 +265,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                 {editingRoleIndex !== null && (
                     <RoleAndPromptConfigModal
                         isOpen={true}
-                        onClose={() => { setEditingRoleIndex(null); setIsRolePresetDropdownOpen(false); }}
+                        onClose={() => { setEditingRoleIndex(null); }}
                         provider={localSettings.provider}
                         title={`Configure Role #${editingRoleIndex + 1}`}
                         fields={[
@@ -287,8 +285,6 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         presets={presetMgr.getRolePresets(activeRoleProfile.id, activeRoleType)}
                         onApplyPreset={(p) => roleMgr.handleApplyRole(editingRoleIndex, { name: p.name, instruction: p.instruction, model: p.model })}
                         onDeletePreset={presetMgr.handleDeleteRolePreset}
-                        isDropdownOpen={isRolePresetDropdownOpen}
-                        setIsDropdownOpen={setIsRolePresetDropdownOpen}
                         onSavePreset={(name) => presetMgr.handleSaveRolePreset(editingRoleIndex, activeRoleType, activeRoleProfile, name)}
                         modelValue={((activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [])[editingRoleIndex]?.model || ''}
                         isModelUnlocked={isModelUnlocked}
@@ -300,7 +296,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                 {editingInstruction !== null && (
                     <RoleAndPromptConfigModal
                         isOpen={true}
-                        onClose={() => { setEditingInstruction(null); setIsInstructionPresetDropdownOpen(false); }}
+                        onClose={() => { setEditingInstruction(null); }}
                         provider={localSettings.provider}
                         title={`Configure ${editingInstruction.replace('_prompt', '').charAt(0).toUpperCase() + editingInstruction.replace('_prompt', '').slice(1)} Instruction`}
                         fields={[{
@@ -312,8 +308,6 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         presets={presetMgr.getInstructionPresets(editingInstruction)}
                         onApplyPreset={(p) => presetMgr.handleApplyInstructionPreset(editingInstruction, p.instruction, p.model)}
                         onDeletePreset={presetMgr.handleDeleteInstructionPreset}
-                        isDropdownOpen={isInstructionPresetDropdownOpen}
-                        setIsDropdownOpen={setIsInstructionPresetDropdownOpen}
                         onSavePreset={(name) => presetMgr.handleSaveInstructionPreset(editingInstruction, name)}
                         modelValue={(localSettings[INSTRUCTION_METADATA[editingInstruction].modelKey] as string) || ''}
                         isModelUnlocked={isModelUnlocked}

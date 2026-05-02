@@ -3,12 +3,9 @@ import { BaseModal } from '@/components/modals/BaseModal';
 import { RoleAndPromptConfigModalProps } from '@/components/modals/RoleAndPromptConfigModal/types';
 import { PortalDropdown, ModelSelector } from '@/components/ui';
 import { ProviderType } from '@/types';
-import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
 import './RoleAndPromptConfigModal.css';
 
-// Stable reference to prevent click listener churn
-// Include portal wrapper so clicks inside the portaled dropdown aren't treated as "outside"
-const CLICK_OUTSIDE_SELECTORS = ['.preset-menu-container', '.model-selector-container', '.modal-dropdown-portal'];
+type ActiveDropdown = 'model' | 'preset' | null;
 
 export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
     isOpen,
@@ -18,8 +15,6 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
     presets,
     onApplyPreset,
     onDeletePreset,
-    isDropdownOpen,
-    setIsDropdownOpen,
     onSavePreset,
     extraActions,
     modelValue,
@@ -29,7 +24,7 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
     isDemoMode = false
 }) => {
     const [isSaving, setIsSaving] = useState(false);
-    const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
+    const [activeDropdown, setActiveDropdown] = useState<ActiveDropdown>(null);
     const [presetName, setPresetName] = useState('');
     const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -38,13 +33,14 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
         if (!isOpen) {
             setIsSaving(false);
             setPresetName('');
-            setIsModelSelectorOpen(false);
+            setActiveDropdown(null);
         }
     }, [isOpen]);
 
     const handleClose = () => {
         setIsSaving(false);
         setPresetName('');
+        setActiveDropdown(null);
         onClose();
     };
 
@@ -62,15 +58,17 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
             onClose={handleClose}
             size="md"
             className="role-edit-modal"
-            clickOutsideSelectors={CLICK_OUTSIDE_SELECTORS}
+            hasActiveDropdown={activeDropdown !== null}
             onCloseDropdowns={() => {
-                setIsDropdownOpen(false);
-                setIsModelSelectorOpen(false);
+                setActiveDropdown(null);
             }}
             onEscape={() => {
-                if (isDropdownOpen) setIsDropdownOpen(false);
-                else if (isModelSelectorOpen) setIsModelSelectorOpen(false);
-                else handleClose();
+                if (activeDropdown) {
+                    setActiveDropdown(null);
+                    return;
+                }
+
+                handleClose();
             }}
         >
             <BaseModal.Header title={title} onClose={handleClose} />
@@ -80,8 +78,8 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
                     <div className="preset-menu-container">
                         <button
                             ref={triggerRef}
-                            className={`preset-menu-trigger ${isDropdownOpen ? 'active' : ''}`}
-                            onClick={() => setIsDropdownOpen(prev => !prev)}
+                            className={`preset-menu-trigger ${activeDropdown === 'preset' ? 'active' : ''}`}
+                            onClick={() => setActiveDropdown(current => current === 'preset' ? null : 'preset')}
                             disabled={presets.length === 0}
                             title={presets.length === 0 ? "No presets available" : "Load from a saved preset"}
                         >
@@ -90,13 +88,13 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
                                 <polyline points="22 4 12 14.01 9 11.01"></polyline>
                             </svg>
                             <span>{presets.length === 0 ? 'No Presets Available' : 'Select a Preset...'}</span>
-                            <svg className={`chevron ${isDropdownOpen ? 'open' : ''}`} xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <svg className={`chevron ${activeDropdown === 'preset' ? 'open' : ''}`} xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M6 9l6 6 6-6" />
                             </svg>
                         </button>
 
                         <PortalDropdown
-                            isOpen={isDropdownOpen}
+                            isOpen={activeDropdown === 'preset'}
                             triggerRef={triggerRef}
                             width={300}
                         >
@@ -108,7 +106,7 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
                                             className="preset-menu-item"
                                             onClick={() => {
                                                 onApplyPreset(p);
-                                                setIsDropdownOpen(false);
+                                                setActiveDropdown(current => current === 'preset' ? null : current);
                                             }}
                                         >
                                             <div className="preset-name">
@@ -122,7 +120,7 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     onDeletePreset(p.id);
-                                                    setIsDropdownOpen(false);
+                                                    setActiveDropdown(current => current === 'preset' ? null : current);
                                                 }}
                                                 title="Delete Preset"
                                             >
@@ -149,8 +147,8 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
                                 provider={provider}
                                 value={(!isModelUnlocked || (provider === ProviderType.Gemini && isDemoMode)) ? (provider === ProviderType.OpenRouter ? '' : 'gemini-2.5-flash-lite') : (modelValue || '')}
                                 onChange={onModelChange}
-                                isOpen={isModelSelectorOpen}
-                                onOpenChange={setIsModelSelectorOpen}
+                                isOpen={activeDropdown === 'model'}
+                                onOpenChange={(open) => setActiveDropdown(current => open ? 'model' : current === 'model' ? null : current)}
                                 placeholder="Use Global Model"
                                 disabled={!isModelUnlocked || (provider === ProviderType.Gemini && isDemoMode)}
                                 showEmptyOption={true}

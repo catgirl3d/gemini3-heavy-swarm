@@ -72,14 +72,11 @@ const baseProps = {
   ],
   onApplyPreset: vi.fn(),
   onDeletePreset: vi.fn(),
-  isDropdownOpen: false,
-  setIsDropdownOpen: vi.fn(),
   onSavePreset: vi.fn(),
 };
 
-const StatefulModalHarness = ({ initialDropdownOpen = false, provider = ProviderType.Gemini }: { initialDropdownOpen?: boolean; provider?: ProviderType }) => {
+const StatefulModalHarness = ({ provider = ProviderType.Gemini }: { provider?: ProviderType }) => {
   const [isOpen, setIsOpen] = useState(true);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(initialDropdownOpen);
 
   return (
     <>
@@ -87,12 +84,9 @@ const StatefulModalHarness = ({ initialDropdownOpen = false, provider = Provider
         {...baseProps}
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
-        isDropdownOpen={isDropdownOpen}
-        setIsDropdownOpen={setIsDropdownOpen}
         onModelChange={vi.fn()}
         provider={provider}
       />
-      <div data-testid="dropdown-state">{String(isDropdownOpen)}</div>
     </>
   );
 };
@@ -112,13 +106,10 @@ describe('RoleAndPromptConfigModal', () => {
   it('applies and deletes presets while showing OpenRouter demo messaging', () => {
     const onApplyPreset = vi.fn();
     const onDeletePreset = vi.fn();
-    const setIsDropdownOpen = vi.fn();
 
     render(
       <RoleAndPromptConfigModal
         {...baseProps}
-        isDropdownOpen
-        setIsDropdownOpen={setIsDropdownOpen}
         onApplyPreset={onApplyPreset}
         onDeletePreset={onDeletePreset}
         onModelChange={vi.fn()}
@@ -128,12 +119,15 @@ describe('RoleAndPromptConfigModal', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /Select a Preset/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Default Preset' }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Select a Preset/i }));
     fireEvent.click(screen.getByTitle('Delete Preset'));
 
     expect(onApplyPreset).toHaveBeenCalledWith(expect.objectContaining({ id: 'preset-default' }));
     expect(onDeletePreset).toHaveBeenCalledWith('preset-custom');
-    expect(setIsDropdownOpen).toHaveBeenCalledWith(false);
+    expect(screen.queryByTestId('portal-dropdown')).not.toBeInTheDocument();
     expect(screen.getByText(/Demo Mode: Only free models are available/i)).toBeInTheDocument();
     expect(screen.getByTestId('model-selector')).toHaveAttribute('data-disabled', 'false');
   });
@@ -194,6 +188,9 @@ describe('RoleAndPromptConfigModal', () => {
 
     expect(screen.queryByPlaceholderText('Preset Name')).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('button', { name: /Select a Preset/i }));
+    expect(screen.getByTestId('portal-dropdown')).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: 'Toggle model selector' }));
     expect(screen.getByRole('button', { name: 'Choose model' })).toBeInTheDocument();
 
@@ -221,14 +218,18 @@ describe('RoleAndPromptConfigModal', () => {
 
     expect(screen.queryByPlaceholderText('Preset Name')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Choose model' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('portal-dropdown')).not.toBeInTheDocument();
   });
 
   it('closes the preset dropdown first, then the model selector, then the modal on Escape', () => {
-    render(<StatefulModalHarness initialDropdownOpen />);
+    render(<StatefulModalHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Select a Preset/i }));
+    expect(screen.getByTestId('portal-dropdown')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Base escape' }));
 
-    expect(screen.getByTestId('dropdown-state')).toHaveTextContent('false');
+    expect(screen.queryByTestId('portal-dropdown')).not.toBeInTheDocument();
     expect(screen.getByTestId('base-modal')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle model selector' }));

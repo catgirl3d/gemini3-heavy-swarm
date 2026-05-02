@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { MutableRefObject } from 'react';
 
 // Module-level state to track active modals and preserve original body styles
 let activeModalCount = 0;
@@ -21,7 +22,8 @@ const handleGlobalEsc = (e: KeyboardEvent) => {
 interface UseModalGlobalHandlersProps {
     isOpen: boolean;
     onEscape: () => void;
-    clickOutsideSelectors: string[];
+    hasActiveDropdown: boolean;
+    clickInsideElementsRef: MutableRefObject<Set<HTMLElement>>;
     onCloseDropdowns: () => void;
 }
 
@@ -34,7 +36,8 @@ interface UseModalGlobalHandlersProps {
 export const useModalGlobalHandlers = ({
     isOpen,
     onEscape,
-    clickOutsideSelectors,
+    hasActiveDropdown,
+    clickInsideElementsRef,
     onCloseDropdowns
 }: UseModalGlobalHandlersProps) => {
     // Use a ref for onEscape to ensure the stack always calls the latest handler
@@ -84,20 +87,18 @@ export const useModalGlobalHandlers = ({
         };
     }, [isOpen]);
 
-    // Manage global Click-outside listener (kept per-modal for targeted dropdown closing)
+    // Manage global click-outside listener for the active dropdown layer.
     useEffect(() => {
-        if (!isOpen) return;
+        if (!isOpen || !hasActiveDropdown) return;
 
         const handleClickOutside = (e: MouseEvent) => {
-            if (!(e.target instanceof Element)) return;
+            if (!(e.target instanceof Node)) return;
+
             const target = e.target;
 
-            // Check if click was outside all specified selectors
-            if (clickOutsideSelectors.length === 0) return;
+            const clickedInsideDropdown = Array.from(clickInsideElementsRef.current).some(element => element.contains(target));
 
-            const isOutsideAll = clickOutsideSelectors.every(selector => !target.closest(selector));
-            
-            if (isOutsideAll) {
+            if (!clickedInsideDropdown) {
                 onCloseDropdowns();
             }
         };
@@ -107,5 +108,5 @@ export const useModalGlobalHandlers = ({
         return () => {
             window.removeEventListener('click', handleClickOutside, true);
         };
-    }, [isOpen, clickOutsideSelectors, onCloseDropdowns]);
+    }, [isOpen, hasActiveDropdown, clickInsideElementsRef, onCloseDropdowns]);
 };

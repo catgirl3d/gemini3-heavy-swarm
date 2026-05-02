@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { useModalGlobalHandlers } from '@/hooks/ui/useModalGlobalHandlers';
+import type { MutableRefObject } from 'react';
 
 type ModalHandlerProps = Parameters<typeof useModalGlobalHandlers>[0];
 
 const createProps = (overrides: Partial<ModalHandlerProps> = {}): ModalHandlerProps => ({
   isOpen: true,
   onEscape: vi.fn(),
-  clickOutsideSelectors: ['.dropdown'],
+  hasActiveDropdown: true,
+  clickInsideElementsRef: { current: new Set<HTMLElement>() } as MutableRefObject<Set<HTMLElement>>,
   onCloseDropdowns: vi.fn(),
   ...overrides,
 });
@@ -159,36 +161,38 @@ describe('useModalGlobalHandlers', () => {
     expect(initialEscape).not.toHaveBeenCalled();
   });
 
-  it('closes dropdowns when clicking outside all configured selectors', () => {
+  it('closes dropdowns when clicking outside the registered dropdown boundaries', () => {
     const onCloseDropdowns = vi.fn();
     const outside = document.createElement('button');
     document.body.appendChild(outside);
-    renderModalHandlers({ clickOutsideSelectors: ['.dropdown'], onCloseDropdowns });
+    renderModalHandlers({ onCloseDropdowns });
 
     click(outside);
 
     expect(onCloseDropdowns).toHaveBeenCalledTimes(1);
   });
 
-  it('does not close dropdowns when clicking inside any configured selector', () => {
+  it('does not close dropdowns when clicking inside a registered dropdown boundary', () => {
     const onCloseDropdowns = vi.fn();
     const dropdown = document.createElement('div');
     const child = document.createElement('button');
-    dropdown.className = 'dropdown';
     dropdown.appendChild(child);
     document.body.appendChild(dropdown);
-    renderModalHandlers({ clickOutsideSelectors: ['.dropdown', '.picker'], onCloseDropdowns });
+    renderModalHandlers({
+      clickInsideElementsRef: { current: new Set([dropdown]) } as MutableRefObject<Set<HTMLElement>>,
+      onCloseDropdowns,
+    });
 
     click(child);
 
     expect(onCloseDropdowns).not.toHaveBeenCalled();
   });
 
-  it('does not close dropdowns when selector list is empty or event target is not an Element', () => {
+  it('does not close dropdowns when there is no active dropdown or the target is not a Node', () => {
     const onCloseDropdowns = vi.fn();
     const outside = document.createElement('button');
     document.body.appendChild(outside);
-    renderModalHandlers({ clickOutsideSelectors: [], onCloseDropdowns });
+    renderModalHandlers({ hasActiveDropdown: false, onCloseDropdowns });
 
     click(outside);
     click(window);
