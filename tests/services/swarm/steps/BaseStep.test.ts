@@ -1,4 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const loggerSpies = vi.hoisted(() => ({
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock('@shared/utils/logger', () => ({
+  Logger: class {
+    debug = loggerSpies.debug;
+    info = loggerSpies.info;
+    warn = loggerSpies.warn;
+    error = loggerSpies.error;
+  },
+}));
+
 import { BaseStep } from '@/services/swarm/steps/BaseStep';
 import { StepId, STEPS, Work, AgentState, TokenUsage, Source } from '@/types';
 import { AppSettings } from '@/types';
@@ -941,6 +958,43 @@ describe('BaseStep', () => {
       });
       expect(callbacks.onChunk).toHaveBeenNthCalledWith(1, '', 'Reason ', usage1);
       expect(callbacks.onChunk).toHaveBeenNthCalledWith(2, 'Answer', 'Reason continues', usage2);
+    });
+
+    it('should log enriched completion summary with last chunk details', async () => {
+      const usage = { totalTokens: 9, promptTokens: 4, candidatesTokens: 5 };
+      const mockProvider = {
+        models: {
+          generateContentStream: vi.fn().mockResolvedValue({
+            stream: (async function* () {
+              yield { text: '', thought: 'Reason ', usage: null };
+              yield { text: 'Answer', thought: 'continues', usage };
+            })()
+          })
+        }
+      };
+
+      await step.testRunModelStream({
+        ai: mockProvider,
+        settings: { debugMode: true } as AppSettings,
+        model: 'test-model',
+        contents: [],
+        signal: new AbortController().signal,
+        work: { results: {} }
+      } as any, { onChunk: vi.fn() });
+
+      expect(loggerSpies.debug).toHaveBeenCalledWith('Stream complete', expect.objectContaining({
+        chunkCount: 2,
+        textLength: 6,
+        thoughtLength: 16,
+        hadAnyText: true,
+        hadAnyThought: true,
+        hadAnyUsage: true,
+        lastChunkTextLen: 6,
+        lastChunkThoughtLen: 9,
+        lastChunkHadText: true,
+        lastChunkHadThought: true,
+        lastChunkHadUsage: true,
+      }));
     });
 
     it('should migrate scalar simulated error counts to per-agent counts and persist the failed attempt', async () => {

@@ -8,6 +8,10 @@ import { Logger } from '@shared/utils/logger';
  * Immutably updates the text of the first part of a message.
  */
 export const updateMessageParts = (message: Message, text: string): Message => {
+  if (message.parts?.[0]?.text === text) {
+    return message;
+  }
+
   const updatedParts = message.parts && message.parts.length > 0
     ? [{ ...message.parts[0], text }, ...message.parts.slice(1)]
     : [{ text }];
@@ -55,7 +59,6 @@ export const ensureModelMessageForSynthesis = (
   const targetIndex = findTargetMessageIndex(messages, messageIndex, STEPS.SYNTHESIS);
   
   if (targetIndex !== null) {
-    logger.debug('Found existing model message at index', targetIndex);
     return { message: messages[targetIndex], index: targetIndex, wasCreated: false };
   }
   

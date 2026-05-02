@@ -54,6 +54,14 @@ describe('messageHelpers', () => {
       expect(message.parts).toEqual([{ text: 'first' }, { text: 'second' }]);
     });
 
+    it('returns the original message when the visible text is unchanged', () => {
+      const message = createMessage('model', 'm1', 'same text');
+
+      const updated = updateMessageParts(message, 'same text');
+
+      expect(updated).toBe(message);
+    });
+
     it('creates a first part when parts is empty', () => {
       const updated = updateMessageParts(createMessage('model', 'm1', 'ignored', { parts: [] }), 'created');
 

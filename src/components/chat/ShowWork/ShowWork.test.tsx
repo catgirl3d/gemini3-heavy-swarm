@@ -324,23 +324,23 @@ describe('ShowWork', () => {
     });
 
     render(
-      <ShowWork
-        {...createProps({
-          work: createWork({
-            agentNames: undefined,
-            criticNames: undefined,
-            results: {
-              [STEPS.INITIAL]: ['Initial draft', null],
-              [STEPS.REFINEMENT]: ['Historical refinement'],
-              [STEPS.SYNTHESIS]: 'Legacy synthesis',
-              initial_step_thoughts: ['Initial thought'],
-              refinement_step_thoughts: ['Refinement thought'],
-            },
-            debugInfo: {
-              [STEPS.INITIAL]: [createDebugInfo('initial')],
-              [STEPS.REFINEMENT]: [createDebugInfo('refinement')],
-            },
-          }),
+        <ShowWork
+          {...createProps({
+            work: createWork({
+              agentNames: undefined,
+              criticNames: undefined,
+              results: {
+                [STEPS.INITIAL]: ['Initial draft', null],
+                [STEPS.REFINEMENT]: ['Historical refinement'],
+                [STEPS.SYNTHESIS]: 'Legacy synthesis',
+                initial_step_thoughts: ['Initial thought'],
+                refinement_step_thoughts: ['Refinement thought'],
+              } as unknown as Work['results'],
+              debugInfo: {
+                [STEPS.INITIAL]: [createDebugInfo('initial')],
+                [STEPS.REFINEMENT]: [createDebugInfo('refinement')],
+              },
+            }),
           onRegenerate: undefined,
         })}
       />

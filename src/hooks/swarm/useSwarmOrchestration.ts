@@ -228,16 +228,28 @@ export function useSwarmOrchestration({
         imageFile,
         historyForSwarm,
         modelMessageId,
-        (text, isFirstChunk, _thought, _usage) => {
-          // _thought and _usage are ignored here as they are handled by individual steps
+        (text, isFirstChunk, thought, usage) => {
+          // thought and usage are handled by individual steps/currentWork; only visible text belongs in message.parts.
           // Message update callback - just update the message text
           setMessages(prev => {
+            if (text === '' && (thought || usage)) {
+              return prev;
+            }
+
             const newMessages = [...prev];
             const targetIndex = newMessages.findIndex(m => m.id === modelMessageId);
             
             if (targetIndex !== -1) {
+              if (newMessages[targetIndex].parts?.[0]?.text === text) {
+                return prev;
+              }
+
               newMessages[targetIndex] = updateMessageParts(newMessages[targetIndex], text);
             } else {
+              if (text === '') {
+                return prev;
+              }
+
               newMessages.push({ id: modelMessageId, role: 'model', parts: [{ text }] });
             }
             return newMessages;

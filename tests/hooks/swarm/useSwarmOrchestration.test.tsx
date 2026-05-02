@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SetStateAction } from 'react';
 import type { AbortControllerHook } from '@/hooks/network/useAbortController';
-import type { AgentState, Message, Source, Work } from '@/types';
+import type { AgentState, Message, Source, TokenUsage, Work } from '@/types';
 import { createMockSettings } from '@/test/utils/settingsMocks';
 import { STEPS } from '@/types/steps';
 import { useAgentStore } from '@/stores/agentStore';
@@ -165,7 +165,7 @@ const toRunSwarmCall = (args: any[]) => {
     imageFile,
     history,
     messageId,
-    onMessageUpdate: onMessageUpdate as (text: string, isFirstChunk: boolean) => void,
+    onMessageUpdate: onMessageUpdate as (text: string, isFirstChunk: boolean, thought?: string, usage?: TokenUsage | null) => void,
     signal,
     pauseResolverRef,
     onPause,
@@ -478,6 +478,33 @@ describe('useSwarmOrchestration', () => {
         agentStates: [expect.objectContaining({ id: 'old-agent', messageId: 'resume-model' })],
       }),
     });
+  });
+
+  it('does not clear resumed visible text when synthesis emits a thought-only chunk', async () => {
+    const existingWork = createWork({
+      stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'pending' }],
+      results: {
+        [STEPS.INITIAL]: ['draft'],
+        [STEPS.REFINEMENT]: ['refined'],
+        [STEPS.SYNTHESIS]: { text: 'partial answer' },
+      },
+    });
+    const initialMessages: Message[] = [
+      { id: 'user-1', role: 'user', parts: [{ text: 'continue' }] },
+      { id: 'model-1', role: 'model', parts: [{ text: 'partial answer' }], work: existingWork },
+    ];
+    const runSwarm = vi.fn(async (...args: any[]) => {
+      const { onMessageUpdate } = toRunSwarmCall(args);
+      onMessageUpdate('', false, 'thinking');
+      return { text: 'final answer', sources: [], work: createWork() };
+    });
+    const { result, messagesState } = renderOrchestration({ initialMessages, runSwarm });
+
+    await act(async () => {
+      await result.current.continueGeneration();
+    });
+
+    expect(messagesState.messages[1].parts[0].text).toBe('partial answer');
   });
 
   it('reuses lastInput.imageFile during resume only when the image matches the triggering user message', async () => {

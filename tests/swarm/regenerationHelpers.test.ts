@@ -131,6 +131,31 @@ describe('calculateUpdatedStateForRegeneration', () => {
         expect(updated[0].work?.results[stepId]).toBeDefined();
     });
 
+    it('does not clear visible synthesis text on thought-only chunks', () => {
+        const messages = [{
+            ...mockMessage,
+            parts: [{ text: 'Previous synthesis' }],
+        }];
+        const thought = 'Reasoning before visible text';
+
+        const updated = calculateUpdatedStateForRegeneration(
+            messages,
+            0,
+            STEPS.SYNTHESIS,
+            0,
+            mockWork,
+            '',
+            mockSettings,
+            false,
+            'msg-1',
+            thought
+        );
+
+        expect(updated[0].parts[0].text).toBe('Previous synthesis');
+        expect((updated[0].work?.results?.[STEPS.SYNTHESIS] as { text?: string })?.text).toBe('');
+        expect(updated[0].work?.results?.[`${STEPS.SYNTHESIS}_thought` as any]).toBe(thought);
+    });
+
     it('creates a new model message for synthesis when no target model exists yet', () => {
         const messages: Message[] = [
             { id: 'user-1', role: 'user', parts: [{ text: 'Prompt text' }] }
