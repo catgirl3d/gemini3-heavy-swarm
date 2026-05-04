@@ -4,6 +4,7 @@ import { AiProviderFactory } from '@/services/ai';
 import { useAppSettings } from '@/hooks/state/useAppSettings';
 import { useMessages } from '@/hooks/state/useMessages';
 import { useAbortController } from '@/hooks/network/useAbortController';
+import { type StepId } from '@/types/steps';
 
 import { useSwarmOrchestration } from '@/hooks/swarm/useSwarmOrchestration';
 import { useSwarmRegeneration } from '@/hooks/swarm/useSwarmRegeneration';
@@ -87,7 +88,7 @@ export const useGeminiSwarm = () => {
     retry: orchestration.retry,
     continueGeneration: orchestration.continueGeneration,
     // Bind pauseResolverRef to regenerateAgentResponse for cleaner API
-    regenerateAgentResponse: (messageId: string, stepId: import('@/types/steps').StepId, agentIndex: number) =>
+    regenerateAgentResponse: (messageId: string, stepId: StepId, agentIndex: number) =>
       regeneration.regenerateAgentResponse(messageId, stepId, agentIndex, pauseResolverRef)
   };
 };

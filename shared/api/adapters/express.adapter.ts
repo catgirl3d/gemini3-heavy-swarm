@@ -1,5 +1,6 @@
 // Note: Using relative paths instead of aliases (@shared)
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
+import type { ReadableStream as WebReadableStream } from 'stream/web';
 import { RATE_LIMIT_PER_MINUTE } from '../../security/security';
 import { type RateLimitResult } from '../types';
 import { Logger } from '../../utils/logger';
@@ -74,7 +75,7 @@ export async function streamToExpress(webResponse: Response, expressRes: any): P
   const { Readable } = await import('stream');
   const { pipeline } = await import('stream/promises');
 
-  const nodeStream = Readable.fromWeb(webResponse.body as unknown as import('stream/web').ReadableStream);
+  const nodeStream = Readable.fromWeb(webResponse.body as unknown as WebReadableStream);
 
   try {
     // pipeline handles automatic cleanup and error propagation for both sides

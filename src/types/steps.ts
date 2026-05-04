@@ -2,6 +2,7 @@ import { type AppSettings, type Message, type AgentState, type Work, type StepId
 export type { StepId };
 export { STEPS };
 import { type Content, type Tool, type GroundingChunk } from '@google/genai';
+import type { MutableRefObject } from 'react';
 import { type AiProvider } from './ai-provider';
 import type { AppError } from '@/utils/errors/AppError';
 
@@ -72,7 +73,7 @@ export interface StepContext {
   messageId: string;
 
   // Optional pause support (for regeneration flows)
-  pauseResolverRef?: import('react').MutableRefObject<((value: void | PromiseLike<void>) => void) | null>;
+  pauseResolverRef?: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>;
   onPause?: () => void;
 }
 

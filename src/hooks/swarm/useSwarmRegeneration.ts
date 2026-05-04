@@ -1,4 +1,4 @@
-import { useRef, useEffect, type RefObject, type Dispatch, type SetStateAction } from 'react';
+import { useRef, useEffect, type RefObject, type Dispatch, type SetStateAction, type MutableRefObject } from 'react';
 import { type AppSettings, type Message, type Work } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
 import { Logger } from '@shared/utils/logger';
@@ -51,7 +51,7 @@ export function useSwarmRegeneration({
     messageId: string,
     stepId: StepId,
     agentIndex: number,
-    pauseResolverRef?: import('react').MutableRefObject<(() => void) | null>
+    pauseResolverRef?: MutableRefObject<(() => void) | null>
   ) => {
     regenLogger.info('regenerateAgentResponse START', { messageId, stepId, agentIndex });
     
