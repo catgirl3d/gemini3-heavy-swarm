@@ -29,13 +29,16 @@ export function useAutoCollapse({
   isEarlyStageWorking,
   synthesisText
 }: AutoCollapseParams) {
+  const synthesizerStatus = synthesizerState?.status;
+  const synthesizerMessageId = synthesizerState?.messageId;
+  const synthesisTextLength = synthesisText?.length ?? 0;
   
   // Decide if we should collapse based on current orchestration state
   // We use useMemo to avoid re-calculating this on every render unless relevant state changes
   const shouldAutoCollapse = useMemo(() => {
-    const isWorking = synthesizerState?.status === 'working';
-    const isOurMessage = synthesizerState?.messageId === messageId;
-    const hasContent = !!(synthesisText && synthesisText.length > 0);
+    const isWorking = synthesizerStatus === 'working';
+    const isOurMessage = synthesizerMessageId === messageId;
+    const hasContent = synthesisTextLength > 0;
     const isActiveSession = isLive || isCurrentMessage || isOurMessage;
     
     // Decisive condition for auto-collapse:
@@ -47,15 +50,15 @@ export function useAutoCollapse({
     const conditionMet = isActiveSession && isWorking && !isEarlyStageWorking && hasContent;
 
     return conditionMet;
-  }, [isLive, isCurrentMessage, messageId, synthesizerState, isEarlyStageWorking, synthesisText]);
+  }, [isLive, isCurrentMessage, messageId, synthesizerStatus, synthesizerMessageId, isEarlyStageWorking, synthesisTextLength]);
 
   // Execute the collapse side-effect
   useEffect(() => {
     logger.debug('Collapse check', {
       shouldAutoCollapse,
       detailsOpen: detailsRef.current?.open,
-      synthesizerStatus: synthesizerState?.status,
-      synthesisTextLen: synthesisText?.length
+      synthesizerStatus,
+      synthesisTextLen: synthesisTextLength
     });
 
     // Only perform the imperative action if condition is met AND the element is actually open
@@ -63,5 +66,5 @@ export function useAutoCollapse({
       logger.info('COLLAPSING CARDS');
       detailsRef.current.open = false;
     }
-  }, [shouldAutoCollapse, detailsRef]);
+  }, [shouldAutoCollapse, detailsRef, synthesizerStatus, synthesisTextLength]);
 }

@@ -1,4 +1,4 @@
-import React, { type FC, useEffect } from 'react';
+import React, { type FC, useEffect, useMemo, useRef } from 'react';
 import { type AgentState, type Work, type ProviderType } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
 import { AgentAvatar } from '@/components/chat';
@@ -23,6 +23,26 @@ export const LoadingIndicator: FC<{
     provider?: ProviderType;
     model?: string;
 }> = ({ status, agentStates, isPaused, messageId, onContinue, onRegenerate, noWrapper, work, provider, model }) => {
+  const latestLogStateRef = useRef<{
+    status: string;
+    messageId?: string;
+    isPaused?: boolean;
+    agentDetails: Array<{
+      id: string;
+      name: string;
+      status: AgentState['status'];
+      label: string;
+      stepId: AgentState['stepId'];
+      messageId: string | undefined;
+      agentIndex: number | undefined;
+    }>;
+  }>({
+    status,
+    messageId,
+    isPaused,
+    agentDetails: []
+  });
+
   // Check for errors in any step to determine button state
   const erroredAgents = getErroredAgents(agentStates, messageId);
   const isWorking = isAnyAgentWorking(agentStates, messageId);
@@ -47,38 +67,54 @@ export const LoadingIndicator: FC<{
           displayStatus = getStepConfig(activeState.stepId).progressMsg;
       } else if (agentStates.some(a => a.stepId === STEPS.INITIAL && a.status === 'waiting')) {
           displayStatus = 'Starting Swarm...';
-      }
-  }
+       }
+   }
+
+  const agentDetails = useMemo(() => agentStates.map(a => ({
+    id: a.id,
+    name: a.name,
+    status: a.status,
+    label: a.label,
+    stepId: a.stepId,
+    messageId: a.messageId,
+    agentIndex: a.agentIndex
+  })), [agentStates]);
+
+  const agentsByMessage = useMemo(() => {
+    return agentDetails.reduce<Record<string, number>>((acc, a) => {
+      const key = a.messageId || 'no-message-id';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+  }, [agentDetails]);
 
   useEffect(() => {
-    const agentDetails = agentStates.map(a => ({
-      id: a.id,
-      name: a.name,
-      status: a.status,
-      label: a.label,
-      stepId: a.stepId,
-      messageId: a.messageId,
-      agentIndex: a.agentIndex
-    }));
+    latestLogStateRef.current = {
+      status,
+      messageId,
+      isPaused,
+      agentDetails
+    };
     
     logger.debug('LoadingIndicator RENDER', { 
       status, 
       currentMessageId: messageId,
-      agentStatesCount: agentStates.length,
+      agentStatesCount: agentDetails.length,
       agents: agentDetails,
-      agentsByMessage: agentDetails.reduce((acc, a) => {
-        const key = a.messageId || 'no-message-id';
-        acc[key] = (acc[key] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
+      agentsByMessage
     });
+  }, [status, messageId, isPaused, agentDetails, agentsByMessage]);
+
+  useEffect(() => {
     
     return () => {
+      const { status: lastStatus, messageId: lastMessageId, isPaused: lastIsPaused, agentDetails: lastAgentDetails } = latestLogStateRef.current;
+
       logger.debug('LoadingIndicator UNMOUNTED', { 
-        lastStatus: status, 
-        messageId,
-        isPaused, 
-        agents: agentDetails
+        lastStatus,
+        messageId: lastMessageId,
+        isPaused: lastIsPaused,
+        agents: lastAgentDetails
       });
     };
   }, []);

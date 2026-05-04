@@ -30,11 +30,20 @@ export const useGeminiSwarm = () => {
   
   // 2. Shared Infrastructure
   const mainAbort = useAbortController();
+  const selectedProvider = settings.provider;
+  const apiKey = settings.apiKey;
+  const openRouterApiKey = settings.openRouterApiKey;
+  const openRouterModel = settings.openRouterModel;
   
   // Create provider when settings change
   const provider = useMemo(
-    () => AiProviderFactory.create(settings),
-    [settings.provider, settings.apiKey, settings.openRouterApiKey, settings.openRouterModel]
+    () => AiProviderFactory.create({
+      provider: selectedProvider,
+      apiKey,
+      openRouterApiKey,
+      openRouterModel,
+    }),
+    [selectedProvider, apiKey, openRouterApiKey, openRouterModel]
   );
 
   const orchestrator = useMemo(() => new SwarmOrchestrator(provider), [provider]);

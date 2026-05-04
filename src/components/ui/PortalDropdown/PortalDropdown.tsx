@@ -1,4 +1,4 @@
-import React, { type FC, type ReactNode, useContext, useEffect, useLayoutEffect, useState } from 'react';
+import React, { type FC, type ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BaseModalInteractionContext } from '@/components/modals/BaseModal/context';
 
@@ -31,7 +31,7 @@ export const PortalDropdown: FC<PortalDropdownProps> = ({
     const [portalElement, setPortalElement] = useState<HTMLDivElement | null>(null);
     const modalInteractionContext = useContext(BaseModalInteractionContext);
 
-    const updateCoords = () => {
+    const updateCoords = useCallback(() => {
         if (triggerRef.current) {
             const rect = triggerRef.current.getBoundingClientRect();
             // Use viewport-relative coordinates for position:fixed
@@ -41,7 +41,7 @@ export const PortalDropdown: FC<PortalDropdownProps> = ({
                 width: width || rect.width
             });
         }
-    };
+    }, [triggerRef, width]);
 
     // useLayoutEffect runs synchronously after DOM mutations but before browser paint
     // This prevents the dropdown from flashing at (0,0) before moving to correct position
@@ -60,7 +60,7 @@ export const PortalDropdown: FC<PortalDropdownProps> = ({
                 setCoords(null);
             };
         }
-    }, [isOpen, triggerRef, width]);
+    }, [isOpen, updateCoords]);
 
     useEffect(() => {
         if (!isOpen || !modalInteractionContext) return;

@@ -6,6 +6,11 @@ import { Logger } from '@shared/utils/logger';
 
 const logger = new Logger('AiProviderFactory');
 
+type ProviderFactorySettings = Pick<
+  AppSettings,
+  'provider' | 'apiKey' | 'openRouterApiKey' | 'openRouterModel'
+>;
+
 /**
  * Factory for creating AI providers based on settings.
  * Centralizes provider instantiation logic that was previously in GeminiService.
@@ -15,7 +20,7 @@ export class AiProviderFactory {
    * Creates the appropriate provider based on user settings.
    * @throws Error if no valid configuration is found
    */
-  static create(settings: AppSettings): AiProvider {
+  static create(settings: ProviderFactorySettings): AiProvider {
     logger.debug('Creating provider', { provider: settings.provider });
 
     let provider: AiProvider;
@@ -50,7 +55,7 @@ export class AiProviderFactory {
    * - If isProxy=false: ensures required API keys are present
    * @throws Error if configuration is invalid
    */
-  private static validateProviderConfiguration(provider: AiProvider, settings: AppSettings): void {
+  private static validateProviderConfiguration(provider: AiProvider, settings: ProviderFactorySettings): void {
     if (provider.isProxy) {
       // For proxy mode, the endpoint is hardcoded to /api/* in ProxyGenAI and OpenRouterGenAI
       // We just need to ensure we're in a browser environment where fetch is available

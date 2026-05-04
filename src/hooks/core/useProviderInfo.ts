@@ -72,14 +72,5 @@ export function getProviderInfo(settings: AppSettings, serverStatus?: ServerStat
  * Centralizes checks for Gemini vs OpenRouter to keep components clean.
  */
 export function useProviderInfo(settings: AppSettings, serverStatus?: ServerStatus) {
-  return useMemo(() => getProviderInfo(settings, serverStatus), [
-    settings.provider, 
-    settings.model, 
-    settings.openRouterModel, 
-    settings.apiKey, 
-    settings.openRouterApiKey,
-    serverStatus?.hasServerKey,
-    serverStatus?.hasOpenRouterKey,
-    serverStatus?.proxyMode
-  ]);
+  return useMemo(() => getProviderInfo(settings, serverStatus), [settings, serverStatus]);
 }
