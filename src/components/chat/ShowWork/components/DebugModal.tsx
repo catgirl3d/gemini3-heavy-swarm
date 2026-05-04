@@ -3,9 +3,14 @@ import { MarkdownRenderer } from '@/components/ui';
 import { BaseModal } from '@/components/modals';
 import { formatDebugInfo } from '@/components/chat/ShowWork/utils';
 import { type StepDebugInfo } from '@/types/app-types';
+import { Logger } from '@shared/utils/logger';
+import { copyTextToClipboard } from '@/utils/common/clipboard';
+
+const logger = new Logger('DebugModal');
 
 export const DebugModal: FC<{ title: string; debugInfo: StepDebugInfo | undefined; onClose: () => void }> = ({ title, debugInfo, onClose }) => {
     const [viewMode, setViewMode] = useState<'formatted' | 'raw' | 'readable'>('formatted');
+    const rawDebugJson = JSON.stringify(debugInfo, null, 2) ?? 'undefined';
 
     const getReadableJson = (data: any): string => {
         // Simple YAML-like formatter for better readability
@@ -46,6 +51,12 @@ export const DebugModal: FC<{ title: string; debugInfo: StepDebugInfo | undefine
         };
         
         return format(data).trim();
+    };
+
+    const copyRawDebugJson = () => {
+        void copyTextToClipboard(rawDebugJson).catch((error: unknown) => {
+            logger.error('Failed to copy raw debug JSON:', error);
+        });
     };
 
     return (
@@ -91,9 +102,7 @@ export const DebugModal: FC<{ title: string; debugInfo: StepDebugInfo | undefine
                     <div className="raw-debug-container">
                         <button
                             className="copy-raw-button"
-                            onClick={() => {
-                                navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2));
-                            }}
+                            onClick={copyRawDebugJson}
                             title="Copy Raw JSON"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -102,7 +111,7 @@ export const DebugModal: FC<{ title: string; debugInfo: StepDebugInfo | undefine
                             Copy
                         </button>
                         <pre className="raw-debug-view">
-                            {JSON.stringify(debugInfo, null, 2)}
+                            {rawDebugJson}
                         </pre>
                     </div>
                 )}

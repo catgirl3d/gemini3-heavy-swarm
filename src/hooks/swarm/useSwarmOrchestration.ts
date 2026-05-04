@@ -353,7 +353,9 @@ export function useSwarmOrchestration({
       const lastMsg = messages[messages.length - 1];
       const failedWork = lastMsg?.role === 'model' ? lastMsg.work : undefined;
 
-      sendMessage(lastInput.text, lastInput.image, lastInput.imageFile, true, undefined, failedWork);
+      sendMessage(lastInput.text, lastInput.image, lastInput.imageFile, true, undefined, failedWork).catch((error: unknown) => {
+        logger.error('Unhandled retry failure:', error);
+      });
     }
   };
 

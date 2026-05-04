@@ -267,4 +267,7 @@ async function startServer() {
 	}
 }
 
-startServer();
+startServer().catch((error: unknown) => {
+	logger.error('Unhandled server startup error:', error);
+	process.exit(1);
+});

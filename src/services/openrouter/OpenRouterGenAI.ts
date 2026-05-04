@@ -14,7 +14,7 @@ let encodeTokenizerReady: Promise<void> | null = null;
 const getEncodeTokenizer = async (): Promise<((text: string) => number[]) | null> => {
   if (encodeTokenizer) return encodeTokenizer;
 
-  if (!encodeTokenizerReady) {
+  if (encodeTokenizerReady === null) {
     encodeTokenizerReady = import('gpt-tokenizer')
       .then(({ encode }) => {
         encodeTokenizer = encode;

@@ -11,6 +11,7 @@ import { StatusBanner, Header, Toast, type ToastType } from '@/components/layout
 import { MessageList, InputArea } from '@/components/chat';
 import { ScrollToBottomButton } from '@/components/ui';
 import { type StepId } from '@/types/steps';
+import { runAsyncAction } from '@/utils/common/asyncAction';
 
 const SettingsModal = lazy(() => import('@/components/modals/SettingsModal').then(m => ({ default: m.SettingsModal })));
 const InfoModal = lazy(() => import('@/components/modals/InfoModal').then(m => ({ default: m.InfoModal })));
@@ -68,6 +69,13 @@ export const App: FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const loggerRef = useRef(new Logger('App', settings.debugMode));
+  const loggerDebugModeRef = useRef(settings.debugMode);
+
+  if (loggerDebugModeRef.current !== settings.debugMode) {
+    loggerRef.current = new Logger('App', settings.debugMode);
+    loggerDebugModeRef.current = settings.debugMode;
+  }
 
   const handleImageChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -98,7 +106,7 @@ export const App: FC = () => {
     inputRef.current?.focus();
   }, []);
 
-  const handleSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     
     // Check if there's content to send BEFORE clearing the fields
@@ -134,12 +142,25 @@ export const App: FC = () => {
       fileInputRef.current.value = '';
     }
     
-    await sendMessage(currentInput, currentImage, currentImageFile);
+    runAsyncAction(
+      () => sendMessage(currentInput, currentImage, currentImageFile),
+      (error) => loggerRef.current.error('Unhandled sendMessage failure:', error)
+    );
   }, [userInput, image, imageFile, sendMessage, providerInfo, setToast]);
+
+  const handleContinue = useCallback(() => {
+    runAsyncAction(
+      continueGeneration,
+      (error) => loggerRef.current.error('Unhandled continueGeneration failure:', error)
+    );
+  }, [continueGeneration]);
 
   // Memoized handler for regeneration to prevent MessageList re-renders
   const handleRegenerate = useCallback((messageId: string, phase: StepId, agentIndex: number) => {
-    regenerateAgentResponse(messageId, phase, agentIndex);
+    runAsyncAction(
+      () => regenerateAgentResponse(messageId, phase, agentIndex),
+      (error) => loggerRef.current.error('Unhandled regeneration failure:', error)
+    );
   }, [regenerateAgentResponse]);
 
   // Enforce model restrictions based on server status
@@ -149,7 +170,7 @@ export const App: FC = () => {
     // Enforce Gemini restrictions for demo model if applicable
     if (providerInfo.isGemini && providerInfo.isDemoMode) {
         if (settings.model !== 'gemini-2.5-flash-lite') {
-            new Logger('App', settings.debugMode).info("Enforcing demo model restriction (gemini-2.5-flash-lite)");
+            loggerRef.current.info("Enforcing demo model restriction (gemini-2.5-flash-lite)");
             setSettings(prev => ({ ...prev, model: 'gemini-2.5-flash-lite' }));
         }
     }
@@ -198,7 +219,7 @@ export const App: FC = () => {
         messageListRef={messageListRef}
         messageId={currentMessageId}
         onPromptClick={handlePromptClick}
-        onContinue={continueGeneration}
+        onContinue={handleContinue}
         onRetry={retry}
         onRegenerate={handleRegenerate}
       />

@@ -37,7 +37,7 @@ export async function fetchOpenRouterModels(): Promise<OpenRouterModel[]> {
     return modelsCache;
   }
 
-  if (fetchPromise) {
+  if (fetchPromise !== null) {
     return fetchPromise;
   }
 

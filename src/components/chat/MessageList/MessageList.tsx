@@ -9,9 +9,22 @@ import { Sources } from '@/components/chat/Sources';
 import { type Message, type AgentState, type Work, type ProviderType } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
 import { getStepResults } from '@/utils/swarm/workHelpers';
+import { Logger } from '@shared/utils/logger';
+import { copyTextToClipboard } from '@/utils/common/clipboard';
+
+const logger = new Logger('MessageList');
+
+type ActionButtonClickResult = boolean | void | Promise<boolean | void>;
+
+const copyResponseText = (text: string): Promise<boolean> => copyTextToClipboard(text)
+  .then(() => true)
+  .catch((error: unknown) => {
+    logger.error('Failed to copy response:', error);
+    return false;
+  });
 
 interface ActionButtonProps {
-  onClick: () => void;
+  onClick: () => ActionButtonClickResult;
   icon: React.ReactNode;
   successIcon: React.ReactNode;
   title: string;
@@ -22,9 +35,22 @@ const ActionButton: FC<ActionButtonProps> = ({ onClick, icon, successIcon, title
   const [complete, setComplete] = React.useState(false);
 
   const handleClick = () => {
-    onClick();
-    setComplete(true);
-    setTimeout(() => setComplete(false), 2000);
+    const markComplete = (result: boolean | void) => {
+      if (result === false) return;
+
+      setComplete(true);
+      setTimeout(() => setComplete(false), 2000);
+    };
+
+    try {
+      void Promise.resolve(onClick())
+        .then(markComplete)
+        .catch((error: unknown) => {
+          logger.error('Action button handler failed:', error);
+        });
+    } catch (error) {
+      logger.error('Action button handler failed:', error);
+    }
   };
 
   return (
@@ -128,7 +154,7 @@ const MessageListComponent: FC<MessageListProps> = ({
                     <span className="agent-label">Synthesizer Agent</span>
                     <div className="message-actions-group">
                       <ActionButton 
-                        onClick={() => navigator.clipboard.writeText(msg.parts![0].text!)}
+                        onClick={() => copyResponseText(msg.parts![0].text!)}
                         icon={<CopyIcon />}
                         successIcon={<CheckIcon />}
                         title="Copy Response"

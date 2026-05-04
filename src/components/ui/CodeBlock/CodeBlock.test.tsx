@@ -70,4 +70,28 @@ describe('CodeBlock', () => {
 
     expect(screen.getByText('Copy')).toBeInTheDocument();
   });
+
+  it('logs when the clipboard API is unavailable', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: undefined,
+      configurable: true,
+    });
+    const loggerError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+    render(
+      <CodeBlock>
+        {'const value = 1;'}
+      </CodeBlock>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(loggerError).toHaveBeenCalledWith('Failed to copy text: ', expect.any(Error));
+    expect((loggerError.mock.calls[0]?.[1] as Error).message).toBe('Clipboard API is not available');
+    expect(screen.getByText('Copy')).toBeInTheDocument();
+  });
 });

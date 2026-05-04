@@ -1,6 +1,9 @@
 import React, { type FC, type ReactNode, useState } from 'react';
 import './CodeBlock.css';
 import { Logger } from '@shared/utils/logger';
+import { copyTextToClipboard } from '@/utils/common/clipboard';
+
+const logger = new Logger('CodeBlock');
 
 export const CodeBlock: FC<{ children?: ReactNode, className?: string }> = ({ children, className }) => {
   const [copied, setCopied] = useState(false);
@@ -9,14 +12,15 @@ export const CodeBlock: FC<{ children?: ReactNode, className?: string }> = ({ ch
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : 'text';
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(textToCopy);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      new Logger('CodeBlock').error('Failed to copy text: ', err);
-    }
+  const handleCopy = () => {
+    void copyTextToClipboard(textToCopy)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch((err: unknown) => {
+        logger.error('Failed to copy text: ', err);
+      });
   };
 
   return (

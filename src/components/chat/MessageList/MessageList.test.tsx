@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentState, Message, Work } from '@/types';
 import { ProviderType } from '@/types';
 import { STEPS } from '@/types/steps';
+import { Logger } from '@shared/utils/logger';
 
 const mocks = vi.hoisted(() => ({
   downloadContent: vi.fn(),
@@ -121,6 +122,7 @@ describe('MessageList', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('renders the empty state when idle and forwards prompt clicks', () => {
@@ -141,7 +143,7 @@ describe('MessageList', () => {
     expect(onPromptClick).toHaveBeenCalledWith('Suggested prompt');
   });
 
-  it('renders model output actions, image and sources, and resets action feedback after the timeout', () => {
+  it('renders model output actions, image and sources, and resets action feedback after the timeout', async () => {
     vi.useFakeTimers();
 
     const messages: Message[] = [
@@ -177,6 +179,11 @@ describe('MessageList', () => {
 
     expect(clipboardWriteText).toHaveBeenCalledWith('Final answer');
     expect(mocks.downloadContent).toHaveBeenCalledWith('Synthesis_Report.md', 'Final answer');
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     expect(screen.getByTitle('Copied!')).toBeInTheDocument();
     expect(screen.getByTitle('Exported!')).toBeInTheDocument();
 
@@ -186,6 +193,36 @@ describe('MessageList', () => {
 
     expect(screen.getByTitle('Copy Response')).toBeInTheDocument();
     expect(screen.getByTitle('Export Response')).toBeInTheDocument();
+  });
+
+  it('does not show copied feedback when response copy fails', async () => {
+    const error = new Error('clipboard blocked');
+    clipboardWriteText.mockRejectedValue(error);
+    const loggerError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+    render(
+      <MessageList
+        {...createMessageListProps({
+          messages: [
+            {
+              id: 'model-1',
+              role: 'model',
+              parts: [{ text: 'Final answer' }],
+            },
+          ],
+        })}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle('Copy Response'));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(loggerError).toHaveBeenCalledWith('Failed to copy response:', error);
+    expect(screen.getByTitle('Copy Response')).toBeInTheDocument();
+    expect(screen.queryByTitle('Copied!')).not.toBeInTheDocument();
   });
 
   it('hides the last empty model message on global error unless it already has completed drafts', () => {

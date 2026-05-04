@@ -47,7 +47,7 @@ const debugInfo = {
 describe('DebugModal', () => {
   beforeEach(() => {
     Object.defineProperty(navigator, 'clipboard', {
-      value: { writeText: vi.fn() },
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
       configurable: true,
     });
   });
@@ -89,7 +89,7 @@ describe('DebugModal', () => {
   });
 
   it('shows raw JSON and copies it to the clipboard', () => {
-    const writeText = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText },
       configurable: true,
@@ -113,6 +113,32 @@ describe('DebugModal', () => {
     fireEvent.click(screen.getByTitle('Copy Raw JSON'));
 
     expect(writeText).toHaveBeenCalledWith(JSON.stringify(debugInfo, null, 2));
+  });
+
+  it('shows and copies undefined when raw debug info is missing', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    render(
+      <DebugModal
+        title="Missing Debug"
+        debugInfo={undefined}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Raw JSON' }));
+
+    expect(screen.getByText((content, element) =>
+      element?.tagName.toLowerCase() === 'pre' && content === 'undefined'
+    )).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle('Copy Raw JSON'));
+
+    expect(writeText).toHaveBeenCalledWith('undefined');
   });
 
   it('formats primitives, empty structures, and long strings in readable mode, then switches back to formatted', () => {
