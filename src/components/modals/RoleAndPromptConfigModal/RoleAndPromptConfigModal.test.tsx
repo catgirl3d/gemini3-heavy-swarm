@@ -30,7 +30,23 @@ vi.mock('@/components/modals/BaseModal', () => {
 });
 
 vi.mock('@/components/ui', () => ({
-  PortalDropdown: ({ isOpen, children }: any) => (isOpen ? <div data-testid="portal-dropdown">{children}</div> : null),
+  PresetSelector: ({ presets, isOpen, onOpenChange, onSelect, onDeletePreset }: any) => (
+    <div data-testid="preset-selector" data-open={String(!!isOpen)}>
+      <button type="button" disabled={presets.length === 0} onClick={() => onOpenChange?.(!isOpen)}>
+        {presets.length === 0 ? 'No Presets Available' : 'Select a Preset...'}
+      </button>
+      {isOpen && presets.map((preset: any) => (
+        <button key={preset.id} type="button" onClick={() => { onSelect(preset); onOpenChange?.(false); }}>
+          {preset.name}
+        </button>
+      ))}
+      {isOpen && presets.filter((preset: any) => preset.isCustom).map((preset: any) => (
+        <button key={`${preset.id}-delete`} type="button" title="Delete Preset" onClick={() => { onDeletePreset?.(preset); onOpenChange?.(false); }}>
+          Delete {preset.name}
+        </button>
+      ))}
+    </div>
+  ),
   ModelSelector: ({ isOpen, onOpenChange, onChange, disabled, value, isDemoMode, provider }: any) => (
     <div
       data-testid="model-selector"
@@ -127,7 +143,7 @@ describe('RoleAndPromptConfigModal', () => {
 
     expect(onApplyPreset).toHaveBeenCalledWith(expect.objectContaining({ id: 'preset-default' }));
     expect(onDeletePreset).toHaveBeenCalledWith('preset-custom');
-    expect(screen.queryByTestId('portal-dropdown')).not.toBeInTheDocument();
+    expect(screen.getByTestId('preset-selector')).toHaveAttribute('data-open', 'false');
     expect(screen.getByText(/Demo Mode: Only free models are available/i)).toBeInTheDocument();
     expect(screen.getByTestId('model-selector')).toHaveAttribute('data-disabled', 'false');
   });
@@ -189,7 +205,7 @@ describe('RoleAndPromptConfigModal', () => {
     expect(screen.queryByPlaceholderText('Preset Name')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Select a Preset/i }));
-    expect(screen.getByTestId('portal-dropdown')).toBeInTheDocument();
+    expect(screen.getByTestId('preset-selector')).toHaveAttribute('data-open', 'true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle model selector' }));
     expect(screen.getByRole('button', { name: 'Choose model' })).toBeInTheDocument();
@@ -218,18 +234,18 @@ describe('RoleAndPromptConfigModal', () => {
 
     expect(screen.queryByPlaceholderText('Preset Name')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Choose model' })).not.toBeInTheDocument();
-    expect(screen.queryByTestId('portal-dropdown')).not.toBeInTheDocument();
+    expect(screen.getByTestId('preset-selector')).toHaveAttribute('data-open', 'false');
   });
 
   it('closes the preset dropdown first, then the model selector, then the modal on Escape', () => {
     render(<StatefulModalHarness />);
 
     fireEvent.click(screen.getByRole('button', { name: /Select a Preset/i }));
-    expect(screen.getByTestId('portal-dropdown')).toBeInTheDocument();
+    expect(screen.getByTestId('preset-selector')).toHaveAttribute('data-open', 'true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Base escape' }));
 
-    expect(screen.queryByTestId('portal-dropdown')).not.toBeInTheDocument();
+    expect(screen.getByTestId('preset-selector')).toHaveAttribute('data-open', 'false');
     expect(screen.getByTestId('base-modal')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle model selector' }));

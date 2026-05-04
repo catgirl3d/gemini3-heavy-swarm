@@ -2,7 +2,7 @@ export * from './CodeBlock';
 export * from './CustomSelect';
 export * from './LoadingIndicator';
 export * from './MarkdownRenderer';
-export * from './PortalDropdown';
+export * from './PresetSelector';
 export * from './ScrollToBottomButton';
 export * from './TimerDisplay';
 export * from './ModelSelector/ModelSelector';

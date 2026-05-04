@@ -102,6 +102,8 @@ const createProps = (overrides: Partial<ComponentProps<typeof RolesTab>> = {}) =
     handleRestoreDefaultRoles: vi.fn(),
     setEditingRoleIndex: vi.fn(),
     setLocalSettings: vi.fn(),
+    openDropdownId: null,
+    setOpenDropdownId: vi.fn(),
     ...overrides,
   };
 };

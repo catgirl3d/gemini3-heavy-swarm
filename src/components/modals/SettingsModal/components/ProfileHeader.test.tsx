@@ -2,13 +2,18 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('./ProfileSelector', () => ({
-  ProfileSelector: ({ profiles, activeId, onChange }: any) => {
+  ProfileSelector: ({ profiles, activeId, onChange, isOpen, onOpenChange }: any) => {
     const activeProfile = profiles.find((profile: any) => profile.id === activeId);
 
     return (
-      <button type="button" onClick={() => onChange('profile-2')}>
-        {activeProfile?.name ?? 'Missing profile'}
-      </button>
+      <div data-testid="profile-selector" data-open={String(!!isOpen)}>
+        <button type="button" onClick={() => onChange('profile-2')}>
+          {activeProfile?.name ?? 'Missing profile'}
+        </button>
+        <button type="button" onClick={() => onOpenChange?.(!isOpen)}>
+          Toggle Selector
+        </button>
+      </div>
     );
   },
 }));
@@ -39,6 +44,7 @@ describe('ProfileHeader', () => {
     const onStartEditing = vi.fn();
     const onCreate = vi.fn();
     const onDelete = vi.fn();
+    const onSelectorOpenChange = vi.fn();
 
     render(
       <ProfileHeader
@@ -47,12 +53,15 @@ describe('ProfileHeader', () => {
         onStartEditing={onStartEditing}
         onCreate={onCreate}
         onDelete={onDelete}
+        isSelectorOpen
+        onSelectorOpenChange={onSelectorOpenChange}
       />
     );
 
     expect(screen.getByText('Active Profile')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Default Profile' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Selector' }));
     fireEvent.click(screen.getByTitle('Rename'));
     fireEvent.click(screen.getByRole('button', { name: '+ New' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
@@ -66,6 +75,8 @@ describe('ProfileHeader', () => {
     expect(onStartEditing).toHaveBeenCalledTimes(1);
     expect(onCreate).toHaveBeenCalledTimes(1);
     expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(onSelectorOpenChange).toHaveBeenCalledWith(false);
+    expect(screen.getByTestId('profile-selector')).toHaveAttribute('data-open', 'true');
   });
 
   it('supports inline renaming and hides delete when deletion is disabled', () => {

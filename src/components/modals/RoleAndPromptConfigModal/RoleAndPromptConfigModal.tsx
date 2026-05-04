@@ -1,7 +1,7 @@
-import React, { FC, useState, useRef, useEffect } from 'react';
+import React, { FC, useState, useEffect } from 'react';
 import { BaseModal } from '@/components/modals/BaseModal';
 import { RoleAndPromptConfigModalProps } from '@/components/modals/RoleAndPromptConfigModal/types';
-import { PortalDropdown, ModelSelector } from '@/components/ui';
+import { ModelSelector, PresetSelector } from '@/components/ui';
 import { ProviderType } from '@/types';
 import './RoleAndPromptConfigModal.css';
 
@@ -26,7 +26,6 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
     const [isSaving, setIsSaving] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState<ActiveDropdown>(null);
     const [presetName, setPresetName] = useState('');
-    const triggerRef = useRef<HTMLButtonElement>(null);
 
     // Reset local state when modal closes
     useEffect(() => {
@@ -52,6 +51,10 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
         }
     };
 
+    const handlePresetDropdownOpenChange = (open: boolean) => {
+        setActiveDropdown(open ? 'preset' : null);
+    };
+
     return (
         <BaseModal
             isOpen={isOpen}
@@ -75,66 +78,13 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
             <BaseModal.Body>
                 <div className="modal-form-group horizontal align-center space-between">
                     <label className="modal-label no-margin">Load from Preset</label>
-                    <div className="preset-menu-container">
-                        <button
-                            ref={triggerRef}
-                            className={`preset-menu-trigger ${activeDropdown === 'preset' ? 'active' : ''}`}
-                            onClick={() => setActiveDropdown(current => current === 'preset' ? null : 'preset')}
-                            disabled={presets.length === 0}
-                            title={presets.length === 0 ? "No presets available" : "Load from a saved preset"}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                            </svg>
-                            <span>{presets.length === 0 ? 'No Presets Available' : 'Select a Preset...'}</span>
-                            <svg className={`chevron ${activeDropdown === 'preset' ? 'open' : ''}`} xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M6 9l6 6 6-6" />
-                            </svg>
-                        </button>
-
-                        <PortalDropdown
-                            isOpen={activeDropdown === 'preset'}
-                            triggerRef={triggerRef}
-                            width={300}
-                        >
-                            <div className="preset-menu-dropdown">
-                                <div className="preset-menu-header">Presets</div>
-                                {presets.map((p) => (
-                                    <div key={p.id} className="preset-menu-item-wrapper">
-                                        <button
-                                            className="preset-menu-item"
-                                            onClick={() => {
-                                                onApplyPreset(p);
-                                                setActiveDropdown(current => current === 'preset' ? null : current);
-                                            }}
-                                        >
-                                            <div className="preset-name">
-                                                {p.name}
-                                                {p.isCustom && <span className="preset-tag">Saved</span>}
-                                            </div>
-                                        </button>
-                                        {p.isCustom && (
-                                            <button
-                                                className="preset-delete-btn"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onDeletePreset(p.id);
-                                                    setActiveDropdown(current => current === 'preset' ? null : current);
-                                                }}
-                                                title="Delete Preset"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <polyline points="3 6 5 6 21 6"></polyline>
-                                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                                </svg>
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </PortalDropdown>
-                    </div>
+                    <PresetSelector
+                        presets={presets}
+                        isOpen={activeDropdown === 'preset'}
+                        onOpenChange={handlePresetDropdownOpenChange}
+                        onSelect={(preset) => onApplyPreset(preset)}
+                        onDeletePreset={(preset) => onDeletePreset(preset.id)}
+                    />
                 </div>
 
                 {onModelChange && (

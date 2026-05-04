@@ -21,6 +21,8 @@ interface RolesTabProps {
     handleRestoreDefaultRoles: () => void;
     setEditingRoleIndex: (index: number | null) => void;
     setLocalSettings: React.Dispatch<React.SetStateAction<AppSettings>>;
+    openDropdownId: string | null;
+    setOpenDropdownId: (id: string | null) => void;
 }
 
 export const getRoleCyclingNotice = (
@@ -57,7 +59,9 @@ export const RolesTab: FC<RolesTabProps> = ({
     handleMoveRole,
     handleRestoreDefaultRoles,
     setEditingRoleIndex,
-    setLocalSettings
+    setLocalSettings,
+    openDropdownId,
+    setOpenDropdownId
 }) => {
     const roles = (activeRoleType === 'drafter' ? activeRoleProfile.roles : activeRoleProfile.criticRoles) || [];
     const roleCyclingNotice = getRoleCyclingNotice(localSettings.numAgents, roles.length, activeRoleType);
@@ -77,6 +81,8 @@ export const RolesTab: FC<RolesTabProps> = ({
                 onCreate={handleCreateRoleProfile}
                 onDelete={handleDeleteRoleProfile}
                 canDelete={(localSettings.roleProfiles || []).length > 1}
+                isSelectorOpen={openDropdownId === 'role-profile'}
+                onSelectorOpenChange={(open) => setOpenDropdownId(open ? 'role-profile' : null)}
             />
 
             <div className="modal-card-container">

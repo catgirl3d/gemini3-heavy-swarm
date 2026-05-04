@@ -56,6 +56,10 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
         setLocalSettings(settings);
     }, [settings, isOpen]);
 
+    useEffect(() => {
+        setOpenDropdownId(null);
+    }, [activeTab]);
+
     const handleClose = () => {
         if (hasChanges) {
             setShowConfirmClose(true);
@@ -236,6 +240,8 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         handleCreateProfile={() => setShowCreateProfileConfirm(true)}
                         handleDeleteProfile={profileMgr.handleDeleteProfile}
                         setEditingInstruction={setEditingInstruction}
+                        openDropdownId={openDropdownId}
+                        setOpenDropdownId={setOpenDropdownId}
                     />
                 )}
                 {activeTab === 'roles' && (
@@ -256,6 +262,8 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         handleRestoreDefaultRoles={roleMgr.handleRestoreDefaultRoles}
                         setEditingRoleIndex={setEditingRoleIndex}
                         setLocalSettings={setLocalSettings}
+                        openDropdownId={openDropdownId}
+                        setOpenDropdownId={setOpenDropdownId}
                     />
                 )}
                 

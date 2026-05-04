@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/components/ui/PortalDropdown/PortalDropdown', () => ({
-  PortalDropdown: ({ isOpen, children }: any) => (isOpen ? <div data-testid="portal-dropdown">{children}</div> : null),
+  PortalDropdown: ({ isOpen, children, width }: any) => (isOpen ? <div data-testid="portal-dropdown" data-width={width ? String(width) : ''}>{children}</div> : null),
 }));
 
 import { CustomSelect } from './CustomSelect';
@@ -171,5 +171,45 @@ describe('CustomSelect', () => {
     expect(screen.getByTestId('portal-dropdown').firstChild).toHaveClass('custom-select-dropdown', 'custom-dropdown');
     expect(screen.getByPlaceholderText('Search...').parentElement).toHaveClass('custom-select-search-wrapper', 'custom-search-wrapper');
     expect(screen.getByRole('button', { name: /alpha trigger open/i }).parentElement).toHaveClass('custom-select-container', 'custom-container');
+  });
+
+  it('supports custom trigger classes, portal width, and trailing option actions', () => {
+    const onArchive = vi.fn();
+
+    render(
+      <CustomSelect
+        options={baseOptions}
+        value="alpha"
+        onChange={vi.fn()}
+        triggerClassName="compact-trigger"
+        dropdownWidth={320}
+        renderOptionTrailing={(option, { closeDropdown }) => (
+          option.value === 'beta-42' ? (
+            <button
+              type="button"
+              onClick={() => {
+                onArchive(option.value);
+                closeDropdown();
+              }}
+            >
+              Archive
+            </button>
+          ) : null
+        )}
+      />
+    );
+
+    const trigger = screen.getByRole('button', { name: /alpha/i });
+
+    expect(trigger).toHaveClass('compact-trigger');
+
+    fireEvent.click(trigger);
+
+    expect(screen.getByTestId('portal-dropdown')).toHaveAttribute('data-width', '320');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+
+    expect(onArchive).toHaveBeenCalledWith('beta-42');
+    expect(screen.queryByTestId('portal-dropdown')).not.toBeInTheDocument();
   });
 });

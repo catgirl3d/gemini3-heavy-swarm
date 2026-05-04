@@ -21,6 +21,10 @@ interface CustomSelectProps<T = string> {
     // Custom rendering
     renderTrigger?: (selected: CustomSelectOption<T> | null, isOpen: boolean) => ReactNode;
     renderOption?: (option: CustomSelectOption<T>, isSelected: boolean) => ReactNode;
+    renderOptionTrailing?: (
+        option: CustomSelectOption<T>,
+        helpers: { closeDropdown: () => void; selectOption: () => void; isSelected: boolean }
+    ) => ReactNode;
     
     // Additional features
     searchable?: boolean;
@@ -33,8 +37,10 @@ interface CustomSelectProps<T = string> {
     
     // Styling
     className?: string;
+    triggerClassName?: string;
     dropdownClassName?: string;
     searchWrapperClassName?: string;
+    dropdownWidth?: number;
     
     // Controlled state
     isOpen?: boolean;
@@ -50,14 +56,17 @@ export function CustomSelect<T = string>({
     disabled = false,
     renderTrigger,
     renderOption,
+    renderOptionTrailing,
     searchable = false,
     searchPlaceholder = 'Search...',
     filterFn,
     dropdownHeader,
     dropdownFooter,
     className = '',
+    triggerClassName = '',
     dropdownClassName = '',
     searchWrapperClassName = '',
+    dropdownWidth,
     isOpen: controlledIsOpen,
     onOpenChange,
     onSearchChange,
@@ -86,10 +95,46 @@ export function CustomSelect<T = string>({
     };
 
     const selectedOption = options.find(opt => opt.value === value) || null;
+    const closeDropdown = () => setIsOpen(false);
+    const renderSelectOption = (option: CustomSelectOption<T>, isSelected: boolean) => {
+        const trailingContent = renderOptionTrailing?.(option, {
+            closeDropdown,
+            selectOption: () => handleSelect(option.value),
+            isSelected,
+        });
+
+        if (!trailingContent) {
+            return (
+                <button
+                    key={String(option.value)}
+                    type="button"
+                    className={`custom-select-option ${isSelected ? 'selected' : ''}`}
+                    onClick={() => handleSelect(option.value)}
+                >
+                    {optionRenderer(option, isSelected)}
+                </button>
+            );
+        }
+
+        return (
+            <div key={String(option.value)} className="custom-select-option-row">
+                <button
+                    type="button"
+                    className={`custom-select-option ${isSelected ? 'selected' : ''}`}
+                    onClick={() => handleSelect(option.value)}
+                >
+                    {optionRenderer(option, isSelected)}
+                </button>
+                <div className="custom-select-option-trailing">
+                    {trailingContent}
+                </div>
+            </div>
+        );
+    };
 
     const handleSelect = (optionValue: T) => {
         onChange(optionValue);
-        setIsOpen(false);
+        closeDropdown();
     };
 
     // Default filter function
@@ -130,7 +175,7 @@ export function CustomSelect<T = string>({
         <div className={`custom-select-container ${className}`}>
             <button
                 ref={triggerRef}
-                className={`custom-select-trigger ${disabled ? 'disabled' : ''}`}
+                className={`custom-select-trigger ${triggerClassName} ${disabled ? 'disabled' : ''}`.trim()}
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 disabled={disabled}
                 type="button"
@@ -138,7 +183,7 @@ export function CustomSelect<T = string>({
                 {triggerRenderer(selectedOption, isOpen)}
             </button>
 
-            <PortalDropdown isOpen={isOpen} triggerRef={triggerRef}>
+            <PortalDropdown isOpen={isOpen} triggerRef={triggerRef} width={dropdownWidth}>
                 <div className={`custom-select-dropdown ${dropdownClassName}`}>
                     {searchable && (
                         <div className={`custom-select-search-wrapper ${searchWrapperClassName}`}>
@@ -167,7 +212,7 @@ export function CustomSelect<T = string>({
                             filteredOptions.map((option, index) => {
                                 const isSelected = option.value === value;
                                 const isHeader = option.isHeader === true;
-                                
+
                                 if (isHeader) {
                                     return (
                                         <div key={`header-${index}`} className="custom-select-header">
@@ -176,15 +221,7 @@ export function CustomSelect<T = string>({
                                     );
                                 }
 
-                                return (
-                                    <button
-                                        key={String(option.value)}
-                                        className={`custom-select-option ${isSelected ? 'selected' : ''}`}
-                                        onClick={() => handleSelect(option.value)}
-                                    >
-                                        {optionRenderer(option, isSelected)}
-                                    </button>
-                                );
+                                return renderSelectOption(option, isSelected);
                             })
                         ) : (
                             <div className="custom-select-no-results">

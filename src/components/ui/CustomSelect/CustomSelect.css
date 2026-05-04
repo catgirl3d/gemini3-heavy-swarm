@@ -94,23 +94,47 @@
 .custom-select-options-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0;
     overflow-y: auto;
     padding: 0;
 }
 
 .custom-select-option {
     width: 100%;
-    padding: 0.75rem 0.8rem;
+    padding: 0.65rem 0.8rem;
     background: transparent;
     border: none;
     color: var(--text-primary);
     text-align: left;
     cursor: pointer;
-    border-radius: var(--radius-md);
     transition: all 0.1s;
     display: flex;
     align-items: center;
+}
+
+.custom-select-options-list > .custom-select-option + .custom-select-option,
+.custom-select-options-list > .custom-select-option + .custom-select-option-row,
+.custom-select-options-list > .custom-select-option-row + .custom-select-option,
+.custom-select-options-list > .custom-select-option-row + .custom-select-option-row {
+    border-top: 1px solid var(--model-message-border);
+}
+
+.custom-select-option-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+}
+
+.custom-select-option-row .custom-select-option {
+    flex: 1;
+}
+
+.custom-select-option-trailing {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding-right: 0.25rem;
 }
 
 .custom-select-option:hover {
