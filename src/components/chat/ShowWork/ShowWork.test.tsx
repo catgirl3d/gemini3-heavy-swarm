@@ -227,6 +227,68 @@ describe('ShowWork', () => {
     }));
   });
 
+  it('passes stable card props from the correct work source', () => {
+    const work = createWork();
+    const onRegenerate = vi.fn();
+
+    render(
+      <ShowWork
+        {...createProps({
+          work,
+          onRegenerate,
+        })}
+      />
+    );
+
+    const cardProps = Object.fromEntries(
+      mocks.statusAwareWorkCard.mock.calls.map(([props]) => [props.cardId, props])
+    );
+
+    expect(cardProps['initial-0'].work).toBe(work);
+    expect(cardProps['initial-0']).toMatchObject({
+      cardId: 'initial-0',
+      step: STEPS.INITIAL,
+      index: 0,
+      title: 'Research Agent',
+      content: 'Initial draft',
+      tokenUsage: { promptTokens: 1, candidatesTokens: 2, totalTokens: 3 },
+      thought: 'Initial thought',
+      downloadFilename: 'Research-Agent-Initial_Draft.md',
+      allowRegenerate: true,
+    });
+    expect(cardProps['initial-0'].debugInfo).toBe(work.debugInfo?.[STEPS.INITIAL]?.[0]);
+
+    expect(cardProps['refined-0'].work).toBe(work);
+    expect(cardProps['refined-0']).toMatchObject({
+      cardId: 'refined-0',
+      step: STEPS.REFINEMENT,
+      index: 0,
+      className: 'refinement-step',
+      title: 'Lead Critic',
+      content: 'Refined draft',
+      tokenUsage: { promptTokens: 4, candidatesTokens: 5, totalTokens: 9 },
+      thought: 'Refinement thought',
+      downloadFilename: 'Lead-Critic-Refined_Response.md',
+      allowRegenerate: true,
+    });
+    expect(cardProps['refined-0'].debugInfo).toBe(work.debugInfo?.[STEPS.REFINEMENT]?.[0]);
+
+    expect(cardProps.synthesis.work).toBe(work);
+    expect(cardProps.synthesis).toMatchObject({
+      cardId: 'synthesis',
+      step: STEPS.SYNTHESIS,
+      index: 0,
+      className: STEPS.SYNTHESIS,
+      title: 'Synthesizer',
+      content: 'Historical synthesis',
+      tokenUsage: { promptTokens: 6, candidatesTokens: 7, totalTokens: 13 },
+      thought: 'Synthesis thought',
+      downloadFilename: 'Synthesis_Report.md',
+      allowRegenerate: true,
+    });
+    expect(cardProps.synthesis.debugInfo).toBe(work.debugInfo?.[STEPS.SYNTHESIS]);
+  });
+
   it('shows Continue only for paused live incomplete work and hides it while agents are working or synthesis is done', () => {
     const onContinue = vi.fn();
     const work = createWork({
@@ -275,6 +337,27 @@ describe('ShowWork', () => {
           isLive: true,
           isPaused: true,
           onContinue,
+        })}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+  });
+
+  it('hides Continue when live work for the current message already finished synthesis', () => {
+    mocks.store.currentMessageId = 'message-1';
+    mocks.store.currentWork = createWork({
+      stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'done' }],
+    });
+
+    render(
+      <ShowWork
+        {...createProps({
+          work: createWork({
+            stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'pending' }],
+          }),
+          isLive: true,
+          isPaused: true,
         })}
       />
     );

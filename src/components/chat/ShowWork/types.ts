@@ -11,11 +11,6 @@ export interface DebugModalData {
   debugInfo: StepDebugInfo | undefined;
 }
 
-export interface ThoughtModalData {
-  title: string;
-  content: string;
-}
-
 export interface ShowWorkProps {
   work: Work;
   isLive?: boolean;
