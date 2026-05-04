@@ -182,8 +182,10 @@ describe('workHelpers', () => {
             };
 
             const updated = updateStepResult(originalWork, STEPS.INITIAL, 1, 'new value');
+            const expectedResults = Array<string>(2);
+            expectedResults[1] = 'new value';
 
-            expect(updated.results?.[STEPS.INITIAL]).toEqual([, 'new value']);
+            expect(updated.results?.[STEPS.INITIAL]).toEqual(expectedResults);
             expect((updated.results?.[STEPS.INITIAL] as string[])).not.toContain('b');
         });
     });

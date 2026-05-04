@@ -78,10 +78,10 @@ describe('streamUtils', () => {
 
   describe('extractTextFromParts', () => {
     it('should return empty strings for undefined or null input', () => {
-      // @ts-ignore
+      const extractFromUnknown = extractTextFromParts as (parts: unknown) => { text: string; thought: string };
+
       expect(extractTextFromParts(undefined)).toEqual({ text: '', thought: '' });
-      // @ts-ignore
-      expect(extractTextFromParts(null)).toEqual({ text: '', thought: '' });
+      expect(extractFromUnknown(null)).toEqual({ text: '', thought: '' });
     });
 
     it('should return empty strings for empty array', () => {

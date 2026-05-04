@@ -15,7 +15,6 @@ describe('geminiValidation', () => {
 
     it('should fail on missing parts', () => {
       const contents = [{ text: 'hello' }];
-      // @ts-ignore
       expect(validateContents(contents).valid).toBe(false);
     });
   });
