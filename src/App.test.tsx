@@ -88,7 +88,7 @@ vi.mock('@/components/ui', () => ({
   ScrollToBottomButton: ({ visible, onClick }: any) => visible ? <button type="button" onClick={onClick}>Scroll to Bottom</button> : null,
 }));
 
-vi.mock('@/components/modals', () => ({
+vi.mock('@/components/modals/SettingsModal', () => ({
   SettingsModal: ({ isOpen, onReset, onShowError, onClose }: any) => (
     isOpen ? (
       <div data-testid="settings-modal">
@@ -98,9 +98,13 @@ vi.mock('@/components/modals', () => ({
       </div>
     ) : null
   ),
+}));
+
+vi.mock('@/components/modals/InfoModal', () => ({
   InfoModal: ({ isOpen, onClose }: any) => (
     isOpen ? (
       <div data-testid="info-modal">
+        <span>How it Works</span>
         <button type="button" onClick={onClose}>Close Info</button>
       </div>
     ) : null

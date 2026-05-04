@@ -12,8 +12,8 @@ import { MessageList, InputArea } from '@/components/chat';
 import { ScrollToBottomButton } from '@/components/ui';
 import { StepId } from '@/types/steps';
 
-const SettingsModal = lazy(() => import('@/components/modals').then(m => ({ default: m.SettingsModal })));
-const InfoModal = lazy(() => import('@/components/modals').then(m => ({ default: m.InfoModal })));
+const SettingsModal = lazy(() => import('@/components/modals/SettingsModal').then(m => ({ default: m.SettingsModal })));
+const InfoModal = lazy(() => import('@/components/modals/InfoModal').then(m => ({ default: m.InfoModal })));
 
 export const App: FC = () => {
   const {

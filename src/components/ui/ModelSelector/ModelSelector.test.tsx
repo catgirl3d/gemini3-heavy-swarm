@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import type { OpenRouterModel } from '@/services/openrouter/modelsService';
+import { RECOMMENDED_MODEL_IDS } from '@/services/openrouter/constants';
 import { ProviderType } from '@/types';
 
 const mocks = vi.hoisted(() => ({
@@ -179,13 +180,13 @@ describe('ModelSelector', () => {
     });
 
     await act(async () => {
-      resolveModels!([
-        createOpenRouterModel({
-          id: 'anthropic/claude-opus-4.5',
-          name: 'Claude Opus 4.5',
-          pricing: { completion: '0.000015' } as OpenRouterModel['pricing'],
-          supported_parameters: ['reasoning'],
-        }),
+        resolveModels!([
+          createOpenRouterModel({
+            id: RECOMMENDED_MODEL_IDS[0],
+            name: 'Recommended Model',
+            pricing: { completion: '0.000015' } as OpenRouterModel['pricing'],
+            supported_parameters: ['reasoning'],
+          }),
         createOpenRouterModel({
           id: 'z/free-model',
           name: 'Regular Free',
@@ -205,13 +206,13 @@ describe('ModelSelector', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Claude Opus 4.5')).toBeInTheDocument();
+      expect(screen.getByText('Recommended Model')).toBeInTheDocument();
     });
 
     expect(mocks.setCachedModels).toHaveBeenCalledWith(expect.arrayContaining([
       expect.objectContaining({
-        value: 'anthropic/claude-opus-4.5',
-        label: 'Claude Opus 4.5',
+        value: RECOMMENDED_MODEL_IDS[0],
+        label: 'Recommended Model',
         price: 0.000015,
         priceText: '$15.00/M',
         supportsReasoning: true,
@@ -235,7 +236,7 @@ describe('ModelSelector', () => {
     expect(screen.queryByText('Recommended')).not.toBeInTheDocument();
     expect(screen.queryByText('All Models')).not.toBeInTheDocument();
     expect(screen.getByText('Regular Free')).toBeInTheDocument();
-    expect(screen.queryByText('Claude Opus 4.5')).not.toBeInTheDocument();
+    expect(screen.queryByText('Recommended Model')).not.toBeInTheDocument();
   });
 
   it('renders cached OpenRouter models immediately while refreshing in the background', async () => {
