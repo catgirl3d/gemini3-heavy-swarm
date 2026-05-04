@@ -1,12 +1,24 @@
-import { type GenerationConfig, type Content } from '@google/genai';
+import { type GenerationConfig, type Content, type Tool } from '@google/genai';
 import { API_SECRET } from '@/constants';
 import { Logger } from '@shared/utils/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
+import { extractPartsFromChunk, isValidStreamChunk, type GeminiStreamChunk } from '@/services/swarm/steps/utils/streamUtils';
 
 const logger = new Logger('ProxyGenAI');
 
 const STREAM_READ_TIMEOUT_MS = 60000; // 60 seconds (increased for reasoning models and slow responses)
 const JSON_ARRAY_DELIMITER_REGEX = /^[\],\s]+$/;
+
+type ProxyRequestConfig = GenerationConfig & {
+  systemInstruction?: string | Content;
+  tools?: Tool[];
+};
+
+type ProxyGenerateRequest = {
+  model?: string;
+  config?: ProxyRequestConfig;
+  contents: Content[];
+};
 
 // Minimal interface matching what the steps use from the Google SDK
 export class ProxyGenAI {
@@ -19,7 +31,7 @@ export class ProxyGenAI {
   // Add models property to match GoogleGenAI interface used by steps
   get models() {
     return {
-      generateContentStream: async (request: { model?: string; config?: any; contents: Content[] }) => {
+      generateContentStream: async (request: ProxyGenerateRequest) => {
         // Use the requested model, or fallback to flash-lite
         // The server will enforce restrictions if PROXY_MODE is 'demo'
         const modelName = request.model || 'gemini-2.5-flash-lite';
@@ -74,9 +86,10 @@ class ProxyGenerativeModel {
           return JSON.stringify(payload);
         })()
       });
-    } catch (fetchError: any) {
+    } catch (fetchError: unknown) {
       if (fetchError instanceof AppError) throw fetchError;
-      throw new AppError(`Network or connection error: ${fetchError.message}`, ErrorCode.NETWORK_ERROR, fetchError);
+      const message = fetchError instanceof Error ? fetchError.message : String(fetchError);
+      throw new AppError(`Network or connection error: ${message}`, ErrorCode.NETWORK_ERROR, fetchError);
     }
     
     if (!response.ok) {
@@ -158,21 +171,24 @@ class ProxyGenerativeModel {
                 if (braceCount === 0) {
                   const potentialJson = buffer.substring(openBraceIndex, i + 1);
                   try {
-                    const parsed = JSON.parse(potentialJson);
-                    yield {
+                    const parsed: unknown = JSON.parse(potentialJson);
+                    const parts = extractPartsFromChunk(parsed);
+                    const chunk = isValidStreamChunk(parsed) ? parsed : undefined;
+
+                    const normalizedChunk: GeminiStreamChunk = {
                       text: () => {
                         try {
-                          if (parsed.candidates?.[0]?.content?.parts) {
-                            return parsed.candidates[0].content.parts.map((p: any) => p.text || '').join('');
-                          }
+                          return parts?.map(part => part.text || '').join('') || '';
                         } catch (e) {
                           logger.warn('Error extracting text from chunk:', e);
                         }
                         return '';
                       },
-                      candidates: parsed.candidates,
-                      usageMetadata: parsed.usageMetadata
+                      candidates: chunk?.candidates,
+                      usageMetadata: chunk?.usageMetadata
                     };
+
+                    yield normalizedChunk;
                     buffer = buffer.substring(i + 1);
                     found = true;
                     break;

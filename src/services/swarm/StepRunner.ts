@@ -39,7 +39,8 @@ export class StepRunner {
 
         // 3. Store Results (Generic)
         if (!work.results) work.results = {};
-        (work.results as any)[step.id] = stepResult;
+        const resultKey: string = step.id;
+        work.results[resultKey] = stepResult;
 
         // Update metadata
         if (!work.stepMetadata) work.stepMetadata = [];

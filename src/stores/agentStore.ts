@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { type AgentState, type Work } from '@/types';
+import { type AgentState, type TokenUsage, type Work } from '@/types';
 import { type StepId } from '@/types/steps';
 import { updateAgentWork } from '@/utils/swarm/workHelpers';
 import { Logger } from '@shared/utils/logger';
@@ -38,7 +38,7 @@ interface AgentStore {
   
   // Work actions
   setCurrentWork: (work: Work | undefined) => void;
-  updateWorkResult: (stepId: StepId, agentIndex: number, updates: { text?: string; thought?: string; usage?: any }) => void;
+  updateWorkResult: (stepId: StepId, agentIndex: number, updates: { text?: string; thought?: string; usage?: TokenUsage | null }) => void;
   
   // Status actions
   setIsLoading: (value: boolean) => void;

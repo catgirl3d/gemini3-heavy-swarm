@@ -12,6 +12,8 @@ import './ModelSelector.css';
 
 import { getCachedModels, setCachedModels, type ModelOption } from '@/services/openrouter/modelsCache';
 
+type ModelSelectOption = CustomSelectOption<string, Omit<ModelOption, 'value' | 'label'> & { isRecommended?: boolean }>;
+
 interface ModelSelectorProps {
     value: string;
     onChange: (value: string) => void;
@@ -154,7 +156,7 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
     }, [models, search, provider, isDemoMode]);
 
     const options = useMemo(() => {
-        const combined: CustomSelectOption<string>[] = [];
+        const combined: ModelSelectOption[] = [];
         
         if (showEmptyOption && !search) {
             combined.push({ value: '', label: emptyLabel || 'None' });
@@ -175,7 +177,7 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
         return combined;
     }, [showEmptyOption, emptyLabel, search, recommendedModels, sortedAndFilteredModels]);
 
-    const renderTrigger = (selected: CustomSelectOption<string> | null) => {
+    const renderTrigger = (selected: ModelSelectOption | null) => {
         const logo = getProviderLogo(provider, selected?.value || value);
         const label = selected ? selected.label : (getModelDisplayName(value) || placeholder || 'Select model...');
         
@@ -192,7 +194,7 @@ export const ModelSelector: FC<ModelSelectorProps> = ({
         );
     };
 
-    const renderOption = (option: CustomSelectOption<string>) => {
+    const renderOption = (option: ModelSelectOption) => {
         if (option.value === '') {
             return <div className="model-option-label">{option.label}</div>;
         }

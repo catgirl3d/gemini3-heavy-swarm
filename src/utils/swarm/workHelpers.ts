@@ -169,7 +169,7 @@ export function updateAgentWork(
   updates: {
     text?: string;
     thought?: string;
-    usage?: TokenUsage;
+    usage?: TokenUsage | null;
   }
 ): Work {
   const nextWork = cloneWork(work);

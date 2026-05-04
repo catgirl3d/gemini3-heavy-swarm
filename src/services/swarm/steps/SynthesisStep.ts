@@ -11,6 +11,14 @@ import { updateAgentStatus } from '@/utils/swarm/statusHelpers';
 import { formatSystemInstruction, formatDrafts, buildSynthesisContext } from '@/utils/swarm/promptHelpers';
 import { createFirstTextJumpTracker } from '@/utils/swarm/jumpHelper';
 
+const getSynthesisText = (value: unknown): string => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value) || !('text' in value)) {
+    return '';
+  }
+
+  return typeof value.text === 'string' ? value.text : '';
+};
+
 export class SynthesisStep extends BaseStep {
   id: StepId = STEPS.SYNTHESIS;
   name = getStepConfig(STEPS.SYNTHESIS).name;
@@ -215,7 +223,7 @@ export class SynthesisStep extends BaseStep {
       
       // Save error info for UI display in ShowWork card, but don't pollute the main text
       // Preservation: if we had some partial text before error, keep it.
-      const currentText = (work.results[STEPS.SYNTHESIS] as any)?.text || '';
+      const currentText = getSynthesisText(work.results[STEPS.SYNTHESIS]);
       
       work.results[STEPS.SYNTHESIS] = { 
         text: currentText, // Don't add [System: Synthesis failed...] here

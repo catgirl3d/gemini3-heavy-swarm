@@ -7,7 +7,16 @@ import { getMissingAgentsForMessage } from '@/utils/swarm/agentHelpers';
 import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
 
 import { calculateUpdatedStateForRegeneration } from '@/utils/swarm/regenerationHelpers';
-import { cloneWork, updateAgentWork } from '@/utils/swarm/workHelpers';
+import {
+  cloneWork,
+  getStepResults,
+  getStepThoughts,
+  getStepUsage,
+  getSynthesisResult,
+  getSynthesisThought,
+  getSynthesisUsage,
+  updateAgentWork,
+} from '@/utils/swarm/workHelpers';
 import { getFriendlyErrorMessage } from '@/services/swarm/steps/utils/errorUtils';
 import { type SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { useAgentStore } from '@/stores/agentStore';
@@ -40,9 +49,11 @@ export function useSwarmRegeneration({
 
   // Cleanup on unmount - abort all registered controllers
   useEffect(() => {
+    const activeRegenerations = activeRegenerationsRef.current;
+
     return () => {
       // Controllers are in the centralized store, so abortAll will handle them
-      activeRegenerationsRef.current.clear();
+      activeRegenerations.clear();
     };
   }, []);
 
@@ -199,6 +210,29 @@ export function useSwarmRegeneration({
         }
       );
 
+      const synthesisResult = stepId === STEPS.SYNTHESIS ? getSynthesisResult(result.work) : null;
+      const text = stepId === STEPS.SYNTHESIS
+        ? typeof synthesisResult === 'string'
+          ? synthesisResult
+          : typeof synthesisResult?.text === 'string'
+            ? synthesisResult.text
+            : undefined
+        : (() => {
+            const stepText = getStepResults(result.work, stepId)[agentIndex];
+            return typeof stepText === 'string' ? stepText : undefined;
+          })();
+
+      const thought = stepId === STEPS.SYNTHESIS
+        ? getSynthesisThought(result.work) ?? undefined
+        : (() => {
+            const stepThought = getStepThoughts(result.work, stepId)[agentIndex];
+            return typeof stepThought === 'string' ? stepThought : undefined;
+          })();
+
+      const usage = stepId === STEPS.SYNTHESIS
+        ? getSynthesisUsage(result.work)
+        : getStepUsage(result.work, stepId)[agentIndex];
+
       // Handle final result
       // "result" contains the authoritative updated Work object for THIS agent from the step.
       // We use it to surgically update the latest message state without overwriting other agents' work.
@@ -208,19 +242,6 @@ export function useSwarmRegeneration({
 
           const existingMessage = prev[idx];
           const existingWork = existingMessage.work || workContext;
-          
-          // 1. Extract this agent's specific data from the regeneration result
-          const text = stepId === STEPS.SYNTHESIS 
-             ? (result.work.results?.[stepId] as any)?.text 
-             : (result.work.results?.[stepId] as string[])?.[agentIndex];
-             
-          const thought = stepId === STEPS.SYNTHESIS
-             ? result.work.results?.[`${stepId}_thought`] as string
-             : (result.work.results?.[`${stepId}_thoughts`] as string[])?.[agentIndex];
-
-          const usage = stepId === STEPS.SYNTHESIS
-             ? result.work.results?.[`${stepId}_usage`]
-             : (result.work.results?.[`${stepId}_usage`] as any[])?.[agentIndex];
 
           // 2. Perform atomic update into the LATEST messages work state
           const updatedWork = updateAgentWork(existingWork, stepId, agentIndex, {
@@ -318,7 +339,7 @@ export function useSwarmRegeneration({
         
         // We no longer update message parts with [System: ...] error text to avoid polluting the main UI.
         // The error is already saved in work.results[stepId] and will be shown in the "Show Work" card.
-        const updates: any = { work: updatedWork };
+        const updates: Partial<Message> = { work: updatedWork };
 
         const updated = updateTargetMessage(prev, messageIndex, stepId, updates, { workContext });
         

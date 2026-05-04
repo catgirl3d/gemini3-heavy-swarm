@@ -16,6 +16,13 @@ import { useAgentStore } from '@/stores/agentStore';
 import { updateAgentStatus, updateAgentStatusIfChanged } from '@/utils/swarm/statusHelpers';
 import { createFirstTextJumpTracker } from '@/utils/swarm/jumpHelper';
 
+type WorkResults = NonNullable<Work['results']>;
+type SynthesisResult = NonNullable<WorkResults[typeof STEPS.SYNTHESIS]>;
+
+const isSynthesisResult = (value: unknown): value is SynthesisResult => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
 export abstract class BaseStep implements StepDescriptor {
   abstract id: StepId;
 
@@ -175,11 +182,11 @@ export abstract class BaseStep implements StepDescriptor {
            */
           // Synthesis/Single agent
           // Always maintain object shape for synthesis - { text, sources? }
-          if (typeof current === 'object' && !Array.isArray(current) && current !== null) {
-              (work.results[stepId] as any) = { ...current, text };
+          if (isSynthesisResult(current)) {
+              work.results[STEPS.SYNTHESIS] = { ...current, text };
           } else {
               // Initialize as object from first chunk
-              (work.results[stepId] as any) = { text };
+              work.results[STEPS.SYNTHESIS] = { text };
           }
       } else {
           // Multi-agent array (Drafters/Critics)
@@ -214,8 +221,7 @@ export abstract class BaseStep implements StepDescriptor {
       if (storageIndex === -1) {
         work.results[usageKey] = usage;
       } else {
-        this.ensureStepUsage(work, stepId, settings.numAgents);
-        (work.results[usageKey] as any[])[storageIndex] = usage;
+        this.ensureStepUsage(work, stepId, settings.numAgents)[storageIndex] = usage;
       }
     }
 
@@ -274,8 +280,8 @@ export abstract class BaseStep implements StepDescriptor {
    */
   protected handleRetryProgress(context: StepContext, index: number, attempt: number, states: AgentState[]): AgentState[] {
     // Maintain current status for synthesis to prevent UI flickering during retries.
-    const currentStatus = states[index]?.status || 'working';
-    const nextStatus = this.id === STEPS.SYNTHESIS ? currentStatus : 'working';
+    const currentStatus: AgentState['status'] = states[index]?.status || 'working';
+    const nextStatus: AgentState['status'] = this.id === STEPS.SYNTHESIS ? currentStatus : 'working';
     const label = `Retrying (Attempt ${attempt})...`;
 
     const updated = this.updateAgentStatus(states, index, nextStatus, label);
@@ -286,7 +292,7 @@ export abstract class BaseStep implements StepDescriptor {
     updateAgentStatus(
       this.id,
       index,
-      nextStatus as any,
+      nextStatus,
       context.messageId,
       label
     );
@@ -431,13 +437,14 @@ export abstract class BaseStep implements StepDescriptor {
     work: StepContext['work'], 
     stepId: StepId, 
     numAgents: number
-  ): unknown[] {
+  ): (TokenUsage | null)[] {
+    this.ensureResults(work);
     const key = `${stepId}_usage`;
-    if (!work.results[key]) {
+    if (!Array.isArray(work.results[key])) {
       // Always initialize as an array to allow indexed access
       work.results[key] = Array(numAgents).fill(null);
     }
-    return work.results[key] as unknown[];
+    return work.results[key] as (TokenUsage | null)[];
   }
 
   /**
@@ -826,8 +833,7 @@ export abstract class BaseStep implements StepDescriptor {
     updateAgentStatus(this.id, agentIndex, 'working', messageId);
 
     // Clear previous usage to avoid displaying stale data during regeneration
-    this.ensureStepUsage(work, this.id, settings.numAgents);
-    (work.results[`${this.id}_usage`] as any[])[agentIndex] = null;
+    this.ensureStepUsage(work, this.id, settings.numAgents)[agentIndex] = null;
     
     /**
      * STATE CLEARING FOR REGENERATION
@@ -905,8 +911,7 @@ export abstract class BaseStep implements StepDescriptor {
       // CRITICAL: Save final usage after streaming completes
       // This ensures token usage displays correctly for regenerated agents
       if (finalUsage) {
-        this.ensureStepUsage(work, this.id, settings.numAgents);
-        (work.results[`${this.id}_usage`] as any[])[agentIndex] = finalUsage;
+        this.ensureStepUsage(work, this.id, settings.numAgents)[agentIndex] = finalUsage;
         
         // Also update the store atomically for immediate UI update
         useAgentStore.getState().updateWorkResult(this.id, agentIndex, { usage: finalUsage });
@@ -982,8 +987,8 @@ export abstract class BaseStep implements StepDescriptor {
     if (sources && sources.length > 0) {
       this.ensureResults(result.work);
       const currentResult = result.work.results?.[this.id];
-      if (typeof currentResult === 'object') {
-        result.work.results![this.id] = { ...currentResult, sources } as any;
+      if (isSynthesisResult(currentResult)) {
+        result.work.results[STEPS.SYNTHESIS] = { ...currentResult, sources };
       }
     }
     

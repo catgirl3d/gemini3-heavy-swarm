@@ -2,15 +2,20 @@ import React, { type ReactNode, useRef, useState } from 'react';
 import { PortalDropdown } from '@/components/ui/PortalDropdown/PortalDropdown';
 import './CustomSelect.css';
 
-export interface CustomSelectOption<T = string> {
+interface BaseCustomSelectOption<T = string> {
     value: T;
     label: string;
-    [key: string]: any; // Allow additional properties
+    isHeader?: boolean;
 }
 
-interface CustomSelectProps<T = string> {
+export type CustomSelectOption<
+    T = string,
+    TExtra extends object = object
+> = BaseCustomSelectOption<T> & TExtra;
+
+interface CustomSelectProps<T = string, TExtra extends object = object> {
     // Data
-    options: CustomSelectOption<T>[];
+    options: CustomSelectOption<T, TExtra>[];
     value: T;
     onChange: (value: T) => void;
     
@@ -19,17 +24,17 @@ interface CustomSelectProps<T = string> {
     disabled?: boolean;
     
     // Custom rendering
-    renderTrigger?: (selected: CustomSelectOption<T> | null, isOpen: boolean) => ReactNode;
-    renderOption?: (option: CustomSelectOption<T>, isSelected: boolean) => ReactNode;
+    renderTrigger?: (selected: CustomSelectOption<T, TExtra> | null, isOpen: boolean) => ReactNode;
+    renderOption?: (option: CustomSelectOption<T, TExtra>, isSelected: boolean) => ReactNode;
     renderOptionTrailing?: (
-        option: CustomSelectOption<T>,
+        option: CustomSelectOption<T, TExtra>,
         helpers: { closeDropdown: () => void; selectOption: () => void; isSelected: boolean }
     ) => ReactNode;
     
     // Additional features
     searchable?: boolean;
     searchPlaceholder?: string;
-    filterFn?: (option: CustomSelectOption<T>, searchTerm: string) => boolean;
+    filterFn?: (option: CustomSelectOption<T, TExtra>, searchTerm: string) => boolean;
     
     // Header/Footer slots
     dropdownHeader?: ReactNode;
@@ -48,7 +53,7 @@ interface CustomSelectProps<T = string> {
     onSearchChange?: (search: string) => void;
 }
 
-export function CustomSelect<T = string>({
+export function CustomSelect<T = string, TExtra extends object = object>({
     options,
     value,
     onChange,
@@ -70,7 +75,7 @@ export function CustomSelect<T = string>({
     isOpen: controlledIsOpen,
     onOpenChange,
     onSearchChange,
-}: CustomSelectProps<T>) {
+}: CustomSelectProps<T, TExtra>) {
     const [internalIsOpen, setInternalIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -96,7 +101,7 @@ export function CustomSelect<T = string>({
 
     const selectedOption = options.find(opt => opt.value === value) || null;
     const closeDropdown = () => setIsOpen(false);
-    const renderSelectOption = (option: CustomSelectOption<T>, isSelected: boolean) => {
+    const renderSelectOption = (option: CustomSelectOption<T, TExtra>, isSelected: boolean) => {
         const trailingContent = renderOptionTrailing?.(option, {
             closeDropdown,
             selectOption: () => handleSelect(option.value),
@@ -138,7 +143,7 @@ export function CustomSelect<T = string>({
     };
 
     // Default filter function
-    const defaultFilterFn = (option: CustomSelectOption<T>, search: string) => {
+    const defaultFilterFn = (option: CustomSelectOption<T, TExtra>, search: string) => {
         const term = search.toLowerCase();
         return (
             option.label.toLowerCase().includes(term) ||
@@ -152,7 +157,7 @@ export function CustomSelect<T = string>({
         : options;
 
     // Default trigger renderer
-    const defaultRenderTrigger = (selected: CustomSelectOption<T> | null, open: boolean) => (
+    const defaultRenderTrigger = (selected: CustomSelectOption<T, TExtra> | null, open: boolean) => (
         <>
             <span className="custom-select-label">
                 {selected ? selected.label : placeholder}
@@ -164,7 +169,7 @@ export function CustomSelect<T = string>({
     );
 
     // Default option renderer
-    const defaultRenderOption = (option: CustomSelectOption<T>) => (
+    const defaultRenderOption = (option: CustomSelectOption<T, TExtra>) => (
         <span className="custom-select-option-label">{option.label}</span>
     );
 

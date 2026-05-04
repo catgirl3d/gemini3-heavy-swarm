@@ -1,7 +1,14 @@
 import { BaseProvider } from './BaseProvider';
 import { type ProviderCapabilities, type GenerateRequest, type ProviderStreamResult, type StreamChunk } from '@/types/ai-provider';
-import { type AppSettings, type TokenUsage, ProviderType } from '@/types';
+import { type AppSettings, ProviderType } from '@/types';
 import { OpenRouterGenAI } from '@/services/openrouter/OpenRouterGenAI';
+import {
+  extractGroundingChunksFromChunk,
+  extractPartsFromChunk,
+  extractTextFromParts,
+  extractTokenUsage,
+  extractUsageMetadataFromChunk,
+} from '@/services/swarm/steps/utils/streamUtils';
 
 export class OpenRouterProvider extends BaseProvider {
   readonly name = ProviderType.OpenRouter;
@@ -35,22 +42,15 @@ export class OpenRouterProvider extends BaseProvider {
   }
 
   get models() {
-    const self = this;
     return {
-      async generateContentStream(request: GenerateRequest): Promise<ProviderStreamResult> {
-        const stream = await self.client.models.generateContentStream({
+      generateContentStream: async (request: GenerateRequest): Promise<ProviderStreamResult> => {
+        const stream = await this.client.models.generateContentStream({
           model: request.model,
           contents: request.contents,
           config: request.config,
         });
 
-        const normalizedStream = (async function* () {
-          // OpenRouterGenAI already yields chunks that match our normalized structure
-          // but we map it just to be sure and consistent with interface
-          for await (const chunk of stream.stream) {
-             yield self.normalizeChunk(chunk);
-          }
-        })();
+        const normalizedStream = this.normalizeStream(stream.stream);
 
         return {
           stream: normalizedStream,
@@ -64,47 +64,26 @@ export class OpenRouterProvider extends BaseProvider {
     return settings.openRouterModel;
   }
 
-  private normalizeChunk(chunk: any): StreamChunk {
-    // OpenRouterGenAI.ts already normalize chunks to have candidates and usageMetadata
-    // and even provides a text() helper which extracts text from candidates[0].content.parts
-    
-    // We can use the same extraction logic as Gemini or rely on OpenRouterGenAI's normalization
-    // Since OpenRouterGenAI already did the heavy lifting, we just map it to our StreamChunk type.
-    
-    let text = '';
-    if (typeof chunk.text === 'function') {
-        text = chunk.text();
+  private async *normalizeStream(stream: AsyncIterable<unknown>): AsyncIterable<StreamChunk> {
+    // OpenRouterGenAI already yields chunks that match our normalized structure,
+    // but we remap them here to keep the provider contract consistent.
+    for await (const chunk of stream) {
+      yield this.normalizeChunk(chunk);
     }
-
-    const thought = typeof chunk.thought === 'string'
-      ? chunk.thought
-      : chunk.candidates?.[0]?.content?.parts
-          ?.filter((part: any) => part?.thought && typeof part.text === 'string')
-          .map((part: any) => part.text)
-          .join('') || '';
-    
-    // In OpenRouterGenAI, thoughts are extracted into candidates[0].content.parts[i].text where part.thought is true
-    // If OpenRouterGenAI followed Gemini pattern, we can use extractTextFromParts
-    
-    return {
-        text: text,
-        thought,
-        usage: this.extractUsage(chunk.usageMetadata),
-        groundingChunks: chunk.groundingChunks,
-        raw: chunk
-    };
   }
 
-  private extractUsage(metadata: any): TokenUsage | null {
-    if (!metadata) return null;
+  private normalizeChunk(chunk: unknown): StreamChunk {
+    const parts = extractPartsFromChunk(chunk);
+    const usageMetadata = extractUsageMetadataFromChunk(chunk);
+    const groundingChunks = extractGroundingChunksFromChunk(chunk);
+    const { text, thought } = extractTextFromParts(parts);
+
     return {
-      promptTokens: metadata.promptTokenCount || 0,
-      candidatesTokens: metadata.candidatesTokenCount || 0,
-      totalTokens: metadata.totalTokenCount || 0,
-      thoughtsTokenCount: metadata.thoughtsTokenCount,
-      cachedContentTokenCount: metadata.cachedContentTokenCount,
-      toolUsePromptTokenCount: metadata.toolUsePromptTokenCount,
-      isEstimated: metadata.isEstimated
+        text,
+        thought,
+        usage: extractTokenUsage(usageMetadata),
+        groundingChunks,
+        raw: chunk,
     };
   }
 }

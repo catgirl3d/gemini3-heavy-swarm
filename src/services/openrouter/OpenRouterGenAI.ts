@@ -1,7 +1,8 @@
-import { type Content } from '@google/genai';
+import { type Content, type GenerationConfig } from '@google/genai';
 import { API_SECRET } from '@/constants';
 import { Logger } from '@shared/utils/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
+import { type GeminiPart, type GeminiUsageMetadata, type OpenRouterStreamChunk } from '@/services/swarm/steps/utils/streamUtils';
 
 const logger = new Logger('OpenRouterGenAI');
 
@@ -38,12 +39,85 @@ export interface OpenRouterOptions {
   timeout?: number;
 }
 
+type OpenRouterRequestConfig = Pick<GenerationConfig, 'temperature' | 'maxOutputTokens'> & {
+  systemInstruction?: string | Content;
+};
+
+type OpenRouterGenerateRequest = {
+  model?: string;
+  config?: OpenRouterRequestConfig;
+  contents: Content[];
+};
+
+type OpenRouterSseUsage = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  reasoning_tokens?: number;
+};
+
+type OpenRouterSseDelta = {
+  content?: string;
+  reasoning?: string;
+};
+
+type OpenRouterSseChoice = {
+  delta?: OpenRouterSseDelta;
+};
+
+type OpenRouterSseChunk = {
+  usage?: OpenRouterSseUsage;
+  choices?: OpenRouterSseChoice[];
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null;
+};
+
+const isOpenRouterSseUsage = (value: unknown): value is OpenRouterSseUsage => {
+  if (!isRecord(value)) return false;
+
+  return (
+    (value.prompt_tokens === undefined || typeof value.prompt_tokens === 'number') &&
+    (value.completion_tokens === undefined || typeof value.completion_tokens === 'number') &&
+    (value.total_tokens === undefined || typeof value.total_tokens === 'number') &&
+    (value.reasoning_tokens === undefined || typeof value.reasoning_tokens === 'number')
+  );
+};
+
+const isOpenRouterSseDelta = (value: unknown): value is OpenRouterSseDelta => {
+  if (!isRecord(value)) return false;
+
+  return (
+    (value.content === undefined || typeof value.content === 'string') &&
+    (value.reasoning === undefined || typeof value.reasoning === 'string')
+  );
+};
+
+const isOpenRouterSseChoice = (value: unknown): value is OpenRouterSseChoice => {
+  if (!isRecord(value)) return false;
+  return value.delta === undefined || isOpenRouterSseDelta(value.delta);
+};
+
+const isOpenRouterSseChunk = (value: unknown): value is OpenRouterSseChunk => {
+  if (!isRecord(value)) return false;
+
+  return (
+    (value.usage === undefined || isOpenRouterSseUsage(value.usage)) &&
+    (value.choices === undefined || (Array.isArray(value.choices) && value.choices.every(isOpenRouterSseChoice)))
+  );
+};
+
+const contentToText = (content: Content): string => {
+  return content.parts?.map(part => part.text || '').join('') || '';
+};
+
 export class OpenRouterGenAI {
   constructor(private options: OpenRouterOptions) {}
 
   get models() {
     return {
-      generateContentStream: async (request: { model?: string; config?: any; contents: Content[] }) => {
+      generateContentStream: async (request: OpenRouterGenerateRequest) => {
         const modelName = request.model || this.options.model;
         const { temperature, maxOutputTokens, systemInstruction } = request.config || {};
 
@@ -64,7 +138,7 @@ export class OpenRouterGenAI {
           
           return {
             role: content.role === 'model' ? 'assistant' : 'user',
-            content: content.parts.map(p => p.text || '').join('')
+            content: contentToText(content)
           };
         });
 
@@ -72,7 +146,7 @@ export class OpenRouterGenAI {
         if (systemInstruction) {
           const systemContent = typeof systemInstruction === 'string'
             ? systemInstruction
-            : (systemInstruction.parts?.map((p: any) => p.text || '').join('') || '');
+            : contentToText(systemInstruction);
           
           if (systemContent) {
             messages.unshift({
@@ -116,8 +190,9 @@ export class OpenRouterGenAI {
               body: JSON.stringify(payload)
             });
           }
-        } catch (fetchError: any) {
-          throw new AppError(`Network or connection error: ${fetchError.message}`, ErrorCode.NETWORK_ERROR, fetchError);
+        } catch (fetchError: unknown) {
+          const message = fetchError instanceof Error ? fetchError.message : String(fetchError);
+          throw new AppError(`Network or connection error: ${message}`, ErrorCode.NETWORK_ERROR, fetchError);
         }
 
         if (!response.ok) {
@@ -194,7 +269,7 @@ export class OpenRouterGenAI {
           let accumulatedContent = '';
           let accumulatedReasoning = '';
           
-          let lastUsage: any = {
+          let lastUsage: GeminiUsageMetadata = {
             promptTokenCount: estimatedPromptTokens,
             candidatesTokenCount: 0,
             totalTokenCount: estimatedPromptTokens,
@@ -223,7 +298,11 @@ export class OpenRouterGenAI {
                 if (data === '[DONE]') break;
 
                 try {
-                  const parsed = JSON.parse(data);
+                  const parsed: unknown = JSON.parse(data);
+                  if (!isOpenRouterSseChunk(parsed)) {
+                    logger.warn('Skipping invalid OpenRouter SSE chunk', { data });
+                    continue;
+                  }
                   
                   // If real usage data arrives, use it (overrides estimates)
                   if (parsed.usage) {
@@ -263,7 +342,7 @@ export class OpenRouterGenAI {
                     }
                     
                     // Build parts array matching Gemini format
-                    const parts: Array<{ text: string; thought?: boolean }> = [];
+                    const parts: GeminiPart[] = [];
                     
                     // Add reasoning as thought part
                     if (reasoning) {
@@ -274,8 +353,8 @@ export class OpenRouterGenAI {
                     if (content) {
                       parts.push({ text: content });
                     }
-                    
-                    yield {
+
+                    const normalizedChunk: OpenRouterStreamChunk = {
                       text: () => content,
                       candidates: [{
                         content: {
@@ -283,7 +362,9 @@ export class OpenRouterGenAI {
                         }
                       }],
                       usageMetadata: lastUsage
-                    } as any;
+                    };
+
+                    yield normalizedChunk;
                   }
                 } catch (e) {
                   logger.warn('Error parsing SSE chunk:', { error: e, data });
@@ -293,7 +374,7 @@ export class OpenRouterGenAI {
             
             // Always yield final usage metadata if we have it
             if (lastUsage) {
-              yield {
+              const finalChunk: OpenRouterStreamChunk = {
                 text: () => '',
                 candidates: [{
                   content: {
@@ -301,7 +382,9 @@ export class OpenRouterGenAI {
                   }
                 }],
                 usageMetadata: lastUsage
-              } as any;
+              };
+
+              yield finalChunk;
             }
           } catch (error) {
             logger.error('OpenRouter stream processing error:', error);

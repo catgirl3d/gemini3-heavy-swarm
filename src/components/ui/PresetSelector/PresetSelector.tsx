@@ -8,9 +8,11 @@ export interface PresetSelectorOption {
     isCustom: boolean;
 }
 
-interface PresetSelectOption<T extends PresetSelectorOption> extends CustomSelectOption<string> {
+type PresetSelectExtra<T extends PresetSelectorOption> = {
     preset: T;
-}
+};
+
+type PresetSelectOption<T extends PresetSelectorOption> = CustomSelectOption<string, PresetSelectExtra<T>>;
 
 interface PresetSelectorProps<T extends PresetSelectorOption> {
     presets: T[];
@@ -58,7 +60,7 @@ export const PresetSelector = <T extends PresetSelectorOption,>({
     );
 
     return (
-        <CustomSelect
+        <CustomSelect<string, PresetSelectExtra<T>>
             options={options}
             value=""
             onChange={handleChange}

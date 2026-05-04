@@ -1,4 +1,4 @@
-import { type AppSettings, type RoleProfile, type SavedInstruction, type AgentRole, PROMPT_TYPES, type PromptTypeId, ProviderType, type RoleType } from '@/types';
+import { type AppSettings, type RoleProfile, type SavedInstruction, type SavedRole, type AgentRole, PROMPT_TYPES, type PromptTypeId, ProviderType, type RoleType } from '@/types';
 import { DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 import { generateUUID } from '@/utils/common/uuid';
 import { Logger } from '@shared/utils/logger';
@@ -130,10 +130,11 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
   } else {
     // Migration 4.1: Ensure savedInstructions have IDs
     let instructionsChanged = false;
-    migrated.savedInstructions = migrated.savedInstructions.map((inst: any) => {
-      if (!hasValidId(inst)) {
+    migrated.savedInstructions = migrated.savedInstructions.map((inst) => {
+      const instruction = inst as Partial<SavedInstruction>;
+      if (!hasValidId(instruction)) {
          instructionsChanged = true;
-         return { ...inst, id: generateUUID() };
+         return { ...instruction, id: generateUUID() } as SavedInstruction;
       }
       return inst;
     });
@@ -147,10 +148,11 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
   } else {
     // Migration 5.1: Ensure savedRoles have IDs
     let savedRolesChanged = false;
-    migrated.savedRoles = migrated.savedRoles.map((role: any) => {
-      if (!hasValidId(role)) {
+    migrated.savedRoles = migrated.savedRoles.map((role) => {
+      const savedRole = role as Partial<SavedRole>;
+      if (!hasValidId(savedRole)) {
         savedRolesChanged = true;
-        return { ...role, id: generateUUID() };
+        return { ...savedRole, id: generateUUID() } as SavedRole;
       }
       return role;
     });
@@ -267,15 +269,15 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
   // Migration 15: Ensure role models exist and are valid
   if (migrated.roleProfiles) {
     let modelsUpdated = false;
-    (migrated.roleProfiles as any[]) = migrated.roleProfiles.map((profile: any) => {
-        const roles = (profile.roles || []).map((role: any) => {
+    migrated.roleProfiles = migrated.roleProfiles.map((profile) => {
+        const roles = (profile.roles || []).map((role) => {
             if (role.model === '') { modelsUpdated = true; }
             return {
                 ...role,
                 model: role.model || undefined // Clean up empty strings or add if missing
             };
         });
-        const criticRoles = (profile.criticRoles || []).map((role: any) => {
+        const criticRoles = (profile.criticRoles || []).map((role) => {
             if (role.model === '') { modelsUpdated = true; }
             return {
                 ...role,
