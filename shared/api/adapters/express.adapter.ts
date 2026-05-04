@@ -1,11 +1,24 @@
 // Note: Using relative paths instead of aliases (@shared)
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
+import type { Response as ExpressResponse } from 'express';
 import type { ReadableStream as WebReadableStream } from 'stream/web';
 import { RATE_LIMIT_PER_MINUTE } from '../../security/security';
 import { type RateLimitResult } from '../types';
 import { Logger } from '../../utils/logger';
 
 const logger = new Logger('ExpressAdapter');
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  return 'Unknown error';
+};
 
 /**
  * Simple in-memory rate limiter for Express
@@ -64,7 +77,7 @@ setInterval(cleanupRateLimits, 60000).unref?.();
  * @param webResponse - The source Web Response (from fetch)
  * @param expressRes - The destination Express Response object
  */
-export async function streamToExpress(webResponse: Response, expressRes: any): Promise<void> {
+export async function streamToExpress(webResponse: Response, expressRes: ExpressResponse): Promise<void> {
   // Use upstream Content-Type from Google API if available
   const contentType = webResponse.headers.get('content-type') || 'application/json';
   expressRes.setHeader('Content-Type', contentType);
@@ -80,13 +93,14 @@ export async function streamToExpress(webResponse: Response, expressRes: any): P
   try {
     // pipeline handles automatic cleanup and error propagation for both sides
     await pipeline(nodeStream, expressRes);
-  } catch (err: any) {
-    logger.error(`Stream/Pipeline Error: ${err.message}`);
+  } catch (err: unknown) {
+    const errorMessage = getErrorMessage(err);
+    logger.error(`Stream/Pipeline Error: ${errorMessage}`);
     
     // If the error occurred after headers were sent, we must signal it via a JSON chunk.
     // We don't use SSE 'event: error' because ProxyGenAI.ts parses raw JSON chunks.
     if (!expressRes.headersSent) {
-      expressRes.status(500).json({ error: 'Stream interrupted', details: err.message });
+      expressRes.status(500).json({ error: 'Stream interrupted', details: errorMessage });
     } else {
       try {
         // Only write if the response is still open
@@ -94,13 +108,13 @@ export async function streamToExpress(webResponse: Response, expressRes: any): P
           // Send as a valid JSON object that the client's parser can recognize
           expressRes.write(JSON.stringify({ 
             error: "Stream interrupted", 
-            details: err.message,
+            details: errorMessage,
             candidates: [] // Match expected structure if needed by client
           }) + '\n');
           expressRes.end();
         }
-      } catch (writeErr) {
-        logger.error(`Failed to write error chunk: ${writeErr.message}`);
+      } catch (writeErr: unknown) {
+        logger.error(`Failed to write error chunk: ${getErrorMessage(writeErr)}`);
       }
     }
   }

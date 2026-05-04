@@ -17,7 +17,7 @@ export class Logger {
   /**
    * Logs a debug message with optional data.
    */
-  debug(message: string, data?: any) {
+  debug(message: string, data?: unknown) {
     if (this.shouldLog()) {
       console.log(`[DEBUG:${this.context}] ${message}`, data ?? '');
     }
@@ -28,7 +28,7 @@ export class Logger {
    * Note: Errors are always logged to console.error regardless of debugMode
    * as they represent critical failures.
    */
-  error(message: string, error?: any) {
+  error(message: string, error?: unknown) {
     console.error(`[ERROR:${this.context}] ${message}`, error ?? '');
   }
 
@@ -36,7 +36,7 @@ export class Logger {
    * Logs an info message.
    * Note: Info messages are always logged as they represent important operational information.
    */
-  info(message: string, data?: any) {
+  info(message: string, data?: unknown) {
     console.log(`[INFO:${this.context}] ${message}`, data ?? '');
   }
 
@@ -44,7 +44,7 @@ export class Logger {
    * Logs a warning message.
    * Note: Warnings are always logged as they represent important issues that should not be ignored.
    */
-  warn(message: string, data?: any) {
+  warn(message: string, data?: unknown) {
     console.warn(`[WARN:${this.context}] ${message}`, data ?? '');
   }
 }

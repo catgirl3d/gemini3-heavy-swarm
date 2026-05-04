@@ -63,7 +63,7 @@ export function buildUnifiedHeaders(origin: string | null | undefined, allowedOr
  * @param headers - Prepared headers
  * @returns Response or null
  */
-export function handleCorsPreflightIfNeeded(request: any, origin: string | null | undefined, allowedOrigins: string[], headers: Headers): Response | null {
+export function handleCorsPreflightIfNeeded(request: { method: string }, origin: string | null | undefined, allowedOrigins: string[], headers: Headers): Response | null {
   const preflight = checkPreflightAllowed(request.method, origin, allowedOrigins);
   if (preflight.isPreflight) {
     if (preflight.allowed) {
