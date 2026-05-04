@@ -1,13 +1,14 @@
 import React, { type FC, type ChangeEvent, useEffect, useMemo } from 'react';
-import { type AppSettings, type ServerStatus, ProviderType } from '@/types';
+import { type AppSettings, type ServerStatus, type SimulateError, ProviderType } from '@/types';
 import { isThinkingModel as checkIsThinkingModel } from '@/utils/common/modelUtils';
 import { getCachedModels } from '@/services/openrouter/modelsCache';
 import { MIN_OUTPUT_TOKENS_FOR_THINKING, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 import { StepperControl } from '@/components/modals/SettingsModal/components/StepperControl';
 import { TemperatureBanner } from '@/components/modals/SettingsModal/components/TemperatureBanner';
 import { ModelSelector, ProviderSelector, CustomSelect, type CustomSelectOption } from '@/components/ui';
+import { persistProviderModels } from '@/utils/settings/providerPersistence';
 
-const ERROR_SIMULATION_OPTIONS: CustomSelectOption[] = [
+const ERROR_SIMULATION_OPTIONS: CustomSelectOption<SimulateError>[] = [
     { value: 'none', label: 'None (Normal Operation)' },
     { value: '429', label: '429 - Rate Limit Exceeded' },
     { value: '500', label: '500 - Internal Server Error' },
@@ -36,6 +37,17 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
 }) => {
     const model = localSettings.model ?? 'gemini-3-flash-preview';
     const isGeminiDemo = !localSettings.apiKey && isModelUnlocked && serverStatus?.proxyMode !== 'private';
+
+    const updateSetting = <K extends keyof AppSettings>(name: K, value: AppSettings[K]) => {
+        setLocalSettings(prev => ({
+            ...prev,
+            [name]: value,
+        }));
+    };
+
+    const updateProvider = (provider: ProviderType) => {
+        setLocalSettings(prev => persistProviderModels(prev, provider));
+    };
 
     const isThinkingModel = useMemo(() => {
         const openRouterModels = localSettings.provider === ProviderType.OpenRouter ? getCachedModels() || undefined : undefined;
@@ -67,7 +79,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                         <label className="modal-label">Provider</label>
                         <ProviderSelector
                             value={localSettings.provider || ProviderType.Gemini}
-                            onChange={(val) => handleChange({ target: { name: 'provider', value: val } } as any)}
+                            onChange={updateProvider}
                             isOpen={openDropdownId === 'provider'}
                             onOpenChange={(open) => setOpenDropdownId(open ? 'provider' : null)}
                         />
@@ -95,7 +107,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                                 <ModelSelector
                                     provider={ProviderType.Gemini}
                                     value={!isModelUnlocked ? 'gemini-2.5-flash-lite' : (localSettings.model || 'gemini-3-flash-preview')}
-                                    onChange={(val) => handleChange({ target: { name: 'model', value: val } } as any)}
+                                    onChange={(val) => updateSetting('model', val)}
                                     disabled={!isModelUnlocked || isGeminiDemo}
                                     isOpen={openDropdownId === 'gemini-model'}
                                     onOpenChange={(open) => setOpenDropdownId(open ? 'gemini-model' : null)}
@@ -157,7 +169,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                                 <ModelSelector
                                     provider={ProviderType.OpenRouter}
                                     value={localSettings.openRouterModel || ''}
-                                    onChange={(val) => handleChange({ target: { name: 'openRouterModel', value: val } } as any)}
+                                    onChange={(val) => updateSetting('openRouterModel', val)}
                                     placeholder="Select model..."
                                     disabled={!isModelUnlocked}
                                     isOpen={openDropdownId === 'openrouter-model'}
@@ -431,7 +443,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                                 <CustomSelect
                                     options={ERROR_SIMULATION_OPTIONS}
                                     value={localSettings.simulateInitialError || 'none'}
-                                    onChange={(val) => handleChange({ target: { name: 'simulateInitialError', value: val } } as any)}
+                                    onChange={(val) => updateSetting('simulateInitialError', val)}
                                     isOpen={openDropdownId === 'initial-error'}
                                     onOpenChange={(open) => setOpenDropdownId(open ? 'initial-error' : null)}
                                 />
@@ -475,7 +487,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                                 <CustomSelect
                                     options={ERROR_SIMULATION_OPTIONS}
                                     value={localSettings.simulateRefinementError || 'none'}
-                                    onChange={(val) => handleChange({ target: { name: 'simulateRefinementError', value: val } } as any)}
+                                    onChange={(val) => updateSetting('simulateRefinementError', val)}
                                     isOpen={openDropdownId === 'refinement-error'}
                                     onOpenChange={(open) => setOpenDropdownId(open ? 'refinement-error' : null)}
                                 />
@@ -519,7 +531,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                                 <CustomSelect
                                     options={ERROR_SIMULATION_OPTIONS}
                                     value={localSettings.simulateSynthesisError || 'none'}
-                                    onChange={(val) => handleChange({ target: { name: 'simulateSynthesisError', value: val } } as any)}
+                                    onChange={(val) => updateSetting('simulateSynthesisError', val)}
                                     isOpen={openDropdownId === 'synthesis-error'}
                                     onOpenChange={(open) => setOpenDropdownId(open ? 'synthesis-error' : null)}
                                 />

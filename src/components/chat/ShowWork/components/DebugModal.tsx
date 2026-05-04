@@ -12,9 +12,9 @@ export const DebugModal: FC<{ title: string; debugInfo: StepDebugInfo | undefine
     const [viewMode, setViewMode] = useState<'formatted' | 'raw' | 'readable'>('formatted');
     const rawDebugJson = JSON.stringify(debugInfo, null, 2) ?? 'undefined';
 
-    const getReadableJson = (data: any): string => {
+    const getReadableJson = (data: unknown): string => {
         // Simple YAML-like formatter for better readability
-        const format = (obj: any, level: number = 0): string => {
+        const format = (obj: unknown, level: number = 0): string => {
             const indent = '  '.repeat(level);
             
             if (obj === null) return 'null';
@@ -24,7 +24,7 @@ export const DebugModal: FC<{ title: string; debugInfo: StepDebugInfo | undefine
             }
             
             if (typeof obj === 'object') {
-                const entries = Object.entries(obj);
+                const entries = Object.entries(obj as Record<string, unknown>);
                 if (entries.length === 0) return '{}';
                 
                 return '\n' + entries.map(([key, value]) => {

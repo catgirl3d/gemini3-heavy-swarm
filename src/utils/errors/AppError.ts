@@ -145,11 +145,18 @@ export class AppError extends Error {
     };
 
     // 2. Classify by Error object details or string message
-    if (error instanceof Error || (error && typeof error === 'object' && 'message' in error)) {
-      message = (error as any).message || message;
+    if (error instanceof Error) {
+      message = error.message || message;
       if (!code) {
-        const name = (error as any).name || '';
-        code = classify(message) || (name === 'AbortError' ? ErrorCode.ABORTED : null) || classify((error as any).stack || '');
+        code = classify(message) || (error.name === 'AbortError' ? ErrorCode.ABORTED : null) || classify(error.stack || '');
+      }
+    } else if (error && typeof error === 'object' && 'message' in error) {
+      const errorLike = error as { message?: unknown; name?: unknown; stack?: unknown };
+      message = errorLike.message ? String(errorLike.message) : message;
+      if (!code) {
+        const name = typeof errorLike.name === 'string' ? errorLike.name : '';
+        const stack = typeof errorLike.stack === 'string' ? errorLike.stack : '';
+        code = classify(message) || (name === 'AbortError' ? ErrorCode.ABORTED : null) || classify(stack);
       }
     } else if (typeof error === 'string') {
       message = error;

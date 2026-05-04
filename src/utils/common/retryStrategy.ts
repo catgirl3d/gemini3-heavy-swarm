@@ -6,7 +6,7 @@ export interface RetryOptions {
   maxDelayMs: number;
   factor: number;
   onRetry?: (error: AppError, attempt: number, delay: number) => void;
-  shouldRetry?: (error: any) => boolean;
+  shouldRetry?: (error: AppError) => boolean;
   signal?: AbortSignal;
 }
 
@@ -25,7 +25,7 @@ export async function withRetry<T>(
   options: Partial<RetryOptions> = {}
 ): Promise<T> {
   const opts = { ...DEFAULT_RETRY_OPTIONS, ...options };
-  let lastError: any;
+  let lastError: unknown;
 
   for (let attempt = 1; attempt <= opts.maxRetries + 1; attempt++) {
     if (opts.signal?.aborted) {

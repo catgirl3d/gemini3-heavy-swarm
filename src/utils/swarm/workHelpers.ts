@@ -94,9 +94,9 @@ export function getSynthesisResult(
  * @returns The synthesis error message, or null if not available.
  */
 export function getSynthesisErrorMessage(work: Work): string | null {
-  const raw = work.results?.[STEPS.SYNTHESIS as keyof NonNullable<Work['results']>];
+  const raw = work.results?.[STEPS.SYNTHESIS];
   if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'errorMessage' in raw) {
-    return typeof (raw as any).errorMessage === 'string' ? (raw as any).errorMessage : null;
+    return typeof raw.errorMessage === 'string' ? raw.errorMessage : null;
   }
   return null;
 }
@@ -176,8 +176,9 @@ export function updateAgentWork(
   if (!nextWork.results) nextWork.results = {};
   
   const results = nextWork.results;
+  const currentStepResult = results[stepId];
   const numAgents = Math.max(
-    (results[stepId] as any[])?.length || 0,
+    Array.isArray(currentStepResult) ? currentStepResult.length : 0,
     agentIndex + 1
   );
 
@@ -187,11 +188,13 @@ export function updateAgentWork(
       const raw = results[stepId];
       // Guard: only spread if it's a plain object, not string/array (legacy formats)
       const existing = raw && typeof raw === 'object' && !Array.isArray(raw)
-        ? (raw as Record<string, any>)
+        ? (raw as Record<string, unknown>)
         : {};
       results[stepId] = { ...existing, text: updates.text };
     } else {
-      const arr = Array.isArray(results[stepId]) ? [...results[stepId] as any[]] : Array(numAgents).fill('');
+      const arr: (string | null)[] = Array.isArray(results[stepId])
+        ? [...results[stepId] as (string | null)[]]
+        : Array<string | null>(numAgents).fill('');
       arr[agentIndex] = updates.text;
       results[stepId] = arr;
     }
@@ -203,7 +206,9 @@ export function updateAgentWork(
     if (stepId === STEPS.SYNTHESIS) {
       results[key] = updates.thought;
     } else {
-      const arr = Array.isArray(results[key]) ? [...results[key] as any[]] : Array(numAgents).fill('');
+      const arr: (string | null)[] = Array.isArray(results[key])
+        ? [...results[key] as (string | null)[]]
+        : Array<string | null>(numAgents).fill('');
       arr[agentIndex] = updates.thought;
       results[key] = arr;
     }
@@ -215,7 +220,9 @@ export function updateAgentWork(
     if (stepId === STEPS.SYNTHESIS) {
       results[key] = updates.usage;
     } else {
-      const arr = Array.isArray(results[key]) ? [...results[key] as any[]] : Array(numAgents).fill(null);
+      const arr: (TokenUsage | null)[] = Array.isArray(results[key])
+        ? [...results[key] as (TokenUsage | null)[]]
+        : Array<TokenUsage | null>(numAgents).fill(null);
       arr[agentIndex] = updates.usage;
       results[key] = arr;
     }
