@@ -17,7 +17,7 @@ vi.mock('@/utils/chat/roleUtils', () => ({
 }));
 
 vi.mock('@/utils/swarm/stepConstants', () => ({
-  getStepConfig: vi.fn((id: string) => ({
+  getStepConfig: vi.fn(() => ({
     name: 'Initial Step',
     description: 'Initial',
     labels: { working: 'Thinking...', done: 'Done', error: 'Error' }

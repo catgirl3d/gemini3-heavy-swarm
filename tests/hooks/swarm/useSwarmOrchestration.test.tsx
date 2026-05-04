@@ -118,14 +118,12 @@ const renderOrchestration = ({
   settings?: ReturnType<typeof createMockSettings>;
 } = {}) => {
   const messagesState = createMessagesState(initialMessages);
-  const regenAbort = createAbortHook();
 
   const hook = renderHook(() => useSwarmOrchestration({
     settings,
     messagesRef: messagesState.messagesRef,
     setMessages: messagesState.setMessages,
     mainAbort,
-    regenAbort,
     pauseResolverRef,
     orchestratorRef: orchestratorRef as any,
   }));
@@ -135,7 +133,6 @@ const renderOrchestration = ({
     settings,
     messagesState,
     mainAbort,
-    regenAbort,
     pauseResolverRef,
     runSwarm,
   };
@@ -518,7 +515,7 @@ describe('useSwarmOrchestration', () => {
         [STEPS.SYNTHESIS]: {},
       },
     });
-    const runSwarm = vi.fn(async (...args: any[]) => {
+    const runSwarm = vi.fn(async () => {
       if (runSwarm.mock.calls.length === 1) {
         return { text: 'partial', sources: [], work: incompleteWork };
       }

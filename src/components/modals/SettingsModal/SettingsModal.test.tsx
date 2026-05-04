@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_SETTINGS, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
+import { MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 import type { AppSettings, RoleProfile, ServerStatus } from '@/types';
 import { PROMPT_TYPES, ProviderType } from '@/types';
 import { createMockSettings } from '@/test/utils/settingsMocks';

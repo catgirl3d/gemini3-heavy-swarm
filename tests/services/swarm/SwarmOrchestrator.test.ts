@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { AiProvider } from '@/types/ai-provider';
 import { StepContext, StepDescriptor, STEPS, StepId } from '@/types/steps';
-import { AppSettings, Message, AgentState, Work } from '@/types';
+import { AppSettings, AgentState, Work } from '@/types';
 import { MutableRefObject } from 'react';
 
 describe('SwarmOrchestrator Integrated', () => {

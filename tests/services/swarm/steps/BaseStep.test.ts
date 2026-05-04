@@ -43,7 +43,7 @@ vi.mock('@/utils/swarm/statusHelpers', () => ({
 }));
 
 vi.mock('@/utils/swarm/stepConstants', () => ({
-  getStepConfig: vi.fn((id) => ({
+  getStepConfig: vi.fn(() => ({
     name: 'Test Step',
     labels: {
       working: 'Working...',
@@ -89,11 +89,11 @@ class TestStep extends BaseStep {
   description = 'Test step for unit testing';
   ui = { visibleInModal: true };
 
-  async execute(context: StepContext): Promise<unknown> {
+  async execute(): Promise<unknown> {
     return 'test result';
   }
 
-  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<unknown> {
+  async regenerate(): Promise<unknown> {
     return 'regenerated result';
   }
 
@@ -126,8 +126,8 @@ class TestStep extends BaseStep {
     this.ensureResults(work);
   }
 
-  public testGetErrorCountKey(agentIndex?: number): string {
-    return this.getErrorCountKey(agentIndex);
+  public testGetErrorCountKey(): string {
+    return this.getErrorCountKey();
   }
 
   public testEnsureStepUsage(work: Work, stepId: StepId, numAgents: number): unknown[] {
@@ -206,7 +206,8 @@ class TestStep extends BaseStep {
 }
 
 class RetryCallbackStep extends TestStep {
-  protected async runModelStream(_config: any, callbacks: any): Promise<any> {
+  protected async runModelStream(...args: [any, any]): Promise<any> {
+    const callbacks = args[1];
     callbacks.onChunk('', '', null);
     callbacks.onRetry(2);
     callbacks.onChunk('retried text', '', null);
@@ -610,10 +611,10 @@ describe('BaseStep', () => {
       expect(key).toBe('initial_step_error_counts');
     });
 
-    it('should use plural form even with agentIndex', () => {
+    it('should use plural form for refinement step', () => {
       step.id = STEPS.REFINEMENT;
 
-      const key = step.testGetErrorCountKey(0);
+      const key = step.testGetErrorCountKey();
 
       expect(key).toBe('refinement_step_error_counts');
     });

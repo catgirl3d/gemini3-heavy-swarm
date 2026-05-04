@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { validateAndPrepareProxy, executeGeminiRequest } from '@shared/api/geminiProxy.core';
-import { ALLOWED_MODELS, MAX_CONTENT_CHARS } from '@shared/security/security';
+import { MAX_CONTENT_CHARS } from '@shared/security/security';
 
 // Mock global fetch
 const fetchMock = vi.fn();
@@ -78,7 +78,8 @@ describe('geminiProxy.core', () => {
     });
 
     it('should timeout correctly', async () => {
-      fetchMock.mockImplementationOnce((_url, options) => new Promise((resolve, reject) => {
+      fetchMock.mockImplementationOnce((...args) => new Promise((resolve, reject) => {
+        const options = args[1] as { signal?: AbortSignal };
         const timeout = setTimeout(() => resolve({ ok: true }), 100);
         options.signal?.addEventListener('abort', () => {
           clearTimeout(timeout);

@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   appSettingsReturn: {} as any,
   messagesReturn: {} as any,
   mainAbort: {} as any,
-  regenAbort: {} as any,
   orchestrationReturn: {} as any,
   regenerationReturn: {} as any,
   storeState: {} as any,
@@ -87,7 +86,6 @@ describe('useGeminiSwarm', () => {
       messagesRef: { current: messages },
     };
     mocks.mainAbort = { ref: { current: null }, create: vi.fn(), abort: vi.fn(), signal: undefined };
-    mocks.regenAbort = { ref: { current: null }, create: vi.fn(), abort: vi.fn(), signal: undefined };
     mocks.orchestrationReturn = {
       sendMessage: vi.fn(),
       stopGeneration: vi.fn(),
@@ -116,9 +114,7 @@ describe('useGeminiSwarm', () => {
         currentSettings.openRouterModel,
       ].join('|'),
     }));
-    mocks.useAbortController.mockReset()
-      .mockReturnValueOnce(mocks.mainAbort)
-      .mockReturnValueOnce(mocks.regenAbort);
+    mocks.useAbortController.mockReset().mockReturnValueOnce(mocks.mainAbort);
     mocks.useSwarmOrchestration.mockReset().mockReturnValue(mocks.orchestrationReturn);
     mocks.useSwarmRegeneration.mockReset().mockReturnValue(mocks.regenerationReturn);
     mocks.orchestratorCtor.mockReset();
@@ -159,7 +155,6 @@ describe('useGeminiSwarm', () => {
     expect(orchestrationArgs.messagesRef).toBe(mocks.messagesReturn.messagesRef);
     expect(orchestrationArgs.setMessages).toBe(mocks.messagesReturn.setMessages);
     expect(orchestrationArgs.mainAbort).toBe(mocks.mainAbort);
-    expect(orchestrationArgs.regenAbort).toBe(mocks.regenAbort);
     expect(orchestrationArgs.pauseResolverRef.current).toBeNull();
     expect(orchestrationArgs.orchestratorRef.current).toBeDefined();
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { updateRoleModel, persistProviderModels } from '@/utils/settings/providerPersistence';
-import { ProviderType, AppSettings } from '@/types';
+import { ProviderType } from '@/types';
 import { createMockSettings } from '@/test/utils/settingsMocks';
 
 describe('providerPersistence with Role IDs', () => {

@@ -250,9 +250,7 @@ describe('Synthesis Regeneration - Integration Tests', () => {
       sources: []
     };
 
-    let capturedOnChunk: any;
-    (step as any).runModelStream = vi.fn().mockImplementation((config: any, callbacks: any) => {
-      capturedOnChunk = callbacks.onChunk;
+    (step as any).runModelStream = vi.fn().mockImplementation(() => {
       // Simulate delay before first chunk (representing network/model processing)
       return new Promise(resolve => {
         setTimeout(() => {

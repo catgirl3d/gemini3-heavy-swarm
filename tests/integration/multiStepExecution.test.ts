@@ -291,7 +291,7 @@ describe('Multi-Step Execution Integration', () => {
       await executionPromise;
       // If it completes, verify abort signal was set
       expect(abortController.signal.aborted).toBe(true);
-    } catch (error) {
+    } catch {
       // Expected: execution was aborted
       expect(abortController.signal.aborted).toBe(true);
     }
@@ -333,7 +333,7 @@ describe('Multi-Step Execution Integration', () => {
       // If we reach here, retry succeeded
       expect(attemptCount).toBeGreaterThan(1);
       expect(work.results[STEPS.INITIAL]).toBeDefined();
-    } catch (error) {
+    } catch {
       // If retry logic isn't implemented or max retries exceeded, test documents behavior
       expect(attemptCount).toBeGreaterThanOrEqual(1);
     }

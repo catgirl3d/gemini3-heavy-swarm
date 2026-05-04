@@ -14,7 +14,7 @@ vi.mock('@/utils/chat/roleUtils', () => ({
 }));
 
 vi.mock('@/utils/swarm/stepConstants', () => ({
-  getStepConfig: vi.fn((id: string) => ({
+  getStepConfig: vi.fn(() => ({
     name: 'Refinement',
     description: 'Refine',
     labels: { working: 'Refining...', done: 'Refined', error: 'Error' }

@@ -39,8 +39,6 @@ vi.mock('@/services/swarm/steps/utils/streamUtils', () => ({
   extractTextFromParts: vi.fn(),
 }));
 
-import { GoogleGenAI } from '@google/genai';
-import { OpenRouterGenAI } from '@/services/openrouter/OpenRouterGenAI';
 import {
   extractPartsFromChunk,
   extractUsageMetadataFromChunk,
@@ -572,7 +570,8 @@ describe('Streaming Integration Tests', () => {
       });
 
       await expect(async () => {
-        for await (const chunk of result.stream) {
+        const iterator = result.stream[Symbol.asyncIterator]();
+        while (!(await iterator.next()).done) {
           // consume until error
         }
       }).rejects.toThrow('Stream error');
@@ -599,7 +598,8 @@ describe('Streaming Integration Tests', () => {
       });
 
       await expect(async () => {
-        for await (const chunk of result.stream) {
+        const iterator = result.stream[Symbol.asyncIterator]();
+        while (!(await iterator.next()).done) {
           // consume until error
         }
       }).rejects.toThrow('OpenRouter stream error');
@@ -654,7 +654,7 @@ describe('Streaming Integration Tests', () => {
       // Try to get next chunk - should throw or return done
       try {
         await streamIterator.next();
-      } catch (error) {
+      } catch {
         // Stream was aborted
         expect(streamAborted).toBe(true);
       }
@@ -706,7 +706,7 @@ describe('Streaming Integration Tests', () => {
       // Try to get next chunk - should throw or return done
       try {
         await streamIterator.next();
-      } catch (error) {
+      } catch {
         // Stream was aborted
         expect(streamAborted).toBe(true);
       }

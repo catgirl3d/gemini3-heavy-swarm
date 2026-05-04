@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SynthesisStep } from '@/services/swarm/steps/SynthesisStep';
-import { STEPS } from '@/types/steps';
 import { useAgentStore } from '@/stores/agentStore';
 
 // Mock dependencies

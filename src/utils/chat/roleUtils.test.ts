@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { getAgentRole } from '@/utils/chat/roleUtils';
-import { AppSettings } from '@/types';
 import { createMockSettings } from '@/test/utils/settingsMocks';
 
 describe('roleUtils', () => {

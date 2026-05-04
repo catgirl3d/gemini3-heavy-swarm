@@ -23,7 +23,7 @@ describe('agentHelpers', () => {
                 agentStates: savedAgents
             };
             
-            const result = getMissingAgentsForMessage(messageId, work, STEPS.INITIAL);
+            const result = getMissingAgentsForMessage(messageId, work);
             expect(result).toEqual(savedAgents);
         });
 
@@ -35,14 +35,14 @@ describe('agentHelpers', () => {
             
             const work: Work = { agentStates: savedAgents };
             
-            const result = getMissingAgentsForMessage(messageId, work, STEPS.INITIAL);
+            const result = getMissingAgentsForMessage(messageId, work);
             expect(result.length).toBe(1);
             expect(result[0].messageId).toBe(messageId);
         });
 
         it('should return empty array if no results or saved states', () => {
             const work: Work = { results: {} };
-            const result = getMissingAgentsForMessage(messageId, work, STEPS.INITIAL);
+            const result = getMissingAgentsForMessage(messageId, work);
             expect(result).toEqual([]);
         });
     });

@@ -22,7 +22,8 @@ describe('OpenRouterGenAI', () => {
       for (const request of invalidRequests) {
         await expect(async () => {
           const result = await client.models.generateContentStream(request as any);
-          for await (const chunk of result.stream) { break; }
+          const iterator = result.stream[Symbol.asyncIterator]();
+          await iterator.next();
         }).rejects.toThrow(AppError);
       }
     });
@@ -290,7 +291,8 @@ describe('OpenRouterGenAI', () => {
       const result = await fastClient.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any);
       
       await expect(async () => {
-        for await (const chunk of result.stream) {
+        const iterator = result.stream[Symbol.asyncIterator]();
+        while (!(await iterator.next()).done) {
           // First chunk might arrive before timeout
         }
       }).rejects.toThrow(/Stream read timeout/);

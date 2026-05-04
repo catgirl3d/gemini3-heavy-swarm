@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { ProviderType } from '@/types';
 import { StatusBanner } from './StatusBanner';
 
 type StatusBannerProps = ComponentProps<typeof StatusBanner>;
