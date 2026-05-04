@@ -168,7 +168,7 @@
 .modal-divider {
   height: 1px;
   background: var(--model-message-border);
-  margin: 1.5rem 0;
+  margin: 1.25rem 0;
 }
 
 .modal-actions-right {

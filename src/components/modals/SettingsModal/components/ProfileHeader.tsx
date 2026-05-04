@@ -15,6 +15,8 @@ interface ProfileHeaderProps {
     onCreate: () => void;
     onDelete: () => void;
     canDelete: boolean;
+    isSelectorOpen?: boolean;
+    onSelectorOpenChange?: (open: boolean) => void;
 }
 
 export const ProfileHeader: FC<ProfileHeaderProps> = ({
@@ -29,7 +31,9 @@ export const ProfileHeader: FC<ProfileHeaderProps> = ({
     onStopEditing,
     onCreate,
     onDelete,
-    canDelete
+    canDelete,
+    isSelectorOpen,
+    onSelectorOpenChange
 }) => {
     const handleProfileSelect = (id: string) => {
         // Convert to synthetic event to match existing signature
@@ -66,6 +70,8 @@ export const ProfileHeader: FC<ProfileHeaderProps> = ({
                                     profiles={profiles}
                                     activeId={activeId}
                                     onChange={handleProfileSelect}
+                                    isOpen={isSelectorOpen}
+                                    onOpenChange={onSelectorOpenChange}
                                 />
                                 <button
                                     className="modal-icon-btn"

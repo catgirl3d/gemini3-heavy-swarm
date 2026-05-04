@@ -113,7 +113,7 @@ export class AppError extends Error {
       }
 
       // Safety blocks
-      if (s.includes('safety') || s.includes('finish_reason_safety') || s.includes('blocked')) {
+      if (s.includes('finish_reason_safety') || s.includes('safety')) {
         return ErrorCode.SAFETY_BLOCK;
       }
       
@@ -145,10 +145,11 @@ export class AppError extends Error {
     };
 
     // 2. Classify by Error object details or string message
-    if (error instanceof Error) {
-      message = error.message;
+    if (error instanceof Error || (error && typeof error === 'object' && 'message' in error)) {
+      message = (error as any).message || message;
       if (!code) {
-        code = classify(message) || (error.name === 'AbortError' ? ErrorCode.ABORTED : null) || classify(error.stack || '');
+        const name = (error as any).name || '';
+        code = classify(message) || (name === 'AbortError' ? ErrorCode.ABORTED : null) || classify((error as any).stack || '');
       }
     } else if (typeof error === 'string') {
       message = error;

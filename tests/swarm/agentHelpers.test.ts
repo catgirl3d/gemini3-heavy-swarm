@@ -55,10 +55,10 @@ describe('agentHelpers', () => {
                 id: 'p1',
                 name: 'Profile 1',
                 roles: [
-                    { name: 'Researcher', instruction: '' },
-                    { name: 'Analyst', instruction: '' }
+                    { id: 'r1', name: 'Researcher', instruction: '' },
+                    { id: 'r2', name: 'Analyst', instruction: '' }
                 ],
-                criticRoles: [{ name: 'Reviewer', instruction: '' }]
+                criticRoles: [{ id: 'c1', name: 'Reviewer', instruction: '' }]
             }]
         } as AppSettings;
 

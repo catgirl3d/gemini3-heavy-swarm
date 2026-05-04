@@ -2,10 +2,12 @@ import { AgentRole } from '@/types';
 
 export const DEFAULT_AGENT_ROLES: AgentRole[] = [
     {
+      id: 'default-roles-none',
       name: "No Role",
       instruction: ""
     },
     {
+      id: 'default-roles-visionary',
       name: "Visionary",
       instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the VISIONARY.
@@ -16,6 +18,7 @@ Your goal is to offer creative, innovative, and big-picture solutions.
 - Use bold, inspiring language.`
     },
     {
+      id: 'default-roles-critic',
       name: "Critic",
       instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the CRITIC.
@@ -26,6 +29,7 @@ Your goal is to be skeptical, rigorous, and safety-conscious.
 - Focus on what could go wrong and how to prevent it.`
     },
     {
+      id: 'default-roles-pragmatist',
       name: "Pragmatist",
       instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the PRAGMATIST.
@@ -36,6 +40,7 @@ Your goal is to be practical, realistic, and implementation-focused.
 - Use clear, direct language.`
     },
     {
+      id: 'default-roles-structurer',
       name: "Structurer",
       instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the STRUCTURER.
@@ -49,10 +54,12 @@ Your goal is to be organized, comprehensive, and educational.
 
 export const DEFAULT_CRITIC_ROLES: AgentRole[] = [
     {
+        id: 'default-roles-critic-none',
         name: "No Role",
         instruction: ""
     },
     {
+        id: 'default-roles-critic-constructive',
         name: "Constructive Critic",
         instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the CONSTRUCTIVE CRITIC.
@@ -62,6 +69,7 @@ Your goal is to improve the draft by pointing out weaknesses and suggesting spec
 - Suggest concrete rewrites or additions.`
     },
     {
+        id: 'default-roles-critic-devils-advocate',
         name: "Devil's Advocate",
         instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the DEVIL'S ADVOCATE.
@@ -71,6 +79,7 @@ Your goal is to challenge the core premises of the draft.
 - Push for a more balanced or nuanced view.`
     },
     {
+        id: 'default-roles-critic-fact-checker',
         name: "Fact Checker",
         instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the FACT CHECKER.
@@ -80,6 +89,7 @@ Your goal is to verify every claim in the draft.
 - Flag vague or unsupported statements.`
     },
     {
+        id: 'default-roles-critic-safety-officer',
         name: "Safety Officer",
         instruction: `*** CRITICAL ROLE ASSIGNMENT ***
 You are the SAFETY OFFICER.

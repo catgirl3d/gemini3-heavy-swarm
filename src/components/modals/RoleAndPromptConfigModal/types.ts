@@ -25,8 +25,6 @@ export interface RoleAndPromptConfigModalProps {
     presets: Preset[];
     onApplyPreset: (preset: Preset) => void;
     onDeletePreset: (id: string) => void;
-    isDropdownOpen: boolean;
-    setIsDropdownOpen: React.Dispatch<React.SetStateAction<boolean>>;
     onSavePreset: (name: string) => void;
     extraActions?: React.ReactNode;
     modelValue?: string;

@@ -1,7 +1,81 @@
 import { describe, it, expect } from 'vitest';
-import { extractTextFromParts, extractTokenUsage } from '@/services/swarm/steps/utils/streamUtils';
+import {
+  extractGroundingChunksFromChunk,
+  extractPartsFromChunk,
+  extractTextFromParts,
+  extractTokenUsage,
+  extractUsageMetadataFromChunk,
+  GeminiPart,
+  GeminiStreamChunk,
+  GeminiUsageMetadata,
+  isValidStreamChunk
+} from '@/services/swarm/steps/utils/streamUtils';
 
 describe('streamUtils', () => {
+  const parts: GeminiPart[] = [
+    { text: 'reason', thought: true },
+    { text: ' answer' }
+  ];
+  const usageMetadata: GeminiUsageMetadata = {
+    promptTokenCount: 10,
+    candidatesTokenCount: 20,
+    totalTokenCount: 30,
+    thoughtsTokenCount: 5,
+    cachedContentTokenCount: 2,
+    toolUsePromptTokenCount: 1,
+    isEstimated: true
+  };
+  const groundingChunks = [{ web: { uri: 'https://example.com', title: 'Example' } }];
+  const streamChunk: GeminiStreamChunk = {
+    candidates: [
+      {
+        content: { parts },
+        groundingMetadata: { groundingChunks }
+      },
+      {
+        content: { parts: [{ text: 'ignored' }] },
+        groundingMetadata: { groundingChunks: [{ web: { uri: 'https://ignored.test' } }] }
+      }
+    ],
+    usageMetadata
+  };
+
+  describe('isValidStreamChunk', () => {
+    it('rejects null, primitives, and objects without stream fields', () => {
+      expect(isValidStreamChunk(null)).toBe(false);
+      expect(isValidStreamChunk('chunk')).toBe(false);
+      expect(isValidStreamChunk(1)).toBe(false);
+      expect(isValidStreamChunk({})).toBe(false);
+      expect(isValidStreamChunk({ text: () => 'text' })).toBe(false);
+      expect(isValidStreamChunk({ candidates: 'bad' })).toBe(false);
+      expect(isValidStreamChunk({ usageMetadata: 'bad' })).toBe(false);
+    });
+
+    it('accepts chunks with candidates or usageMetadata', () => {
+      expect(isValidStreamChunk({ candidates: [] })).toBe(true);
+      expect(isValidStreamChunk({ usageMetadata: {} })).toBe(true);
+      expect(isValidStreamChunk(streamChunk)).toBe(true);
+    });
+  });
+
+  describe('chunk extractors', () => {
+    it('extracts first-candidate parts, usage metadata, and grounding chunks', () => {
+      expect(extractPartsFromChunk(streamChunk)).toBe(parts);
+      expect(extractUsageMetadataFromChunk(streamChunk)).toBe(usageMetadata);
+      expect(extractGroundingChunksFromChunk(streamChunk)).toBe(groundingChunks);
+    });
+
+    it('returns undefined for invalid or incomplete chunks', () => {
+      expect(extractPartsFromChunk({ text: () => 'invalid' })).toBeUndefined();
+      expect(extractUsageMetadataFromChunk(null)).toBeUndefined();
+      expect(extractGroundingChunksFromChunk('invalid')).toBeUndefined();
+      expect(extractPartsFromChunk({ candidates: [] })).toBeUndefined();
+      expect(extractPartsFromChunk({ candidates: [{ content: { parts: 'bad' } }] })).toBeUndefined();
+      expect(extractUsageMetadataFromChunk({ usageMetadata: 'bad' })).toBeUndefined();
+      expect(extractGroundingChunksFromChunk({ candidates: [{ content: { parts } }] })).toBeUndefined();
+    });
+  });
+
   describe('extractTextFromParts', () => {
     it('should return empty strings for undefined or null input', () => {
       // @ts-ignore
@@ -48,6 +122,21 @@ describe('streamUtils', () => {
         { } // empty part
       ];
       expect(extractTextFromParts(parts)).toEqual({ text: 'Visible', thought: '' });
+    });
+
+    it('should treat false, omitted, and non-boolean thought flags as regular text', () => {
+      const parts = [
+        { text: 'Regular ', thought: false },
+        { text: 'omitted ' },
+        { text: 'string flag', thought: 'true' as any },
+        { text: '', thought: true }
+      ];
+
+      expect(extractTextFromParts(parts)).toEqual({ text: 'Regular omitted string flag', thought: '' });
+    });
+
+    it('should return empty strings for non-array runtime input', () => {
+      expect(extractTextFromParts({ text: 'not an array' } as any)).toEqual({ text: '', thought: '' });
     });
   });
 
@@ -130,6 +219,42 @@ describe('streamUtils', () => {
         thoughtsTokenCount: 50,
         cachedContentTokenCount: undefined,
         toolUsePromptTokenCount: undefined
+      });
+    });
+
+    it('should preserve zero extended values and false isEstimated flag', () => {
+      expect(extractTokenUsage({
+        promptTokenCount: 0,
+        candidatesTokenCount: 0,
+        totalTokenCount: 0,
+        thoughtsTokenCount: 0,
+        cachedContentTokenCount: 0,
+        toolUsePromptTokenCount: 0,
+        isEstimated: false
+      })).toEqual({
+        promptTokens: 0,
+        candidatesTokens: 0,
+        totalTokens: 0,
+        thoughtsTokenCount: 0,
+        cachedContentTokenCount: 0,
+        toolUsePromptTokenCount: 0,
+        isEstimated: false
+      });
+    });
+
+    it('should coerce NaN core token counts to zero while preserving negative values', () => {
+      expect(extractTokenUsage({
+        promptTokenCount: Number.NaN,
+        candidatesTokenCount: -1,
+        totalTokenCount: Number.NaN
+      })).toEqual({
+        promptTokens: 0,
+        candidatesTokens: -1,
+        totalTokens: 0,
+        thoughtsTokenCount: undefined,
+        cachedContentTokenCount: undefined,
+        toolUsePromptTokenCount: undefined,
+        isEstimated: undefined
       });
     });
   });

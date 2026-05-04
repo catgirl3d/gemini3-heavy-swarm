@@ -3,12 +3,15 @@ import { AppSettings, PromptProfile, RoleProfile, PROMPT_TYPES } from '@/types';
 import { DEFAULT_SETTINGS } from '@/constants';
 import { InstructionType } from '@/components/modals/SettingsModal/types';
 import { INSTRUCTION_METADATA } from '@/components/modals/SettingsModal/constants';
+import { updateStepModel } from '@/utils/settings/providerPersistence';
 
-export function usePresetManagement(
+type StepModelKey = 'initialModel' | 'refinementModel' | 'synthesisModel';
+
+export const usePresetManagement = (
     localSettings: AppSettings,
     setLocalSettings: React.Dispatch<React.SetStateAction<AppSettings>>,
     activeProfile: PromptProfile
-) {
+) => {
     const getRolePresets = (profileId: string, type: 'drafter' | 'critic') => {
         const defaultProfile = DEFAULT_SETTINGS.roleProfiles.find(p => p.id === profileId);
         const defaultRoles = defaultProfile ? (type === 'drafter' ? defaultProfile.roles : (defaultProfile.criticRoles || [])) : [];
@@ -143,7 +146,9 @@ export function usePresetManagement(
             
             // Also apply model if provided
             if (model !== undefined) {
-                (updatedSettings as any)[INSTRUCTION_METADATA[type].modelKey] = model || undefined;
+                const modelKey = INSTRUCTION_METADATA[type].modelKey as StepModelKey;
+                const result = updateStepModel(updatedSettings, modelKey, model || undefined);
+                return result.success ? result.settings : updatedSettings;
             }
             
             return updatedSettings;

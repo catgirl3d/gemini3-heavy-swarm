@@ -7,25 +7,29 @@ import { Logger } from '@shared/utils/logger';
 /**
  * Immutably updates the text of the first part of a message.
  */
-export function updateMessageParts(message: Message, text: string): Message {
+export const updateMessageParts = (message: Message, text: string): Message => {
+  if (message.parts?.[0]?.text === text) {
+    return message;
+  }
+
   const updatedParts = message.parts && message.parts.length > 0
     ? [{ ...message.parts[0], text }, ...message.parts.slice(1)]
     : [{ text }];
   
   return { ...message, parts: updatedParts };
-}
+};
 
 /**
  * Immutably updates agent or critic names in a Work object based on the step.
  */
-export function updateWorkAgentNames(work: Work, stepId: StepId, agentIndex: number, newName: string): Work {
+export const updateWorkAgentNames = (work: Work, stepId: StepId, agentIndex: number, newName: string): Work => {
   return setWorkName(work, stepId, agentIndex, newName);
-}
+};
 
 /**
  * Creates a new model message for synthesis regeneration.
  */
-function createRegeneratedModelMessage(workContext: Work | undefined, text: string): Message {
+const createRegeneratedModelMessage = (workContext: Work | undefined, text: string): Message => {
   return {
     id: generateUUID(),
     role: 'model',
@@ -43,19 +47,18 @@ function createRegeneratedModelMessage(workContext: Work | undefined, text: stri
  * 
  * @returns Object with message, index, and wasCreated flag
  */
-export function ensureModelMessageForSynthesis(
+export const ensureModelMessageForSynthesis = (
   messages: Message[],
   messageIndex: number,
   workContext: Work | undefined,
   text: string,
   settings?: AppSettings
-): { message: Message; index: number; wasCreated: boolean } {
+): { message: Message; index: number; wasCreated: boolean } => {
   const logger = new Logger('Synthesis', settings?.debugMode);
   
   const targetIndex = findTargetMessageIndex(messages, messageIndex, STEPS.SYNTHESIS);
   
   if (targetIndex !== null) {
-    logger.debug('Found existing model message at index', targetIndex);
     return { message: messages[targetIndex], index: targetIndex, wasCreated: false };
   }
   
@@ -71,11 +74,11 @@ export function ensureModelMessageForSynthesis(
  * 
  * @returns Index of target message, or null if not found
  */
-export function findTargetMessageIndex(
+export const findTargetMessageIndex = (
   messages: Message[],
   messageIndex: number,
   stepId: StepId
-): number | null {
+): number | null => {
   const msg = messages[messageIndex];
   if (msg?.role === 'model') {
     return messageIndex;

@@ -129,6 +129,10 @@ export function useSwarmOrchestration({
     existingWork?: Work
   ) => {
     if (!userInput.trim() && !image) return;
+    const orchestrator = orchestratorRef.current;
+    if (!orchestrator) {
+      throw new Error('SwarmOrchestrator not initialized');
+    }
     
     // Use existing ID for resume, or generate new one
     const modelMessageId = resumeMessageId || generateUUID();
@@ -216,30 +220,36 @@ export function useSwarmOrchestration({
     const controllerKey = `main-${modelMessageId}`;
     useAgentStore.getState().registerAbortController(controllerKey, controller);
 
-    const lastUserMessageIndex = historyForSwarm.length - 1;
-
-    if (!orchestratorRef.current) {
-      throw new Error('SwarmOrchestrator not initialized');
-    }
-
     try {
-      const { text: finalMessageText, sources, work } = await orchestratorRef.current.runSwarm(
+      const { text: finalMessageText, sources, work } = await orchestrator.runSwarm(
         settings,
         userInput,
         image,
         imageFile,
         historyForSwarm,
         modelMessageId,
-        (text, isFirstChunk, _thought, _usage) => {
-          // _thought and _usage are ignored here as they are handled by individual steps
+        (text, isFirstChunk, thought, usage) => {
+          // thought and usage are handled by individual steps/currentWork; only visible text belongs in message.parts.
           // Message update callback - just update the message text
           setMessages(prev => {
+            if (text === '' && (thought || usage)) {
+              return prev;
+            }
+
             const newMessages = [...prev];
             const targetIndex = newMessages.findIndex(m => m.id === modelMessageId);
             
             if (targetIndex !== -1) {
+              if (newMessages[targetIndex].parts?.[0]?.text === text) {
+                return prev;
+              }
+
               newMessages[targetIndex] = updateMessageParts(newMessages[targetIndex], text);
             } else {
+              if (text === '') {
+                return prev;
+              }
+
               newMessages.push({ id: modelMessageId, role: 'model', parts: [{ text }] });
             }
             return newMessages;

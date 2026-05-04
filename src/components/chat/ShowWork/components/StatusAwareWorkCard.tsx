@@ -1,9 +1,26 @@
-import React, { FC } from 'react';
+import React, { FC, useEffect, useRef } from 'react';
 import { Work, TokenUsage } from '@/types';
-import { StepId } from '@/types/steps';
+import { StepId, STEPS } from '@/types/steps';
 import { WorkCard, CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
 import { useResolvedAgentState } from '@/hooks/swarm/useResolvedSwarmState';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
+import { getStepResults, getSynthesisResult } from '@/utils/swarm/workHelpers';
+import { useAgentStore } from '@/stores/agentStore';
+import { Logger } from '@shared/utils/logger';
+
+const logger = new Logger('StatusAwareWorkCard');
+
+const getWorkContentLength = (work: Work | undefined, step: StepId, index: number) => {
+  if (!work) return -1;
+
+  if (step === STEPS.SYNTHESIS) {
+    const result = getSynthesisResult(work);
+    const text = typeof result === 'string' ? result : result?.text;
+    return typeof text === 'string' ? text.length : -1;
+  }
+
+  return (getStepResults(work, step)[index] ?? '').length;
+};
 
 interface StatusAwareWorkCardProps {
   // Card identification
@@ -51,6 +68,7 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
   allowRegenerate
 }) => {
   const config = getStepConfig(step);
+  const lastEmptyDoneLogRef = useRef<string | null>(null);
   
   // Resolve agent state from either live store or historical snapshot
   const agent = useResolvedAgentState(messageId, step, index, work);
@@ -65,7 +83,40 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
   // This ensures role names (e.g., "Agent 1 (Researcher)") are shown during generation
   const displayTitle = agent?.name || title;
 
-  // DEBUG: Log final status
+  useEffect(() => {
+    if (status !== 'done' || content !== '') {
+      lastEmptyDoneLogRef.current = null;
+      return;
+    }
+
+    // Intentionally read a one-time store snapshot here: this effect only emits a
+    // diagnostic warning for the suspicious "done + empty" state, and subscribing
+    // to currentWork would add extra rerenders and duplicate log noise.
+    const liveWork = useAgentStore.getState().currentWork;
+    const propLen = content?.length ?? -1;
+    const snapshotLen = getWorkContentLength(work, step, index);
+    const liveLen = getWorkContentLength(liveWork ?? work, step, index);
+    const logKey = [messageId ?? '', step, index, label, propLen, snapshotLen, liveLen, thought ? '1' : '0'].join('|');
+
+    if (lastEmptyDoneLogRef.current === logKey) {
+      return;
+    }
+
+    lastEmptyDoneLogRef.current = logKey;
+
+    logger.warn('Done card rendered empty', {
+      messageId,
+      step,
+      index,
+      status,
+      label,
+      propLen,
+      snapshotLen,
+      liveLen,
+      hasThought: !!thought,
+    });
+  }, [content, index, label, messageId, status, step, thought, work]);
+
   return (
     <WorkCard
       cardId={cardId}

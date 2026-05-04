@@ -18,7 +18,6 @@ export function processSynthesisChunkUpdate(
   isFirstChunk: boolean
 ): { updatedMessages: Message[]; targetIndex: number } {
   const logger = new Logger('Synthesis', settings.debugMode);
-  logger.debug('processSynthesisChunkUpdate:', { textLength: text.length, messageIndex });
   
   const newMessages = [...messages];
   
@@ -37,9 +36,9 @@ export function processSynthesisChunkUpdate(
   }
   
   if (msg && msg.role === 'model') {
-    logger.debug('Updating model message text:', { hasMsg: !!msg, msgRole: msg?.role, textLength: text.length });
-    newMessages[targetIndex] = updateMessageParts(msg, text);
-    logger.debug('Text updated successfully');
+    if (text !== '') {
+      newMessages[targetIndex] = updateMessageParts(msg, text);
+    }
   } else {
     logger.error('ERROR: Could not update text - msg is not a model message!');
   }

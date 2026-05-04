@@ -1,6 +1,7 @@
 import React, { FC } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalGlobalHandlers } from '@/hooks/ui/useModalGlobalHandlers';
+import { BaseModalInteractionContext } from './context';
 import { 
     BaseModalProps, 
     BaseModalHeaderProps, 
@@ -9,7 +10,6 @@ import {
 } from './types';
 import './BaseModal.css';
 
-const EMPTY_SELECTORS: string[] = [];
 const NOOP = () => {};
 
 const BaseModalMain: FC<BaseModalProps> = ({
@@ -20,12 +20,30 @@ const BaseModalMain: FC<BaseModalProps> = ({
     className = '',
     overlayClassName = '',
     closeOnOverlayClick = true,
-    clickOutsideSelectors = EMPTY_SELECTORS,
+    hasActiveDropdown = false,
     onCloseDropdowns = NOOP,
     onEscape
 }) => {
     const [shouldRender, setShouldRender] = React.useState(isOpen);
     const [isAnimating, setIsAnimating] = React.useState(false);
+    const clickInsideElementsRef = React.useRef(new Set<HTMLElement>());
+
+    const registerClickInsideElement = React.useCallback((element: HTMLElement | null) => {
+        if (!element) return;
+
+        clickInsideElementsRef.current.add(element);
+    }, []);
+
+    const unregisterClickInsideElement = React.useCallback((element: HTMLElement | null) => {
+        if (!element) return;
+
+        clickInsideElementsRef.current.delete(element);
+    }, []);
+
+    const interactionContextValue = React.useMemo(() => ({
+        registerClickInsideElement,
+        unregisterClickInsideElement
+    }), [registerClickInsideElement, unregisterClickInsideElement]);
 
     React.useEffect(() => {
         if (isOpen) {
@@ -44,7 +62,8 @@ const BaseModalMain: FC<BaseModalProps> = ({
     useModalGlobalHandlers({
         isOpen: isOpen || isAnimating,
         onEscape: onEscape || onClose,
-        clickOutsideSelectors,
+        hasActiveDropdown,
+        clickInsideElementsRef,
         onCloseDropdowns
     });
 
@@ -52,21 +71,27 @@ const BaseModalMain: FC<BaseModalProps> = ({
 
     const handleOverlayClick = (e: React.MouseEvent) => {
         if (closeOnOverlayClick && e.target === e.currentTarget) {
+            if (hasActiveDropdown) {
+                return;
+            }
+
             onClose();
         }
     };
 
     return createPortal(
-        <div className={`modal-overlay ${overlayClassName} ${isAnimating ? 'closing' : ''}`} onClick={handleOverlayClick}>
-            <div 
-                className={`modal-container modal-${size} ${className} ${isAnimating ? 'closing' : ''}`} 
-                onClick={e => e.stopPropagation()}
-                role="dialog"
-                aria-modal="true"
-            >
-                {children}
+        <BaseModalInteractionContext.Provider value={interactionContextValue}>
+            <div className={`modal-overlay ${overlayClassName} ${isAnimating ? 'closing' : ''}`} onClick={handleOverlayClick}>
+                <div 
+                    className={`modal-container modal-${size} ${className} ${isAnimating ? 'closing' : ''}`} 
+                    onClick={e => e.stopPropagation()}
+                    role="dialog"
+                    aria-modal="true"
+                >
+                    {children}
+                </div>
             </div>
-        </div>,
+        </BaseModalInteractionContext.Provider>,
         document.body
     );
 };

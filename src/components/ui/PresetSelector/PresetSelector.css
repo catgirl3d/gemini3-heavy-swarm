@@ -1,0 +1,118 @@
+.preset-selector-container {
+    width: auto;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
+.preset-selector-trigger {
+    width: auto;
+    height: auto;
+    min-height: 0;
+    gap: 0.4rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    justify-content: flex-start;
+    line-height: 1.2;
+}
+
+.preset-selector-trigger:hover:not(:disabled),
+.preset-selector-trigger:focus:not(:disabled) {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--input-border);
+}
+
+.preset-selector-trigger:disabled {
+    opacity: 0.5;
+}
+
+.preset-selector-trigger svg {
+    width: 14px;
+    height: 14px;
+}
+
+.preset-selector-trigger .custom-select-chevron {
+    width: 12px;
+    height: 12px;
+    margin-left: 0;
+    opacity: 0.6;
+}
+
+.preset-selector-trigger-label {
+    display: inline-flex;
+    align-items: center;
+}
+
+.preset-selector-dropdown {
+    animation: fade-in 0.2s ease-out;
+}
+
+.preset-selector-header {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--model-message-border);
+}
+
+.preset-selector-option-content {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.preset-selector-option-name {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.preset-selector-tag {
+    font-size: 0.65rem;
+    background-color: var(--accent-bg);
+    color: var(--accent-text);
+    padding: 0.1rem 0.4rem;
+    border-radius: var(--radius-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.preset-selector-delete-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--input-focus-ring);
+    padding: 0.25rem;
+    border-radius: var(--radius-xs);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-standard);
+    flex-shrink: 0;
+}
+
+.preset-selector-delete-btn:hover {
+    background-color: var(--error-bg);
+    color: var(--error-color);
+}
+
+@media (max-width: 768px) {
+    .preset-selector-trigger {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+    }
+
+    .preset-selector-dropdown {
+        max-width: 280px;
+    }
+}

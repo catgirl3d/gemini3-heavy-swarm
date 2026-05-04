@@ -6,6 +6,8 @@ interface ProfileSelectorProps {
     activeId: string;
     onChange: (id: string) => void;
     disabled?: boolean;
+    isOpen?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }
 
 export const ProfileSelector: FC<ProfileSelectorProps> = ({
@@ -13,6 +15,8 @@ export const ProfileSelector: FC<ProfileSelectorProps> = ({
     activeId,
     onChange,
     disabled = false,
+    isOpen,
+    onOpenChange,
 }) => {
     // Convert profiles to CustomSelectOption format
     const options: CustomSelectOption<string>[] = profiles.map(p => ({
@@ -27,6 +31,8 @@ export const ProfileSelector: FC<ProfileSelectorProps> = ({
             onChange={onChange}
             disabled={disabled}
             placeholder="Select Profile"
+            isOpen={isOpen}
+            onOpenChange={onOpenChange}
         />
     );
 };

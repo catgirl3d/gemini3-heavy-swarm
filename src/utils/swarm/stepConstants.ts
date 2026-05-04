@@ -1,5 +1,5 @@
 import { StepId, STEPS } from '@/types/steps';
-import { Work } from '@/types';
+import { Work, RoleType } from '@/types';
 import { Logger } from '@shared/utils/logger';
 
 const logger = new Logger('SynthesisJump');
@@ -13,7 +13,7 @@ export interface StepConfig {
   /** Display prefix for agent names (e.g., "Agent", "Critic") */
   namePrefix: string;
   /** Key to access role definitions in RoleProfile */
-  roleKey: 'roles' | 'criticRoles';
+  roleKey: RoleType;
   /** Key to access agent names in Work object */
   namesKey: 'agentNames' | 'criticNames' | null;
   /** Default status labels */
@@ -95,23 +95,23 @@ const STEP_CONFIGS: Record<StepId, StepConfig> = {
 /**
  * Returns the configuration for a specific step.
  */
-export function getStepConfig(stepId: StepId): StepConfig {
+export const getStepConfig = (stepId: StepId): StepConfig => {
   return STEP_CONFIGS[stepId];
-}
+};
 
 /**
  * Returns agent names array from Work based on stepId.
  */
-export function getWorkNames(work: Work, stepId: StepId): string[] | undefined {
+export const getWorkNames = (work: Work, stepId: StepId): string[] | undefined => {
   const config = STEP_CONFIGS[stepId];
   if (!config.namesKey) return undefined;
   return work[config.namesKey] as string[] | undefined;
-}
+};
 
 /**
  * Returns updated Work with new agent name at index.
  */
-export function setWorkName(work: Work, stepId: StepId, index: number, name: string): Work {
+export const setWorkName = (work: Work, stepId: StepId, index: number, name: string): Work => {
   const config = STEP_CONFIGS[stepId];
   if (!config.namesKey) return work;
   
@@ -120,7 +120,7 @@ export function setWorkName(work: Work, stepId: StepId, index: number, name: str
   newNames[index] = name;
   
   return { ...work, [config.namesKey]: newNames };
-}
+};
 
 
 
@@ -128,16 +128,16 @@ export function setWorkName(work: Work, stepId: StepId, index: number, name: str
  * Shared logic for the "Synthesis Jump" behavior.
  * This hides loading indicators and unpauses the UI when the first chunk of synthesis arrives.
  * Consolidated from synthesisHelpers.ts.
- * 
+ *
  * @param setIsLoading - State setter for loading status
  * @param setIsPaused - State setter for pause status
  * @param onJump - Optional callback for additional jump logic (e.g., updating agent status)
  */
-export function handleSynthesisJump(
+export const handleSynthesisJump = (
   setIsLoading: (b: boolean) => void,
   setIsPaused: (b: boolean) => void,
   onJump?: () => void
-) {
+) => {
   logger.info('SYNTHESIS JUMP - First chunk received, hiding LoadingIndicator');
   setIsLoading(false);
   setIsPaused(false);

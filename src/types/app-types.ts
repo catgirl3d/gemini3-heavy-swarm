@@ -15,6 +15,7 @@ export interface PromptProfile {
 
 
 export interface AgentRole {
+  id: string; // Unique stable identifier for tracking role model assignments
   name: string;
   instruction: string;
   model?: string;
@@ -26,6 +27,8 @@ export interface RoleProfile {
     roles: AgentRole[];
     criticRoles?: AgentRole[];
 }
+
+export type RoleType = 'roles' | 'criticRoles';
 
 /** Pipeline step identifiers. Note: 'refinement_step' is distinct from 'refinement_prompt' InstructionType */
 export const STEPS = {
@@ -57,16 +60,7 @@ export interface SavedInstruction {
     model?: string;
 }
 
-/**
- * Legacy instruction format from older versions of the application.
- * Used during migration to properly type-cast old data.
- */
-export interface LegacySavedInstruction {
-    id: string;
-    name: string;
-    type: 'initial' | 'refinement' | 'synthesizer'; // Old type names
-    content: string;
-}
+
 
 export interface SavedRole {
     id: string;
@@ -96,15 +90,16 @@ export interface ProviderModels {
     };
   };
   // Role profile models per provider
+  // CRITICAL: Uses role.id instead of array index to prevent cache desynchronization
   roleModels?: {
     [profileId: string]: {
       [ProviderType.Gemini]?: {
-        roles?: Record<number, string>; // role index -> model
-        criticRoles?: Record<number, string>;
+        roles?: Record<string, string>; // role.id -> model
+        criticRoles?: Record<string, string>; // role.id -> model
       };
       [ProviderType.OpenRouter]?: {
-        roles?: Record<number, string>;
-        criticRoles?: Record<number, string>;
+        roles?: Record<string, string>; // role.id -> model
+        criticRoles?: Record<string, string>; // role.id -> model
       };
     };
   };

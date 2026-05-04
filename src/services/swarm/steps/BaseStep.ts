@@ -1,5 +1,5 @@
 import { StepDescriptor, StepContext, StepId, STEPS, StreamConfig, StreamCallbacks, StreamResult, AgentInstruction, MultiAgentConfig } from '@/types/steps';
-import { SimulateError, ProviderType } from '@/types';
+import { SimulateError, ProviderType, RoleType } from '@/types';
 import { Tool, Content } from '@google/genai';
 import { getStepConfig, StepConfig } from '@/utils/swarm/stepConstants';
 import type { GroundingChunk } from './utils/streamUtils';
@@ -93,7 +93,7 @@ export abstract class BaseStep implements StepDescriptor {
    * Returns the model for the current agent based on role and step configuration.
    * Priority: Role model > Step model > Global model
    */
-  protected getRoleModel(context: StepContext, agentIndex: number, roleType: 'roles' | 'criticRoles'): string {
+  protected getRoleModel(context: StepContext, agentIndex: number, roleType: RoleType): string {
     const { settings } = context;
     // Early return if no role profiles
     if (!settings.roleProfiles || settings.roleProfiles.length === 0) {
@@ -107,7 +107,8 @@ export abstract class BaseStep implements StepDescriptor {
     }
 
     const roleList = roleType === 'roles' ? activeRoleProfile.roles : activeRoleProfile.criticRoles;
-    const role = roleList?.[agentIndex];
+    const roleIndex = roleList?.length ? agentIndex % roleList.length : agentIndex;
+    const role = roleList?.[roleIndex];
     
     if (role?.model) {
         return role.model;
@@ -622,6 +623,15 @@ export abstract class BaseStep implements StepDescriptor {
     let fullThought = '';
     const allGroundingChunks: GroundingChunk[] = [];
     let lastUsage: TokenUsage | null = null;
+    let chunkCount = 0;
+    let hadAnyText = false;
+    let hadAnyThought = false;
+    let hadAnyUsage = false;
+    let lastChunkTextLen = 0;
+    let lastChunkThoughtLen = 0;
+    let lastChunkHadText = false;
+    let lastChunkHadThought = false;
+    let lastChunkHadUsage = false;
 
     if (settings.devMode) {
       logger.debug('Using DEV MODE (simulated response)');
@@ -630,6 +640,16 @@ export abstract class BaseStep implements StepDescriptor {
         dummyText,
         signal,
         (chunk) => {
+          chunkCount++;
+          lastChunkTextLen = chunk.length;
+          lastChunkThoughtLen = 0;
+          lastChunkHadText = chunk.length > 0;
+          lastChunkHadThought = false;
+          lastChunkHadUsage = false;
+          if (lastChunkHadText) {
+            hadAnyText = true;
+          }
+
           callbacks.onChunk(chunk, '', null);
         },
         devModeDuration ?? (DEV_MODE_DURATIONS[this.id] || 1000)
@@ -656,7 +676,15 @@ export abstract class BaseStep implements StepDescriptor {
           fullThought = '';
           allGroundingChunks.length = 0;
           lastUsage = null;
-          let chunkCount = 0;
+          chunkCount = 0;
+          hadAnyText = false;
+          hadAnyThought = false;
+          hadAnyUsage = false;
+          lastChunkTextLen = 0;
+          lastChunkThoughtLen = 0;
+          lastChunkHadText = false;
+          lastChunkHadThought = false;
+          lastChunkHadUsage = false;
 
           const config = {
             ...getGenerationConfig(model, settings.temperature, settings.maxOutputTokens, settings.unsafeTemperature),
@@ -685,6 +713,20 @@ export abstract class BaseStep implements StepDescriptor {
             chunkCount++;
             
             const { text, thought, usage, groundingChunks } = chunk;
+            lastChunkTextLen = text.length;
+            lastChunkThoughtLen = thought?.length || 0;
+            lastChunkHadText = text.length > 0;
+            lastChunkHadThought = (thought?.length || 0) > 0;
+            lastChunkHadUsage = !!usage;
+            if (lastChunkHadText) {
+              hadAnyText = true;
+            }
+            if (lastChunkHadThought) {
+              hadAnyThought = true;
+            }
+            if (lastChunkHadUsage) {
+              hadAnyUsage = true;
+            }
             
             // Log first chunk details or when thought content appears
             const isFirstThought = thought && !fullThought;
@@ -723,8 +765,20 @@ export abstract class BaseStep implements StepDescriptor {
       } catch (err) {
         throw AppError.from(err);
       }
-      
-      logger.debug('Stream complete', { textLength: fullText.length, thoughtLength: fullThought.length });
+        
+      logger.debug('Stream complete', {
+        chunkCount,
+        textLength: fullText.length,
+        thoughtLength: fullThought.length,
+        hadAnyText,
+        hadAnyThought,
+        hadAnyUsage,
+        lastChunkTextLen,
+        lastChunkThoughtLen,
+        lastChunkHadText,
+        lastChunkHadThought,
+        lastChunkHadUsage,
+      });
     }
 
     return { 
@@ -745,7 +799,7 @@ export abstract class BaseStep implements StepDescriptor {
     agentIndex: number,
     instruction: AgentInstruction,
     agentStates: AgentState[],
-    roleType?: 'roles' | 'criticRoles',
+    roleType?: RoleType,
     tools?: Tool[],
     onFirstTextChunk?: () => void,
     simulateError?: SimulateError,

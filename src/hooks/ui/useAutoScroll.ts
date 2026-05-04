@@ -63,6 +63,8 @@ export function useAutoScroll(deps: {
 
   const scrollToBottom = () => {
     if (messageListRef.current) {
+      setShouldAutoScroll(true);
+      setShowScrollButton(false);
       messageListRef.current.scrollTo({ top: messageListRef.current.scrollHeight, behavior: 'smooth' });
     }
   };

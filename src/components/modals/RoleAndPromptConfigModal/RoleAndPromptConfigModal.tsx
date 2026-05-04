@@ -1,14 +1,11 @@
-import React, { FC, useState, useRef, useEffect } from 'react';
+import React, { FC, useState, useEffect } from 'react';
 import { BaseModal } from '@/components/modals/BaseModal';
 import { RoleAndPromptConfigModalProps } from '@/components/modals/RoleAndPromptConfigModal/types';
-import { PortalDropdown, ModelSelector } from '@/components/ui';
+import { ModelSelector, PresetSelector } from '@/components/ui';
 import { ProviderType } from '@/types';
-import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
 import './RoleAndPromptConfigModal.css';
 
-// Stable reference to prevent click listener churn
-// Include portal wrapper so clicks inside the portaled dropdown aren't treated as "outside"
-const CLICK_OUTSIDE_SELECTORS = ['.preset-menu-container', '.model-selector-container', '.modal-dropdown-portal'];
+type ActiveDropdown = 'model' | 'preset' | null;
 
 export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
     isOpen,
@@ -18,8 +15,6 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
     presets,
     onApplyPreset,
     onDeletePreset,
-    isDropdownOpen,
-    setIsDropdownOpen,
     onSavePreset,
     extraActions,
     modelValue,
@@ -29,22 +24,22 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
     isDemoMode = false
 }) => {
     const [isSaving, setIsSaving] = useState(false);
-    const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
+    const [activeDropdown, setActiveDropdown] = useState<ActiveDropdown>(null);
     const [presetName, setPresetName] = useState('');
-    const triggerRef = useRef<HTMLButtonElement>(null);
 
     // Reset local state when modal closes
     useEffect(() => {
         if (!isOpen) {
             setIsSaving(false);
             setPresetName('');
-            setIsModelSelectorOpen(false);
+            setActiveDropdown(null);
         }
     }, [isOpen]);
 
     const handleClose = () => {
         setIsSaving(false);
         setPresetName('');
+        setActiveDropdown(null);
         onClose();
     };
 
@@ -56,87 +51,40 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
         }
     };
 
+    const handlePresetDropdownOpenChange = (open: boolean) => {
+        setActiveDropdown(open ? 'preset' : null);
+    };
+
     return (
         <BaseModal
             isOpen={isOpen}
             onClose={handleClose}
             size="md"
             className="role-edit-modal"
-            clickOutsideSelectors={CLICK_OUTSIDE_SELECTORS}
+            hasActiveDropdown={activeDropdown !== null}
             onCloseDropdowns={() => {
-                setIsDropdownOpen(false);
-                setIsModelSelectorOpen(false);
+                setActiveDropdown(null);
             }}
             onEscape={() => {
-                if (isDropdownOpen) setIsDropdownOpen(false);
-                else if (isModelSelectorOpen) setIsModelSelectorOpen(false);
-                else handleClose();
+                if (activeDropdown) {
+                    setActiveDropdown(null);
+                    return;
+                }
+
+                handleClose();
             }}
         >
             <BaseModal.Header title={title} onClose={handleClose} />
             <BaseModal.Body>
                 <div className="modal-form-group horizontal align-center space-between">
                     <label className="modal-label no-margin">Load from Preset</label>
-                    <div className="preset-menu-container">
-                        <button
-                            ref={triggerRef}
-                            className={`preset-menu-trigger ${isDropdownOpen ? 'active' : ''}`}
-                            onClick={() => setIsDropdownOpen(prev => !prev)}
-                            disabled={presets.length === 0}
-                            title={presets.length === 0 ? "No presets available" : "Load from a saved preset"}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                            </svg>
-                            <span>{presets.length === 0 ? 'No Presets Available' : 'Select a Preset...'}</span>
-                            <svg className={`chevron ${isDropdownOpen ? 'open' : ''}`} xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M6 9l6 6 6-6" />
-                            </svg>
-                        </button>
-
-                        <PortalDropdown
-                            isOpen={isDropdownOpen}
-                            triggerRef={triggerRef}
-                            width={300}
-                        >
-                            <div className="preset-menu-dropdown">
-                                <div className="preset-menu-header">Presets</div>
-                                {presets.map((p) => (
-                                    <div key={p.id} className="preset-menu-item-wrapper">
-                                        <button
-                                            className="preset-menu-item"
-                                            onClick={() => {
-                                                onApplyPreset(p);
-                                                setIsDropdownOpen(false);
-                                            }}
-                                        >
-                                            <div className="preset-name">
-                                                {p.name}
-                                                {p.isCustom && <span className="preset-tag">Saved</span>}
-                                            </div>
-                                        </button>
-                                        {p.isCustom && (
-                                            <button
-                                                className="preset-delete-btn"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onDeletePreset(p.id);
-                                                    setIsDropdownOpen(false);
-                                                }}
-                                                title="Delete Preset"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <polyline points="3 6 5 6 21 6"></polyline>
-                                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                                </svg>
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </PortalDropdown>
-                    </div>
+                    <PresetSelector
+                        presets={presets}
+                        isOpen={activeDropdown === 'preset'}
+                        onOpenChange={handlePresetDropdownOpenChange}
+                        onSelect={(preset) => onApplyPreset(preset)}
+                        onDeletePreset={(preset) => onDeletePreset(preset.id)}
+                    />
                 </div>
 
                 {onModelChange && (
@@ -149,8 +97,8 @@ export const RoleAndPromptConfigModal: FC<RoleAndPromptConfigModalProps> = ({
                                 provider={provider}
                                 value={(!isModelUnlocked || (provider === ProviderType.Gemini && isDemoMode)) ? (provider === ProviderType.OpenRouter ? '' : 'gemini-2.5-flash-lite') : (modelValue || '')}
                                 onChange={onModelChange}
-                                isOpen={isModelSelectorOpen}
-                                onOpenChange={setIsModelSelectorOpen}
+                                isOpen={activeDropdown === 'model'}
+                                onOpenChange={(open) => setActiveDropdown(current => open ? 'model' : current === 'model' ? null : current)}
                                 placeholder="Use Global Model"
                                 disabled={!isModelUnlocked || (provider === ProviderType.Gemini && isDemoMode)}
                                 showEmptyOption={true}

@@ -6,6 +6,7 @@ import { AppError, ErrorCode } from '@/utils/errors/AppError';
 const logger = new Logger('ProxyGenAI');
 
 const STREAM_READ_TIMEOUT_MS = 60000; // 60 seconds (increased for reasoning models and slow responses)
+const JSON_ARRAY_DELIMITER_REGEX = /^[\],\s]+$/;
 
 // Minimal interface matching what the steps use from the Google SDK
 export class ProxyGenAI {
@@ -99,11 +100,16 @@ class ProxyGenerativeModel {
         while (true) {
           // Add timeout to prevent hanging if the server stops sending data but keeps connection open
           const readPromise = stream.read();
+          let timeoutId: ReturnType<typeof setTimeout> | undefined;
           const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new AppError('Stream read timeout', ErrorCode.NETWORK_ERROR)), STREAM_READ_TIMEOUT_MS)
+            timeoutId = setTimeout(() => reject(new AppError('Stream read timeout', ErrorCode.NETWORK_ERROR)), STREAM_READ_TIMEOUT_MS)
           );
 
-          const { done, value } = await Promise.race([readPromise, timeoutPromise]);
+          const { done, value } = await Promise.race([readPromise, timeoutPromise]).finally(() => {
+            if (timeoutId !== undefined) {
+              clearTimeout(timeoutId);
+            }
+          });
           if (done) break;
 
           buffer += value;
@@ -179,6 +185,11 @@ class ProxyGenerativeModel {
             }
             if (!found) break;
           }
+        }
+
+        const remaining = buffer.trim();
+        if (remaining && remaining !== '[]' && !JSON_ARRAY_DELIMITER_REGEX.test(remaining)) {
+          throw new AppError('Response stream ended with incomplete JSON chunk', ErrorCode.PROXY_ERROR);
         }
       } catch (error) {
         logger.error('Stream processing error:', error);

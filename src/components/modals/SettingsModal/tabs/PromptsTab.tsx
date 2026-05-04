@@ -17,6 +17,8 @@ interface PromptsTabProps {
     handleCreateProfile: () => void;
     handleDeleteProfile: () => void;
     setEditingInstruction: (type: InstructionType | null) => void;
+    openDropdownId: string | null;
+    setOpenDropdownId: (id: string | null) => void;
 }
 
 export const PromptsTab: FC<PromptsTabProps> = ({
@@ -30,7 +32,9 @@ export const PromptsTab: FC<PromptsTabProps> = ({
     handleProfileChange,
     handleCreateProfile,
     handleDeleteProfile,
-    setEditingInstruction
+    setEditingInstruction,
+    openDropdownId,
+    setOpenDropdownId
 }) => {
     return (
         <div className="settings-section fade-in">
@@ -47,6 +51,8 @@ export const PromptsTab: FC<PromptsTabProps> = ({
                 onCreate={handleCreateProfile}
                 onDelete={handleDeleteProfile}
                 canDelete={localSettings.profiles.length > 1}
+                isSelectorOpen={openDropdownId === 'prompt-profile'}
+                onSelectorOpenChange={(open) => setOpenDropdownId(open ? 'prompt-profile' : null)}
             />
 
             <div className="modal-card-container">

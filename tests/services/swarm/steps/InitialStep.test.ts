@@ -94,4 +94,49 @@ describe('InitialStep', () => {
     // Verify prepareGeminiContent was used to build base parts
     expect(instructionArg.userTurn.parts[0].text).toBe('user input');
   });
+
+  it('delegates execute to executeMultiAgent with and without initial search tools', async () => {
+    const executeMultiAgentSpy = vi.spyOn(step as any, 'executeMultiAgent').mockResolvedValue(['draft']);
+
+    mockContext.settings.useSearchInInitial = true;
+    await step.execute(mockContext);
+    expect(executeMultiAgentSpy.mock.calls[0][1]).toMatchObject({
+      tools: [{ googleSearch: {} }],
+      simulateError: mockContext.settings.simulateInitialError,
+      simulateErrorAttempts: mockContext.settings.simulateInitialErrorAttempts,
+    });
+    expect((executeMultiAgentSpy.mock.calls[0][1] as any).prepareAgent(0).systemInstruction).toContain('Agent 1 Instruction');
+
+    mockContext.settings.useSearchInInitial = false;
+    await step.execute(mockContext);
+    expect(executeMultiAgentSpy.mock.calls[1][1]).toMatchObject({
+      tools: undefined,
+      simulateError: mockContext.settings.simulateInitialError,
+      simulateErrorAttempts: mockContext.settings.simulateInitialErrorAttempts,
+    });
+  });
+
+  it('falls back to the first prompt profile when activeProfileId is missing', () => {
+    mockContext.settings.profiles = [
+      { id: 'fallback', initialInstruction: 'Fallback instruction' },
+      { id: 'other', initialInstruction: 'Other instruction' },
+    ];
+    mockContext.settings.activeProfileId = 'missing-profile';
+
+    const config = (step as any).prepareInstruction(mockContext, 0);
+
+    expect(config.systemInstruction).toContain('Fallback instruction');
+  });
+
+  it('passes initial search tools during regeneration when search is enabled', async () => {
+    const runRegenSpy = vi.spyOn(step as any, 'runAgentRegeneration').mockResolvedValue({
+      text: 'search-enabled response',
+      work: mockContext.work
+    });
+    mockContext.settings.useSearchInInitial = true;
+
+    await step.regenerate(mockContext, 0, []);
+
+    expect(runRegenSpy.mock.calls[0][5]).toEqual([{ googleSearch: {} }]);
+  });
 });

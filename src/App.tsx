@@ -33,7 +33,9 @@ export const App: FC = () => {
     retry,
     continueGeneration,
     regenerateAgentResponse,
-    currentMessageId
+    currentMessageId,
+    loadError,
+    clearLoadError
   } = useGeminiSwarm();
 
   const {
@@ -153,6 +155,14 @@ export const App: FC = () => {
         }
     }
   }, [serverStatus.isLoaded, providerInfo.isGemini, providerInfo.isDemoMode, settings.model, settingsLoaded, setSettings]);
+
+  // Show toast when loadError is present (e.g. from corrupt settings fallback)
+  useEffect(() => {
+    if (loadError) {
+      setToast({ message: loadError, type: 'error' });
+      clearLoadError();
+    }
+  }, [loadError, clearLoadError]);
 
   const { isUsingProxy, modelDisplayName } = providerInfo;
 

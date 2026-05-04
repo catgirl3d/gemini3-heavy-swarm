@@ -2,11 +2,21 @@ import { useState, useEffect, useRef } from 'react';
 import { ServerStatus } from '@/types';
 import { Logger } from '@shared/utils/logger';
 
+const DEFAULT_PROXY_MODE = 'private';
+
+const isJsonContentType = (contentType: string | null): boolean => (
+  contentType?.toLowerCase().includes('application/json') ?? false
+);
+
+const normalizeProxyMode = (proxyMode: unknown): 'demo' | 'private' => (
+  proxyMode === 'demo' ? 'demo' : DEFAULT_PROXY_MODE
+);
+
 export function useServerStatus() {
   const [serverStatus, setServerStatus] = useState<ServerStatus>({
     hasServerKey: false,
     hasOpenRouterKey: false,
-    proxyMode: 'private',
+    proxyMode: DEFAULT_PROXY_MODE,
     isLoaded: false
   });
   const [shouldShowLoadingBanner, setShouldShowLoadingBanner] = useState(false);
@@ -16,9 +26,11 @@ export function useServerStatus() {
   const isLoadedRef = useRef(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     // Show loading banner only if check takes longer than 300ms
     const loadingTimer = setTimeout(() => {
-      if (!isLoadedRef.current) {
+      if (isMounted && !isLoadedRef.current) {
         setShouldShowLoadingBanner(true);
       }
     }, 300);
@@ -26,12 +38,13 @@ export function useServerStatus() {
     fetch('/api/status')
       .then(res => {
         const contentType = res.headers.get('content-type');
-        if (!res.ok || !contentType || !contentType.includes('application/json')) {
+        if (!isMounted || !res.ok || !isJsonContentType(contentType)) {
           return null;
         }
         return res.json();
       })
       .then(data => {
+        if (!isMounted) return;
         clearTimeout(loadingTimer);
         setShouldShowLoadingBanner(false);
         if (data && typeof data.hasServerKey === 'boolean') {
@@ -39,7 +52,7 @@ export function useServerStatus() {
           setServerStatus({
             hasServerKey: data.hasServerKey,
             hasOpenRouterKey: !!data.hasOpenRouterKey,
-            proxyMode: data.proxyMode || 'private',
+            proxyMode: normalizeProxyMode(data.proxyMode),
             isLoaded: true
           });
         } else {
@@ -48,6 +61,7 @@ export function useServerStatus() {
         }
       })
       .catch(err => {
+        if (!isMounted) return;
         clearTimeout(loadingTimer);
         setShouldShowLoadingBanner(false);
         new Logger('ServerStatus').debug('Server status check failed (running client-only?):', err);
@@ -55,7 +69,10 @@ export function useServerStatus() {
         setServerStatus(prev => ({ ...prev, isLoaded: true }));
       });
 
-    return () => clearTimeout(loadingTimer);
+    return () => {
+      isMounted = false;
+      clearTimeout(loadingTimer);
+    };
   }, []);
 
   const dismissBanner = () => setIsBannerDismissed(true);

@@ -5,7 +5,7 @@ export interface BaseModalProps {
     onClose: () => void;
     children: React.ReactNode;
     size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
-    clickOutsideSelectors?: string[];
+    hasActiveDropdown?: boolean;
     onCloseDropdowns?: () => void;
     className?: string;
     overlayClassName?: string;

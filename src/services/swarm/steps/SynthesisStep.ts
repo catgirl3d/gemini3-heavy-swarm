@@ -24,11 +24,27 @@ export class SynthesisStep extends BaseStep {
   async execute(context: StepContext): Promise<{ text: string; sources?: Source[] }> {
     const { ai, settings, history, userInput, image, imageFile, work, onMessageUpdate, signal, messageId } = context;
 
+    // Initialize logger early so it's available for all logging
+    const logger = new Logger(this.id, settings.debugMode);
+
     // Ensure we have refined drafts
     const refinedDrafts = getStepResults(work, STEPS.REFINEMENT);
     
     if (refinedDrafts.length === 0) {
       throw new Error('Cannot run synthesis step without refined drafts');
+    }
+    
+    // LOG: What we got from work.results
+    if (settings.debugMode) {
+      logger.debug('=== SYNTHESIS EXECUTE - REFINED DRAFTS FROM WORK ===');
+      logger.debug('work.results[STEPS.REFINEMENT]:', work.results?.[STEPS.REFINEMENT]);
+      logger.debug('refinedDrafts (processed):', refinedDrafts.map((text, i) => ({
+        index: i,
+        isNull: text === null,
+        isEmpty: !text || text.length === 0,
+        length: text?.length || 0,
+        preview: text ? text.substring(0, 100) : 'null/empty'
+      })));
     }
 
     // Initialize agent states - show the drafters (Initial step agents) who created the content
@@ -70,8 +86,6 @@ export class SynthesisStep extends BaseStep {
     // Initialize generic storage
     this.ensureResults(work);
     
-    const logger = new Logger(this.id, settings.debugMode);
-    
     logger.debug('Starting synthesis', { numRefinedDrafts: refinedDrafts.length, isRegeneration: hadError });
     
     // Initialize ALL agents in the store
@@ -84,6 +98,22 @@ export class SynthesisStep extends BaseStep {
       const { systemInstruction, synthesizerTurn, mainChatHistory } = this.prepareSynthesis(context, refinedDrafts);
 
       logger.debug('Starting model stream');
+      
+      // LOG: What we're actually sending to the model
+      const contentsForModel = [...mainChatHistory, synthesizerTurn];
+      if (settings.debugMode) {
+        logger.debug('=== CONTENTS SENT TO MODEL ===');
+        logger.debug('Total messages:', contentsForModel.length);
+        logger.debug('Last message (synthesizerTurn):', {
+          role: synthesizerTurn.role,
+          partsCount: synthesizerTurn.parts.length,
+          parts: synthesizerTurn.parts.map(part => ({
+            hasText: !!part.text,
+            textLength: part.text?.length || 0,
+            textSnippet: part.text ? part.text.substring(0, 300) : 'no text'
+          }))
+        });
+      }
 
       // Create jump tracker to manage first-text-chunk behavior
       const jumpTracker = createFirstTextJumpTracker(context.onSynthesisJump);
@@ -232,13 +262,64 @@ export class SynthesisStep extends BaseStep {
 
     const initialDrafts = getStepResults(work, STEPS.INITIAL);
 
+    const logger = new Logger(this.id, settings.debugMode);
+    
+    // LOG: Input data
+    if (settings.debugMode) {
+      logger.debug('=== PREPARE SYNTHESIS - INPUT DATA ===');
+      logger.debug('refinedDrafts:', refinedDrafts.map((text, i) => ({
+        index: i,
+        isEmpty: !text || text.length === 0,
+        length: text?.length || 0,
+        preview: text ? text.substring(0, 100) : 'null/empty'
+      })));
+      logger.debug('initialDrafts:', initialDrafts.map((text, i) => ({
+        index: i,
+        isEmpty: !text || text.length === 0,
+        length: text?.length || 0,
+        preview: text ? text.substring(0, 100) : 'null/empty'
+      })));
+    }
+
     // Prepare drafts for synthesis (fallback to initial if refined is empty)
     const draftsForSynthesis = refinedDrafts.map((refinedText: string, i: number) => {
-      return (!refinedText || refinedText.length === 0) ? (initialDrafts[i] || '') : refinedText;
+      const useFallback = !refinedText || refinedText.length === 0;
+      const result = useFallback ? (initialDrafts[i] || '') : refinedText;
+      
+      // LOG: Fallback decisions
+      if (settings.debugMode) {
+        if (useFallback) {
+          logger.debug(`Agent ${i}: Using FALLBACK (refined is empty), source: ${initialDrafts[i] ? 'INITIAL' : 'EMPTY'}`, {
+            preview: result ? result.substring(0, 100) : 'empty'
+          });
+        } else {
+          logger.debug(`Agent ${i}: Using REFINED draft`, {
+            length: refinedText.length,
+            preview: refinedText.substring(0, 100)
+          });
+        }
+      }
+      
+      return result;
     });
+
+    // LOG: Final drafts
+    if (settings.debugMode) {
+      logger.debug('draftsForSynthesis:', draftsForSynthesis.map((text, i) => ({
+        index: i,
+        length: text?.length || 0,
+        preview: text ? text.substring(0, 100) : 'empty'
+      })));
+    }
 
     // Format agent drafts using helper
     const agentDrafts = formatDrafts(draftsForSynthesis);
+    
+    // LOG: Formatted drafts (what actually goes to the model)
+    if (settings.debugMode) {
+      logger.debug('=== FORMATTED AGENT DRAFTS (PAYLOAD) ===');
+      logger.debug(agentDrafts);
+    }
 
     // Build synthesis context using helper
     const synthesizerContext = buildSynthesisContext({
@@ -248,6 +329,16 @@ export class SynthesisStep extends BaseStep {
     });
 
     const synthesizerTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}`}] };
+
+    // LOG: What we're saving to debug info
+    if (settings.debugMode) {
+      logger.debug('=== SAVING TO DEBUG INFO ===');
+      logger.debug('synthesizerTurn.parts:', synthesizerTurn.parts.map(part => ({
+        hasText: !!part.text,
+        textLength: part.text?.length || 0,
+        textPreview: part.text ? part.text.substring(0, 200) : 'no text'
+      })));
+    }
 
     // Capture debug info
     this.ensureDebugInfo(work, STEPS.SYNTHESIS, false);

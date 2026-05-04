@@ -1,4 +1,8 @@
 
+import { Logger } from '@shared/utils/logger';
+
+const logger = new Logger('ModelsCache');
+
 // LocalStorage cache configuration for OpenRouter models
 const CACHE_KEY = 'openrouter_models_cache';
 const CACHE_DURATION_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -55,7 +59,7 @@ export function setCachedModels(models: ModelOption[]): void {
         localStorage.setItem(CACHE_KEY, JSON.stringify(data));
     } catch (error) {
         // Silently fail if localStorage is unavailable
-        console.warn('Failed to cache OpenRouter models:', error);
+        logger.warn('Failed to cache OpenRouter models:', error);
     }
 }
 

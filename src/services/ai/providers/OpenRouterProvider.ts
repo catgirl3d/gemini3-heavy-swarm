@@ -75,13 +75,20 @@ export class OpenRouterProvider extends BaseProvider {
     if (typeof chunk.text === 'function') {
         text = chunk.text();
     }
+
+    const thought = typeof chunk.thought === 'string'
+      ? chunk.thought
+      : chunk.candidates?.[0]?.content?.parts
+          ?.filter((part: any) => part?.thought && typeof part.text === 'string')
+          .map((part: any) => part.text)
+          .join('') || '';
     
     // In OpenRouterGenAI, thoughts are extracted into candidates[0].content.parts[i].text where part.thought is true
     // If OpenRouterGenAI followed Gemini pattern, we can use extractTextFromParts
     
     return {
         text: text,
-        thought: chunk.thought, // OpenRouterGenAI marks thought in chunk
+        thought,
         usage: this.extractUsage(chunk.usageMetadata),
         groundingChunks: chunk.groundingChunks,
         raw: chunk

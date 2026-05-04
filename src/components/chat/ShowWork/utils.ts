@@ -1,11 +1,13 @@
 export const downloadContent = (filename: string, content: string) => {
   const element = document.createElement('a');
   const file = new Blob([content], { type: 'text/markdown' });
-  element.href = URL.createObjectURL(file);
+  const objectUrl = URL.createObjectURL(file);
+  element.href = objectUrl;
   element.download = filename;
   document.body.appendChild(element);
   element.click();
   document.body.removeChild(element);
+  URL.revokeObjectURL(objectUrl);
 };
 
 export const formatDebugInfo = (info: unknown) => {

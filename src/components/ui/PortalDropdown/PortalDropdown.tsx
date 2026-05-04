@@ -1,5 +1,6 @@
-import React, { FC, ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import React, { FC, ReactNode, useContext, useEffect, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { BaseModalInteractionContext } from '@/components/modals/BaseModal/context';
 
 interface PortalDropdownProps {
     isOpen: boolean;
@@ -27,6 +28,8 @@ export const PortalDropdown: FC<PortalDropdownProps> = ({
     width
 }) => {
     const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
+    const [portalElement, setPortalElement] = useState<HTMLDivElement | null>(null);
+    const modalInteractionContext = useContext(BaseModalInteractionContext);
 
     const updateCoords = () => {
         if (triggerRef.current) {
@@ -59,11 +62,33 @@ export const PortalDropdown: FC<PortalDropdownProps> = ({
         }
     }, [isOpen, triggerRef, width]);
 
+    useEffect(() => {
+        if (!isOpen || !modalInteractionContext) return;
+
+        const triggerElement = triggerRef.current;
+        modalInteractionContext.registerClickInsideElement(triggerElement);
+
+        return () => {
+            modalInteractionContext.unregisterClickInsideElement(triggerElement);
+        };
+    }, [isOpen, modalInteractionContext, triggerRef]);
+
+    useEffect(() => {
+        if (!isOpen || !modalInteractionContext || !portalElement) return;
+
+        modalInteractionContext.registerClickInsideElement(portalElement);
+
+        return () => {
+            modalInteractionContext.unregisterClickInsideElement(portalElement);
+        };
+    }, [isOpen, modalInteractionContext, portalElement]);
+
     // Don't render until we have calculated coordinates
     if (!isOpen || coords === null) return null;
 
     return createPortal(
         <div
+            ref={setPortalElement}
             className={`modal-dropdown-portal ${className}`}
             style={{
                 // Inline styles required for dynamic positioning
