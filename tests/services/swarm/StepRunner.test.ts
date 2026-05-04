@@ -304,4 +304,77 @@ describe('StepRunner', () => {
       { id: 'name-fallback-step', status: 'done', label: 'Name Fallback Step' }
     ]);
   });
+
+  it('syncs paused context.work from live store before the next step resumes', async () => {
+    const { getStepConfig } = await import('@/utils/swarm/stepConstants');
+    vi.mocked(getStepConfig).mockImplementation((id: string) => {
+      if (id === 'pausable-step') {
+        return {
+          allowPause: true,
+          pauseSettingKey: 'pauseAfterInitial',
+          progressMsg: 'Pausable Progress'
+        } as any;
+      }
+
+      return {
+        progressMsg: `Progress for ${id}`
+      } as any;
+    });
+
+    const pausableStep: StepDescriptor = {
+      id: 'pausable-step' as any,
+      name: 'Pausable Step',
+      execute: vi.fn().mockResolvedValue('done')
+    };
+    const step2: StepDescriptor = {
+      id: 'step2' as any,
+      name: 'Step 2',
+      execute: vi.fn().mockImplementation(async (context: StepContext) => {
+        return context.work.results?.regenerated;
+      })
+    };
+
+    mockSettings.pauseAfterInitial = true;
+    const liveStoreState = {
+      setCurrentWork: vi.fn(),
+      updateWorkResult: vi.fn(),
+      setIsPaused: vi.fn(),
+      setLoadingStatus: vi.fn(),
+      setIsLoading: vi.fn(),
+      currentMessageId: 'msg-1',
+      currentWork: undefined as Work | undefined,
+    };
+    (useAgentStore.getState as any).mockImplementation(() => liveStoreState);
+
+    const runner = new StepRunner([pausableStep, step2]);
+    const context: StepContext = {
+      work: mockWork,
+      settings: mockSettings,
+      messageId: 'msg-1',
+      signal: new AbortController().signal,
+    } as any;
+
+    const runPromise = runner.run(context, pauseResolverRef);
+    await new Promise(r => setTimeout(r, 0));
+    expect(pauseResolverRef.current).toEqual(expect.any(Function));
+
+    liveStoreState.currentWork = {
+      ...mockWork,
+      results: {
+        ...mockWork.results,
+        'pausable-step': 'done',
+        regenerated: 'latest refinement',
+      },
+      stepMetadata: [{ id: 'pausable-step', status: 'done', label: 'Pausable Step' } as any],
+    };
+
+    pauseResolverRef.current?.();
+    const finalWork = await runPromise;
+
+    expect(step2.execute).toHaveBeenCalledTimes(1);
+    expect(finalWork.results).toEqual(expect.objectContaining({
+      regenerated: 'latest refinement',
+      step2: 'latest refinement',
+    }));
+  });
 });

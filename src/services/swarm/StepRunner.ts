@@ -10,17 +10,29 @@ const getLogger = (settings: AppSettings) => new Logger('StepRunner', settings.d
 export class StepRunner {
   constructor(private steps: StepDescriptor[]) {}
 
+  private syncContextWorkFromStore(context: StepContext): void {
+    const messageId = context.messageId;
+    if (!messageId) return;
+
+    const store = useAgentStore.getState();
+    if (store.currentMessageId !== messageId || !store.currentWork) return;
+
+    context.work = store.currentWork;
+  }
+
   async run(
     context: StepContext,
     pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>,
     onPause?: () => void,
     onStatusUpdate?: (status: string) => void
   ): Promise<Work> {
-    const { settings, work } = context;
+    const { settings } = context;
 
     for (const step of this.steps) {
+      this.syncContextWorkFromStore(context);
+
       // Skip steps that are already completed (Resume logic)
-      const isDone = work.stepMetadata?.find(m => m.id === step.id)?.status === 'done';
+      const isDone = context.work.stepMetadata?.find(m => m.id === step.id)?.status === 'done';
       if (isDone) {
         getLogger(settings).debug(`Skipping completed step: ${step.id}`);
         continue;
@@ -38,21 +50,21 @@ export class StepRunner {
         const stepResult = await step.execute(context);
 
         // 3. Store Results (Generic)
-        if (!work.results) work.results = {};
+        if (!context.work.results) context.work.results = {};
         const resultKey: string = step.id;
-        work.results[resultKey] = stepResult;
+        context.work.results[resultKey] = stepResult;
 
         // Update metadata
-        if (!work.stepMetadata) work.stepMetadata = [];
-        const existingMetaIndex = work.stepMetadata.findIndex(m => m.id === step.id);
+        if (!context.work.stepMetadata) context.work.stepMetadata = [];
+        const existingMetaIndex = context.work.stepMetadata.findIndex(m => m.id === step.id);
         if (existingMetaIndex >= 0) {
-            work.stepMetadata[existingMetaIndex].status = 'done';
+            context.work.stepMetadata[existingMetaIndex].status = 'done';
         } else {
-            work.stepMetadata.push({ id: step.id, status: 'done', label: step.name });
+            context.work.stepMetadata.push({ id: step.id, status: 'done', label: step.name });
         }
 
         // SYNC: Update global work state to reflect 'done' status immediately (stops timer)
-        useAgentStore.getState().setCurrentWork({ ...work });
+        useAgentStore.getState().setCurrentWork({ ...context.work });
       } catch (error) {
         getLogger(settings).debug(`Error in step ${step.id}:`, error);
         throw error;
@@ -68,12 +80,14 @@ export class StepRunner {
         await new Promise<void>(resolve => {
           pauseResolverRef.current = resolve;
         });
+
+        this.syncContextWorkFromStore(context);
         
         getLogger(settings).debug(`Resumed after step: ${step.id}`);
       }
     }
 
-    return work;
+    return context.work;
   }
 
   private shouldPauseAfter(step: StepDescriptor, settings: AppSettings): boolean {
