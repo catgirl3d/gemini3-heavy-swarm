@@ -1,14 +1,13 @@
-import React, { FC, useState, useRef, useEffect } from 'react';
-import { TokenUsage as TokenUsageType } from '@/types';
+import type { FC } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import type { TokenUsage as TokenUsageType } from '@/types';
 import { InfoIcon } from '../icons';
 import './TokenUsage.css';
 
 export const TokenUsage: FC<{ usage: TokenUsageType | null }> = ({ usage }) => {
   const [showPopup, setShowPopup] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
-  
-  if (!usage) return null;
-  
+
   // Close popup when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -22,6 +21,8 @@ export const TokenUsage: FC<{ usage: TokenUsageType | null }> = ({ usage }) => {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showPopup]);
+
+  if (!usage) return null;
   
   // Build inline breakdown string
   const buildBreakdown = () => {
