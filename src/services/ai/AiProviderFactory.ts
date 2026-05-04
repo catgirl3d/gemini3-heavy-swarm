@@ -1,5 +1,5 @@
-import { AiProvider } from '@/types/ai-provider';
-import { AppSettings, ProviderType } from '@/types';
+import { type AiProvider } from '@/types/ai-provider';
+import { type AppSettings, ProviderType } from '@/types';
 import { GeminiProvider, ProxyProvider, OpenRouterProvider } from './providers';
 import { getDirectApiKey } from '@/services/proxy/proxyUtils';
 import { Logger } from '@shared/utils/logger';

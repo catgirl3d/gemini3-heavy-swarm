@@ -1,6 +1,6 @@
-import { useRef, useEffect, RefObject, Dispatch, SetStateAction } from 'react';
-import { AppSettings, Message, AgentState, Work } from '@/types';
-import { StepId, STEPS } from '@/types/steps';
+import { useRef, useEffect, type RefObject, type Dispatch, type SetStateAction } from 'react';
+import { type AppSettings, type Message, AgentState, type Work } from '@/types';
+import { type StepId, STEPS } from '@/types/steps';
 import { Logger } from '@shared/utils/logger';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { getMissingAgentsForMessage } from '@/utils/swarm/agentHelpers';
@@ -9,7 +9,7 @@ import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
 import { calculateUpdatedStateForRegeneration } from '@/utils/swarm/regenerationHelpers';
 import { withEnsuredResults, cloneWork, updateAgentWork } from '@/utils/swarm/workHelpers';
 import { getFriendlyErrorMessage } from '@/services/swarm/steps/utils/errorUtils';
-import { SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
+import { type SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { useAgentStore } from '@/stores/agentStore';
 
 const regenLogger = new Logger('Regeneration');
@@ -223,7 +223,7 @@ export function useSwarmRegeneration({
              : (result.work.results?.[`${stepId}_usage`] as any[])?.[agentIndex];
 
           // 2. Perform atomic update into the LATEST messages work state
-          let updatedWork = updateAgentWork(existingWork, stepId, agentIndex, {
+          const updatedWork = updateAgentWork(existingWork, stepId, agentIndex, {
               text,
               thought,
               usage

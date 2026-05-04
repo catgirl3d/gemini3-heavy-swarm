@@ -1,8 +1,8 @@
-import React, { FC, useState } from 'react';
+import React, { type FC, useState } from 'react';
 import { MarkdownRenderer } from '@/components/ui';
 import { BaseModal } from '@/components/modals';
 import { formatDebugInfo } from '@/components/chat/ShowWork/utils';
-import { StepDebugInfo } from '@/types/app-types';
+import { type StepDebugInfo } from '@/types/app-types';
 
 export const DebugModal: FC<{ title: string; debugInfo: StepDebugInfo | undefined; onClose: () => void }> = ({ title, debugInfo, onClose }) => {
     const [viewMode, setViewMode] = useState<'formatted' | 'raw' | 'readable'>('formatted');

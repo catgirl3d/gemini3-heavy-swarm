@@ -1,4 +1,4 @@
-import { AppSettings, ProviderType } from '@/types';
+import { type AppSettings, type ProviderType } from '@/types';
 import { Logger } from '@shared/utils/logger';
 
 const logger = new Logger('ProviderSwitching');

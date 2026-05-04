@@ -1,4 +1,4 @@
-import { AppSettings, Work } from '@/types';
+import { type AppSettings, type Work } from '@/types';
 import { STEPS } from '@/types/steps';
 import { getFriendlyErrorMessage } from '@/services/swarm/steps/utils/errorUtils';
 import { Logger } from '@shared/utils/logger';

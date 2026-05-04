@@ -1,5 +1,5 @@
 import { ProviderType } from '@/types';
-import { ModelOption as OpenRouterModelOption, getCachedModels } from '@/services/openrouter/modelsCache';
+import { type ModelOption as OpenRouterModelOption, getCachedModels } from '@/services/openrouter/modelsCache';
 import { MODEL_DISPLAY_NAMES } from '@/constants/models';
 
 export const isThinkingModel = (

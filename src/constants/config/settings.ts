@@ -1,4 +1,4 @@
-import { AppSettings, ProviderType } from '@/types';
+import { type AppSettings, ProviderType } from '@/types';
 import { IS_FORCED_PROXY } from './env';
 import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
 import { DEFAULT_PROFILES } from '@/constants/prompts';

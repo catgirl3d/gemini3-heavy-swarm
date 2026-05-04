@@ -1,6 +1,6 @@
-import { Content } from '@google/genai';
-import { StepContext, StepId, STEPS } from '@/types/steps';
-import { AgentState, Source, Work } from '@/types';
+import { type Content } from '@google/genai';
+import { type StepContext, type StepId, STEPS } from '@/types/steps';
+import { type AgentState, type Source, type Work } from '@/types';
 import { prepareGeminiContent } from '@/services/swarm/contentUtils';
 import { BaseStep } from './BaseStep';
 import { getStepResults } from '@/utils/swarm/workHelpers';

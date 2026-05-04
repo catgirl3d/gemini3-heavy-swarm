@@ -1,4 +1,4 @@
-import { AppSettings, ProviderType } from '@/types';
+import { type AppSettings, ProviderType } from '@/types';
 
 export const createMockSettings = (overrides?: Partial<AppSettings>): AppSettings => ({
   provider: ProviderType.Gemini,

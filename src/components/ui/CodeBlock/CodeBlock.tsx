@@ -1,4 +1,4 @@
-import React, { FC, ReactNode, useState } from 'react';
+import React, { type FC, type ReactNode, useState } from 'react';
 import './CodeBlock.css';
 import { Logger } from '@shared/utils/logger';
 

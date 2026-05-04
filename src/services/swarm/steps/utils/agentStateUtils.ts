@@ -1,4 +1,4 @@
-import { AppSettings, AgentState, StepId } from '@/types';
+import { type AppSettings, type AgentState, type StepId } from '@/types';
 import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
 
 interface AgentStateConfig {

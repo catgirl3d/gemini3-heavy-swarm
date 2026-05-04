@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useRoleManagement } from '@/components/modals/SettingsModal/hooks/useRoleManagement';
-import { AppSettings, ProviderType } from '@/types';
+import { type AppSettings, ProviderType } from '@/types';
 import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
 import { useState } from 'react';
 import { createMockSettings } from '@/test/utils/settingsMocks';

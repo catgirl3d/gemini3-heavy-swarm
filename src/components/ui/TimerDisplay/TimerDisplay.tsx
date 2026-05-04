@@ -1,4 +1,4 @@
-import React, { FC } from 'react';
+import React, { type FC } from 'react';
 import { useSwarmTimer } from '@/hooks/swarm/useSwarmTimer';
 
 export const TimerDisplay: FC<{ isActive: boolean }> = ({ isActive }) => {

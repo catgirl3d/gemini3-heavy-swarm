@@ -1,4 +1,4 @@
-import React, { FC, ReactNode, useContext, useEffect, useLayoutEffect, useState } from 'react';
+import React, { type FC, type ReactNode, useContext, useEffect, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BaseModalInteractionContext } from '@/components/modals/BaseModal/context';
 

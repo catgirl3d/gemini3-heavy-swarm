@@ -1,5 +1,5 @@
-import React, { FC } from 'react';
-import { Source } from '@/types';
+import React, { type FC } from 'react';
+import { type Source } from '@/types';
 import './Sources.css';
 
 export const Sources: FC<{ sources: Source[] }> = ({ sources }) => (

@@ -1,5 +1,5 @@
-import { AppSettings } from '@/types';
-import { UpdateResult } from '@/types/result-types';
+import { type AppSettings } from '@/types';
+import { type UpdateResult } from '@/types/result-types';
 import { Logger } from '@shared/utils/logger';
 
 const logger = new Logger('RoleModelUpdates');

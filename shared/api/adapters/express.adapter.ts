@@ -1,7 +1,7 @@
 // Note: Using relative paths instead of aliases (@shared)
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
 import { RATE_LIMIT_PER_MINUTE } from '../../security/security';
-import { RateLimitResult } from '../types';
+import { type RateLimitResult } from '../types';
 import { Logger } from '../../utils/logger';
 
 const logger = new Logger('ExpressAdapter');

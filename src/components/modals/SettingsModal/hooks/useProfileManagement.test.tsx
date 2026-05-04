@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useProfileManagement } from '@/components/modals/SettingsModal/hooks/useProfileManagement';
-import { AppSettings, ProviderType } from '@/types';
+import { type AppSettings, ProviderType } from '@/types';
 import { useState } from 'react';
 import { createMockSettings } from '@/test/utils/settingsMocks';
 

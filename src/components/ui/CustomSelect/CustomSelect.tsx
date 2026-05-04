@@ -1,4 +1,4 @@
-import React, { ReactNode, useRef, useState } from 'react';
+import React, { type ReactNode, useRef, useState } from 'react';
 import { PortalDropdown } from '@/components/ui/PortalDropdown/PortalDropdown';
 import './CustomSelect.css';
 

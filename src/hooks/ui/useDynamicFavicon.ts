@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ProviderType } from '@/types';
+import { type ProviderType } from '@/types';
 import { getProviderLogo } from '@/utils/logoHelpers';
 
 /**

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { AppSettings, ServerStatus, ProviderType } from '@/types';
+import { type AppSettings, type ServerStatus, ProviderType } from '@/types';
 import { getModelDisplayName } from '@/utils/common/modelUtils';
 import { isUsingProxy as checkProxyUsage } from '@/services/proxy/proxyUtils';
 

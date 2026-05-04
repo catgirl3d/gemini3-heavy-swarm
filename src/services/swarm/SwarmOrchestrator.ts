@@ -1,11 +1,11 @@
-import { AiProvider } from '@/types/ai-provider';
-import { AppSettings, Work, AgentState, Message, Source, TokenUsage } from '@/types';
+import { type AiProvider } from '@/types/ai-provider';
+import { type AppSettings, type Work, type AgentState, type Message, type Source, type TokenUsage } from '@/types';
 import type { MutableRefObject } from 'react';
 import { StepRunner } from '@/services/swarm/StepRunner';
 import { InitialStep } from '@/services/swarm/steps/InitialStep';
 import { RefinementStep } from '@/services/swarm/steps/RefinementStep';
 import { SynthesisStep } from '@/services/swarm/steps/SynthesisStep';
-import { StepContext, StepDescriptor, STEPS, StepId } from '@/types/steps';
+import { type StepContext, type StepDescriptor, STEPS, type StepId } from '@/types/steps';
 import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
 import { Logger } from '@shared/utils/logger';
 

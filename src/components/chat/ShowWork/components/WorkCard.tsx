@@ -1,5 +1,5 @@
-import React, { FC, ReactNode, memo, useCallback, useMemo, useState, useEffect, useRef } from 'react';
-import { TokenUsage as TokenUsageType } from '@/types';
+import React, { type FC, type ReactNode, memo, useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import { type TokenUsage as TokenUsageType } from '@/types';
 import { MarkdownRenderer } from '@/components/ui';
 import { SpinnerIcon, ErrorIcon, CheckIcon, ExpandIcon, ThoughtIcon, DebugIcon, DownloadIcon, RegenerateIcon } from '@/components/chat/ShowWork/icons';
 import { ActionMenu } from './ActionMenu';

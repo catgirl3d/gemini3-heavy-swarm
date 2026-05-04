@@ -1,5 +1,5 @@
-import { ReactNode, useEffect } from 'react';
-import { AppSettings } from '@/types';
+import { type ReactNode, useEffect } from 'react';
+import { type AppSettings } from '@/types';
 import { Logger } from '@shared/utils/logger';
 
 interface ConfigProviderProps {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AppSettings } from '@/types';
+import { type AppSettings } from '@/types';
 import { DEFAULT_SETTINGS } from '@/constants';
 import { migrateSettings } from '@/services/settings/settingsMigration';
 import { Logger } from '@shared/utils/logger';

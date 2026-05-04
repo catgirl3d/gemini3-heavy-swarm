@@ -1,4 +1,4 @@
-import { GenerationConfig, ThinkingLevel } from '@google/genai';
+import { type GenerationConfig, type ThinkingLevel } from '@google/genai';
 import { Logger } from '@shared/utils/logger';
 import { isThinkingModel as checkIsThinkingModel } from '@/utils/common/modelUtils';
 import { ProviderType } from '@/types';

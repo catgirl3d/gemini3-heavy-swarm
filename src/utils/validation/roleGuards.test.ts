@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { assertRoleHasId, hasValidRoleId } from './roleGuards';
-import { AgentRole } from '@/types';
+import { type AgentRole } from '@/types';
 
 describe('roleGuards', () => {
   describe('hasValidRoleId', () => {

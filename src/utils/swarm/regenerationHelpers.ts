@@ -1,6 +1,6 @@
-import { StepId, STEPS } from '@/types/steps';
+import { type StepId, STEPS } from '@/types/steps';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
-import { AppSettings, Message, Work, TokenUsage } from '@/types';
+import { type AppSettings, type Message, type Work, type TokenUsage } from '@/types';
 import { ensureModelMessageForSynthesis, updateMessageParts, updateWorkAgentNames } from '@/utils/chat/messageHelpers';
 import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
 import { updateAgentWork } from '@/utils/swarm/workHelpers';
@@ -28,8 +28,8 @@ export function processSynthesisChunkUpdate(
   
 
 
-  let msg = foundMsg;
-  let targetIndex = foundIndex;
+  const msg = foundMsg;
+  const targetIndex = foundIndex;
   
   if (wasCreated) {
     newMessages.push(msg);
@@ -65,7 +65,7 @@ export function updateWorkForStep(
   usage?: TokenUsage | null
 ): Work {
   const newName = getUpdatedAgentName(agentIndex, stepId, settings);
-  let updatedWork = updateWorkAgentNames(work, stepId, agentIndex, newName);
+  const updatedWork = updateWorkAgentNames(work, stepId, agentIndex, newName);
   
   // Use atomic update that handles text, thought, and usage
   return updateAgentWork(updatedWork, stepId, agentIndex, {

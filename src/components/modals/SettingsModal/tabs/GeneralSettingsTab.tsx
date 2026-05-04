@@ -1,12 +1,12 @@
-import React, { FC, ChangeEvent, useEffect, useMemo } from 'react';
-import { AppSettings, ServerStatus, ProviderType } from '@/types';
+import React, { type FC, type ChangeEvent, useEffect, useMemo } from 'react';
+import { type AppSettings, type ServerStatus, ProviderType } from '@/types';
 import { isThinkingModel as checkIsThinkingModel } from '@/utils/common/modelUtils';
 import { getCachedModels } from '@/services/openrouter/modelsCache';
 import { MIN_OUTPUT_TOKENS_FOR_THINKING, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 import { StepperControl } from '@/components/modals/SettingsModal/components/StepperControl';
 import { TemperatureBanner } from '@/components/modals/SettingsModal/components/TemperatureBanner';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
-import { ModelSelector, ProviderSelector, CustomSelect, CustomSelectOption } from '@/components/ui';
+import { ModelSelector, ProviderSelector, CustomSelect, type CustomSelectOption } from '@/components/ui';
 
 const ERROR_SIMULATION_OPTIONS: CustomSelectOption[] = [
     { value: 'none', label: 'None (Normal Operation)' },

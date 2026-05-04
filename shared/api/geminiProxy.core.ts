@@ -2,7 +2,7 @@
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
 import { ALLOWED_MODELS, MAX_CONTENT_CHARS } from '../security/security';
 import { validateContents, serializeRequestBody, getTargetModel, buildGeminiUrl } from '../validation/geminiValidation';
-import { GeminiRequest } from './types';
+import { type GeminiRequest } from './types';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('GeminiProxyCore');

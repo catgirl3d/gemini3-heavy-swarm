@@ -1,4 +1,4 @@
-import { InstructionType, ProfileMetadata } from '@/components/modals/SettingsModal/types';
+import { type InstructionType, type ProfileMetadata } from '@/components/modals/SettingsModal/types';
 import { AVAILABLE_MODELS as SHARED_MODELS } from '@shared/security/security';
 import { PROMPT_TYPES } from '@/types';
 

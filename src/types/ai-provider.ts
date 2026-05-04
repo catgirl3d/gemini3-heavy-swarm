@@ -1,5 +1,5 @@
-import { Content, Tool, GroundingChunk } from '@google/genai';
-import { AppSettings, TokenUsage } from '@/types/app-types';
+import { type Content, type Tool, type GroundingChunk } from '@google/genai';
+import { type AppSettings, type TokenUsage } from '@/types/app-types';
 
 /**
  * Provider capabilities - what features a provider supports.

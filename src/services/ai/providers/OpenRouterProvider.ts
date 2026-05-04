@@ -1,6 +1,6 @@
 import { BaseProvider } from './BaseProvider';
-import { ProviderCapabilities, GenerateRequest, ProviderStreamResult, StreamChunk } from '@/types/ai-provider';
-import { AppSettings, TokenUsage, ProviderType } from '@/types';
+import { type ProviderCapabilities, type GenerateRequest, type ProviderStreamResult, type StreamChunk } from '@/types/ai-provider';
+import { type AppSettings, type TokenUsage, ProviderType } from '@/types';
 import { OpenRouterGenAI } from '@/services/openrouter/OpenRouterGenAI';
 
 export class OpenRouterProvider extends BaseProvider {

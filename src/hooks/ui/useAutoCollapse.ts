@@ -1,5 +1,5 @@
-import { useEffect, useMemo, RefObject } from 'react';
-import { AgentState } from '@/types';
+import { useEffect, useMemo, type RefObject } from 'react';
+import { type AgentState } from '@/types';
 import { Logger } from '@shared/utils/logger';
 
 const logger = new Logger('useAutoCollapse');

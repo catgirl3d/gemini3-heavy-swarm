@@ -1,4 +1,4 @@
-import React, { FC, ChangeEvent, FormEvent, RefObject } from 'react';
+import React, { type FC, type ChangeEvent, type FormEvent, type RefObject } from 'react';
 
 interface InputAreaProps {
   isLoading: boolean;

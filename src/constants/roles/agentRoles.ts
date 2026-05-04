@@ -1,4 +1,4 @@
-import { AgentRole } from '@/types';
+import { type AgentRole } from '@/types';
 
 export const DEFAULT_AGENT_ROLES: AgentRole[] = [
     {

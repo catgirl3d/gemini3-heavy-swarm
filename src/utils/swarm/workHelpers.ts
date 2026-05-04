@@ -1,5 +1,5 @@
-import { Work, TokenUsage, AgentState } from '@/types';
-import { StepId, STEPS } from '@/types/steps';
+import { type Work, type TokenUsage, type AgentState } from '@/types';
+import { type StepId, STEPS } from '@/types/steps';
 
 /**
  * Safely extracts array-based results for a specific step from the Work object.

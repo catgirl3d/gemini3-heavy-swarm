@@ -1,4 +1,4 @@
-import { AppSettings, PromptTypeId, ServerStatus } from '@/types';
+import { type AppSettings, type PromptTypeId, type ServerStatus } from '@/types';
 
 export interface SettingsModalProps {
     isOpen: boolean;

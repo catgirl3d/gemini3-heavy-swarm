@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useAgentStore } from '@/stores/agentStore';
-import { Work, AgentState } from '@/types';
-import { StepId, STEPS } from '@/types/steps';
+import { type Work, type AgentState } from '@/types';
+import { type StepId, STEPS } from '@/types/steps';
 
 /**
  * Hook to resolve agent state by checking both the live Zustand store 

@@ -1,5 +1,5 @@
-import React from 'react';
-import { AppSettings, RoleProfile, AgentRole, RoleType } from '@/types';
+import type React from 'react';
+import { type AppSettings, type RoleProfile, type AgentRole, type RoleType } from '@/types';
 import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
 import { updateRoleModel, cleanupRoleModels, clearAllRoleModelsInProfile } from '@/utils/settings/providerPersistence';
 import { generateUUID } from '@/utils/common/uuid';
@@ -240,7 +240,7 @@ export const useRoleManagement = (
                 // CRITICAL FIX: Clear all old role models to prevent orphaned data
                 // Old roles had different IDs, so their model mappings are now useless
                 // Without this, localStorage accumulates dead mappings indefinitely
-                let updated = clearAllRoleModelsInProfile(prev, targetId);
+                const updated = clearAllRoleModelsInProfile(prev, targetId);
                 
                 // Update profiles with new default roles (fresh UUIDs, no models assigned)
                 return {

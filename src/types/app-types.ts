@@ -1,4 +1,4 @@
-import { Content } from '@google/genai';
+import { type Content } from '@google/genai';
 
 export enum ProviderType {
   Gemini = 'gemini',

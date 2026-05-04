@@ -1,5 +1,5 @@
-import React, { FC, useState, useEffect, useMemo } from 'react';
-import { AppSettings, PROMPT_TYPES, ProviderType } from '@/types';
+import React, { type FC, useState, useEffect, useMemo } from 'react';
+import { type AppSettings, PROMPT_TYPES, ProviderType } from '@/types';
 import { DEFAULT_SETTINGS, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 import { useProviderInfo, getProviderInfo } from '@/hooks/core/useProviderInfo';
 
@@ -7,7 +7,7 @@ import { useProviderInfo, getProviderInfo } from '@/hooks/core/useProviderInfo';
 import { RoleAndPromptConfigModal, BaseModal, ConfirmationModal } from '@/components/modals';
 
 // Local parts
-import { SettingsModalProps, InstructionType } from '@/components/modals/SettingsModal/types';
+import { type SettingsModalProps, type InstructionType } from '@/components/modals/SettingsModal/types';
 import { useProfileManagement } from '@/components/modals/SettingsModal/hooks/useProfileManagement';
 import { useRoleManagement } from '@/components/modals/SettingsModal/hooks/useRoleManagement';
 import { usePresetManagement } from '@/components/modals/SettingsModal/hooks/usePresetManagement';

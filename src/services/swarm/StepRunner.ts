@@ -1,6 +1,6 @@
-import { MutableRefObject } from 'react';
-import { StepDescriptor, StepContext } from '@/types/steps';
-import { Work, AppSettings } from '@/types';
+import { type MutableRefObject } from 'react';
+import { type StepDescriptor, type StepContext } from '@/types/steps';
+import { type Work, type AppSettings } from '@/types';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { Logger } from '@shared/utils/logger';
 import { useAgentStore } from '@/stores/agentStore';

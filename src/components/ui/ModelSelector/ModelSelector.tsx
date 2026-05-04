@@ -1,16 +1,16 @@
-import React, { FC, useState, useEffect, useMemo } from 'react';
+import React, { type FC, useState, useEffect, useMemo } from 'react';
 import { getModelDisplayName } from '@/utils/common/modelUtils';
 import { fetchOpenRouterModels } from '@/services/openrouter/modelsService';
 import { RECOMMENDED_MODEL_IDS, FILTERED_MODEL_IDS } from '@/services/openrouter/constants';
 import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
 import { SortAscIcon, SortDescIcon, StarIcon } from '@/components/modals/SettingsModal/icons';
 import { ProviderType } from '@/types';
-import { CustomSelect, CustomSelectOption } from '@/components/ui/CustomSelect';
+import { CustomSelect, type CustomSelectOption } from '@/components/ui/CustomSelect';
 import { getProviderLogo } from '@/utils/logoHelpers';
 import thinkingIcon from '@/assets/thinking.png';
 import './ModelSelector.css';
 
-import { getCachedModels, setCachedModels, ModelOption } from '@/services/openrouter/modelsCache';
+import { getCachedModels, setCachedModels, type ModelOption } from '@/services/openrouter/modelsCache';
 
 interface ModelSelectorProps {
     value: string;

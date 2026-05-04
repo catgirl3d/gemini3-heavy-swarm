@@ -1,4 +1,4 @@
-import { GenerationConfig, Content } from '@google/genai';
+import { type GenerationConfig, type Content } from '@google/genai';
 import { API_SECRET } from '@/constants';
 import { Logger } from '@shared/utils/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';

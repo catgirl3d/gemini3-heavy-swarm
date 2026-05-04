@@ -1,6 +1,6 @@
-import React, { FC, useState, useEffect } from 'react';
+import React, { type FC, useState, useEffect } from 'react';
 import { BaseModal } from '@/components/modals/BaseModal';
-import { RoleAndPromptConfigModalProps } from '@/components/modals/RoleAndPromptConfigModal/types';
+import { type RoleAndPromptConfigModalProps } from '@/components/modals/RoleAndPromptConfigModal/types';
 import { ModelSelector, PresetSelector } from '@/components/ui';
 import { ProviderType } from '@/types';
 import './RoleAndPromptConfigModal.css';

@@ -1,4 +1,4 @@
-import { PromptProfile } from '@/types';
+import { type PromptProfile } from '@/types';
 
 export const DEFAULT_PROFILES: PromptProfile[] = [
   {

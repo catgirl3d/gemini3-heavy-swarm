@@ -1,9 +1,9 @@
-import React, { FC, ChangeEvent } from 'react';
-import { AppSettings, PromptProfile, PROMPT_TYPES } from '@/types';
+import React, { type FC, type ChangeEvent } from 'react';
+import { type AppSettings, type PromptProfile, PROMPT_TYPES } from '@/types';
 import { ProfileHeader } from '@/components/modals/SettingsModal/components/ProfileHeader';
 import { InstructionItem } from '@/components/modals/SettingsModal/components/InstructionItem';
 import { INSTRUCTION_METADATA } from '@/components/modals/SettingsModal/constants';
-import { InstructionType } from '@/components/modals/SettingsModal/types';
+import { type InstructionType } from '@/components/modals/SettingsModal/types';
 
 interface PromptsTabProps {
     localSettings: AppSettings;

@@ -2,7 +2,7 @@
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
 import { RATE_LIMIT_PER_MINUTE, isProductionEnvironment } from '../../security/security';
 import { getAllowedOrigins, isOriginAllowed, buildAllHeaders, checkPreflightAllowed } from '../cors.core';
-import { RateLimitResult, KVNamespaceSubset, GenericRequest } from '../types';
+import { type RateLimitResult, type KVNamespaceSubset, type GenericRequest } from '../types';
 import { Logger } from '../../utils/logger';
 
 const logger = new Logger('CloudflareAdapter');

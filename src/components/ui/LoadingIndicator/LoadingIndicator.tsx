@@ -1,6 +1,6 @@
-import React, { FC, useEffect } from 'react';
-import { AgentState, Work, ProviderType } from '@/types';
-import { StepId, STEPS } from '@/types/steps';
+import React, { type FC, useEffect } from 'react';
+import { type AgentState, type Work, type ProviderType } from '@/types';
+import { type StepId, STEPS } from '@/types/steps';
 import { AgentAvatar } from '@/components/chat';
 import { TimerDisplay } from '@/components/ui/TimerDisplay';
 import { Logger } from '@shared/utils/logger';

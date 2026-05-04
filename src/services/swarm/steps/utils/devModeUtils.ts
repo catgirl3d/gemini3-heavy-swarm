@@ -1,4 +1,4 @@
-import { StepId, STEPS } from '@/types';
+import { type StepId, STEPS } from '@/types';
 
 export const DEV_MODE_DURATIONS = {
   [STEPS.INITIAL]: 10000,

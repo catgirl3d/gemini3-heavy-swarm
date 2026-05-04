@@ -1,4 +1,4 @@
-import { AgentRole } from '@/types';
+import { type AgentRole } from '@/types';
 
 /**
  * Runtime guard to assert that a role has a valid ID.

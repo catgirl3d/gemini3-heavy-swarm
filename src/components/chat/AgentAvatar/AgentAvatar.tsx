@@ -1,6 +1,6 @@
-import React, { FC } from 'react';
+import React, { type FC } from 'react';
 import geminiIcon from '@/assets/Google-gemini-icon.webp';
-import { ProviderType } from '@/types';
+import { type ProviderType } from '@/types';
 import { getProviderLogo } from '@/utils/logoHelpers';
 import './AgentAvatar.css';
 

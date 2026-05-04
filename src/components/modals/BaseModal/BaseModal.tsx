@@ -1,12 +1,12 @@
-import React, { FC } from 'react';
+import React, { type FC } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalGlobalHandlers } from '@/hooks/ui/useModalGlobalHandlers';
 import { BaseModalInteractionContext } from './context';
 import { 
-    BaseModalProps, 
-    BaseModalHeaderProps, 
-    BaseModalBodyProps, 
-    BaseModalFooterProps 
+    type BaseModalProps, 
+    type BaseModalHeaderProps, 
+    type BaseModalBodyProps, 
+    type BaseModalFooterProps 
 } from './types';
 import './BaseModal.css';
 

@@ -1,4 +1,4 @@
-import React, { FC } from 'react';
+import React, { type FC } from 'react';
 import { WarningIcon } from '@/components/modals/SettingsModal/icons';
 
 interface TemperatureBannerProps {

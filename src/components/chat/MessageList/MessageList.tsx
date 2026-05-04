@@ -1,4 +1,4 @@
-import React, { FC, RefObject, memo } from 'react';
+import React, { type FC, type RefObject, memo } from 'react';
 import { AgentAvatar } from '@/components/chat/AgentAvatar';
 import { EmptyState } from '@/components/chat/EmptyState';
 import { MarkdownRenderer, LoadingIndicator } from '@/components/ui';
@@ -7,8 +7,8 @@ import { ActionMenu } from '@/components/chat/ShowWork/components/ActionMenu';
 import { DownloadIcon, CopyIcon, CheckIcon } from '@/components/chat/ShowWork/icons';
 import { downloadContent } from '@/components/chat/ShowWork/utils';
 import { Sources } from '@/components/chat/Sources';
-import { Message, AgentState, Work, ProviderType } from '@/types';
-import { StepId, STEPS } from '@/types/steps';
+import { type Message, type AgentState, type Work, type ProviderType } from '@/types';
+import { type StepId, STEPS } from '@/types/steps';
 import { getStepResults } from '@/utils/swarm/workHelpers';
 
 interface ActionButtonProps {

@@ -1,5 +1,5 @@
-import React, { FC } from 'react';
-import { CustomSelect, CustomSelectOption } from '@/components/ui/CustomSelect';
+import React, { type FC } from 'react';
+import { CustomSelect, type CustomSelectOption } from '@/components/ui/CustomSelect';
 
 interface ProfileSelectorProps {
     profiles: { id: string; name: string }[];

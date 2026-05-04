@@ -1,5 +1,5 @@
-import { Message, Work, AppSettings } from '@/types';
-import { StepId, STEPS } from '@/types/steps';
+import { type Message, type Work, type AppSettings } from '@/types';
+import { type StepId, STEPS } from '@/types/steps';
 import { generateUUID } from '@/utils/common/uuid';
 import { setWorkName } from '@/utils/swarm/stepConstants';
 import { Logger } from '@shared/utils/logger';

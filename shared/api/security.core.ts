@@ -1,6 +1,6 @@
 // Note: Using relative paths instead of aliases (@shared)
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
-import { ValidationResult } from '../validation/geminiValidation';
+import { type ValidationResult } from '../validation/geminiValidation';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('SecurityCore');

@@ -1,5 +1,5 @@
-import { Message, Work } from '@/types';
-import { StepId } from '@/types/steps';
+import { type Message, type Work } from '@/types';
+import { type StepId } from '@/types/steps';
 import { findTargetMessageIndex } from './messageHelpers';
 
 /**

@@ -1,5 +1,5 @@
-import { AgentState } from '@/types';
-import { StepId } from '@/types/steps';
+import { type AgentState } from '@/types';
+import { type StepId } from '@/types/steps';
 
 /**
  * Determines if there are errored agents for a given message

@@ -1,4 +1,4 @@
-import { TokenUsage } from '@/types';
+import { type TokenUsage } from '@/types';
 
 /**
  * Structure of a Gemini API response part.

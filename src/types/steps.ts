@@ -1,8 +1,8 @@
-import { AppSettings, Message, AgentState, Work, StepId, TokenUsage, STEPS, SimulateError } from '@/types/index';
+import { type AppSettings, type Message, type AgentState, type Work, type StepId, type TokenUsage, STEPS, type SimulateError } from '@/types/index';
 export type { StepId };
 export { STEPS };
-import { Content, Tool, GroundingChunk } from '@google/genai';
-import { AiProvider } from './ai-provider';
+import { type Content, type Tool, type GroundingChunk } from '@google/genai';
+import { type AiProvider } from './ai-provider';
 import type { AppError } from '@/utils/errors/AppError';
 
 export interface StreamConfig {

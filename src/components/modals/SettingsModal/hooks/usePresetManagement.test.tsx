@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useState } from 'react';
 import { usePresetManagement } from '@/components/modals/SettingsModal/hooks/usePresetManagement';
-import { AppSettings, PROMPT_TYPES, ProviderType } from '@/types';
+import { type AppSettings, PROMPT_TYPES, ProviderType } from '@/types';
 import { createMockSettings } from '@/test/utils/settingsMocks';
 
 describe('usePresetManagement', () => {

@@ -1,4 +1,4 @@
-import { AppSettings, RoleProfile, SavedInstruction, AgentRole, PROMPT_TYPES, PromptTypeId, ProviderType, RoleType } from '@/types';
+import { type AppSettings, type RoleProfile, type SavedInstruction, type AgentRole, PROMPT_TYPES, type PromptTypeId, ProviderType, type RoleType } from '@/types';
 import { DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 import { generateUUID } from '@/utils/common/uuid';
 import { Logger } from '@shared/utils/logger';

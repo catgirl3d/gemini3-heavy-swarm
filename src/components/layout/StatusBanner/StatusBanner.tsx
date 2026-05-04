@@ -1,7 +1,7 @@
-import React, { FC } from 'react';
-import { ServerStatus } from '@/types';
+import React, { type FC } from 'react';
+import { type ServerStatus } from '@/types';
 
-import { useProviderInfo } from '@/hooks/core/useProviderInfo';
+import { type useProviderInfo } from '@/hooks/core/useProviderInfo';
 
 interface StatusBannerProps {
   serverStatus: ServerStatus;

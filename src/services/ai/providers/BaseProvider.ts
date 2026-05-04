@@ -1,5 +1,5 @@
-import { AiProvider, ProviderCapabilities, GenerateRequest, ProviderStreamResult } from '@/types/ai-provider';
-import { AppSettings } from '@/types';
+import { type AiProvider, type ProviderCapabilities, type GenerateRequest, type ProviderStreamResult } from '@/types/ai-provider';
+import { type AppSettings } from '@/types';
 
 /**
  * Abstract base class for AI providers.

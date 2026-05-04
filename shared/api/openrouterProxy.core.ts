@@ -1,7 +1,7 @@
 // Note: Using relative paths instead of aliases (@shared)
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
 import { MAX_CONTENT_CHARS } from '../security/security';
-import { OpenRouterRequest } from './types';
+import { type OpenRouterRequest } from './types';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('OpenRouterProxyCore');

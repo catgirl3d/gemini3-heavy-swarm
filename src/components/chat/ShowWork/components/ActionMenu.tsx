@@ -1,4 +1,4 @@
-import React, { FC, useState, useRef, useEffect, ReactNode } from 'react';
+import React, { type FC, useState, useRef, useEffect, type ReactNode } from 'react';
 import { MoreActionsIcon } from '@/components/chat/ShowWork/icons';
 
 interface Action {

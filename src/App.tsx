@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, FormEvent, FC, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, type FormEvent, type FC, lazy, Suspense } from 'react';
 import { useGeminiSwarm } from '@/hooks/core/useGeminiSwarm';
 import { useServerStatus } from '@/hooks/network/useServerStatus';
 import { useAutoScroll } from '@/hooks/ui/useAutoScroll';
@@ -7,10 +7,10 @@ import { useProviderInfo } from '@/hooks/core/useProviderInfo';
 import { ConfigProvider } from '@/providers';
 import { Logger } from '@shared/utils/logger';
 
-import { StatusBanner, Header, Toast, ToastType } from '@/components/layout';
+import { StatusBanner, Header, Toast, type ToastType } from '@/components/layout';
 import { MessageList, InputArea } from '@/components/chat';
 import { ScrollToBottomButton } from '@/components/ui';
-import { StepId } from '@/types/steps';
+import { type StepId } from '@/types/steps';
 
 const SettingsModal = lazy(() => import('@/components/modals/SettingsModal').then(m => ({ default: m.SettingsModal })));
 const InfoModal = lazy(() => import('@/components/modals/InfoModal').then(m => ({ default: m.InfoModal })));

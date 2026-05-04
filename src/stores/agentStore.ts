@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { AgentState, Work } from '@/types';
-import { StepId } from '@/types/steps';
+import { type AgentState, type Work } from '@/types';
+import { type StepId } from '@/types/steps';
 import { updateAgentWork } from '@/utils/swarm/workHelpers';
 import { Logger } from '@shared/utils/logger';
 

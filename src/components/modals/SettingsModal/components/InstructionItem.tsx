@@ -1,7 +1,7 @@
-import React, { FC } from 'react';
+import React, { type FC } from 'react';
 import { ConfigIcon } from '@/components/modals/SettingsModal/icons';
 import { formatModelTag } from '@/utils/common/modelUtils';
-import { ProviderType } from '@/types';
+import { type ProviderType } from '@/types';
 import { getProviderLogo } from '@/utils/logoHelpers';
 
 interface InstructionItemProps {

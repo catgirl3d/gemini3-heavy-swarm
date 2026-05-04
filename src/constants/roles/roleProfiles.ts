@@ -1,4 +1,4 @@
-import { RoleProfile } from '@/types';
+import { type RoleProfile } from '@/types';
 import { DEFAULT_AGENT_ROLES, DEFAULT_CRITIC_ROLES } from './agentRoles';
 
 export const DEFAULT_ROLE_PROFILES: RoleProfile[] = [

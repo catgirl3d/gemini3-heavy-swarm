@@ -1,7 +1,7 @@
-import React, { FC, useEffect, useRef } from 'react';
-import { Work, TokenUsage } from '@/types';
-import { StepId, STEPS } from '@/types/steps';
-import { WorkCard, CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
+import React, { type FC, useEffect, useRef } from 'react';
+import { type Work, type TokenUsage } from '@/types';
+import { type StepId, STEPS } from '@/types/steps';
+import { WorkCard, type CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
 import { useResolvedAgentState } from '@/hooks/swarm/useResolvedSwarmState';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { getStepResults, getSynthesisResult } from '@/utils/swarm/workHelpers';

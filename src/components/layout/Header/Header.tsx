@@ -1,6 +1,6 @@
-import React, { FC } from 'react';
+import React, { type FC } from 'react';
 import { getProviderLogo } from '@/utils/logoHelpers';
-import { ProviderType } from '@/types';
+import { type ProviderType } from '@/types';
 
 interface HeaderProps {
   modelDisplayName: string;

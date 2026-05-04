@@ -1,4 +1,4 @@
-import { ProviderType } from '@/types';
+import { type ProviderType } from '@/types';
 
 export interface ModalField {
     label: string;

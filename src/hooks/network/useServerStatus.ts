@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ServerStatus } from '@/types';
+import { type ServerStatus } from '@/types';
 import { Logger } from '@shared/utils/logger';
 
 const DEFAULT_PROXY_MODE = 'private';

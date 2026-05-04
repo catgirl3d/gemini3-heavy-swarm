@@ -1,5 +1,5 @@
-import React, { ReactNode, useMemo } from 'react';
-import { CustomSelect, CustomSelectOption } from '@/components/ui/CustomSelect';
+import React, { type ReactNode, useMemo } from 'react';
+import { CustomSelect, type CustomSelectOption } from '@/components/ui/CustomSelect';
 import './PresetSelector.css';
 
 export interface PresetSelectorOption {

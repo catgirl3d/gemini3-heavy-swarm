@@ -1,4 +1,4 @@
-import { AppSettings, AgentRole, RoleType } from '@/types';
+import { type AppSettings, type AgentRole, type RoleType } from '@/types';
 import { hasValidRoleId } from '@/utils/validation/roleGuards';
 import { generateUUID } from '@/utils/common/uuid';
 import { Logger } from '@shared/utils/logger';

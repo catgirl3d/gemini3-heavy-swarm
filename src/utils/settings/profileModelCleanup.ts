@@ -1,4 +1,4 @@
-import { AppSettings, ProviderType, ProviderModels } from '@/types';
+import { type AppSettings, type ProviderType, type ProviderModels } from '@/types';
 import { Logger } from '@shared/utils/logger';
 
 const logger = new Logger('ProfileModelCleanup');

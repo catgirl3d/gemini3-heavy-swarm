@@ -1,5 +1,5 @@
-import { AppSettings, AgentState, Work } from '@/types';
-import { StepId, STEPS } from '@/types/steps';
+import { type AppSettings, type AgentState, type Work } from '@/types';
+import { type StepId, STEPS } from '@/types/steps';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { getAgentRole } from '@/utils/chat/roleUtils';
 

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ProviderType, RoleProfile } from '@/types';
+import { ProviderType, type RoleProfile } from '@/types';
 import { createMockSettings } from '@/test/utils/settingsMocks';
 
 const mocks = vi.hoisted(() => ({

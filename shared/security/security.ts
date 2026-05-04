@@ -1,6 +1,6 @@
 // Note: Using relative paths instead of aliases (@shared)
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
-import { GenericRequest } from '../api/types';
+import { type GenericRequest } from '../api/types';
 
 /**
  * Safe environment utilities for cross-runtime compatibility

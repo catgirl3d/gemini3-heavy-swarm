@@ -1,5 +1,5 @@
-import { StepId, STEPS } from '@/types/steps';
-import { Work, RoleType } from '@/types';
+import { type StepId, STEPS } from '@/types/steps';
+import { type Work, type RoleType } from '@/types';
 import { Logger } from '@shared/utils/logger';
 
 const logger = new Logger('SynthesisJump');

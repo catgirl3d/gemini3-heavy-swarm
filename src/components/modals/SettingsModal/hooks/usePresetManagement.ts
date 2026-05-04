@@ -1,7 +1,7 @@
-import React from 'react';
-import { AppSettings, PromptProfile, RoleProfile, PROMPT_TYPES } from '@/types';
+import type React from 'react';
+import { type AppSettings, type PromptProfile, type RoleProfile, PROMPT_TYPES } from '@/types';
 import { DEFAULT_SETTINGS } from '@/constants';
-import { InstructionType } from '@/components/modals/SettingsModal/types';
+import { type InstructionType } from '@/components/modals/SettingsModal/types';
 import { INSTRUCTION_METADATA } from '@/components/modals/SettingsModal/constants';
 import { updateStepModel } from '@/utils/settings/providerPersistence';
 

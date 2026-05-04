@@ -1,5 +1,5 @@
-import { StepId } from '@/types/steps';
-import { AgentState } from '@/types';
+import { type StepId } from '@/types/steps';
+import { type AgentState } from '@/types';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { useAgentStore } from '@/stores/agentStore';
 

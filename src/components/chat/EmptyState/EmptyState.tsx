@@ -1,5 +1,5 @@
-import React, { FC } from 'react';
-import { ProviderType } from '@/types';
+import React, { type FC } from 'react';
+import { type ProviderType } from '@/types';
 import { getProviderLogo } from '@/utils/logoHelpers';
 import './EmptyState.css';
 

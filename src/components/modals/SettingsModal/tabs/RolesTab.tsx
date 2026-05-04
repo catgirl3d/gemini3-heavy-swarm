@@ -1,5 +1,5 @@
-import React, { FC, ChangeEvent } from 'react';
-import { AppSettings, RoleProfile } from '@/types';
+import React, { type FC, type ChangeEvent } from 'react';
+import { type AppSettings, type RoleProfile } from '@/types';
 import { ProfileHeader } from '@/components/modals/SettingsModal/components/ProfileHeader';
 import { RoleItem } from '@/components/modals/SettingsModal/components/RoleItem';
 import { InfoIcon } from '@/components/modals/SettingsModal/icons';

@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { BaseProvider } from './BaseProvider';
-import { ProviderCapabilities, GenerateRequest, ProviderStreamResult, StreamChunk } from '@/types/ai-provider';
-import { AppSettings, TokenUsage, ProviderType } from '@/types';
+import { type ProviderCapabilities, type GenerateRequest, type ProviderStreamResult, type StreamChunk } from '@/types/ai-provider';
+import { type AppSettings, TokenUsage, ProviderType } from '@/types';
 import { extractPartsFromChunk, extractUsageMetadataFromChunk, extractGroundingChunksFromChunk, extractTokenUsage, extractTextFromParts } from '@/services/swarm/steps/utils/streamUtils';
 
 export class GeminiProvider extends BaseProvider {

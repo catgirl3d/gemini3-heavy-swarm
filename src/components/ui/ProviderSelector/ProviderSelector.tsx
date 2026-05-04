@@ -1,6 +1,6 @@
-import React, { FC } from 'react';
+import React, { type FC } from 'react';
 import { ProviderType } from '@/types';
-import { CustomSelect, CustomSelectOption } from '@/components/ui/CustomSelect';
+import { CustomSelect, type CustomSelectOption } from '@/components/ui/CustomSelect';
 import { getProviderLogo } from '@/utils/logoHelpers';
 import './ProviderSelector.css';
 
