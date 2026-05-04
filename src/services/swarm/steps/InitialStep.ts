@@ -60,9 +60,8 @@ export class InitialStep extends BaseStep {
       roleContent + searchInstruction
     );
 
-    let userTurn = currentUserTurn;
     const roleReminder = getRoleReminder(perspective.name);
-    userTurn = {
+    const userTurn: Content = {
       role: 'user',
       parts: [...currentUserTurn.parts, { text: roleReminder }]
     };

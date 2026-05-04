@@ -562,7 +562,7 @@ export abstract class BaseStep implements StepDescriptor {
         this.ensureResults(targetWork);
         const errorKey = this.getErrorCountKey();
         
-        let currentCount = 0;
+        let currentCount: number;
         if (agentIndex === undefined) {
           currentCount = (targetWork.results[errorKey] as number) || 0;
         } else {

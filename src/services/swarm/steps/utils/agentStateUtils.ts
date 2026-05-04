@@ -34,28 +34,35 @@ export const createAgentStates = (
 /**
  * Updates a specific agent's state in the array.
  */
+const matchesAgentState = (
+  state: AgentState,
+  stateIndex: number,
+  targetIndex: number,
+  updates: Partial<AgentState>
+): boolean => {
+  if (updates.stepId !== undefined && updates.messageId !== undefined) {
+    return state.stepId === updates.stepId
+      && state.agentIndex === targetIndex
+      && state.messageId === updates.messageId;
+  }
+
+  if (updates.stepId !== undefined) {
+    return state.stepId === updates.stepId && state.agentIndex === targetIndex;
+  }
+
+  return stateIndex === targetIndex;
+};
+
 export const updateAgentState = (
   states: AgentState[],
   index: number,
   updates: Partial<AgentState>
 ): AgentState[] => {
-  // If stepId or messageId is provided in updates, use them for more precise matching
-  const stepId = updates.stepId;
-  const messageId = updates.messageId;
-  
-  return states.map((a, idx) => {
-    let isMatch = false;
-    
-    if (stepId !== undefined && messageId !== undefined) {
-      isMatch = a.stepId === stepId && a.agentIndex === index && a.messageId === messageId;
-    } else if (stepId !== undefined) {
-      isMatch = a.stepId === stepId && a.agentIndex === index;
-    } else {
-      isMatch = idx === index;
-    }
-    
-    return isMatch ? { ...a, ...updates } : a;
-  });
+  return states.map((state, stateIndex) => (
+    matchesAgentState(state, stateIndex, index, updates)
+      ? { ...state, ...updates }
+      : state
+  ));
 };
 
 /**
