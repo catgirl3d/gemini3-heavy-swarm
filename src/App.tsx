@@ -52,8 +52,7 @@ export const App: FC = () => {
   const {
     messageListRef,
     showScrollButton,
-    scrollToBottom,
-    setShouldAutoScroll
+    scrollToBottom
   } = useAutoScroll({
     messagesLength: messages.length,
     isLoading,
@@ -164,7 +163,7 @@ export const App: FC = () => {
     }
   }, [loadError, clearLoadError]);
 
-  const { isUsingProxy, modelDisplayName } = providerInfo;
+  const { modelDisplayName } = providerInfo;
 
   return (
     <ConfigProvider settings={settings}>

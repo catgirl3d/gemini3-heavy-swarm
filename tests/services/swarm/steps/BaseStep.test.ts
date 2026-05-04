@@ -19,7 +19,7 @@ vi.mock('@shared/utils/logger', () => ({
 import { BaseStep } from '@/services/swarm/steps/BaseStep';
 import { StepId, STEPS, Work, AgentState, TokenUsage, Source } from '@/types';
 import { AppSettings } from '@/types';
-import { StepContext } from '@/types/steps';
+import { type StepContext, type StreamCallbacks, type StreamConfig, type StreamResult } from '@/types/steps';
 import { GroundingChunk } from '@google/genai';
 import { useAgentStore } from '@/stores/agentStore';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
@@ -89,11 +89,11 @@ class TestStep extends BaseStep {
   description = 'Test step for unit testing';
   ui = { visibleInModal: true };
 
-  async execute(): Promise<unknown> {
+  async execute(_context: StepContext): Promise<unknown> {
     return 'test result';
   }
 
-  async regenerate(): Promise<unknown> {
+  async regenerate(_context: StepContext, _agentIndex: number, _agentStates: AgentState[]): Promise<unknown> {
     return 'regenerated result';
   }
 
@@ -155,7 +155,7 @@ class TestStep extends BaseStep {
     return this.processSettledOutcomes(context, outcomes, results, agentStates);
   }
 
-  public async testRunModelStream(config: any, callbacks: any): Promise<any> {
+  public async testRunModelStream(config: StreamConfig, callbacks: StreamCallbacks): Promise<StreamResult> {
     return this.runModelStream(config, callbacks);
   }
 
@@ -206,12 +206,11 @@ class TestStep extends BaseStep {
 }
 
 class RetryCallbackStep extends TestStep {
-  protected async runModelStream(...args: [any, any]): Promise<any> {
-    const callbacks = args[1];
+  protected async runModelStream(_config: StreamConfig, callbacks: StreamCallbacks): Promise<StreamResult> {
     callbacks.onChunk('', '', null);
-    callbacks.onRetry(2);
+    callbacks.onRetry?.(2, new AppError('retry failed', ErrorCode.NETWORK_ERROR));
     callbacks.onChunk('retried text', '', null);
-    return { text: 'retried text', usage: null, groundingChunks: [] };
+    return { text: 'retried text', thought: '', usage: null, groundingChunks: [] };
   }
 }
 

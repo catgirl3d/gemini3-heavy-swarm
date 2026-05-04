@@ -47,7 +47,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     const hasChanges = useMemo(() => {
         try {
             return JSON.stringify(localSettings) !== JSON.stringify(settings);
-        } catch (e) {
+        } catch {
             return true; // Fallback to safe side
         }
     }, [localSettings, settings]);
@@ -230,10 +230,8 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                 {activeTab === 'prompts' && (
                     <PromptsTab
                         localSettings={localSettings}
-                        setLocalSettings={setLocalSettings}
                         activeProfile={activeProfile}
                         isEditingProfileName={isEditingProfileName}
-                        isModelUnlocked={isModelUnlocked}
                         setIsEditingProfileName={setIsEditingProfileName}
                         handleRenameProfile={profileMgr.handleRenameProfile}
                         handleProfileChange={profileMgr.handleProfileChange}
@@ -261,7 +259,6 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                         handleMoveRole={roleMgr.handleMoveRole}
                         handleRestoreDefaultRoles={roleMgr.handleRestoreDefaultRoles}
                         setEditingRoleIndex={setEditingRoleIndex}
-                        setLocalSettings={setLocalSettings}
                         openDropdownId={openDropdownId}
                         setOpenDropdownId={setOpenDropdownId}
                     />

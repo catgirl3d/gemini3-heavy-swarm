@@ -1,4 +1,4 @@
-import React, { type FC, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { type FC, useState, useRef, useCallback, useMemo } from 'react';
 import { type ShowWorkProps, type WorkModalData, type DebugModalData, type ThoughtModalData } from '@/components/chat/ShowWork/types';
 import { type StepId, STEPS } from '@/types/steps';
 import { WorkModal } from '@/components/chat/ShowWork/components/WorkModal';
@@ -11,11 +11,8 @@ import { useResolvedSwarmState } from '@/hooks/swarm/useResolvedSwarmState';
 import { getErroredAgents, isAnyAgentWorking, isErrorState, getContinueButtonText, handleContinueClick as handleContinueClickHelper } from '@/utils/swarm/continueHelpers';
 import { useAgentStore } from '@/stores/agentStore';
 import { type StepDebugInfo } from '@/types/app-types';
-import { Logger } from '@shared/utils/logger';
 import { useAutoCollapse } from '@/hooks/ui/useAutoCollapse';
 import './ShowWork.css';
-
-const logger = new Logger('ShowWork');
 
 // Card metadata for stable callback resolution
 interface CardMeta {
