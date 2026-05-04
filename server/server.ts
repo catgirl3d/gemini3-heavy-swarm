@@ -20,6 +20,18 @@ const logger = new Logger('Server');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const getErrorMessage = (error: unknown): string => {
+	if (error instanceof Error) {
+		return error.message;
+	}
+
+	if (typeof error === 'string') {
+		return error;
+	}
+
+	return 'Unknown error';
+};
+
 /**
  * Finds an available port starting from the given port number.
  * If the port is occupied, tries the next port (+1) until a free port is found.
@@ -88,7 +100,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Middleware to parse JSON bodies
-app.use(express.json({ limit: MAX_REQUEST_SIZE }) as any);
+app.use(express.json({ limit: MAX_REQUEST_SIZE }));
 
 const allowedOrigins = getAllowedOrigins(process.env.ALLOWED_ORIGINS);
 const API_SECRET = process.env.API_SECRET;
@@ -189,9 +201,10 @@ app.post('/api/gemini', async (req: Request, res: Response) => {
 		// Stream response back to client
 		await streamToExpress(response, res);
 
-	} catch (error: any) {
-		logger.error(`Proxy error: ${error.message}`);
-		res.status(500).json({ error: error.message });
+	} catch (error: unknown) {
+		const errorMessage = getErrorMessage(error);
+		logger.error(`Proxy error: ${errorMessage}`);
+		res.status(500).json({ error: errorMessage });
 	}
 });
 
@@ -230,9 +243,10 @@ app.post('/api/openrouter', async (req: Request, res: Response) => {
 		// Stream response back to client
 		await streamToExpress(response, res);
 
-	} catch (error: any) {
-		logger.error(`OpenRouter proxy error: ${error.message}`);
-		res.status(500).json({ error: error.message });
+	} catch (error: unknown) {
+		const errorMessage = getErrorMessage(error);
+		logger.error(`OpenRouter proxy error: ${errorMessage}`);
+		res.status(500).json({ error: errorMessage });
 	}
 });
 
@@ -261,8 +275,8 @@ async function startServer() {
 				logger.info(`Environment check: ALLOWED_ORIGINS is SET`);
 			}
 		});
-	} catch (error: any) {
-		logger.error(`Failed to start server: ${error.message}`);
+	} catch (error: unknown) {
+		logger.error(`Failed to start server: ${getErrorMessage(error)}`);
 		process.exit(1);
 	}
 }
