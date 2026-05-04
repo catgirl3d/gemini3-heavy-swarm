@@ -1,10 +1,10 @@
 import React, { type FC, useEffect, useRef } from 'react';
 import { type Work, type TokenUsage } from '@/types';
-import { type StepId, STEPS } from '@/types/steps';
+import { type StepId } from '@/types/steps';
 import { WorkCard, type CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
 import { useResolvedAgentState } from '@/hooks/swarm/useResolvedSwarmState';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
-import { getStepResults, getSynthesisResult } from '@/utils/swarm/workHelpers';
+import { getStepContent } from '@/utils/swarm/workHelpers';
 import { useAgentStore } from '@/stores/agentStore';
 import { Logger } from '@shared/utils/logger';
 
@@ -12,14 +12,8 @@ const logger = new Logger('StatusAwareWorkCard');
 
 const getWorkContentLength = (work: Work | undefined, step: StepId, index: number) => {
   if (!work) return -1;
-
-  if (step === STEPS.SYNTHESIS) {
-    const result = getSynthesisResult(work);
-    const text = typeof result === 'string' ? result : result?.text;
-    return typeof text === 'string' ? text.length : -1;
-  }
-
-  return (getStepResults(work, step)[index] ?? '').length;
+  const content = getStepContent(work, step, index);
+  return typeof content === 'string' ? content.length : -1;
 };
 
 interface StatusAwareWorkCardProps {

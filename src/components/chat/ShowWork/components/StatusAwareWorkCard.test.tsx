@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentState, Work } from '@/types';
 import { STEPS } from '@/types/steps';
@@ -13,6 +13,17 @@ const mocks = vi.hoisted(() => ({
       <span data-testid="work-card-content">{props.content ?? '<null>'}</span>
     </div>
   )),
+  loggerWarn: vi.fn(),
+}));
+
+vi.mock('@shared/utils/logger', () => ({
+  Logger: class {
+    debug() {}
+    error() {}
+    warn(...args: unknown[]) {
+      mocks.loggerWarn(...args);
+    }
+  },
 }));
 
 vi.mock('@/hooks/swarm/useResolvedSwarmState', () => ({
@@ -24,6 +35,7 @@ vi.mock('@/components/chat/ShowWork/components/WorkCard', () => ({
 }));
 
 import { StatusAwareWorkCard } from './StatusAwareWorkCard';
+import { useAgentStore } from '@/stores/agentStore';
 
 const createWork = (overrides: Partial<Work> = {}): Work => ({
   agentStates: [],
@@ -44,6 +56,7 @@ const createAgentState = (overrides: Partial<AgentState> = {}): AgentState => ({
 describe('StatusAwareWorkCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useAgentStore.getState().clear();
     mocks.useResolvedAgentState.mockReturnValue(undefined);
   });
 
@@ -112,5 +125,104 @@ describe('StatusAwareWorkCard', () => {
     expect(screen.getByTestId('work-card')).toHaveAttribute('data-label', 'Waiting...');
     expect(screen.getByTestId('work-card-icon')).toHaveTextContent('2');
     expect(screen.getByTestId('work-card-content')).toHaveTextContent('<null>');
+  });
+
+  it('diagnoses empty done multi-agent cards using the content length from work results', async () => {
+    const snapshotText = 'Initial snapshot text';
+    mocks.useResolvedAgentState.mockReturnValue(createAgentState({
+      status: 'done',
+      label: 'Done',
+      stepId: STEPS.INITIAL,
+      agentIndex: 0,
+    }));
+
+    render(
+      <StatusAwareWorkCard
+        cardId="initial-0"
+        work={createWork({ results: { [STEPS.INITIAL]: [snapshotText] } })}
+        step={STEPS.INITIAL}
+        index={0}
+        title="Agent 1"
+        content=""
+        downloadFilename="Agent-1.md"
+        onCardAction={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(mocks.loggerWarn).toHaveBeenCalledWith(
+        'Done card rendered empty',
+        expect.objectContaining({
+          step: STEPS.INITIAL,
+          snapshotLen: snapshotText.length,
+        })
+      );
+    });
+  });
+
+  it('diagnoses empty done synthesis cards using object synthesis text length from work results', async () => {
+    const snapshotText = 'Object synthesis text';
+    mocks.useResolvedAgentState.mockReturnValue(createAgentState({
+      status: 'done',
+      label: 'Synthesized',
+      stepId: STEPS.SYNTHESIS,
+      agentIndex: 0,
+    }));
+
+    render(
+      <StatusAwareWorkCard
+        cardId="synthesis"
+        work={createWork({ results: { [STEPS.SYNTHESIS]: { text: snapshotText } } })}
+        step={STEPS.SYNTHESIS}
+        index={0}
+        title="Synthesizer"
+        content=""
+        downloadFilename="Synthesis_Report.md"
+        onCardAction={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(mocks.loggerWarn).toHaveBeenCalledWith(
+        'Done card rendered empty',
+        expect.objectContaining({
+          step: STEPS.SYNTHESIS,
+          snapshotLen: snapshotText.length,
+        })
+      );
+    });
+  });
+
+  it('diagnoses empty done synthesis cards using legacy synthesis string length from work results', async () => {
+    const snapshotText = 'Legacy synthesis text';
+    mocks.useResolvedAgentState.mockReturnValue(createAgentState({
+      status: 'done',
+      label: 'Synthesized',
+      stepId: STEPS.SYNTHESIS,
+      agentIndex: 0,
+    }));
+
+    render(
+      <StatusAwareWorkCard
+        cardId="synthesis"
+        work={createWork({ results: { [STEPS.SYNTHESIS]: snapshotText as any } })}
+        step={STEPS.SYNTHESIS}
+        index={0}
+        title="Synthesizer"
+        content=""
+        downloadFilename="Synthesis_Report.md"
+        onCardAction={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(mocks.loggerWarn).toHaveBeenCalledWith(
+        'Done card rendered empty',
+        expect.objectContaining({
+          step: STEPS.SYNTHESIS,
+          snapshotLen: snapshotText.length,
+        })
+      );
+    });
   });
 });

@@ -16,6 +16,26 @@ export function getStepResults(work: Work, stepId: StepId): (string | null)[] {
 }
 
 /**
+ * Safely extracts displayable content for any step.
+ * Multi-agent steps read indexed array output; synthesis reads its single final result.
+ */
+export function getStepContent(
+  work: Work | undefined,
+  stepId: StepId,
+  agentIndex: number
+): string | null {
+  if (!work) return null;
+
+  if (stepId === STEPS.SYNTHESIS) {
+    const result = getSynthesisResult(work);
+    return typeof result === 'string' ? result : result?.text ?? null;
+  }
+
+  const result = getStepResults(work, stepId)[agentIndex];
+  return typeof result === 'string' ? result : null;
+}
+
+/**
  * Safely extracts thought process data for a specific step.
  * 
  * @param work - The Work object containing step metadata

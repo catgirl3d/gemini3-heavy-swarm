@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     cloneWork,
+    getStepContent,
     getStepResults,
     getStepThoughts,
     getStepUsage,
@@ -35,6 +36,8 @@ describe('workHelpers', () => {
             };
 
             expect(getStepResults(work, STEPS.INITIAL)).toEqual(['answer 1', null]);
+            expect(getStepContent(work, STEPS.INITIAL, 0)).toBe('answer 1');
+            expect(getStepContent(work, STEPS.INITIAL, 1)).toBeNull();
             expect(getStepThoughts(work, STEPS.INITIAL)).toEqual(['thought 1', null]);
             expect(getStepUsage(work, STEPS.INITIAL)).toEqual([usage, null]);
         });
@@ -49,6 +52,8 @@ describe('workHelpers', () => {
             };
 
             expect(getStepResults(work, STEPS.SYNTHESIS)).toEqual([]);
+            expect(getStepContent(work, STEPS.INITIAL, 0)).toBeNull();
+            expect(getStepContent(undefined, STEPS.INITIAL, 0)).toBeNull();
             expect(getStepResults({}, STEPS.INITIAL)).toEqual([]);
             expect(getStepThoughts(work, STEPS.INITIAL)).toEqual([]);
             expect(getStepUsage(work, STEPS.SYNTHESIS)).toEqual([]);
@@ -76,14 +81,18 @@ describe('workHelpers', () => {
                 errorMessage: 'failed',
                 sources: []
             });
+            expect(getStepContent(work, STEPS.SYNTHESIS, 0)).toBe('final');
             expect(getSynthesisErrorMessage(work)).toBe('failed');
         });
 
         it('handles legacy and malformed synthesis data safely', () => {
             expect(getSynthesisResult({ results: { [STEPS.SYNTHESIS]: 'legacy final' as any } })).toBe('legacy final');
+            expect(getStepContent({ results: { [STEPS.SYNTHESIS]: 'legacy final' as any } }, STEPS.SYNTHESIS, 0)).toBe('legacy final');
             expect(getSynthesisResult({ results: { [STEPS.SYNTHESIS]: { error: true } as any } })).toEqual({ error: true });
+            expect(getStepContent({ results: { [STEPS.SYNTHESIS]: { error: true } as any } }, STEPS.SYNTHESIS, 0)).toBeNull();
             expect(getSynthesisResult({ results: { [STEPS.SYNTHESIS]: { sources: [] } as any } })).toEqual({ sources: [] });
             expect(getSynthesisResult({ results: { [STEPS.SYNTHESIS]: ['bad'] as any } })).toBeNull();
+            expect(getStepContent({ results: { [STEPS.SYNTHESIS]: ['bad'] as any } }, STEPS.SYNTHESIS, 0)).toBeNull();
             expect(getSynthesisThought({ results: { [`${STEPS.SYNTHESIS}_thought`]: { text: 'bad' } as any } })).toBeNull();
             expect(getSynthesisUsage({ results: { [`${STEPS.SYNTHESIS}_usage`]: { promptTokens: 1 } as any } })).toBeNull();
             expect(getSynthesisErrorMessage({ results: { [STEPS.SYNTHESIS]: 'legacy final' as any } })).toBeNull();
