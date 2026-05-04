@@ -2,7 +2,12 @@ import { type GenerationConfig, type Content, type Tool } from '@google/genai';
 import { API_SECRET } from '@/constants';
 import { Logger } from '@shared/utils/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
-import { extractPartsFromChunk, isValidStreamChunk, type GeminiStreamChunk } from '@/services/swarm/steps/utils/streamUtils';
+import {
+  extractPartsFromChunk,
+  type GeminiCandidate,
+  type GeminiStreamChunk,
+  type GeminiUsageMetadata,
+} from '@/services/swarm/steps/utils/streamUtils';
 
 const logger = new Logger('ProxyGenAI');
 
@@ -18,6 +23,20 @@ type ProxyGenerateRequest = {
   model?: string;
   config?: ProxyRequestConfig;
   contents: Content[];
+};
+
+const isObjectRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null;
+};
+
+const getCandidatesFromParsed = (value: unknown): GeminiCandidate[] | undefined => {
+  if (!isObjectRecord(value) || !Array.isArray(value.candidates)) return undefined;
+  return value.candidates as GeminiCandidate[];
+};
+
+const getUsageMetadataFromParsed = (value: unknown): GeminiUsageMetadata | undefined => {
+  if (!isObjectRecord(value) || !isObjectRecord(value.usageMetadata)) return undefined;
+  return value.usageMetadata as GeminiUsageMetadata;
 };
 
 // Minimal interface matching what the steps use from the Google SDK
@@ -170,32 +189,34 @@ class ProxyGenerativeModel {
 
                 if (braceCount === 0) {
                   const potentialJson = buffer.substring(openBraceIndex, i + 1);
+                  let parsed: unknown;
+
                   try {
-                    const parsed: unknown = JSON.parse(potentialJson);
-                    const parts = extractPartsFromChunk(parsed);
-                    const chunk = isValidStreamChunk(parsed) ? parsed : undefined;
-
-                    const normalizedChunk: GeminiStreamChunk = {
-                      text: () => {
-                        try {
-                          return parts?.map(part => part.text || '').join('') || '';
-                        } catch (e) {
-                          logger.warn('Error extracting text from chunk:', e);
-                        }
-                        return '';
-                      },
-                      candidates: chunk?.candidates,
-                      usageMetadata: chunk?.usageMetadata
-                    };
-
-                    yield normalizedChunk;
-                    buffer = buffer.substring(i + 1);
-                    found = true;
-                    break;
+                    parsed = JSON.parse(potentialJson);
                   } catch {
                     // If JSON.parse fails despite balanced braces, it might be an invalid fragment or nested structure not handled by simple counting
                     // We let it continue to see if more data fixes it
+                    continue;
                   }
+
+                  const parts = extractPartsFromChunk(parsed);
+                  const normalizedChunk: GeminiStreamChunk = {
+                    text: () => {
+                      try {
+                        return parts?.map(part => part.text || '').join('') || '';
+                      } catch (e) {
+                        logger.warn('Error extracting text from chunk:', e);
+                      }
+                      return '';
+                    },
+                    candidates: getCandidatesFromParsed(parsed),
+                    usageMetadata: getUsageMetadataFromParsed(parsed)
+                  };
+
+                  yield normalizedChunk;
+                  buffer = buffer.substring(i + 1);
+                  found = true;
+                  break;
                 }
               }
             }

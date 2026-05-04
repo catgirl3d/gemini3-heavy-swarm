@@ -1,14 +1,56 @@
 import { BaseProvider } from './BaseProvider';
 import { type ProviderCapabilities, type GenerateRequest, type ProviderStreamResult, type StreamChunk } from '@/types/ai-provider';
-import { type AppSettings, ProviderType } from '@/types';
+import { type AppSettings, type TokenUsage, ProviderType } from '@/types';
 import { OpenRouterGenAI } from '@/services/openrouter/OpenRouterGenAI';
 import {
-  extractGroundingChunksFromChunk,
   extractPartsFromChunk,
   extractTextFromParts,
-  extractTokenUsage,
-  extractUsageMetadataFromChunk,
 } from '@/services/swarm/steps/utils/streamUtils';
+
+const isObjectRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null;
+};
+
+const hasTextFunction = (chunk: unknown): chunk is { text: () => string } => {
+  return isObjectRecord(chunk) && typeof chunk.text === 'function';
+};
+
+const hasThoughtString = (chunk: unknown): chunk is { thought: string } => {
+  return isObjectRecord(chunk) && typeof chunk.thought === 'string';
+};
+
+const getUsageMetadata = (chunk: unknown): Record<string, unknown> | null | undefined => {
+  if (!isObjectRecord(chunk) || !('usageMetadata' in chunk)) return undefined;
+  if (chunk.usageMetadata === null) return null;
+  return isObjectRecord(chunk.usageMetadata) ? chunk.usageMetadata : undefined;
+};
+
+const getGroundingChunks = (chunk: unknown): StreamChunk['groundingChunks'] => {
+  if (!isObjectRecord(chunk) || !Array.isArray(chunk.groundingChunks)) return undefined;
+  return chunk.groundingChunks as StreamChunk['groundingChunks'];
+};
+
+const getNumericValue = (value: unknown): number | undefined => {
+  return typeof value === 'number' ? value : undefined;
+};
+
+const normalizeUsage = (metadata: Record<string, unknown> | null | undefined): TokenUsage | null => {
+  if (!metadata) return null;
+
+  const isEstimated = typeof metadata.isEstimated === 'boolean'
+    ? metadata.isEstimated
+    : undefined;
+
+  return {
+    promptTokens: getNumericValue(metadata.promptTokenCount) ?? 0,
+    candidatesTokens: getNumericValue(metadata.candidatesTokenCount) ?? 0,
+    totalTokens: getNumericValue(metadata.totalTokenCount) ?? 0,
+    thoughtsTokenCount: getNumericValue(metadata.thoughtsTokenCount),
+    cachedContentTokenCount: getNumericValue(metadata.cachedContentTokenCount),
+    toolUsePromptTokenCount: getNumericValue(metadata.toolUsePromptTokenCount),
+    isEstimated,
+  };
+};
 
 export class OpenRouterProvider extends BaseProvider {
   readonly name = ProviderType.OpenRouter;
@@ -74,14 +116,18 @@ export class OpenRouterProvider extends BaseProvider {
 
   private normalizeChunk(chunk: unknown): StreamChunk {
     const parts = extractPartsFromChunk(chunk);
-    const usageMetadata = extractUsageMetadataFromChunk(chunk);
-    const groundingChunks = extractGroundingChunksFromChunk(chunk);
-    const { text, thought } = extractTextFromParts(parts);
+    const extractedContent = extractTextFromParts(parts) ?? { text: '', thought: '' };
+    const topLevelText = hasTextFunction(chunk) ? chunk.text() : '';
+    const topLevelThought = hasThoughtString(chunk) ? chunk.thought : '';
+    const text = topLevelText || extractedContent.text;
+    const thought = topLevelThought || extractedContent.thought;
+    const usageMetadata = getUsageMetadata(chunk);
+    const groundingChunks = getGroundingChunks(chunk);
 
     return {
         text,
         thought,
-        usage: extractTokenUsage(usageMetadata),
+        usage: normalizeUsage(usageMetadata),
         groundingChunks,
         raw: chunk,
     };
