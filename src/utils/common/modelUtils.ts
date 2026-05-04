@@ -70,7 +70,7 @@ export const getModelDisplayName = (model: string, options: ModelDisplayNameOpti
         const found = cachedModels.find(m => m.value === model);
         if (found) displayName = found.label;
       }
-    } catch (e) {
+    } catch {
       // Ignore cache errors in SSR or restricted environments
     }
   }

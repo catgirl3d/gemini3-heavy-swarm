@@ -17,7 +17,7 @@ export class InitialStep extends BaseStep {
   };
 
   async execute(context: StepContext): Promise<string[]> {
-    const { work, settings } = context;
+    const { settings } = context;
     return this.executeMultiAgent(context, {
       prepareAgent: (i) => this.prepareInstruction(context, i),
       tools: settings.useSearchInInitial ? [{ googleSearch: {} }] : undefined,

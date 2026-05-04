@@ -164,7 +164,7 @@ export function CustomSelect<T = string>({
     );
 
     // Default option renderer
-    const defaultRenderOption = (option: CustomSelectOption<T>, isSelected: boolean) => (
+    const defaultRenderOption = (option: CustomSelectOption<T>) => (
         <span className="custom-select-option-label">{option.label}</span>
     );
 

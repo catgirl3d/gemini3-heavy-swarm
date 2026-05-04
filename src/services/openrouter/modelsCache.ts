@@ -40,7 +40,7 @@ export function getCachedModels(): ModelOption[] | null {
         // Cache expired, remove it
         localStorage.removeItem(CACHE_KEY);
         return null;
-    } catch (error) {
+    } catch {
         // Invalid cache, remove it
         localStorage.removeItem(CACHE_KEY);
         return null;

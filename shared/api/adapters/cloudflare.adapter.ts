@@ -1,7 +1,7 @@
 // Note: Using relative paths instead of aliases (@shared)
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
 import { RATE_LIMIT_PER_MINUTE, isProductionEnvironment } from '../../security/security';
-import { getAllowedOrigins, isOriginAllowed, buildAllHeaders, checkPreflightAllowed } from '../cors.core';
+import { buildAllHeaders, checkPreflightAllowed } from '../cors.core';
 import { type RateLimitResult, type KVNamespaceSubset, type GenericRequest } from '../types';
 import { Logger } from '../../utils/logger';
 

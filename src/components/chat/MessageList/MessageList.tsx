@@ -3,7 +3,6 @@ import { AgentAvatar } from '@/components/chat/AgentAvatar';
 import { EmptyState } from '@/components/chat/EmptyState';
 import { MarkdownRenderer, LoadingIndicator } from '@/components/ui';
 import { ShowWork } from '@/components/chat/ShowWork';
-import { ActionMenu } from '@/components/chat/ShowWork/components/ActionMenu';
 import { DownloadIcon, CopyIcon, CheckIcon } from '@/components/chat/ShowWork/icons';
 import { downloadContent } from '@/components/chat/ShowWork/utils';
 import { Sources } from '@/components/chat/Sources';

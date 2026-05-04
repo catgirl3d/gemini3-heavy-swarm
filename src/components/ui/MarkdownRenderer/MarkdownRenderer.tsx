@@ -13,7 +13,7 @@ const MarkdownRendererComponent: FC<{ content: string }> = ({ content }) => (
           const {children, className} = props;
           return <CodeBlock className={className}>{String(children)}</CodeBlock>;
         },
-        table({node, ...props}) {
+        table(props: React.ComponentProps<'table'>) {
           return <div className="table-wrapper"><table {...props} /></div>;
         }
       }}

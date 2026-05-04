@@ -22,7 +22,7 @@ export class SynthesisStep extends BaseStep {
   };
 
   async execute(context: StepContext): Promise<{ text: string; sources?: Source[] }> {
-    const { ai, settings, history, userInput, image, imageFile, work, onMessageUpdate, signal, messageId } = context;
+    const { ai, settings, work, signal, messageId } = context;
 
     // Initialize logger early so it's available for all logging
     const logger = new Logger(this.id, settings.debugMode);
@@ -63,7 +63,7 @@ export class SynthesisStep extends BaseStep {
     const config = getStepConfig(this.id);
     
     // Persistent error count check for synthesis
-    const errorCountKey = this.getErrorCountKey(undefined);
+    const errorCountKey = this.getErrorCountKey();
     const errorCountData = work.results?.[errorCountKey];
     const errorCount = Array.isArray(errorCountData) ? (errorCountData[0] || 0) : (errorCountData as number || 0);
     const isSimulatingError = settings.simulateSynthesisError !== 'none' && errorCount < settings.simulateSynthesisErrorAttempts;
@@ -239,7 +239,11 @@ export class SynthesisStep extends BaseStep {
     }
   }
 
-  async regenerate(context: StepContext, _agentIndex: number, agentStates: AgentState[]): Promise<{ text: string; sources?: Source[]; work: Work }> {
+  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<{ text: string; sources?: Source[]; work: Work }> {
+    if (agentIndex !== 0) {
+      throw new Error(`Synthesis regeneration only supports agent index 0, received ${agentIndex}`);
+    }
+
     const refinedDrafts = getStepResults(context.work, STEPS.REFINEMENT);
     const { systemInstruction, synthesizerTurn, mainChatHistory } = this.prepareSynthesis(context, refinedDrafts);
     const { settings } = context;

@@ -20,7 +20,6 @@ interface RolesTabProps {
     handleMoveRole: (index: number, direction: 'up' | 'down') => void;
     handleRestoreDefaultRoles: () => void;
     setEditingRoleIndex: (index: number | null) => void;
-    setLocalSettings: React.Dispatch<React.SetStateAction<AppSettings>>;
     openDropdownId: string | null;
     setOpenDropdownId: (id: string | null) => void;
 }
@@ -59,7 +58,6 @@ export const RolesTab: FC<RolesTabProps> = ({
     handleMoveRole,
     handleRestoreDefaultRoles,
     setEditingRoleIndex,
-    setLocalSettings,
     openDropdownId,
     setOpenDropdownId
 }) => {

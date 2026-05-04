@@ -1,6 +1,6 @@
 import type React from 'react';
 import { type AppSettings, type PromptProfile, type RoleProfile } from '@/types';
-import { DEFAULT_SETTINGS, DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES } from '@/constants';
+import { DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES } from '@/constants';
 import { generateUUID } from '@/utils/common/uuid';
 import { cleanupProfileModels, cloneProfileModels } from '@/utils/settings/providerPersistence';
 import { Logger } from '@shared/utils/logger';

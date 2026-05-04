@@ -69,7 +69,7 @@ export const onRequestPost = (async (context) => {
     let body: GeminiRequest;
     try {
       body = (await request.json()) as GeminiRequest;
-    } catch (e) {
+    } catch {
       return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400, headers });
     }
 

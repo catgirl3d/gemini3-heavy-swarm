@@ -1,5 +1,5 @@
 import { useRef, useEffect, type RefObject, type Dispatch, type SetStateAction } from 'react';
-import { type AppSettings, type Message, AgentState, type Work } from '@/types';
+import { type AppSettings, type Message, type Work } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
 import { Logger } from '@shared/utils/logger';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
@@ -7,7 +7,7 @@ import { getMissingAgentsForMessage } from '@/utils/swarm/agentHelpers';
 import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
 
 import { calculateUpdatedStateForRegeneration } from '@/utils/swarm/regenerationHelpers';
-import { withEnsuredResults, cloneWork, updateAgentWork } from '@/utils/swarm/workHelpers';
+import { cloneWork, updateAgentWork } from '@/utils/swarm/workHelpers';
 import { getFriendlyErrorMessage } from '@/services/swarm/steps/utils/errorUtils';
 import { type SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { useAgentStore } from '@/stores/agentStore';
@@ -112,7 +112,7 @@ export function useSwarmRegeneration({
     
     if (!hasAgentsForMessage) {
       // 2. If not, try to recover them (Legacy/Reload support)
-      const missingAgents = getMissingAgentsForMessage(messageId, workContext, stepId);
+      const missingAgents = getMissingAgentsForMessage(messageId, workContext);
       
       if (missingAgents.length > 0) {
         regenLogger.debug('Restoring missing agents', { count: missingAgents.length, source: 'helper' });

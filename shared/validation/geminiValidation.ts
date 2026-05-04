@@ -88,7 +88,7 @@ export function serializeRequestBody(
     }
     
     return { valid: true, serialized };
-  } catch (e) {
+  } catch {
     // Serialization failure is a malformed request (400), not size issue (413)
     return { valid: false, error: 'Content is not serializable', statusCode: 400 };
   }

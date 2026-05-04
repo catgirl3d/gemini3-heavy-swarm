@@ -1,4 +1,4 @@
-import { type Work, AgentState, type StepDebugInfo } from '@/types';
+import { type Work, type StepDebugInfo } from '@/types';
 import { type StepId } from '@/types/steps';
 
 export interface WorkModalData {

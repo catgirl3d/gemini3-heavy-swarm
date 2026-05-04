@@ -25,13 +25,12 @@ export const getUpdatedAgentName = (index: number, stepId: StepId, settings: App
 };
 
 /**
- * Recovers agent states for a message from the legacy message or reconstruction.
- * First tries to load saved agentStates, then tries to reconstruct from work.results.
+ * Returns saved agent states for a message when they are present on the work item.
+ * Legacy reconstruction from work.results is intentionally disabled.
  */
 export const getMissingAgentsForMessage = (
   messageId: string,
-  workContext: Work,
-  stepId: StepId
+  workContext: Work
 ): AgentState[] => {
   // Only use saved states. Legacy reconstruction from text results is removed.
   if (workContext.agentStates?.length) {

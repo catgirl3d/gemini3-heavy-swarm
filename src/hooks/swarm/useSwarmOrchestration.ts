@@ -3,7 +3,7 @@ import { type AppSettings, type Message, type AgentState, type Work } from '@/ty
 import { STEPS } from '@/types/steps';
 import { type SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { generateUUID } from '@/utils/common/uuid';
-import { updateMessageParts, findTargetMessageIndex } from '@/utils/chat/messageHelpers';
+import { updateMessageParts } from '@/utils/chat/messageHelpers';
 import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
 import { handleSendMessageError } from '@/utils/swarm/errorHandling';
 import { handleSynthesisJump } from '@/utils/swarm/stepConstants';
@@ -18,7 +18,6 @@ export interface OrchestrationDependencies {
   messagesRef: RefObject<Message[]>;
   setMessages: Dispatch<SetStateAction<Message[]>>;
   mainAbort: AbortControllerHook;
-  regenAbort: AbortControllerHook;
   pauseResolverRef: MutableRefObject<(() => void) | null>;
   orchestratorRef: RefObject<SwarmOrchestrator>;
 }
@@ -29,7 +28,6 @@ export function useSwarmOrchestration({
   messagesRef,
   setMessages,
   mainAbort,
-  regenAbort,
   pauseResolverRef,
   orchestratorRef
 }: OrchestrationDependencies) {
@@ -221,7 +219,7 @@ export function useSwarmOrchestration({
     useAgentStore.getState().registerAbortController(controllerKey, controller);
 
     try {
-      const { text: finalMessageText, sources, work } = await orchestrator.runSwarm(
+      const { sources, work } = await orchestrator.runSwarm(
         settings,
         userInput,
         image,

@@ -164,7 +164,7 @@ export class OpenRouterGenAI {
             }
 
             return encode(textOrCharCount).length;
-          } catch (e) {
+          } catch {
             // Fallback if tokenizer fails at runtime
             return Math.ceil(textOrCharCount.length / 3.5);
           }
@@ -200,8 +200,6 @@ export class OpenRouterGenAI {
             totalTokenCount: estimatedPromptTokens,
             isEstimated: true
           };
-          
-          let hasYieldedContent = false;
           
           try {
             while (true) {
@@ -252,8 +250,6 @@ export class OpenRouterGenAI {
                   
                   const content = parsed.choices?.[0]?.delta?.content || '';
                   if (content || reasoning) {
-                    hasYieldedContent = true;
-                    
                     if (content) {
                       accumulatedContent += content;
                       // Only update estimates if we don't have real usage yet

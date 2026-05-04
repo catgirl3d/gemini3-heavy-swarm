@@ -6,7 +6,7 @@ import type { GroundingChunk } from './utils/streamUtils';
 import { type AgentState, type Source, type TokenUsage, type Work, type StepDebugInfo } from '@/types';
 import { createAgentStates, updateAgentState, updateAgentStateById } from './utils/agentStateUtils';
 import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from './utils/devModeUtils';
-import { extractTextFromParts, extractTokenUsage, extractPartsFromChunk, extractUsageMetadataFromChunk, extractGroundingChunksFromChunk } from './utils/streamUtils';
+import { extractTextFromParts, extractTokenUsage } from './utils/streamUtils';
 import { getErrorLabel, checkGlobalRateLimitFailure, checkGlobalStepFailure, getFriendlyErrorMessage } from './utils/errorUtils';
 import { getGenerationConfig } from '@/services/proxy/geminiConfig';
 import { Logger } from '@shared/utils/logger';
@@ -14,7 +14,6 @@ import { AppError, ErrorCode } from '@/utils/errors/AppError';
 import { withRetry } from '@/utils/common/retryStrategy';
 import { useAgentStore } from '@/stores/agentStore';
 import { updateAgentStatus, updateAgentStatusIfChanged } from '@/utils/swarm/statusHelpers';
-import { AppSettings } from '@/types';
 import { createFirstTextJumpTracker } from '@/utils/swarm/jumpHelper';
 
 export abstract class BaseStep implements StepDescriptor {
@@ -66,14 +65,14 @@ export abstract class BaseStep implements StepDescriptor {
   protected checkGlobalStepFailure = checkGlobalStepFailure;
 
   /**
-   * Type-safe helper to get the error count key for the current step.
-   * Prevents magic string typos by using WorkResultKey type.
-   * @param agentIndex - Optional agent index. Determines data structure (array vs scalar), not naming.
+   * Returns the storage key used for persistent error simulation counts.
+   *
+   * The key name is always plural for consistency across single-agent and
+   * multi-agent steps. The stored value shape (scalar vs array) is determined
+   * by the caller's context, not by the key name itself.
    */
-  protected getErrorCountKey(agentIndex?: number): string {
-    const stepId = this.id;
-    // Always use plural for consistency (agentIndex determines array vs scalar structure)
-    return `${stepId}_error_counts`;
+  protected getErrorCountKey(): string {
+    return `${this.id}_error_counts`;
   }
 
   /**
@@ -478,7 +477,7 @@ export abstract class BaseStep implements StepDescriptor {
 
     // Initialize persistent error counts if simulating errors
     if (config.simulateError && config.simulateError !== 'none') {
-      const errorKey = this.getErrorCountKey(0); // Multi-agent context
+      const errorKey = this.getErrorCountKey();
       if (!Array.isArray(work.results[errorKey])) {
         work.results[errorKey] = Array(settings.numAgents).fill(0);
       }
@@ -555,14 +554,13 @@ export abstract class BaseStep implements StepDescriptor {
     // Persistent error simulation logic (works across manual regenerations)
     if (simulateError && simulateError !== 'none') {
       const maxErrorAttempts = simulateErrorAttempts ?? 1;
-      const stepId = this.id;
-      
+
       // Use work from config (passed from context) or fallback to store
       const targetWork = configWork || useAgentStore.getState().currentWork;
       
       if (targetWork) {
         this.ensureResults(targetWork);
-        const errorKey = this.getErrorCountKey(agentIndex);
+        const errorKey = this.getErrorCountKey();
         
         let currentCount = 0;
         if (agentIndex === undefined) {
@@ -670,7 +668,7 @@ export abstract class BaseStep implements StepDescriptor {
       });
       
       try {
-        await withRetry(async (attempt) => {
+        await withRetry(async () => {
           // Reset accumulators for each attempt to ensure clean regeneration if retried
           fullText = '';
           fullThought = '';

@@ -72,10 +72,9 @@ export async function streamToExpress(webResponse: Response, expressRes: any): P
 
   // Convert Web Stream to Node Stream
   const { Readable } = await import('stream');
-  const { ReadableStream: WebReadableStream } = await import('stream/web');
   const { pipeline } = await import('stream/promises');
 
-  const nodeStream = Readable.fromWeb(webResponse.body as InstanceType<typeof WebReadableStream>);
+  const nodeStream = Readable.fromWeb(webResponse.body as unknown as import('stream/web').ReadableStream);
 
   try {
     // pipeline handles automatic cleanup and error propagation for both sides

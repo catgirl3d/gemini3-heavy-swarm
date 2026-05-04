@@ -1,5 +1,4 @@
 import { type StepId, STEPS } from '@/types/steps';
-import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { type AppSettings, type Message, type Work, type TokenUsage } from '@/types';
 import { ensureModelMessageForSynthesis, updateMessageParts, updateWorkAgentNames } from '@/utils/chat/messageHelpers';
 import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
@@ -14,8 +13,7 @@ export function processSynthesisChunkUpdate(
   messageIndex: number,
   workContext: Work | undefined,
   text: string,
-  settings: AppSettings,
-  isFirstChunk: boolean
+  settings: AppSettings
 ): { updatedMessages: Message[]; targetIndex: number } {
   const logger = new Logger('Synthesis', settings.debugMode);
   
@@ -105,7 +103,7 @@ export function calculateUpdatedStateForRegeneration(
   // 1. Handle Message Updates
   if (stepId === STEPS.SYNTHESIS) {
     const { updatedMessages, targetIndex } = processSynthesisChunkUpdate(
-      messages, messageIndex, workContext, text, settings, isFirstChunk
+      messages, messageIndex, workContext, text, settings
     );
     updatedMsgs = updatedMessages;
     targetIdx = targetIndex;

@@ -5,7 +5,6 @@ import { getCachedModels } from '@/services/openrouter/modelsCache';
 import { MIN_OUTPUT_TOKENS_FOR_THINKING, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 import { StepperControl } from '@/components/modals/SettingsModal/components/StepperControl';
 import { TemperatureBanner } from '@/components/modals/SettingsModal/components/TemperatureBanner';
-import { AVAILABLE_MODELS } from '@/components/modals/SettingsModal/constants';
 import { ModelSelector, ProviderSelector, CustomSelect, type CustomSelectOption } from '@/components/ui';
 
 const ERROR_SIMULATION_OPTIONS: CustomSelectOption[] = [

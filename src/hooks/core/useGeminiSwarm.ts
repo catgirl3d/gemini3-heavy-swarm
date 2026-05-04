@@ -29,7 +29,6 @@ export const useGeminiSwarm = () => {
   
   // 2. Shared Infrastructure
   const mainAbort = useAbortController();
-  const regenAbort = useAbortController();
   
   // Create provider when settings change
   const provider = useMemo(
@@ -48,7 +47,6 @@ export const useGeminiSwarm = () => {
     messagesRef,
     setMessages,
     mainAbort,
-    regenAbort,
     pauseResolverRef,
     orchestratorRef
   });

@@ -176,7 +176,7 @@ class ProxyGenerativeModel {
                     buffer = buffer.substring(i + 1);
                     found = true;
                     break;
-                  } catch (e) {
+                  } catch {
                     // If JSON.parse fails despite balanced braces, it might be an invalid fragment or nested structure not handled by simple counting
                     // We let it continue to see if more data fixes it
                   }

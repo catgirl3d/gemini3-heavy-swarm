@@ -4,7 +4,6 @@
 
 import express, { type Request, type Response, type NextFunction } from 'express';
 import path from 'path';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
 import net from 'net';
 import { isProductionEnvironment, MAX_REQUEST_SIZE } from '../shared/security/security';
