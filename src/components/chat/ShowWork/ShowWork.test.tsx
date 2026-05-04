@@ -219,12 +219,71 @@ describe('ShowWork', () => {
 
     expect(screen.getByText('View Full Agent Swarm Process')).toBeInTheDocument();
     expect(screen.queryByText('Critiques & Refinements')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('card-initial-0')).not.toBeInTheDocument();
     expect(screen.getByTestId('card-synthesis')).toHaveAttribute('data-content', 'Live synthesis');
-    expect(screen.getByText('19')).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
     expect(mocks.autoCollapse).toHaveBeenCalledWith(expect.objectContaining({
       isCurrentMessage: true,
       synthesisText: 'Live synthesis',
     }));
+  });
+
+  it('uses live currentWork for initial and refinement cards while the message snapshot is stale', () => {
+    const liveWork = createWork({
+      results: {
+        [STEPS.INITIAL]: ['Live initial draft'],
+        [STEPS.REFINEMENT]: ['Live refinement 1', 'Live refinement 2'],
+        [STEPS.SYNTHESIS]: {},
+        initial_step_thoughts: ['Live initial thought'],
+        refinement_step_thoughts: ['Live refinement thought 1', 'Live refinement thought 2'],
+        initial_step_usage: [{ promptTokens: 1, candidatesTokens: 1, totalTokens: 2 }],
+        refinement_step_usage: [
+          { promptTokens: 2, candidatesTokens: 3, totalTokens: 5 },
+          { promptTokens: 4, candidatesTokens: 5, totalTokens: 9 },
+        ],
+      },
+    });
+
+    mocks.store.currentMessageId = 'message-1';
+    mocks.store.currentWork = liveWork;
+
+    render(
+      <ShowWork
+        {...createProps({
+          work: createWork({
+            results: {
+              [STEPS.INITIAL]: [''],
+              [STEPS.REFINEMENT]: ['', ''],
+              [STEPS.SYNTHESIS]: {},
+            },
+          }),
+          isLive: true,
+        })}
+      />
+    );
+
+    const cardProps = Object.fromEntries(
+      mocks.statusAwareWorkCard.mock.calls.map(([props]) => [props.cardId, props])
+    );
+
+    expect(cardProps['initial-0'].work).toBe(liveWork);
+    expect(cardProps['initial-0']).toMatchObject({
+      content: 'Live initial draft',
+      thought: 'Live initial thought',
+      tokenUsage: { promptTokens: 1, candidatesTokens: 1, totalTokens: 2 },
+    });
+    expect(cardProps['refined-0'].work).toBe(liveWork);
+    expect(cardProps['refined-0']).toMatchObject({
+      content: 'Live refinement 1',
+      thought: 'Live refinement thought 1',
+      tokenUsage: { promptTokens: 2, candidatesTokens: 3, totalTokens: 5 },
+    });
+    expect(cardProps['refined-1'].work).toBe(liveWork);
+    expect(cardProps['refined-1']).toMatchObject({
+      content: 'Live refinement 2',
+      thought: 'Live refinement thought 2',
+      tokenUsage: { promptTokens: 4, candidatesTokens: 5, totalTokens: 9 },
+    });
   });
 
   it('passes stable card props from the correct work source', () => {
