@@ -300,21 +300,18 @@ export function useSwarmRegeneration({
       }
 
       const sessionSnapshot = store.snapshotSessionWork(messageId);
+      const fallbackMessageWork = stepId === STEPS.SYNTHESIS
+        ? mergedWork
+        : markWorkDownstreamStale(mergedWork, stepId);
 
       setMessages(prev => {
           const idx = prev.findIndex(m => m.id === messageId);
           if (idx === -1) return prev;
 
           const existingMessage = prev[idx];
-          const mergedMessageWork = mergeRegeneratedStepWork(existingMessage.work ?? workContext, result.work, stepId, agentIndex);
-          const finalMessageWork = stepId === STEPS.SYNTHESIS
-            ? mergedMessageWork
-            : markWorkDownstreamStale(mergedMessageWork, stepId);
           const updatedMessage: Message = {
               ...existingMessage,
-              work: sessionSnapshot
-                ? { ...finalMessageWork, agentStates: sessionSnapshot.agentStates }
-                : finalMessageWork,
+              work: sessionSnapshot ?? fallbackMessageWork,
               sources: result.sources || existingMessage.sources
           };
           

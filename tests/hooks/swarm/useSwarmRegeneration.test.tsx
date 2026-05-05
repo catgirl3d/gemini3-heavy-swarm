@@ -692,6 +692,56 @@ describe('useSwarmRegeneration', () => {
 
     const secondCall = toRegenerateResponseCall(regenerateResponse.mock.calls[1]);
     expect(secondCall.workContext.results?.[STEPS.REFINEMENT]).toEqual(['old critic 0', 'new critic 1']);
+    expect(messagesState.messages[1].work?.results?.[STEPS.REFINEMENT]).toEqual(['old critic 0', 'new critic 1']);
+    expect(messagesState.messages[1].work?.results?.[STEPS.SYNTHESIS]).toEqual({ text: 'new final answer' });
+  });
+
+  it('writes final message work from the session snapshot instead of a stale message snapshot', async () => {
+    const liveSessionWork = createBaseWork({
+      results: {
+        [STEPS.INITIAL]: ['live agent 0', 'live agent 1'],
+        [`${STEPS.INITIAL}_thoughts`]: ['live thought 0', 'live thought 1'],
+        [`${STEPS.INITIAL}_usage`]: [createUsage(101), createUsage(102)],
+        [STEPS.REFINEMENT]: ['live critic 0', 'live critic 1'],
+        [`${STEPS.REFINEMENT}_thoughts`]: ['live critic thought 0', 'live critic thought 1'],
+        [`${STEPS.REFINEMENT}_usage`]: [createUsage(103), createUsage(104)],
+        [STEPS.SYNTHESIS]: { text: 'live final answer' },
+      },
+    });
+    const staleMessageWork = createBaseWork();
+    useAgentStore.getState().startSession('model-1', liveSessionWork, {
+      status: 'paused',
+      isLoading: true,
+      isPaused: true,
+      loadingStatus: 'Paused. Waiting for user confirmation...',
+    });
+    const regenerateResponse = vi.fn(async () => ({
+      text: 'new critic 1',
+      sources: [],
+      work: createRegeneratedWork({
+        stepId: STEPS.REFINEMENT,
+        agentIndex: 1,
+        text: 'new critic 1',
+        thought: 'new critic thought 1',
+        usage: createUsage(155),
+      }),
+    }));
+    const { result, messagesState } = renderRegeneration({
+      initialMessages: createConversation(staleMessageWork),
+      regenerateResponse,
+    });
+
+    await act(async () => {
+      await result.current.regenerateAgentResponse('model-1', STEPS.REFINEMENT, 1);
+    });
+
+    expect(messagesState.messages[1].work?.results?.[STEPS.INITIAL]).toEqual(['live agent 0', 'live agent 1']);
+    expect(messagesState.messages[1].work?.results?.[STEPS.REFINEMENT]).toEqual(['live critic 0', 'new critic 1']);
+    expect(messagesState.messages[1].work?.results?.[STEPS.SYNTHESIS]).toEqual({ text: 'live final answer' });
+    expect(messagesState.messages[1].work?.stepMetadata?.find(m => m.id === STEPS.SYNTHESIS)).toMatchObject({
+      status: 'stale',
+      staleFromStepId: STEPS.REFINEMENT,
+    });
   });
 
   it('refuses regeneration for historical assistant turns once a later user turn exists', async () => {
