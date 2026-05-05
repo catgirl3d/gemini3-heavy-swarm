@@ -294,7 +294,7 @@ describe('workHelpers', () => {
     });
 
     describe('cloneWork', () => {
-        it('should create a shallow-deep clone of the Work object', () => {
+        it('should create an isolated clone of the Work object', () => {
             const original: Work = {
                 results: { [STEPS.INITIAL]: ['a'] },
                 agentStates: [{ id: '1' } as any],
@@ -334,6 +334,62 @@ describe('workHelpers', () => {
             expect(clone.criticNames).not.toBe(original.criticNames);
             expect(clone.results?.[STEPS.INITIAL]).toEqual(original.results?.[STEPS.INITIAL]);
             expect(clone.results?.[STEPS.INITIAL]).not.toBe(original.results?.[STEPS.INITIAL]);
+        });
+
+        it('should recursively clone nested synthesis sources and debug content payloads', () => {
+            const original: Work = {
+                results: {
+                    [STEPS.SYNTHESIS]: {
+                        text: 'final answer',
+                        sources: [{ uri: 'https://example.com', title: 'Example' }]
+                    }
+                },
+                debugInfo: {
+                    [STEPS.SYNTHESIS]: {
+                        systemInstruction: 'system',
+                        history: [{
+                            role: 'user',
+                            parts: [
+                                { text: 'hello' },
+                                { inlineData: { mimeType: 'image/png', data: 'abc123' } }
+                            ]
+                        }],
+                        userTurn: {
+                            role: 'model',
+                            parts: [
+                                { text: 'answer' },
+                                { thought: true, text: 'reasoning' }
+                            ]
+                        }
+                    }
+                } as Work['debugInfo']
+            };
+
+            const clone = cloneWork(original);
+            const originalSynthesis = original.results?.[STEPS.SYNTHESIS] as { sources: { uri: string; title: string }[] };
+            const clonedSynthesis = clone.results?.[STEPS.SYNTHESIS] as { sources: { uri: string; title: string }[] };
+            const originalDebug = original.debugInfo?.[STEPS.SYNTHESIS] as {
+                history: Array<{ parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }>;
+                userTurn: { parts: Array<{ text?: string; thought?: boolean }> };
+            };
+            const clonedDebug = clone.debugInfo?.[STEPS.SYNTHESIS] as typeof originalDebug;
+
+            expect(clonedSynthesis).toEqual(originalSynthesis);
+            expect(clonedSynthesis).not.toBe(originalSynthesis);
+            expect(clonedSynthesis.sources).not.toBe(originalSynthesis.sources);
+            expect(clonedSynthesis.sources[0]).not.toBe(originalSynthesis.sources[0]);
+
+            expect(clonedDebug).toEqual(originalDebug);
+            expect(clonedDebug).not.toBe(originalDebug);
+            expect(clonedDebug.history).not.toBe(originalDebug.history);
+            expect(clonedDebug.history[0]).not.toBe(originalDebug.history[0]);
+            expect(clonedDebug.history[0].parts).not.toBe(originalDebug.history[0].parts);
+            expect(clonedDebug.history[0].parts[0]).not.toBe(originalDebug.history[0].parts[0]);
+            expect(clonedDebug.history[0].parts[1]).not.toBe(originalDebug.history[0].parts[1]);
+            expect(clonedDebug.history[0].parts[1].inlineData).not.toBe(originalDebug.history[0].parts[1].inlineData);
+            expect(clonedDebug.userTurn).not.toBe(originalDebug.userTurn);
+            expect(clonedDebug.userTurn.parts).not.toBe(originalDebug.userTurn.parts);
+            expect(clonedDebug.userTurn.parts[0]).not.toBe(originalDebug.userTurn.parts[0]);
         });
     });
 

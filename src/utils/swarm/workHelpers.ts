@@ -2,16 +2,23 @@ import { type Work, type TokenUsage, type AgentState, type WorkStepMetadata, typ
 import { type StepId, STEPS } from '@/types/steps';
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 };
 
 const cloneResultEntry = (value: unknown): unknown => {
   if (Array.isArray(value)) {
-    return [...value];
+    return value.map(entry => cloneResultEntry(entry));
   }
 
   if (isPlainObject(value)) {
-    return { ...value };
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entryValue]) => [key, cloneResultEntry(entryValue)])
+    );
   }
 
   return value;
@@ -354,8 +361,9 @@ export function updateAgentWork(
 
 
 /**
- * Deeply clones a Work object to prevent accidental mutations of state.
- * Specifically ensures that nested objects like 'results' and 'debugInfo' are new references.
+ * Clones Work snapshot data to prevent accidental mutations of persisted state.
+ * Recursively clones plain-data payloads inside results/debugInfo while leaving non-plain
+ * references intact.
  *
  * @param work - The source Work object
  * @returns A new Work object with cloned nested structures
