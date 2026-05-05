@@ -306,6 +306,7 @@ describe('useSwarmOrchestration', () => {
       const { messageId } = toRunSwarmCall(args);
 
       if (runSwarm.mock.calls.length === 1) {
+        useAgentStore.getState().replaceSessionAgents(messageId, pausedAgents);
         return { text: '', sources: [], work: pausedWork, paused: true };
       }
 
@@ -512,6 +513,58 @@ describe('useSwarmOrchestration', () => {
         agentStates: [expect.objectContaining({ id: 'old-agent', messageId: 'resume-model' })],
       }),
     });
+  });
+
+  it('preserves live session agent states when resumed work returns a stale agentStates snapshot', async () => {
+    const staleAgents = [
+      createAgent({ id: 'resume-agent-1', messageId: 'resume-model', status: 'done', label: 'Drafted' }),
+      createAgent({ id: 'resume-agent-2', messageId: 'resume-model', agentIndex: 1, status: 'waiting', label: 'Waiting...', name: 'Agent 2' }),
+    ];
+    const existingWork = createWork({
+      results: {
+        [STEPS.INITIAL]: ['partial draft'],
+        [STEPS.REFINEMENT]: [],
+        [STEPS.SYNTHESIS]: {},
+      },
+      stepMetadata: [
+        { id: STEPS.INITIAL, status: 'done' },
+        { id: STEPS.SYNTHESIS, status: 'pending' },
+      ],
+      agentStates: staleAgents,
+    });
+    const liveAgents = [
+      createAgent({ id: 'resume-agent-1', messageId: 'resume-model', status: 'done', label: 'Done' }),
+      createAgent({ id: 'resume-agent-2', messageId: 'resume-model', agentIndex: 1, status: 'done', label: 'Done', name: 'Agent 2' }),
+    ];
+    const initialMessages: Message[] = [
+      { id: 'resume-user', role: 'user', parts: [{ text: 'resume' }] },
+      { id: 'resume-model', role: 'model', parts: [{ text: 'partial answer' }], work: existingWork },
+    ];
+    const runSwarm = vi.fn(async (...args: any[]) => {
+      const { messageId, onMessageUpdate } = toRunSwarmCall(args);
+      onMessageUpdate('resumed stream', false);
+      useAgentStore.getState().replaceSessionAgents(messageId, liveAgents);
+
+      return {
+        text: 'resumed final',
+        sources: [],
+        work: createWork({
+          stepMetadata: [
+            { id: STEPS.INITIAL, status: 'done' },
+            { id: STEPS.SYNTHESIS, status: 'done' },
+          ],
+          agentStates: staleAgents,
+        }),
+      };
+    });
+    const { result, messagesState } = renderOrchestration({ initialMessages, runSwarm });
+
+    await act(async () => {
+      await result.current.continueGeneration();
+    });
+
+    expect(useAgentStore.getState().sessionsByMessageId['resume-model']?.agentStates).toEqual(liveAgents);
+    expect(messagesState.messages[1].work?.agentStates).toEqual(liveAgents);
   });
 
   it('does not clear resumed visible text when synthesis emits a thought-only chunk', async () => {

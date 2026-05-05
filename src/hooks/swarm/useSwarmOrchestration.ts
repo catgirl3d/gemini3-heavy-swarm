@@ -292,10 +292,10 @@ export function useSwarmOrchestration({
         paused,
       });
 
+      // Live agent status truth stays in session.agentStates during execution.
+      // Do not write work.agentStates back here: on resume/retry it may still contain
+      // an older snapshot and would overwrite the live session state right before we snapshot it.
       useAgentStore.getState().replaceSessionWork(modelMessageId, work);
-      if (work.agentStates) {
-        useAgentStore.getState().replaceSessionAgents(modelMessageId, work.agentStates);
-      }
 
       if (paused) {
         useAgentStore.getState().setSessionStatus(modelMessageId, 'paused');
