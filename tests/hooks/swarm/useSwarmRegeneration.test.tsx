@@ -794,6 +794,36 @@ describe('useSwarmRegeneration', () => {
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
   });
 
+  it('restores previous live agent states after an aborted regeneration updates them transiently', async () => {
+    const originalConversation = createConversation();
+    const originalAgents = originalConversation[1].work?.agentStates?.map(agent => ({ ...agent })) ?? [];
+    const transientAgents = [
+      createAgent({ id: 'model-1-initial-agent-0', agentIndex: 0, status: 'done', label: 'Done' }),
+      createAgent({ id: 'model-1-initial-agent-1', agentIndex: 1, status: 'working', label: 'Regenerating...' }),
+    ];
+    const regenerateResponse = vi.fn(async () => {
+      useAgentStore.getState().replaceSessionAgents('model-1', transientAgents);
+      throw new DOMException('The operation was aborted.', 'AbortError');
+    });
+    const { result } = renderRegeneration({
+      initialMessages: originalConversation,
+      regenerateResponse,
+    });
+
+    await act(async () => {
+      await result.current.regenerateAgentResponse('model-1', STEPS.INITIAL, 1);
+    });
+
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.agentStates).toEqual(originalAgents);
+    expect(useAgentStore.getState()).toMatchObject({
+      isLoading: false,
+      isPaused: false,
+      error: null,
+      loadingStatus: '',
+      activeSessionMessageId: undefined,
+    });
+  });
+
   it('restores the original synthesis snapshot after an aborted synthesis regeneration', async () => {
     const originalConversation = createConversation();
     const regenerateResponse = vi.fn(async (...args: any[]) => {

@@ -186,6 +186,9 @@ export function useSwarmRegeneration({
       || targetMessage?.work;
     const workContext = baseWork ? cloneWork(baseWork) : undefined;
     const wasCompletedMessage = getStepMeta(baseWork, STEPS.SYNTHESIS)?.status === 'done';
+    const seededAgentStates = (liveSession?.agentStates ?? workContext?.agentStates ?? [])
+      .filter(agent => agent.messageId === messageId);
+    const previousAgentStates = seededAgentStates.map(agent => ({ ...agent }));
     const previousActiveSessionId = store.activeSessionMessageId;
     const previousSessionRuntime = liveSession
       ? {
@@ -215,7 +218,7 @@ export function useSwarmRegeneration({
     }
 
     store.startSession(messageId, workContext, {
-      agentStates: (liveSession?.agentStates ?? workContext.agentStates ?? []).filter(agent => agent.messageId === messageId),
+      agentStates: seededAgentStates,
       status: 'running',
       isLoading: true,
       isPaused: false,
@@ -356,6 +359,7 @@ export function useSwarmRegeneration({
         regenLogger.info('Regeneration aborted by user - cleanup', { stepId, agentIndex });
 
         store.replaceSessionWork(messageId, workContext);
+        store.replaceSessionAgents(messageId, previousAgentStates);
         store.updateSessionRuntime(messageId, previousSessionRuntime);
 
         if (stepId === STEPS.SYNTHESIS) {
