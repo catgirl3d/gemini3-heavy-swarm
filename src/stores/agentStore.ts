@@ -5,10 +5,17 @@ import {
   type SwarmSessionStatus,
   type TokenUsage,
   type Work,
+  type WorkResultUpdates,
 } from '@/types';
-import { type StepId } from '@/types/steps';
+import { type StepId, STEPS } from '@/types/steps';
 import {
   cloneWork,
+  getStepResults,
+  getStepThoughts,
+  getStepUsage,
+  getSynthesisResult,
+  getSynthesisThought,
+  getSynthesisUsage,
   markDownstreamStale as markWorkDownstreamStale,
   snapshotWorkWithAgents,
   updateAgentWork,
@@ -29,6 +36,65 @@ type SessionSeedOptions = {
 };
 
 type SessionRuntimeUpdate = Partial<Pick<SwarmSession, 'status' | 'isLoading' | 'isPaused' | 'loadingStatus' | 'error'>>;
+const hasOwnUpdate = <T extends object, K extends keyof T>(value: T, key: K): boolean => {
+  return Object.prototype.hasOwnProperty.call(value, key);
+};
+
+// Keep this field list in sync with src/types/app-types.ts:TokenUsage.
+// Streaming no-op detection relies on value equality here rather than object identity.
+const isTokenUsageEqual = (left: TokenUsage | null | undefined, right: TokenUsage | null | undefined): boolean => {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return left.promptTokens === right.promptTokens
+    && left.candidatesTokens === right.candidatesTokens
+    && left.totalTokens === right.totalTokens
+    && left.thoughtsTokenCount === right.thoughtsTokenCount
+    && left.cachedContentTokenCount === right.cachedContentTokenCount
+    && left.toolUsePromptTokenCount === right.toolUsePromptTokenCount
+    && left.isEstimated === right.isEstimated;
+};
+
+const hasWorkResultChanges = (
+  work: Work,
+  stepId: StepId,
+  agentIndex: number,
+  updates: WorkResultUpdates,
+): boolean => {
+  if (hasOwnUpdate(updates, 'text')) {
+    const currentText = stepId === STEPS.SYNTHESIS
+      ? getSynthesisResult(work)?.text
+      : getStepResults(work, stepId)[agentIndex];
+    if (currentText !== updates.text) {
+      return true;
+    }
+  }
+
+  if (hasOwnUpdate(updates, 'thought')) {
+    const currentThought = stepId === STEPS.SYNTHESIS
+      ? getSynthesisThought(work)
+      : getStepThoughts(work, stepId)[agentIndex];
+    if (currentThought !== updates.thought) {
+      return true;
+    }
+  }
+
+  if (hasOwnUpdate(updates, 'usage')) {
+    const currentUsage = stepId === STEPS.SYNTHESIS
+      ? getSynthesisUsage(work)
+      : getStepUsage(work, stepId)[agentIndex];
+    if (!isTokenUsageEqual(currentUsage, updates.usage)) {
+      return true;
+    }
+  }
+
+  return false;
+};
 
 const cloneAgentStates = (agentStates: AgentState[]): AgentState[] => {
   return agentStates.map(agent => ({ ...agent }));
@@ -207,10 +273,14 @@ const buildUpdatedSessionWorkState = (
   messageId: string,
   stepId: StepId,
   agentIndex: number,
-  updates: { text?: string; thought?: string; usage?: TokenUsage | null },
+  updates: WorkResultUpdates,
 ): { nextSessions: SessionMap } | null => {
   const targetSession = state.sessionsByMessageId[messageId];
   if (!targetSession) {
+    return null;
+  }
+
+  if (!hasWorkResultChanges(targetSession.work, stepId, agentIndex, updates)) {
     return null;
   }
 

@@ -196,8 +196,11 @@ export class SynthesisStep extends BaseStep {
         sourcesCount: sources?.length || 0 
       });
 
+      this.flushLiveWorkResult(context, STEPS.SYNTHESIS, -1);
+
       // Update generic results map (already an object due to handleStreamChunk, but ensuring it here)
       work.results[STEPS.SYNTHESIS] = { text: finalResponseText, sources };
+      this.discardLiveWorkResultBuffer(context, STEPS.SYNTHESIS, -1);
 
       // Mark synthesizer as completed
       currentAgentStates = this.updateAgentStateById(currentAgentStates, `${messageId}-synthesizer_agent`, {
@@ -241,6 +244,7 @@ export class SynthesisStep extends BaseStep {
       updateAgentStatus(STEPS.SYNTHESIS, 0, 'error', messageId, errorLabel);
       
       // SYNC: Ensure work results (including error flag) are updated in the global store
+      this.discardLiveWorkResultBuffer(context, STEPS.SYNTHESIS, -1);
       this.syncLiveWork(context, work);
       
       throw error;

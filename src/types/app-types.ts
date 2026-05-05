@@ -172,6 +172,12 @@ export interface TokenUsage {
   isEstimated?: boolean;
 }
 
+export type WorkResultUpdates = {
+  text?: string;
+  thought?: string;
+  usage?: TokenUsage | null;
+};
+
 /**
  * Type-safe keys for accessing work.results.
  * Prevents typos and ensures only valid result keys are used.

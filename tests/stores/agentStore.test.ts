@@ -325,6 +325,63 @@ describe('agentStore', () => {
     expect(updatedSession?.work.stepMetadata).toEqual(previousSession?.work.stepMetadata);
   });
 
+  it('skips multi-agent work updates when text, thought, and usage are unchanged', () => {
+    const initialWork: Work = {
+      results: {
+        [STEPS.INITIAL]: ['draft 1'],
+        [`${STEPS.INITIAL}_thoughts`]: ['existing thought'],
+        [`${STEPS.INITIAL}_usage`]: [createUsage(12)],
+      },
+    };
+    const store = useAgentStore.getState();
+
+    store.startSession('msg-1', initialWork);
+
+    const previousSessions = useAgentStore.getState().sessionsByMessageId;
+    const previousSession = previousSessions['msg-1'];
+    const previousWork = previousSession?.work;
+
+    store.updateSessionWorkResult('msg-1', STEPS.INITIAL, 0, {
+      text: 'draft 1',
+      thought: 'existing thought',
+      usage: createUsage(12),
+    });
+
+    const nextSessions = useAgentStore.getState().sessionsByMessageId;
+    const nextSession = nextSessions['msg-1'];
+
+    expect(nextSessions).toBe(previousSessions);
+    expect(nextSession).toBe(previousSession);
+    expect(nextSession?.work).toBe(previousWork);
+  });
+
+  it('skips synthesis work updates when object text and usage are unchanged', () => {
+    const initialWork: Work = {
+      results: {
+        [STEPS.SYNTHESIS]: { text: 'final answer' },
+        [`${STEPS.SYNTHESIS}_thought`]: 'existing synthesis thought',
+        [`${STEPS.SYNTHESIS}_usage`]: createUsage(24),
+      },
+    };
+    const store = useAgentStore.getState();
+
+    store.startSession('msg-1', initialWork);
+
+    const previousSessions = useAgentStore.getState().sessionsByMessageId;
+    const previousSession = previousSessions['msg-1'];
+
+    store.updateSessionWorkResult('msg-1', STEPS.SYNTHESIS, -1, {
+      text: 'final answer',
+      thought: 'existing synthesis thought',
+      usage: createUsage(24),
+    });
+
+    const nextSessions = useAgentStore.getState().sessionsByMessageId;
+
+    expect(nextSessions).toBe(previousSessions);
+    expect(nextSessions['msg-1']).toBe(previousSession);
+  });
+
   it('accepts usage null updates to clear multi-agent and synthesis usage', () => {
     const initialWork: Work = {
       results: {

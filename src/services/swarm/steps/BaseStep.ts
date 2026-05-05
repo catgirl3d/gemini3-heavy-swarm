@@ -3,7 +3,7 @@ import { type SimulateError, ProviderType, type RoleType } from '@/types';
 import { type Tool, type Content } from '@google/genai';
 import { getStepConfig, type StepConfig } from '@/utils/swarm/stepConstants';
 import type { GroundingChunk } from './utils/streamUtils';
-import { type AgentState, type Source, type TokenUsage, type Work, type StepDebugInfo } from '@/types';
+import { type AgentState, type Source, type TokenUsage, type Work, type StepDebugInfo, type WorkResultUpdates } from '@/types';
 import { createAgentStates, updateAgentState, updateAgentStateById } from './utils/agentStateUtils';
 import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from './utils/devModeUtils';
 import { extractTextFromParts, extractTokenUsage } from './utils/streamUtils';
@@ -18,12 +18,22 @@ import { createFirstTextJumpTracker } from '@/utils/swarm/jumpHelper';
 
 type WorkResults = NonNullable<Work['results']>;
 type SynthesisResult = NonNullable<WorkResults[typeof STEPS.SYNTHESIS]>;
+type LiveWorkSyncEntry = {
+  pendingUpdates: WorkResultUpdates | null;
+  timerId: ReturnType<typeof setTimeout> | null;
+  hasFlushedVisibleText: boolean;
+};
+
+// Small delay to batch token-level stream noise while keeping the first visible chunk immediate.
+const LIVE_WORK_SYNC_THROTTLE_MS = 75;
 
 const isSynthesisResult = (value: unknown): value is SynthesisResult => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
 
 export abstract class BaseStep implements StepDescriptor {
+  private liveWorkSyncEntries = new Map<string, LiveWorkSyncEntry>();
+
   abstract id: StepId;
 
   abstract name: string;
@@ -146,13 +156,160 @@ export abstract class BaseStep implements StepDescriptor {
     context: Pick<StepContext, 'messageId'>,
     stepId: StepId,
     agentIndex: number,
-    updates: { text?: string; thought?: string; usage?: TokenUsage | null }
+    updates: WorkResultUpdates,
+    options?: { forceImmediate?: boolean }
   ): void {
     if (!context.messageId) {
       return;
     }
 
-    useAgentStore.getState().updateSessionWorkResult(context.messageId, stepId, agentIndex, updates);
+    const syncKey = this.getLiveWorkSyncKey(context.messageId, stepId, agentIndex);
+    const entry = this.liveWorkSyncEntries.get(syncKey) ?? {
+      pendingUpdates: null,
+      timerId: null,
+      hasFlushedVisibleText: false,
+    };
+
+    entry.pendingUpdates = this.mergeLiveWorkResultUpdates(entry.pendingUpdates, updates);
+
+    const shouldFlushImmediately = options?.forceImmediate === true
+      || (!entry.hasFlushedVisibleText && this.hasVisibleLiveText(entry.pendingUpdates));
+
+    if (shouldFlushImmediately) {
+      this.flushLiveWorkSyncEntry(context.messageId, stepId, agentIndex, entry);
+      return;
+    }
+
+    if (!entry.pendingUpdates) {
+      this.liveWorkSyncEntries.delete(syncKey);
+      return;
+    }
+
+    if (!entry.timerId) {
+      entry.timerId = setTimeout(() => {
+        this.flushLiveWorkSync(context.messageId, stepId, agentIndex);
+      }, LIVE_WORK_SYNC_THROTTLE_MS);
+    }
+
+    this.liveWorkSyncEntries.set(syncKey, entry);
+  }
+
+  protected flushLiveWorkResult(
+    context: Pick<StepContext, 'messageId'>,
+    stepId: StepId,
+    agentIndex: number,
+  ): void {
+    if (!context.messageId) {
+      return;
+    }
+
+    this.flushLiveWorkSync(context.messageId, stepId, agentIndex);
+  }
+
+  protected discardLiveWorkResultBuffer(
+    context: Pick<StepContext, 'messageId'>,
+    stepId: StepId,
+    agentIndex: number,
+  ): void {
+    if (!context.messageId) {
+      return;
+    }
+
+    const syncKey = this.getLiveWorkSyncKey(context.messageId, stepId, agentIndex);
+    const entry = this.liveWorkSyncEntries.get(syncKey);
+    if (!entry) {
+      return;
+    }
+
+    if (entry.timerId) {
+      clearTimeout(entry.timerId);
+    }
+
+    this.liveWorkSyncEntries.delete(syncKey);
+  }
+
+  protected discardStepLiveWorkBuffers(context: Pick<StepContext, 'messageId'>): void {
+    if (!context.messageId) {
+      return;
+    }
+
+    const messagePrefix = `${context.messageId}:${this.id}:`;
+    for (const [syncKey, entry] of this.liveWorkSyncEntries.entries()) {
+      if (!syncKey.startsWith(messagePrefix)) {
+        continue;
+      }
+
+      if (entry.timerId) {
+        clearTimeout(entry.timerId);
+      }
+
+      this.liveWorkSyncEntries.delete(syncKey);
+    }
+  }
+
+  private getLiveWorkSyncKey(messageId: string, stepId: StepId, agentIndex: number): string {
+    return `${messageId}:${stepId}:${agentIndex}`;
+  }
+
+  private mergeLiveWorkResultUpdates(
+    current: WorkResultUpdates | null,
+    updates: WorkResultUpdates,
+  ): WorkResultUpdates {
+    const merged: WorkResultUpdates = current ? { ...current } : {};
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'text')) {
+      merged.text = updates.text;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'thought')) {
+      merged.thought = updates.thought;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'usage')) {
+      merged.usage = updates.usage;
+    }
+
+    return merged;
+  }
+
+  private hasVisibleLiveText(updates: WorkResultUpdates | null): boolean {
+    return typeof updates?.text === 'string' && updates.text.length > 0;
+  }
+
+  private flushLiveWorkSync(messageId: string, stepId: StepId, agentIndex: number): void {
+    const syncKey = this.getLiveWorkSyncKey(messageId, stepId, agentIndex);
+    const entry = this.liveWorkSyncEntries.get(syncKey);
+    if (!entry) {
+      return;
+    }
+
+    this.flushLiveWorkSyncEntry(messageId, stepId, agentIndex, entry);
+  }
+
+  private flushLiveWorkSyncEntry(
+    messageId: string,
+    stepId: StepId,
+    agentIndex: number,
+    entry: LiveWorkSyncEntry,
+  ): void {
+    if (entry.timerId) {
+      clearTimeout(entry.timerId);
+    }
+
+    entry.timerId = null;
+
+    if (!entry.pendingUpdates) {
+      this.liveWorkSyncEntries.delete(this.getLiveWorkSyncKey(messageId, stepId, agentIndex));
+      return;
+    }
+
+    const updates = entry.pendingUpdates;
+    entry.pendingUpdates = null;
+    entry.hasFlushedVisibleText = entry.hasFlushedVisibleText || this.hasVisibleLiveText(updates);
+
+    useAgentStore.getState().updateSessionWorkResult(messageId, stepId, agentIndex, updates);
+
+    this.liveWorkSyncEntries.set(this.getLiveWorkSyncKey(messageId, stepId, agentIndex), entry);
   }
 
   /**
@@ -262,7 +419,20 @@ export abstract class BaseStep implements StepDescriptor {
       * will incorrectly create an array [text] instead of an object {text, sources}.
       * This breaks 'synthesisText' retrieval in the UI (ShowWork).
       */
-     this.syncLiveWorkResult(context, stepId, storageIndex, { text, thought, usage });
+     const liveWorkUpdates: WorkResultUpdates = {};
+     if (text.length > 0) {
+       liveWorkUpdates.text = text;
+     }
+     if (thought.length > 0) {
+       liveWorkUpdates.thought = thought;
+     }
+     if (usage) {
+       liveWorkUpdates.usage = usage;
+     }
+
+     if (Object.keys(liveWorkUpdates).length > 0) {
+       this.syncLiveWorkResult(context, stepId, storageIndex, liveWorkUpdates);
+     }
 
      const hasContent = text.length > 0;
      const hasThought = !!(thought && thought.length > 0);
@@ -416,17 +586,20 @@ export abstract class BaseStep implements StepDescriptor {
     
     if (this.checkGlobalRateLimitFailure(failures, settings.numAgents)) {
         work.results[this.id] = [...results];
+        this.discardStepLiveWorkBuffers(context);
         this.syncLiveWork(context, work);
         throw failures[0];
     }
 
     if (this.checkGlobalStepFailure(failures, settings.numAgents)) {
       work.results[this.id] = [...results];
+      this.discardStepLiveWorkBuffers(context);
       this.syncLiveWork(context, work);
       throw failures[0];
     }
 
     work.results[this.id] = [...results];
+    this.discardStepLiveWorkBuffers(context);
     this.syncLiveWork(context, work);
     
     return results;
@@ -875,7 +1048,7 @@ export abstract class BaseStep implements StepDescriptor {
     }
     
     // Clear store as well (usage AND text)
-    this.syncLiveWorkResult(context, this.id, storageIndex, { usage: null, text: '' });
+    this.syncLiveWorkResult(context, this.id, storageIndex, { usage: null, text: '' }, { forceImmediate: true });
     
     // Determine model
     const model = roleType 
@@ -938,6 +1111,7 @@ export abstract class BaseStep implements StepDescriptor {
       this.updateStepMetadata(work, 'done');
       
       // Update store with final snapshot
+      this.discardLiveWorkResultBuffer(context, this.id, storageIndex);
       this.syncLiveWork(context, work);
       
       return { text: fullText, work, groundingChunks };
@@ -956,6 +1130,7 @@ export abstract class BaseStep implements StepDescriptor {
       work.results[this.id] = currentResults;
       
       // Update store with error state
+      this.discardLiveWorkResultBuffer(context, this.id, storageIndex);
       this.syncLiveWork(context, work);
       
       // Re-throw to let caller handle additional UI updates (e.g., message parts)

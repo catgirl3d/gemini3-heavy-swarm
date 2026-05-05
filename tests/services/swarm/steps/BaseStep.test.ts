@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const loggerSpies = vi.hoisted(() => ({
   debug: vi.fn(),
@@ -219,6 +219,10 @@ describe('BaseStep', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     step = new TestStep();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('getRoleModel', () => {
@@ -549,6 +553,8 @@ describe('BaseStep', () => {
     });
 
     it('should call onMessageUpdate for thought or usage chunks even when text is empty', () => {
+      vi.useFakeTimers();
+
       const work: Work = {
         results: {}
       };
@@ -570,13 +576,100 @@ describe('BaseStep', () => {
       expect(work.results[STEPS.INITIAL]).toEqual(['', '']);
       expect(work.results[`${STEPS.INITIAL}_thoughts`]).toEqual(['reasoning first', '']);
       expect(work.results[`${STEPS.INITIAL}_usage`]).toEqual([usage, null]);
+      expect(useAgentStore.getState().updateSessionWorkResult).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(75);
+
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
+         'msg-1',
+         STEPS.INITIAL,
+         0,
+         { thought: 'reasoning first', usage }
+       );
+      expect(onMessageUpdate).toHaveBeenCalledWith('', false, 'reasoning first', usage);
+    });
+
+    it('should flush buffered reasoning immediately when the first text chunk arrives', () => {
+      vi.useFakeTimers();
+
+      const work: Work = {
+        results: {}
+      };
+      const usage = { totalTokens: 7, promptTokens: 3, candidatesTokens: 4 };
+
+      const context = {
+        work,
+        settings: { numAgents: 2 } as AppSettings,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn()
+      } as any;
+
+      step.testHandleStreamChunk(context, 0, '', 'reasoning first', usage, {
+        isFirstChunk: false,
+        streamToMessage: false
+      });
+
+      expect(useAgentStore.getState().updateSessionWorkResult).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(50);
+      step.testHandleStreamChunk(context, 0, 'visible text', 'reasoning first', usage, {
+        isFirstChunk: false,
+        streamToMessage: false
+      });
+
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledTimes(1);
       expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
         'msg-1',
         STEPS.INITIAL,
         0,
-        { text: '', thought: 'reasoning first', usage }
+        { text: 'visible text', thought: 'reasoning first', usage }
       );
-      expect(onMessageUpdate).toHaveBeenCalledWith('', false, 'reasoning first', usage);
+
+      vi.advanceTimersByTime(100);
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throttle subsequent visible text sync updates after the first flush', () => {
+      vi.useFakeTimers();
+
+      const context = {
+        work: { results: {} },
+        settings: { numAgents: 1 } as AppSettings,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn()
+      } as any;
+
+      step.testHandleStreamChunk(context, 0, 'first chunk', '', null, {
+        isFirstChunk: false,
+        streamToMessage: false
+      });
+
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledTimes(1);
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenLastCalledWith(
+        'msg-1',
+        STEPS.INITIAL,
+        0,
+        { text: 'first chunk' }
+      );
+
+      step.testHandleStreamChunk(context, 0, 'first chunk plus more', '', null, {
+        isFirstChunk: false,
+        streamToMessage: false
+      });
+
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(74);
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(1);
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledTimes(2);
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenLastCalledWith(
+        'msg-1',
+        STEPS.INITIAL,
+        0,
+        { text: 'first chunk plus more' }
+      );
     });
   });
 
@@ -1289,7 +1382,7 @@ describe('BaseStep', () => {
         'msg-1',
         STEPS.INITIAL,
         1,
-        { usage: finalUsage }
+        { text: 'new agent text', thought: 'new thought', usage: finalUsage }
       );
     });
 
