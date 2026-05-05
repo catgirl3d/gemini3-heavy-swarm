@@ -288,10 +288,16 @@ export function updateAgentWork(
     usage?: TokenUsage | null;
   }
 ): Work {
-  const nextWork = cloneWork(work);
-  if (!nextWork.results) nextWork.results = {};
-  
-  const results = nextWork.results;
+  const results: NonNullable<Work['results']> = {
+    ...(work.results ?? {}),
+  };
+  const nextWork: Work = {
+    ...work,
+    results,
+    // Step metadata is still mutated in-place in step execution code, so keep it detached
+    // from the previous Work snapshot even while we structurally share other unchanged fields.
+    stepMetadata: work.stepMetadata ? work.stepMetadata.map(meta => ({ ...meta })) : undefined,
+  };
   const currentStepResult = results[stepId];
   const numAgents = Math.max(
     Array.isArray(currentStepResult) ? currentStepResult.length : 0,

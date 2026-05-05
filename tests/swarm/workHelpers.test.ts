@@ -85,9 +85,7 @@ describe('workHelpers', () => {
             expect(getSynthesisErrorMessage(work)).toBe('failed');
         });
 
-        it('handles legacy and malformed synthesis data safely', () => {
-            expect(getSynthesisResult({ results: { [STEPS.SYNTHESIS]: 'legacy final' as any } })).toBe('legacy final');
-            expect(getStepContent({ results: { [STEPS.SYNTHESIS]: 'legacy final' as any } }, STEPS.SYNTHESIS, 0)).toBe('legacy final');
+        it('handles malformed synthesis data safely', () => {
             expect(getSynthesisResult({ results: { [STEPS.SYNTHESIS]: { error: true } as any } })).toEqual({ error: true });
             expect(getStepContent({ results: { [STEPS.SYNTHESIS]: { error: true } as any } }, STEPS.SYNTHESIS, 0)).toBeNull();
             expect(getSynthesisResult({ results: { [STEPS.SYNTHESIS]: { sources: [] } as any } })).toEqual({ sources: [] });
@@ -95,7 +93,6 @@ describe('workHelpers', () => {
             expect(getStepContent({ results: { [STEPS.SYNTHESIS]: ['bad'] as any } }, STEPS.SYNTHESIS, 0)).toBeNull();
             expect(getSynthesisThought({ results: { [`${STEPS.SYNTHESIS}_thought`]: { text: 'bad' } as any } })).toBeNull();
             expect(getSynthesisUsage({ results: { [`${STEPS.SYNTHESIS}_usage`]: { promptTokens: 1 } as any } })).toBeNull();
-            expect(getSynthesisErrorMessage({ results: { [STEPS.SYNTHESIS]: 'legacy final' as any } })).toBeNull();
             expect(getSynthesisErrorMessage({ results: { [STEPS.SYNTHESIS]: { text: 'ok' } as any } })).toBeNull();
             expect(getSynthesisErrorMessage({ results: { [STEPS.SYNTHESIS]: { errorMessage: undefined } as any } })).toBeNull();
             expect(getSynthesisErrorMessage({ results: { [STEPS.SYNTHESIS]: { errorMessage: null } as any } })).toBeNull();
@@ -140,20 +137,6 @@ describe('workHelpers', () => {
             
             expect(updated.results?.[STEPS.INITIAL]).toEqual(['first']);
         });
-        it('should handle legacy string in synthesis results', () => {
-            const originalWork: Work = {
-                results: {
-                    [STEPS.SYNTHESIS]: "legacy string" as any
-                }
-            };
-            
-            const updated = updateStepResult(originalWork, STEPS.SYNTHESIS, -1, 'new synthesis');
-            
-            const result = updated.results?.[STEPS.SYNTHESIS] as { text: string };
-            expect(result).toEqual({ text: 'new synthesis' });
-            expect(Object.keys(result)).not.toContain('0');
-        });
-
         it('should preserve existing synthesis object fields while updating text', () => {
             const originalWork: Work = {
                 results: {
@@ -200,20 +183,6 @@ describe('workHelpers', () => {
     });
 
     describe('updateAgentWork', () => {
-        it('should handle legacy string in synthesis results', () => {
-            const originalWork: Work = {
-                results: {
-                    [STEPS.SYNTHESIS]: "legacy string" as any
-                }
-            };
-            
-            const updated = updateAgentWork(originalWork, STEPS.SYNTHESIS, 0, { text: "new synthesis" });
-            
-            const result = updated.results?.[STEPS.SYNTHESIS] as { text: string };
-            expect(result).toEqual({ text: "new synthesis" });
-            expect(Object.keys(result)).not.toContain('0');
-        });
-
         it('should update multiple fields atomically', () => {
             const originalWork: Work = {
                 results: {}
@@ -253,6 +222,52 @@ describe('workHelpers', () => {
             expect(originalWork.results?.[STEPS.INITIAL]).toEqual(['old 1', 'old 2']);
             expect(originalWork.results?.[`${STEPS.INITIAL}_thoughts`]).toEqual(['thought 1', 'thought 2']);
             expect(originalWork.results?.[`${STEPS.INITIAL}_usage`]).toEqual([existingUsage, null]);
+        });
+
+        it('should structurally share unchanged fields while cloning touched result paths', () => {
+            const debugInfo = {
+                custom: {
+                    systemInstruction: 'system',
+                    history: [],
+                    userTurn: { parts: [] }
+                }
+            };
+            const unrelatedObject = { keep: true };
+            const unrelatedArray = ['preserve'];
+            const agentStates = [{ id: 'agent-1' } as AgentState];
+            const stepMetadata = [{ id: STEPS.INITIAL, status: 'working' as const, label: 'Initial Step' }];
+            const originalWork: Work = {
+                results: {
+                    [STEPS.INITIAL]: ['old 1', 'old 2'],
+                    unrelatedObject,
+                    unrelatedArray
+                },
+                debugInfo: debugInfo as Work['debugInfo'],
+                stepMetadata,
+                agentStates,
+                agentNames: ['Agent 1'],
+                criticNames: ['Critic 1']
+            };
+
+            const updated = updateAgentWork(originalWork, STEPS.INITIAL, 1, {
+                text: 'new 2',
+                thought: 'new thought 2',
+                usage
+            });
+
+            expect(updated).not.toBe(originalWork);
+            expect(updated.results).not.toBe(originalWork.results);
+            expect(updated.results?.[STEPS.INITIAL]).not.toBe(originalWork.results?.[STEPS.INITIAL]);
+            expect(updated.results?.[`${STEPS.INITIAL}_thoughts`]).not.toBe(originalWork.results?.[`${STEPS.INITIAL}_thoughts`]);
+            expect(updated.results?.[`${STEPS.INITIAL}_usage`]).not.toBe(originalWork.results?.[`${STEPS.INITIAL}_usage`]);
+            expect(updated.results?.unrelatedObject).toBe(unrelatedObject);
+            expect(updated.results?.unrelatedArray).toBe(unrelatedArray);
+            expect(updated.debugInfo).toBe(originalWork.debugInfo);
+            expect(updated.agentStates).toBe(agentStates);
+            expect(updated.agentNames).toBe(originalWork.agentNames);
+            expect(updated.criticNames).toBe(originalWork.criticNames);
+            expect(updated.stepMetadata).toEqual(stepMetadata);
+            expect(updated.stepMetadata).not.toBe(stepMetadata);
         });
 
         it('should initialize missing multi-agent arrays with step-specific defaults', () => {
@@ -301,7 +316,7 @@ describe('workHelpers', () => {
             expect(clone).toEqual(minimal);
         });
 
-        it('should clone metadata arrays and debugInfo while preserving nested result values shallowly', () => {
+        it('should clone metadata arrays, debugInfo, and result entries', () => {
             const original: Work = {
                 results: { [STEPS.INITIAL]: ['a'] },
                 debugInfo: { custom: { systemInstruction: 'system', history: [], userTurn: { parts: [] } } } as any,
@@ -317,7 +332,8 @@ describe('workHelpers', () => {
             expect(clone.stepMetadata).not.toBe(original.stepMetadata);
             expect(clone.criticNames).toEqual(original.criticNames);
             expect(clone.criticNames).not.toBe(original.criticNames);
-            expect(clone.results?.[STEPS.INITIAL]).toBe(original.results?.[STEPS.INITIAL]);
+            expect(clone.results?.[STEPS.INITIAL]).toEqual(original.results?.[STEPS.INITIAL]);
+            expect(clone.results?.[STEPS.INITIAL]).not.toBe(original.results?.[STEPS.INITIAL]);
         });
     });
 
