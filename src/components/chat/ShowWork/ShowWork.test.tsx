@@ -28,9 +28,8 @@ const mocks = vi.hoisted(() => ({
     </div>
   )),
   store: {
-    agents: [] as AgentState[],
-    currentWork: undefined as Work | undefined,
-    currentMessageId: undefined as string | undefined,
+    activeSessionMessageId: undefined as string | undefined,
+    sessionsByMessageId: {} as Record<string, { work?: Work; agentStates?: AgentState[] }>,
   },
 }));
 
@@ -71,6 +70,9 @@ vi.mock('@/hooks/ui/useAutoCollapse', () => ({
 
 vi.mock('@/stores/agentStore', () => ({
   useAgentStore: (selector: any) => selector(mocks.store),
+  createSessionAgentsSelector: (messageId: string | undefined) => (state: any) => messageId ? state.sessionsByMessageId[messageId]?.agentStates : undefined,
+  createSessionWorkSelector: (messageId: string | undefined) => (state: any) => messageId ? state.sessionsByMessageId[messageId]?.work : undefined,
+  selectActiveSessionMessageId: (state: any) => state.activeSessionMessageId,
 }));
 
 import { ShowWork } from './ShowWork';
@@ -130,9 +132,8 @@ const createProps = (overrides: Partial<ShowWorkProps> = {}): ShowWorkProps => (
 describe('ShowWork', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.store.agents = [];
-    mocks.store.currentWork = undefined;
-    mocks.store.currentMessageId = undefined;
+    mocks.store.activeSessionMessageId = undefined;
+    mocks.store.sessionsByMessageId = {};
     mocks.resolvedSwarmState.mockReturnValue({
       synthesizerState: createAgentState({
         id: 'synth-1',
@@ -189,14 +190,19 @@ describe('ShowWork', () => {
       refinementStarted: false,
       isEarlyStageWorking: false,
     });
-    mocks.store.currentMessageId = 'message-1';
-    mocks.store.currentWork = createWork({
-      results: {
-        [STEPS.SYNTHESIS]: { text: 'Live synthesis' },
-        synthesis_step_thought: 'Live synthesis thought',
-        synthesis_step_usage: { promptTokens: 2, candidatesTokens: 7, totalTokens: 9 },
+    mocks.store.activeSessionMessageId = 'message-1';
+    mocks.store.sessionsByMessageId = {
+      'message-1': {
+        work: createWork({
+          results: {
+            [STEPS.SYNTHESIS]: { text: 'Live synthesis' },
+            synthesis_step_thought: 'Live synthesis thought',
+            synthesis_step_usage: { promptTokens: 2, candidatesTokens: 7, totalTokens: 9 },
+          },
+        }),
+        agentStates: [],
       },
-    });
+    };
 
     render(
       <ShowWork
@@ -228,7 +234,7 @@ describe('ShowWork', () => {
     }));
   });
 
-  it('uses live currentWork for initial and refinement cards while the message snapshot is stale', () => {
+  it('uses live session work for initial and refinement cards while the message snapshot is stale', () => {
     const liveWork = createWork({
       results: {
         [STEPS.INITIAL]: ['Live initial draft'],
@@ -244,8 +250,13 @@ describe('ShowWork', () => {
       },
     });
 
-    mocks.store.currentMessageId = 'message-1';
-    mocks.store.currentWork = liveWork;
+    mocks.store.activeSessionMessageId = 'message-1';
+    mocks.store.sessionsByMessageId = {
+      'message-1': {
+        work: liveWork,
+        agentStates: [],
+      },
+    };
 
     render(
       <ShowWork
@@ -368,9 +379,15 @@ describe('ShowWork', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(onContinue).toHaveBeenCalledTimes(1);
 
-    mocks.store.agents = [
-      createAgentState({ status: 'working', label: 'Drafting...', messageId: 'message-1' }),
-    ];
+    mocks.store.activeSessionMessageId = 'message-1';
+    mocks.store.sessionsByMessageId = {
+      'message-1': {
+        work,
+        agentStates: [
+          createAgentState({ status: 'working', label: 'Drafting...', messageId: 'message-1' }),
+        ],
+      },
+    };
 
     rerender(
       <ShowWork
@@ -385,7 +402,14 @@ describe('ShowWork', () => {
 
     expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
 
-    mocks.store.agents = [];
+    mocks.store.sessionsByMessageId = {
+      'message-1': {
+        work: createWork({
+          stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'done' }],
+        }),
+        agentStates: [],
+      },
+    };
 
     rerender(
       <ShowWork
@@ -404,10 +428,15 @@ describe('ShowWork', () => {
   });
 
   it('hides Continue when live work for the current message already finished synthesis', () => {
-    mocks.store.currentMessageId = 'message-1';
-    mocks.store.currentWork = createWork({
-      stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'done' }],
-    });
+    mocks.store.activeSessionMessageId = 'message-1';
+    mocks.store.sessionsByMessageId = {
+      'message-1': {
+        work: createWork({
+          stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'done' }],
+        }),
+        agentStates: [],
+      },
+    };
 
     render(
       <ShowWork
@@ -426,19 +455,28 @@ describe('ShowWork', () => {
 
   it('shows Retry for scoped errored agents and retries each failed agent', () => {
     const onRegenerate = vi.fn();
-    mocks.store.agents = [
-      createAgentState({ status: 'error', label: 'Draft Failed', messageId: 'message-1', agentIndex: 0 }),
-      createAgentState({
-        id: 'critic-1',
-        name: 'Critic 1',
-        status: 'error',
-        label: 'Refinement Failed',
-        stepId: STEPS.REFINEMENT,
-        messageId: 'message-1',
-        agentIndex: 1,
-      }),
-      createAgentState({ id: 'other-message', status: 'error', messageId: 'other-message', agentIndex: 2 }),
-    ];
+    mocks.store.activeSessionMessageId = 'message-1';
+    mocks.store.sessionsByMessageId = {
+      'message-1': {
+        work: createWork(),
+        agentStates: [
+          createAgentState({ status: 'error', label: 'Draft Failed', messageId: 'message-1', agentIndex: 0 }),
+          createAgentState({
+            id: 'critic-1',
+            name: 'Critic 1',
+            status: 'error',
+            label: 'Refinement Failed',
+            stepId: STEPS.REFINEMENT,
+            messageId: 'message-1',
+            agentIndex: 1,
+          }),
+        ],
+      },
+      'other-message': {
+        work: createWork(),
+        agentStates: [createAgentState({ id: 'other-message', status: 'error', messageId: 'other-message', agentIndex: 2 })],
+      },
+    };
 
     render(
       <ShowWork
@@ -474,7 +512,7 @@ describe('ShowWork', () => {
               results: {
                 [STEPS.INITIAL]: ['Initial draft', null],
                 [STEPS.REFINEMENT]: ['Historical refinement'],
-                [STEPS.SYNTHESIS]: 'Legacy synthesis',
+                [STEPS.SYNTHESIS]: { text: 'Historical synthesis' },
                 initial_step_thoughts: ['Initial thought'],
                 refinement_step_thoughts: ['Refinement thought'],
               } as unknown as Work['results'],
@@ -489,7 +527,7 @@ describe('ShowWork', () => {
     );
 
     expect(screen.getByText('Critiques & Refinements')).toBeInTheDocument();
-    expect(screen.getByTestId('card-synthesis')).toHaveAttribute('data-content', 'Legacy synthesis');
+    expect(screen.getByTestId('card-synthesis')).toHaveAttribute('data-content', 'Historical synthesis');
 
     fireEvent.click(screen.getByRole('button', { name: 'thought-initial-0' }));
     expect(screen.getByTestId('work-modal')).toHaveTextContent('Agent 1 - Initial Thought Process');

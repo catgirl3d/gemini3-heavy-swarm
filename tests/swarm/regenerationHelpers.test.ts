@@ -52,7 +52,7 @@ describe('calculateUpdatedStateForRegeneration', () => {
         vi.clearAllMocks();
     });
 
-    it('should update existing work in a message', () => {
+    it('does not mutate message.work for non-synthesis streaming chunks', () => {
         const messages = [mockMessage];
         const stepId = STEPS.INITIAL;
         const agentIndex = 0;
@@ -70,43 +70,36 @@ describe('calculateUpdatedStateForRegeneration', () => {
             'msg-1'
         );
         
-        expect(updated[0].work?.results[stepId]).toBeDefined();
-        const results = updated[0].work?.results[stepId];
-        
-        expect(Array.isArray(results)).toBe(true);
-        if (Array.isArray(results)) {
-            expect(results[agentIndex]).toEqual(text);
-        }
+        expect(updated).not.toBe(messages);
+        expect(updated[0]).toBe(messages[0]);
+        expect(updated[0].parts[0].text).toBe('Old content');
+        expect(updated[0].work).toBe(mockWork);
+        expect(updated[0].work?.results?.[stepId]).toBeUndefined();
     });
 
-    it('should apply thought and usage metadata when provided', () => {
-        const messages = [mockMessage];
+    it('updateWorkForStep should apply thought and usage metadata when provided', () => {
         const stepId = STEPS.INITIAL;
         const agentIndex = 0;
         const text = 'Thinking result';
         const thought = 'Initial reasoning';
         const usage: TokenUsage = { totalTokens: 100, promptTokens: 40, candidatesTokens: 60 };
         
-        const updated = calculateUpdatedStateForRegeneration(
-            messages,
-            0,
+        const updated = updateWorkForStep(
+            mockWork,
             stepId,
             agentIndex,
-            mockWork,
             text,
             mockSettings,
-            false,
             'msg-1',
             thought,
-            usage
+            usage,
         );
         
-        const work = updated[0].work;
-        expect(work?.results[`${stepId}_thoughts` as any]).toBeDefined();
-        expect((work?.results[`${stepId}_thoughts` as any] as string[])[agentIndex]).toBe(thought);
+        expect(updated.results?.[`${stepId}_thoughts` as any]).toBeDefined();
+        expect((updated.results?.[`${stepId}_thoughts` as any] as string[])[agentIndex]).toBe(thought);
         
-        expect(work?.results[`${stepId}_usage` as any]).toBeDefined();
-        expect((work?.results[`${stepId}_usage` as any] as any[])[agentIndex]).toEqual(usage);
+        expect(updated.results?.[`${stepId}_usage` as any]).toBeDefined();
+        expect((updated.results?.[`${stepId}_usage` as any] as any[])[agentIndex]).toEqual(usage);
     });
 
     it('should handle Synthesis step text updates on message parts', () => {
@@ -181,7 +174,7 @@ describe('calculateUpdatedStateForRegeneration', () => {
         expect((updated[1].work?.results?.[STEPS.SYNTHESIS] as { text?: string })?.text).toBe('Fresh synthesis');
     });
 
-    it('falls back to workContext when the target message has no work of its own', () => {
+    it('falls back to workContext for synthesis when the target message has no work of its own', () => {
         const messages: Message[] = [{
             id: 'msg-2',
             role: 'model',
@@ -191,8 +184,8 @@ describe('calculateUpdatedStateForRegeneration', () => {
         const updated = calculateUpdatedStateForRegeneration(
             messages,
             0,
-            STEPS.INITIAL,
-            1,
+            STEPS.SYNTHESIS,
+            0,
             mockWork,
             'Recovered text',
             mockSettings,
@@ -202,8 +195,8 @@ describe('calculateUpdatedStateForRegeneration', () => {
             null
         );
 
-        expect(updated[0].work?.results?.[STEPS.INITIAL]).toEqual(['', 'Recovered text']);
-        expect(updated[0].work?.results?.[`${STEPS.INITIAL}_usage` as any]).toBeUndefined();
+        expect((updated[0].work?.results?.[STEPS.SYNTHESIS] as { text?: string })?.text).toBe('Recovered text');
+        expect(updated[0].parts[0].text).toBe('Recovered text');
     });
 
     it('returns the original collection when no message or work can be resolved', () => {

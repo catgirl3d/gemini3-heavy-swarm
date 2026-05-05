@@ -1,11 +1,22 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { AiProvider } from '@/types/ai-provider';
 import { StepContext, StepDescriptor, STEPS, StepId } from '@/types/steps';
 import { AppSettings, AgentState, Work } from '@/types';
-import { MutableRefObject } from 'react';
+import { useAgentStore } from '@/stores/agentStore';
 
 describe('SwarmOrchestrator Integrated', () => {
+    beforeEach(() => {
+        useAgentStore.getState().abortAll();
+        useAgentStore.getState().clear();
+        vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+        useAgentStore.getState().abortAll();
+        useAgentStore.getState().clear();
+    });
+
     const mockProvider: AiProvider = {
         name: 'mock',
         capabilities: {
@@ -56,8 +67,7 @@ describe('SwarmOrchestrator Integrated', () => {
             [],
             'id',
             vi.fn(),
-            new AbortController().signal,
-            { current: null }
+            new AbortController().signal
         );
 
         expect(result.text).toBe('Final answer');
@@ -95,7 +105,6 @@ describe('SwarmOrchestrator Integrated', () => {
             'id',
             vi.fn(),
             new AbortController().signal,
-            { current: null },
             undefined,
             undefined,
             undefined,
@@ -134,8 +143,7 @@ describe('SwarmOrchestrator Integrated', () => {
             [],
             'id',
             vi.fn(),
-            new AbortController().signal,
-            { current: null }
+            new AbortController().signal
         );
 
         expect(result.text).toBe('');
@@ -158,8 +166,7 @@ describe('SwarmOrchestrator Integrated', () => {
             [],
             'id',
             vi.fn(),
-            new AbortController().signal,
-            { current: null }
+            new AbortController().signal
         );
 
         expect(result.text).toBe('Final with sources');
@@ -178,7 +185,6 @@ describe('SwarmOrchestrator Integrated', () => {
             'id',
             vi.fn(),
             new AbortController().signal,
-            { current: null },
             undefined,
             undefined,
             undefined,
@@ -214,8 +220,7 @@ describe('SwarmOrchestrator Integrated', () => {
             [],
             'id',
             vi.fn(),
-            new AbortController().signal,
-            { current: null }
+            new AbortController().signal
         );
 
         expect(provider.getEffectiveSettings).toHaveBeenCalledWith(originalSettings);
@@ -224,7 +229,6 @@ describe('SwarmOrchestrator Integrated', () => {
 
     it('should forward pause, status, and synthesis callbacks through StepRunner', async () => {
         const settings = createSettings({ pauseAfterInitial: true });
-        const pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null> = { current: null };
         const onMessageUpdate = vi.fn();
         const onPause = vi.fn();
         const onStatusUpdate = vi.fn();
@@ -250,18 +254,15 @@ describe('SwarmOrchestrator Integrated', () => {
             'message-id',
             onMessageUpdate,
             signal,
-            pauseResolverRef,
             onPause,
             onStatusUpdate,
             onSynthesisJump
         );
 
-        await vi.waitFor(() => {
-            expect(onPause).toHaveBeenCalledTimes(1);
-        });
+        const result = await runPromise;
 
+        expect(onPause).toHaveBeenCalledTimes(1);
         expect(onStatusUpdate).toHaveBeenCalledWith('Drafting initial responses...');
-        expect(pauseResolverRef.current).toEqual(expect.any(Function));
         expect(receivedContext).toMatchObject({
             ai: mockProvider,
             settings,
@@ -276,9 +277,9 @@ describe('SwarmOrchestrator Integrated', () => {
         });
         expect(onSynthesisJump).toHaveBeenCalledTimes(1);
 
-        pauseResolverRef.current?.();
-        await expect(runPromise).resolves.toMatchObject({
+        expect(result).toMatchObject({
             text: '',
+            paused: true,
             work: expect.objectContaining({
                 results: expect.objectContaining({
                     [STEPS.INITIAL]: ['draft'],

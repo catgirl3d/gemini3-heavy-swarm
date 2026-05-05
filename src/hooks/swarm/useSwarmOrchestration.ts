@@ -35,12 +35,13 @@ export function useSwarmOrchestration({
   const continueGeneration = async () => {
     logger.debug('continueGeneration called');
 
-    // Resume from latest persisted work snapshot.
+    // Resume from the latest persisted session snapshot so agent states stay aligned
+    // with already-completed cards when we restart from a paused step boundary.
     const currentMessages = messagesRef.current || [];
     const lastModelMessage = [...currentMessages].reverse().find(m => m.role === 'model');
     const store = useAgentStore.getState();
     const latestWork = lastModelMessage
-      ? store.sessionsByMessageId[lastModelMessage.id]?.work ?? lastModelMessage.work
+      ? store.snapshotSessionWork(lastModelMessage.id) ?? lastModelMessage.work
       : undefined;
     
     if (!lastModelMessage || !latestWork) {
@@ -292,6 +293,9 @@ export function useSwarmOrchestration({
       });
 
       useAgentStore.getState().replaceSessionWork(modelMessageId, work);
+      if (work.agentStates) {
+        useAgentStore.getState().replaceSessionAgents(modelMessageId, work.agentStates);
+      }
 
       if (paused) {
         useAgentStore.getState().setSessionStatus(modelMessageId, 'paused');

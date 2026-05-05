@@ -7,9 +7,10 @@ import { useAgentStore } from '@/stores/agentStore';
 vi.mock('@/stores/agentStore', () => ({
   useAgentStore: {
     getState: vi.fn(() => ({
-      updateAgent: vi.fn(),
-      updateWorkResult: vi.fn(),
-      setCurrentWork: vi.fn(),
+      updateSessionAgent: vi.fn(),
+      updateSessionWorkResult: vi.fn(),
+      replaceSessionWork: vi.fn(),
+      updateSessionRuntime: vi.fn(),
       agents: []
     }))
   }
@@ -66,9 +67,10 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     
     updateWorkResultSpy = vi.fn();
     (useAgentStore.getState as any).mockReturnValue({
-      updateAgent: vi.fn(),
-      updateWorkResult: updateWorkResultSpy,
-      setCurrentWork: vi.fn(),
+      updateSessionAgent: vi.fn(),
+      updateSessionWorkResult: updateWorkResultSpy,
+      replaceSessionWork: vi.fn(),
+      updateSessionRuntime: vi.fn(),
       agents: []
     });
 
@@ -157,6 +159,7 @@ describe('Synthesis Regeneration - Integration Tests', () => {
 
     // Check that updateWorkResult was called to clear store with storageIndex = -1
     expect(updateWorkResultSpy).toHaveBeenCalledWith(
+      'msg-integration-test',
       STEPS.SYNTHESIS, 
       -1,  // CRITICAL: Must use -1, not 0
       { usage: null, text: '' }
@@ -170,6 +173,7 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     
     // Verify updateWorkResult was called with storageIndex = -1 for thought
     expect(updateWorkResultSpy).toHaveBeenCalledWith(
+      'msg-integration-test',
       STEPS.SYNTHESIS,
       -1,  // Must be -1 to maintain object structure
       expect.objectContaining({
@@ -183,6 +187,7 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     
     // Verify final updateWorkResult uses storageIndex = -1
     expect(updateWorkResultSpy).toHaveBeenCalledWith(
+      'msg-integration-test',
       STEPS.SYNTHESIS,
       -1,  // CRITICAL: storageIndex, not agentIndex
       expect.objectContaining({
@@ -234,9 +239,10 @@ describe('Synthesis Regeneration - Integration Tests', () => {
 
     // Verify store update uses storageIndex = -1
     const lastCall = updateWorkResultSpy.mock.calls[updateWorkResultSpy.mock.calls.length - 1];
-    expect(lastCall[0]).toBe(STEPS.SYNTHESIS);
-    expect(lastCall[1]).toBe(-1);  // storageIndex
-    expect(lastCall[2]).toMatchObject({ text: 'Recovered text' });
+    expect(lastCall[0]).toBe('msg-integration-test');
+    expect(lastCall[1]).toBe(STEPS.SYNTHESIS);
+    expect(lastCall[2]).toBe(-1);  // storageIndex
+    expect(lastCall[3]).toMatchObject({ text: 'Recovered text' });
 
     await regenPromise;
   });
@@ -271,6 +277,7 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     
     // Verify store was also cleared
     expect(updateWorkResultSpy).toHaveBeenCalledWith(
+      'msg-integration-test',
       STEPS.SYNTHESIS,
       -1,
       expect.objectContaining({ text: '' })

@@ -27,10 +27,9 @@ import { AppError, ErrorCode } from '@/utils/errors/AppError';
 // Mock dependencies
 vi.mock('@/stores/agentStore', () => {
   const mockState = {
-    setIsLoading: vi.fn(),
-    updateWorkResult: vi.fn(),
-    setCurrentWork: vi.fn(),
-    currentWork: null
+    updateSessionRuntime: vi.fn(),
+    updateSessionWorkResult: vi.fn(),
+    replaceSessionWork: vi.fn(),
   };
   const useAgentStore = vi.fn(() => mockState);
   (useAgentStore as any).getState = vi.fn(() => mockState);
@@ -571,7 +570,8 @@ describe('BaseStep', () => {
       expect(work.results[STEPS.INITIAL]).toEqual(['', '']);
       expect(work.results[`${STEPS.INITIAL}_thoughts`]).toEqual(['reasoning first', '']);
       expect(work.results[`${STEPS.INITIAL}_usage`]).toEqual([usage, null]);
-      expect(useAgentStore.getState().updateWorkResult).toHaveBeenCalledWith(
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
+        'msg-1',
         STEPS.INITIAL,
         0,
         { text: '', thought: 'reasoning first', usage }
@@ -789,7 +789,7 @@ describe('BaseStep', () => {
         label: 'Retrying (Attempt 2)...',
         messageId: 'msg-1'
       });
-      expect(useAgentStore.getState().setIsLoading).toHaveBeenCalledWith(true);
+      expect(useAgentStore.getState().updateSessionRuntime).toHaveBeenCalledWith('msg-1', { isLoading: true });
 
       step.id = STEPS.SYNTHESIS;
       const synthesisStates: AgentState[] = [
@@ -811,7 +811,8 @@ describe('BaseStep', () => {
       const work: Work = { results: {} };
       const context = {
         work,
-        settings: { numAgents: 2 } as AppSettings
+        settings: { numAgents: 2 } as AppSettings,
+        messageId: 'msg-1',
       } as StepContext;
 
       expect(() => step.testFinalizeStep(
@@ -822,7 +823,7 @@ describe('BaseStep', () => {
       )).toThrow(rateLimitError);
 
       expect(work.results?.[STEPS.INITIAL]).toEqual(['partial 1', 'partial 2']);
-      expect(useAgentStore.getState().setCurrentWork).toHaveBeenCalledWith({ ...work });
+      expect(useAgentStore.getState().replaceSessionWork).toHaveBeenCalledWith('msg-1', { ...work });
     });
   });
 
@@ -997,7 +998,7 @@ describe('BaseStep', () => {
       }));
     });
 
-    it('should migrate scalar simulated error counts to per-agent counts and persist the failed attempt', async () => {
+    it('should reinitialize malformed per-agent simulated error counts and persist the failed attempt', async () => {
       const work: Work = {
         results: {
           [`${STEPS.INITIAL}_error_counts`]: 2
@@ -1013,6 +1014,7 @@ describe('BaseStep', () => {
         agentIndex: 1,
         simulateError: '503',
         simulateErrorAttempts: 1,
+        messageId: 'msg-1',
         work
       } as any, { onChunk: vi.fn() })).rejects.toMatchObject({
         code: ErrorCode.SERVICE_OVERLOADED,
@@ -1020,7 +1022,7 @@ describe('BaseStep', () => {
       } satisfies Partial<AppError>);
 
       expect(work.results?.[`${STEPS.INITIAL}_error_counts`]).toEqual([0, 1, 0]);
-      expect(useAgentStore.getState().setCurrentWork).toHaveBeenCalledWith(expect.objectContaining({
+      expect(useAgentStore.getState().replaceSessionWork).toHaveBeenCalledWith('msg-1', expect.objectContaining({
         results: work.results
       }));
     });
@@ -1277,12 +1279,14 @@ describe('BaseStep', () => {
       expect(work.results?.[STEPS.INITIAL]).toEqual(['old agent 0', 'new agent text']);
       expect(work.results?.[`${STEPS.INITIAL}_usage`]).toEqual([null, finalUsage]);
       expect(work.stepMetadata?.[0]).toMatchObject({ id: STEPS.INITIAL, status: 'done' });
-      expect(useAgentStore.getState().updateWorkResult).toHaveBeenCalledWith(
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
+        'msg-1',
         STEPS.INITIAL,
         1,
         { usage: null, text: '' }
       );
-      expect(useAgentStore.getState().updateWorkResult).toHaveBeenCalledWith(
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
+        'msg-1',
         STEPS.INITIAL,
         1,
         { usage: finalUsage }
@@ -1331,7 +1335,7 @@ describe('BaseStep', () => {
       )).rejects.toThrow('regeneration stream failed');
 
       expect(work.results?.[STEPS.INITIAL]).toEqual(['old agent 0', 'partial']);
-      expect(useAgentStore.getState().setCurrentWork).toHaveBeenCalledWith({ ...work });
+      expect(useAgentStore.getState().replaceSessionWork).toHaveBeenCalledWith('msg-1', { ...work });
     });
 
     it('should route retry callbacks through retry progress during regeneration', async () => {
@@ -1353,7 +1357,7 @@ describe('BaseStep', () => {
       );
 
       expect(result.text).toBe('retried text');
-      expect(useAgentStore.getState().setIsLoading).toHaveBeenCalledWith(true);
+      expect(useAgentStore.getState().updateSessionRuntime).toHaveBeenCalledWith('msg-1', { isLoading: true });
     });
   });
 

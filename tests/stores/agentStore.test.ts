@@ -49,48 +49,50 @@ describe('agentStore', () => {
   it('starts with the expected initial state', () => {
     const state = useAgentStore.getState();
 
-    expect(state.agents).toEqual([]);
-    expect(state.currentWork).toBeUndefined();
     expect(state.isLoading).toBe(false);
     expect(state.isPaused).toBe(false);
     expect(state.loadingStatus).toBe('');
     expect(state.error).toBeNull();
-    expect(state.currentMessageId).toBeUndefined();
+    expect(state.activeSessionMessageId).toBeUndefined();
+    expect(state.sessionsByMessageId).toEqual({});
     expect(state.abortControllers).toBeInstanceOf(Map);
     expect(state.abortControllers.size).toBe(0);
   });
 
-  it('updates simple state fields through setters', () => {
+  it('updates active session runtime fields through session APIs', () => {
     const work: Work = { results: { [STEPS.INITIAL]: ['draft'] } };
     const store = useAgentStore.getState();
 
-    store.setCurrentWork(work);
-    store.setIsLoading(true);
-    store.setIsPaused(true);
-    store.setLoadingStatus('Loading drafts');
-    store.setError('Something failed');
-    store.setCurrentMessageId('msg-123');
+    store.startSession('msg-123', work);
+    store.updateSessionRuntime('msg-123', {
+      isLoading: true,
+      isPaused: true,
+      loadingStatus: 'Loading drafts',
+      error: 'Something failed',
+    });
 
     const state = useAgentStore.getState();
-    expect(state.currentWork).toBe(work);
+    expect(state.activeSessionMessageId).toBe('msg-123');
+    expect(state.sessionsByMessageId['msg-123']?.work).toEqual(work);
     expect(state.isLoading).toBe(true);
     expect(state.isPaused).toBe(true);
     expect(state.loadingStatus).toBe('Loading drafts');
     expect(state.error).toBe('Something failed');
-    expect(state.currentMessageId).toBe('msg-123');
   });
 
   it('adds and updates agents by step, index, and message id', () => {
     const store = useAgentStore.getState();
 
-    store.updateAgent(STEPS.INITIAL, 0, 'working', 'Working', 'msg-1');
-    store.updateAgent(STEPS.INITIAL, 1, 'working', 'Working', 'msg-1', 'Custom Agent');
-    store.updateAgent(STEPS.INITIAL, 0, 'done', 'Done', 'msg-1');
-    store.updateAgent(STEPS.INITIAL, 0, 'working', 'Working', 'msg-2');
+    store.updateSessionAgent(STEPS.INITIAL, 0, 'working', 'Working', 'msg-1');
+    store.updateSessionAgent(STEPS.INITIAL, 1, 'working', 'Working', 'msg-1', 'Custom Agent');
+    store.updateSessionAgent(STEPS.INITIAL, 0, 'done', 'Done', 'msg-1');
+    store.updateSessionAgent(STEPS.INITIAL, 0, 'working', 'Working', 'msg-2');
 
-    const agents = useAgentStore.getState().agents;
-    expect(agents).toHaveLength(3);
-    expect(agents[0]).toMatchObject({
+    const msg1Agents = useAgentStore.getState().sessionsByMessageId['msg-1']?.agentStates ?? [];
+    const msg2Agents = useAgentStore.getState().sessionsByMessageId['msg-2']?.agentStates ?? [];
+    expect(msg1Agents).toHaveLength(2);
+    expect(msg2Agents).toHaveLength(1);
+    expect(msg1Agents[0]).toMatchObject({
       id: 'msg-1-initial_step-agent-0',
       name: 'Agent 1',
       status: 'done',
@@ -99,13 +101,13 @@ describe('agentStore', () => {
       agentIndex: 0,
       messageId: 'msg-1',
     });
-    expect(agents[1]).toMatchObject({
+    expect(msg1Agents[1]).toMatchObject({
       id: 'msg-1-initial_step-agent-1',
       name: 'Custom Agent',
       agentIndex: 1,
       messageId: 'msg-1',
     });
-    expect(agents[2]).toMatchObject({
+    expect(msg2Agents[0]).toMatchObject({
       id: 'msg-2-initial_step-agent-0',
       name: 'Agent 1',
       agentIndex: 0,
@@ -116,10 +118,10 @@ describe('agentStore', () => {
   it('preserves an existing agent name when later updates omit the name', () => {
     const store = useAgentStore.getState();
 
-    store.updateAgent(STEPS.INITIAL, 0, 'working', 'Working', 'msg-1', 'Research Agent');
-    store.updateAgent(STEPS.INITIAL, 0, 'done', 'Done', 'msg-1');
+    store.updateSessionAgent(STEPS.INITIAL, 0, 'working', 'Working', 'msg-1', 'Research Agent');
+    store.updateSessionAgent(STEPS.INITIAL, 0, 'done', 'Done', 'msg-1');
 
-    expect(useAgentStore.getState().agents).toEqual([
+    expect(useAgentStore.getState().sessionsByMessageId['msg-1']?.agentStates).toEqual([
       expect.objectContaining({
         id: 'msg-1-initial_step-agent-0',
         name: 'Research Agent',
@@ -129,7 +131,7 @@ describe('agentStore', () => {
     ]);
   });
 
-  it('hydrates agents and clear resets app state while leaving abort controllers untouched', () => {
+  it('replaces session agents and clear resets app state while leaving abort controllers untouched', () => {
     const hydratedAgents = [
       createAgent({ id: 'a', name: 'Hydrated A' }),
       createAgent({ id: 'b', name: 'Hydrated B', agentIndex: 1 }),
@@ -138,27 +140,27 @@ describe('agentStore', () => {
     const abortSpy = vi.spyOn(controller, 'abort');
     const store = useAgentStore.getState();
 
-    store.hydrate(hydratedAgents);
-    expect(useAgentStore.getState().agents).toBe(hydratedAgents);
+    store.replaceSessionAgents('msg-1', hydratedAgents);
+    expect(useAgentStore.getState().sessionsByMessageId['msg-1']?.agentStates).toEqual(hydratedAgents);
 
-    store.setCurrentWork({ results: { [STEPS.INITIAL]: ['draft'] } });
-    store.setIsLoading(true);
-    store.setIsPaused(true);
-    store.setLoadingStatus('Loading');
-    store.setError('Failed');
-    store.setCurrentMessageId('msg-1');
+    store.startSession('msg-1', { results: { [STEPS.INITIAL]: ['draft'] } });
+    store.updateSessionRuntime('msg-1', {
+      isLoading: true,
+      isPaused: true,
+      loadingStatus: 'Loading',
+      error: 'Failed',
+    });
     store.registerAbortController('request-1', controller);
 
     useAgentStore.getState().clear();
 
     const state = useAgentStore.getState();
-    expect(state.agents).toEqual([]);
-    expect(state.currentWork).toBeUndefined();
+    expect(state.sessionsByMessageId).toEqual({});
     expect(state.isLoading).toBe(false);
     expect(state.isPaused).toBe(false);
     expect(state.loadingStatus).toBe('');
     expect(state.error).toBeNull();
-    expect(state.currentMessageId).toBeUndefined();
+    expect(state.activeSessionMessageId).toBeUndefined();
     expect(state.abortControllers.get('request-1')).toBe(controller);
     expect(abortSpy).not.toHaveBeenCalled();
   });
@@ -207,30 +209,31 @@ describe('agentStore', () => {
     const store = useAgentStore.getState();
     const work: Work = { results: { [STEPS.INITIAL]: ['draft'] } };
 
-    store.setCurrentWork(work);
-    store.setIsLoading(true);
-    store.setIsPaused(true);
-    store.setLoadingStatus('Paused for retry');
-    store.setError('Previous error');
-    store.setCurrentMessageId('msg-keep');
+    store.startSession('msg-keep', work);
+    store.updateSessionRuntime('msg-keep', {
+      isLoading: true,
+      isPaused: true,
+      loadingStatus: 'Paused for retry',
+      error: 'Previous error',
+    });
     store.registerAbortController('request-1', new AbortController());
 
     store.abortAll();
 
     const state = useAgentStore.getState();
-    expect(state.currentWork).toBe(work);
+    expect(state.sessionsByMessageId['msg-keep']?.work).toEqual(work);
     expect(state.isLoading).toBe(true);
     expect(state.isPaused).toBe(true);
     expect(state.loadingStatus).toBe('Paused for retry');
     expect(state.error).toBe('Previous error');
-    expect(state.currentMessageId).toBe('msg-keep');
+    expect(state.activeSessionMessageId).toBe('msg-keep');
     expect(state.abortControllers.size).toBe(0);
   });
 
-  it('does nothing when updating work without currentWork', () => {
-    useAgentStore.getState().updateWorkResult(STEPS.INITIAL, 0, { text: 'ignored' });
+  it('does nothing when updating work for a missing session', () => {
+    useAgentStore.getState().updateSessionWorkResult('missing-message', STEPS.INITIAL, 0, { text: 'ignored' });
 
-    expect(useAgentStore.getState().currentWork).toBeUndefined();
+    expect(useAgentStore.getState().sessionsByMessageId).toEqual({});
   });
 
   it('updates multi-agent work results without mutating the previous work reference', () => {
@@ -243,15 +246,15 @@ describe('agentStore', () => {
     };
     const store = useAgentStore.getState();
 
-    store.setCurrentWork(initialWork);
-    const previousWork = useAgentStore.getState().currentWork;
-    store.updateWorkResult(STEPS.INITIAL, 1, {
+    store.startSession('msg-1', initialWork);
+    const previousWork = useAgentStore.getState().sessionsByMessageId['msg-1']?.work;
+    store.updateSessionWorkResult('msg-1', STEPS.INITIAL, 1, {
       text: 'new 2',
       thought: 'thinking 2',
       usage,
     });
 
-    const updatedWork = useAgentStore.getState().currentWork;
+    const updatedWork = useAgentStore.getState().sessionsByMessageId['msg-1']?.work;
     expect(updatedWork).not.toBe(previousWork);
     expect(updatedWork?.results?.[STEPS.INITIAL]).toEqual(['old 1', 'new 2']);
     expect(updatedWork?.results?.[`${STEPS.INITIAL}_thoughts`]).toEqual(['', 'thinking 2']);
@@ -271,15 +274,15 @@ describe('agentStore', () => {
     };
     const store = useAgentStore.getState();
 
-    store.setCurrentWork(initialWork);
-    const previousWork = useAgentStore.getState().currentWork;
-    store.updateWorkResult(STEPS.SYNTHESIS, -1, {
+    store.startSession('msg-1', initialWork);
+    const previousWork = useAgentStore.getState().sessionsByMessageId['msg-1']?.work;
+    store.updateSessionWorkResult('msg-1', STEPS.SYNTHESIS, -1, {
       text: 'final synthesis',
       thought: 'synthesis thought',
       usage,
     });
 
-    const updatedWork = useAgentStore.getState().currentWork;
+    const updatedWork = useAgentStore.getState().sessionsByMessageId['msg-1']?.work;
     expect(updatedWork).not.toBe(previousWork);
     expect(updatedWork?.results?.[STEPS.SYNTHESIS]).toEqual({
       text: 'final synthesis',
@@ -291,20 +294,35 @@ describe('agentStore', () => {
     expect(initialWork.results?.[STEPS.SYNTHESIS]).toEqual({ text: 'old synthesis', sources });
   });
 
-  it('replaces legacy synthesis string data with object text shape', () => {
+  it('reuses unchanged session fields during streaming work updates', () => {
+    const initialAgentStates = [createAgent()];
     const initialWork: Work = {
       results: {
-        [STEPS.SYNTHESIS]: 'legacy synthesis' as never,
+        [STEPS.INITIAL]: ['old 1'],
       },
+      debugInfo: {
+        [STEPS.INITIAL]: [{
+          systemInstruction: 'system',
+          history: [],
+          userTurn: { parts: [] },
+        }],
+      },
+      stepMetadata: [{ id: STEPS.INITIAL, status: 'working', label: 'Initial Step' }],
     };
     const store = useAgentStore.getState();
 
-    store.setCurrentWork(initialWork);
-    store.updateWorkResult(STEPS.SYNTHESIS, -1, { text: 'normalized synthesis' });
+    store.startSession('msg-1', initialWork, { agentStates: initialAgentStates });
 
-    expect(useAgentStore.getState().currentWork?.results?.[STEPS.SYNTHESIS]).toEqual({
-      text: 'normalized synthesis',
-    });
+    const previousSession = useAgentStore.getState().sessionsByMessageId['msg-1'];
+    store.updateSessionWorkResult('msg-1', STEPS.INITIAL, 0, { text: 'new 1' });
+
+    const updatedSession = useAgentStore.getState().sessionsByMessageId['msg-1'];
+    expect(updatedSession).toBeDefined();
+    expect(updatedSession).not.toBe(previousSession);
+    expect(updatedSession?.agentStates).toBe(previousSession?.agentStates);
+    expect(updatedSession?.work.debugInfo).toBe(previousSession?.work.debugInfo);
+    expect(updatedSession?.work.stepMetadata).not.toBe(previousSession?.work.stepMetadata);
+    expect(updatedSession?.work.stepMetadata).toEqual(previousSession?.work.stepMetadata);
   });
 
   it('accepts usage null updates to clear multi-agent and synthesis usage', () => {
@@ -318,11 +336,11 @@ describe('agentStore', () => {
     };
     const store = useAgentStore.getState();
 
-    store.setCurrentWork(initialWork);
-    store.updateWorkResult(STEPS.INITIAL, 0, { usage: null as never });
-    store.updateWorkResult(STEPS.SYNTHESIS, -1, { usage: null as never });
+    store.startSession('msg-1', initialWork);
+    store.updateSessionWorkResult('msg-1', STEPS.INITIAL, 0, { usage: null as never });
+    store.updateSessionWorkResult('msg-1', STEPS.SYNTHESIS, -1, { usage: null as never });
 
-    const results = useAgentStore.getState().currentWork?.results;
+    const results = useAgentStore.getState().sessionsByMessageId['msg-1']?.work.results;
     expect(results?.[`${STEPS.INITIAL}_usage`]).toEqual([null]);
     expect(results?.[`${STEPS.SYNTHESIS}_usage`]).toBeNull();
   });

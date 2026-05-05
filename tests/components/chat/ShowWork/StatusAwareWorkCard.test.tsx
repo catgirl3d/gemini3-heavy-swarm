@@ -68,7 +68,7 @@ describe('StatusAwareWorkCard', () => {
   it('logs lengths from prop, snapshot, and live work when a done card renders empty', async () => {
     useResolvedAgentStateMock.mockReturnValue(createAgent());
 
-    useAgentStore.getState().setCurrentWork({
+    useAgentStore.getState().startSession('message-1', {
       results: {
         [STEPS.REFINEMENT]: ['live refined response'],
       },
@@ -81,6 +81,7 @@ describe('StatusAwareWorkCard', () => {
         step={STEPS.REFINEMENT}
         index={0}
         messageId="message-1"
+        preferLiveSession={true}
         title="Critic 1"
         content=""
         thought="reasoning"
@@ -113,6 +114,7 @@ describe('StatusAwareWorkCard', () => {
         step={STEPS.REFINEMENT}
         index={0}
         messageId="message-1"
+        preferLiveSession={true}
         title="Critic 1"
         content="visible response"
         downloadFilename="refined.md"

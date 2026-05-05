@@ -34,11 +34,9 @@ vi.mock('@shared/utils/logger', () => ({
 vi.mock('@/stores/agentStore', () => ({
   useAgentStore: {
     getState: vi.fn(() => ({
-      setCurrentWork: vi.fn(),
-      updateWorkResult: vi.fn(),
-      setIsPaused: vi.fn(),
-      setLoadingStatus: vi.fn(),
-      setIsLoading: vi.fn()
+      replaceSessionWork: vi.fn(),
+      setSessionStatus: vi.fn(),
+      sessionsByMessageId: {},
     }))
   }
 }));
@@ -46,7 +44,6 @@ vi.mock('@/stores/agentStore', () => ({
 describe('StepRunner', () => {
   let mockWork: Work;
   let mockSettings: AppSettings;
-  let pauseResolverRef: { current: any };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -63,8 +60,6 @@ describe('StepRunner', () => {
       numAgents: 3,
       pauseAfterInitial: false,
     } as unknown as AppSettings;
-
-    pauseResolverRef = { current: null };
   });
 
   it('should execute steps in sequence and store results', async () => {
@@ -87,7 +82,7 @@ describe('StepRunner', () => {
       signal: new AbortController().signal
     } as any;
 
-    const finalWork = await runner.run(context, pauseResolverRef);
+    const { work: finalWork } = await runner.run(context);
 
     expect(step1.execute).toHaveBeenCalled();
     expect(step2.execute).toHaveBeenCalled();
@@ -114,37 +109,40 @@ describe('StepRunner', () => {
       signal: new AbortController().signal 
     } as any;
 
-    await runner.run(context, pauseResolverRef, undefined, onStatusUpdate);
+    await runner.run(context, undefined, onStatusUpdate);
 
     // Should call with progressMsg from config
     expect(onStatusUpdate).toHaveBeenCalledWith('Progress for step1');
   });
 
-  it('should update global store Work status after each step', async () => {
+  it('should persist step completion into the owning session', async () => {
     const step = {
       id: 'step1' as any,
       name: 'Step 1',
       execute: vi.fn().mockResolvedValue('done')
     };
     
-    const setCurrentWorkMock = vi.fn();
+    const replaceSessionWorkMock = vi.fn();
+    const setSessionStatusMock = vi.fn();
     (useAgentStore.getState as any).mockReturnValue({
-      setCurrentWork: setCurrentWorkMock
+      replaceSessionWork: replaceSessionWorkMock,
+      setSessionStatus: setSessionStatusMock,
+      sessionsByMessageId: {},
     });
 
     const runner = new StepRunner([step as any]);
     const context = { 
       work: mockWork, 
       settings: mockSettings, 
+      messageId: 'msg-1',
       signal: new AbortController().signal 
     } as any;
 
-    await runner.run(context, pauseResolverRef);
+    await runner.run(context);
 
-    // Verify SYNC call to store
-    expect(setCurrentWorkMock).toHaveBeenCalled();
-    // Ensure the work object passed to store has the results
-    const lastCallWork = setCurrentWorkMock.mock.calls[0][0];
+    expect(replaceSessionWorkMock).toHaveBeenCalled();
+    expect(setSessionStatusMock).toHaveBeenCalledWith('msg-1', 'running');
+    const lastCallWork = replaceSessionWorkMock.mock.calls.at(-1)?.[1];
     expect(lastCallWork.results.step1).toBe('done');
   });
 
@@ -165,7 +163,7 @@ describe('StepRunner', () => {
       signal: new AbortController().signal 
     } as any;
 
-    const finalWork = await runner.run(context, pauseResolverRef);
+    const { work: finalWork } = await runner.run(context);
 
     expect(finalWork.stepMetadata).toHaveLength(1);
     expect(finalWork.stepMetadata?.[0].status).toBe('done');
@@ -189,19 +187,11 @@ describe('StepRunner', () => {
       signal: new AbortController().signal
     } as any;
 
-    const runPromise = runner.run(context, pauseResolverRef, onPause);
-
-    // Wait for internal async pause jump
-    await new Promise(r => setTimeout(r, 0));
+    const result = await runner.run(context, onPause);
 
     expect(onPause).toHaveBeenCalled();
-    expect(pauseResolverRef.current).toBeDefined();
-
-    // Resume
-    pauseResolverRef.current();
-    await runPromise;
-
-    expect(mockWork.results['pausable-step']).toBe('done');
+    expect(result.paused).toBe(true);
+    expect(result.work.results?.['pausable-step']).toBe('done');
   });
 
   it('should throw if a step fails', async () => {
@@ -219,7 +209,7 @@ describe('StepRunner', () => {
       signal: new AbortController().signal
     } as any;
 
-    await expect(runner.run(context, pauseResolverRef)).rejects.toThrow('Step failed');
+    await expect(runner.run(context)).rejects.toThrow('Step failed');
   });
 
   it('should skip steps that are already marked as done (Resume logic)', async () => {
@@ -246,7 +236,7 @@ describe('StepRunner', () => {
       signal: new AbortController().signal
     } as any;
 
-    const finalWork = await runner.run(context, pauseResolverRef);
+    const { work: finalWork } = await runner.run(context);
 
     // Step 1 should NOT be executed
     expect(step1.execute).not.toHaveBeenCalled();
@@ -290,14 +280,11 @@ describe('StepRunner', () => {
       signal: new AbortController().signal
     } as any;
 
-    const runPromise = runner.run(context, pauseResolverRef, undefined, onStatusUpdate);
-    await new Promise(r => setTimeout(r, 0));
+    const result = await runner.run(context, undefined, onStatusUpdate);
 
     expect(onStatusUpdate).toHaveBeenCalledWith('Name Fallback Step');
-    expect(pauseResolverRef.current).toBeDefined();
-
-    pauseResolverRef.current();
-    const finalWork = await runPromise;
+    expect(result.paused).toBe(true);
+    const finalWork = result.work;
 
     expect(finalWork.results).toEqual({ 'name-fallback-step': 'done' });
     expect(finalWork.stepMetadata).toEqual([
@@ -305,7 +292,7 @@ describe('StepRunner', () => {
     ]);
   });
 
-  it('syncs paused context.work from live store before the next step resumes', async () => {
+  it('resumes from the latest persisted work snapshot on a new run after pause', async () => {
     const { getStepConfig } = await import('@/utils/swarm/stepConstants');
     vi.mocked(getStepConfig).mockImplementation((id: string) => {
       if (id === 'pausable-step') {
@@ -336,13 +323,9 @@ describe('StepRunner', () => {
 
     mockSettings.pauseAfterInitial = true;
     const liveStoreState = {
-      setCurrentWork: vi.fn(),
-      updateWorkResult: vi.fn(),
-      setIsPaused: vi.fn(),
-      setLoadingStatus: vi.fn(),
-      setIsLoading: vi.fn(),
-      currentMessageId: 'msg-1',
-      currentWork: undefined as Work | undefined,
+      replaceSessionWork: vi.fn(),
+      setSessionStatus: vi.fn(),
+      sessionsByMessageId: {},
     };
     (useAgentStore.getState as any).mockImplementation(() => liveStoreState);
 
@@ -354,24 +337,31 @@ describe('StepRunner', () => {
       signal: new AbortController().signal,
     } as any;
 
-    const runPromise = runner.run(context, pauseResolverRef);
-    await new Promise(r => setTimeout(r, 0));
-    expect(pauseResolverRef.current).toEqual(expect.any(Function));
+    const firstRun = await runner.run(context);
+    expect(firstRun.paused).toBe(true);
 
-    liveStoreState.currentWork = {
-      ...mockWork,
-      results: {
-        ...mockWork.results,
-        'pausable-step': 'done',
-        regenerated: 'latest refinement',
+    liveStoreState.sessionsByMessageId = {
+      'msg-1': {
+        work: {
+          ...mockWork,
+          results: {
+            ...mockWork.results,
+            'pausable-step': 'done',
+            regenerated: 'latest refinement',
+          },
+          stepMetadata: [{ id: 'pausable-step', status: 'done', label: 'Pausable Step' } as any],
+        },
       },
-      stepMetadata: [{ id: 'pausable-step', status: 'done', label: 'Pausable Step' } as any],
     };
 
-    pauseResolverRef.current?.();
-    const finalWork = await runPromise;
+    const resumedContext: StepContext = {
+      ...context,
+      work: firstRun.work,
+    };
+    const { work: finalWork, paused } = await runner.run(resumedContext);
 
     expect(step2.execute).toHaveBeenCalledTimes(1);
+    expect(paused).toBe(false);
     expect(finalWork.results).toEqual(expect.objectContaining({
       regenerated: 'latest refinement',
       step2: 'latest refinement',

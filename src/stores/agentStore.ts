@@ -208,7 +208,7 @@ const buildUpdatedSessionWorkState = (
   stepId: StepId,
   agentIndex: number,
   updates: { text?: string; thought?: string; usage?: TokenUsage | null },
-): { nextWork: Work; nextSessions: SessionMap } | null => {
+): { nextSessions: SessionMap } | null => {
   const targetSession = state.sessionsByMessageId[messageId];
   if (!targetSession) {
     return null;
@@ -216,11 +216,10 @@ const buildUpdatedSessionWorkState = (
 
   const nextWork = updateAgentWork(targetSession.work, stepId, agentIndex, updates);
   return {
-    nextWork,
     nextSessions: {
       ...state.sessionsByMessageId,
       [messageId]: {
-        ...cloneSession(targetSession),
+        ...targetSession,
         work: nextWork,
         updatedAt: Date.now(),
       },
@@ -418,8 +417,9 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
         status: messageId === state.activeSessionMessageId ? 'running' : 'done',
       });
       const nextSession: SwarmSession = {
-        ...cloneSession(existingSession),
+        ...existingSession,
         work: cloneWork(work),
+        agentStates: cloneAgentStates(existingSession.agentStates),
         updatedAt: Date.now(),
       };
       const nextSessions = {
