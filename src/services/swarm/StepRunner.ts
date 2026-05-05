@@ -1,4 +1,3 @@
-import { type MutableRefObject } from 'react';
 import { type StepDescriptor, type StepContext } from '@/types/steps';
 import { type Work, type AppSettings } from '@/types';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
@@ -6,6 +5,11 @@ import { Logger } from '@shared/utils/logger';
 import { useAgentStore } from '@/stores/agentStore';
 
 const getLogger = (settings: AppSettings) => new Logger('StepRunner', settings.debugMode);
+
+export interface StepRunResult {
+  work: Work;
+  paused: boolean;
+}
 
 export class StepRunner {
   constructor(private steps: StepDescriptor[]) {}
@@ -15,20 +19,30 @@ export class StepRunner {
     if (!messageId) return;
 
     const store = useAgentStore.getState();
-    if (store.currentMessageId !== messageId || !store.currentWork) return;
+    const sessionWork = store.sessionsByMessageId[messageId]?.work;
+    if (!sessionWork) return;
 
-    context.work = store.currentWork;
+    context.work = sessionWork;
   }
 
   async run(
     context: StepContext,
-    pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>,
     onPause?: () => void,
     onStatusUpdate?: (status: string) => void
-  ): Promise<Work> {
+  ): Promise<StepRunResult> {
     const { settings } = context;
 
-    for (const step of this.steps) {
+    if (context.messageId) {
+      const store = useAgentStore.getState();
+      const sessionWork = store.sessionsByMessageId[context.messageId]?.work;
+      const hasSessionWork = !!sessionWork?.results && Object.keys(sessionWork.results).length > 0;
+      if (!hasSessionWork) {
+        store.replaceSessionWork(context.messageId, context.work);
+      }
+      useAgentStore.getState().setSessionStatus(context.messageId, 'running');
+    }
+
+    for (const [stepIndex, step] of this.steps.entries()) {
       this.syncContextWorkFromStore(context);
 
       // Skip steps that are already completed (Resume logic)
@@ -63,31 +77,44 @@ export class StepRunner {
             context.work.stepMetadata.push({ id: step.id, status: 'done', label: step.name });
         }
 
-        // SYNC: Update global work state to reflect 'done' status immediately (stops timer)
-        useAgentStore.getState().setCurrentWork({ ...context.work });
+        // Persist step completion into the owning session.
+        if (context.messageId) {
+          useAgentStore.getState().replaceSessionWork(context.messageId, context.work);
+          useAgentStore.getState().setSessionStatus(context.messageId, 'running');
+        }
       } catch (error) {
         getLogger(settings).debug(`Error in step ${step.id}:`, error);
+        if (context.messageId) {
+          useAgentStore.getState().setSessionStatus(context.messageId, 'error');
+        }
         throw error;
       }
 
       // 4. Handle Pause Logic
       if (this.shouldPauseAfter(step, settings)) {
         getLogger(settings).debug(`Pausing after step: ${step.id}`);
+        if (context.messageId) {
+          useAgentStore.getState().setSessionStatus(context.messageId, 'paused');
+        }
         
         // Notify UI that we are entering pause state
         if (onPause) onPause();
 
-        await new Promise<void>(resolve => {
-          pauseResolverRef.current = resolve;
-        });
-
-        this.syncContextWorkFromStore(context);
-        
-        getLogger(settings).debug(`Resumed after step: ${step.id}`);
+        return {
+          work: context.work,
+          paused: true,
+        };
       }
     }
 
-    return context.work;
+    if (context.messageId) {
+      useAgentStore.getState().setSessionStatus(context.messageId, 'done');
+    }
+
+    return {
+      work: context.work,
+      paused: false,
+    };
   }
 
   private shouldPauseAfter(step: StepDescriptor, settings: AppSettings): boolean {

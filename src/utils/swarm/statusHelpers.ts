@@ -30,13 +30,13 @@ export function updateAgentStatus(
   const config = getStepConfig(stepId);
   const label = customLabel ?? config.labels[status];
   
-  useAgentStore.getState().updateAgent(
+  useAgentStore.getState().updateSessionAgent(
     stepId,
     agentIndex,
     status,
     label,
     messageId,
-    agentName
+    agentName,
   );
 }
 
@@ -61,7 +61,7 @@ export function updateAgentStatusIfChanged(
   customLabel?: string
 ): void {
   const store = useAgentStore.getState();
-  const existing = store.agents.find(
+  const existing = store.sessionsByMessageId[messageId]?.agentStates.find(
     a => a.stepId === stepId && a.agentIndex === agentIndex && a.messageId === messageId
   );
   

@@ -19,6 +19,12 @@ export const CheckIcon = () => (
   </svg>
 );
 
+export const StaleIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+    <path fillRule="evenodd" d="M12 2a10 10 0 100 20 10 10 0 000-20zm.75 5a.75.75 0 00-1.5 0v5.19c0 .2.08.39.22.53l3.5 3.5a.75.75 0 101.06-1.06l-3.28-3.28V7z" clipRule="evenodd" />
+  </svg>
+);
+
 export const ExpandIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
     <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>

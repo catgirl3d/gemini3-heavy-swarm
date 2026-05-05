@@ -9,7 +9,7 @@ import { ArrowDownIcon, TokenIcon } from '@/components/chat/ShowWork/icons';
 import { getStepResults, getStepThoughts, getStepUsage, getSynthesisThought, getSynthesisUsage, getSynthesisResult, isSynthesisComplete } from '@/utils/swarm/workHelpers';
 import { useResolvedSwarmState } from '@/hooks/swarm/useResolvedSwarmState';
 import { getErroredAgents, isAnyAgentWorking, isErrorState, getContinueButtonText, handleContinueClick as handleContinueClickHelper } from '@/utils/swarm/continueHelpers';
-import { useAgentStore } from '@/stores/agentStore';
+import { createSessionAgentsSelector, createSessionWorkSelector, selectActiveSessionMessageId, useAgentStore } from '@/stores/agentStore';
 import { type StepDebugInfo, type TokenUsage } from '@/types/app-types';
 import { useAutoCollapse } from '@/hooks/ui/useAutoCollapse';
 import './ShowWork.css';
@@ -35,25 +35,19 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
   const [debugModalData, setDebugModalData] = useState<DebugModalData | null>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
-  // Get all agents for error checking
-  const allAgents = useAgentStore(state => state.agents);
+  const sessionAgentStates = useAgentStore(createSessionAgentsSelector(messageId));
+  const activeSessionMessageId = useAgentStore(selectActiveSessionMessageId);
+  const liveSessionWork = useAgentStore(createSessionWorkSelector(messageId));
+  const isCurrentMessage = activeSessionMessageId === messageId;
+  const effectiveAgentStates = isCurrentMessage ? (sessionAgentStates ?? []) : (work.agentStates ?? []);
   
-  // Resolve swarm states from either live store or historical snapshot
   const {
     synthesizerState,
     refinementStarted,
     isEarlyStageWorking
-  } = useResolvedSwarmState(messageId, work);
+  } = useResolvedSwarmState(messageId, work, isCurrentMessage);
 
-  // Subscribe to live work from store for real-time updates during streaming
-  // The work prop may lag behind store updates during active generation
-  // NOTE: We check currentMessageId instead of isLive because isLive becomes false
-  // after setIsLoading(false), but the current message can still need live card data
-  // and collapse state until the final message snapshot catches up.
-  const liveWork = useAgentStore(state => state.currentWork);
-  const currentMessageId = useAgentStore(state => state.currentMessageId);
-  const isCurrentMessage = currentMessageId === messageId;
-  const effectiveWork = (isLive || isCurrentMessage) && liveWork ? liveWork : work;
+  const effectiveWork = isCurrentMessage && liveSessionWork ? liveSessionWork : work;
 
   const synthesisResult = useMemo(() => getSynthesisResult(effectiveWork), [effectiveWork]);
   const initialResults = useMemo(() => getStepResults(effectiveWork, STEPS.INITIAL), [effectiveWork]);
@@ -66,12 +60,9 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
   const refinementThoughts = useMemo(() => getStepThoughts(effectiveWork, STEPS.REFINEMENT), [effectiveWork]);
   const synthesisUsage = useMemo(() => getSynthesisUsage(effectiveWork), [effectiveWork]);
   const synthesisThought = useMemo(() => getSynthesisThought(effectiveWork), [effectiveWork]);
-  const isSynthesisDone = useMemo(() => isSynthesisComplete(effectiveWork, []), [effectiveWork]);
+  const isSynthesisDone = useMemo(() => isSynthesisComplete(effectiveWork, effectiveAgentStates), [effectiveAgentStates, effectiveWork]);
 
-  const synthesisText: string | null =
-    typeof synthesisResult === 'string'
-      ? synthesisResult
-      : synthesisResult?.text ?? null;
+  const synthesisText: string | null = synthesisResult?.text ?? null;
 
   // Manage automatic collapsing of agent work details via custom hook
   useAutoCollapse({
@@ -185,14 +176,14 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
   }, [allCards]);
 
   // Continue/Retry button logic using shared helpers
-  const erroredAgents = useMemo(() => getErroredAgents(allAgents, messageId), [allAgents, messageId]);
-  const isWorking = useMemo(() => isAnyAgentWorking(allAgents, messageId), [allAgents, messageId]);
-  const isError = useMemo(() => isErrorState(allAgents, messageId), [allAgents, messageId]);
+  const erroredAgents = useMemo(() => getErroredAgents(effectiveAgentStates, messageId), [effectiveAgentStates, messageId]);
+  const isWorking = useMemo(() => isAnyAgentWorking(effectiveAgentStates, messageId), [effectiveAgentStates, messageId]);
+  const isError = useMemo(() => isErrorState(effectiveAgentStates, messageId), [effectiveAgentStates, messageId]);
   const continueButtonText = getContinueButtonText(isError);
   
   const handleClick = useCallback(() => {
-    handleContinueClickHelper(allAgents, messageId, onContinue, onRegenerate);
-  }, [allAgents, messageId, onContinue, onRegenerate]);
+    handleContinueClickHelper(effectiveAgentStates, messageId, onContinue, onRegenerate);
+  }, [effectiveAgentStates, messageId, onContinue, onRegenerate]);
 
   // Determine if the continue/retry button should be visible
   const showContinueButton = useMemo(() => {
@@ -236,6 +227,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
                   thought={card.thought ?? undefined}
                   debugInfo={card.debugInfo}
                   downloadFilename={card.downloadFilename}
+                  preferLiveSession={isCurrentMessage}
                   allowRegenerate={!!onRegenerate}
                 />
               ))}
@@ -263,6 +255,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
                     thought={card.thought ?? undefined}
                     debugInfo={card.debugInfo}
                     downloadFilename={card.downloadFilename}
+                    preferLiveSession={isCurrentMessage}
                     allowRegenerate={!!onRegenerate}
                   />
                 ))}
@@ -287,6 +280,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
                 thought={synthesisCard.thought ?? undefined}
                 debugInfo={synthesisCard.debugInfo}
                 downloadFilename={synthesisCard.downloadFilename}
+                preferLiveSession={isCurrentMessage}
                 allowRegenerate={!!onRegenerate}
               />
             </div>

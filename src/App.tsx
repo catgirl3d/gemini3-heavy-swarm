@@ -22,8 +22,6 @@ export const App: FC = () => {
     isLoading,
     isPaused,
     loadingStatus,
-    agentStates,
-    currentWork,
     settings,
     settingsLoaded,
     error,
@@ -34,7 +32,6 @@ export const App: FC = () => {
     retry,
     continueGeneration,
     regenerateAgentResponse,
-    currentMessageId,
     loadError,
     clearLoadError
   } = useGeminiSwarm();
@@ -211,13 +208,10 @@ export const App: FC = () => {
         isPaused={isPaused}
         error={error}
         loadingStatus={loadingStatus}
-        agentStates={agentStates}
-        currentWork={currentWork}
         modelDisplayName={modelDisplayName}
         provider={settings.provider}
         model={providerInfo.currentModelId}
         messageListRef={messageListRef}
-        messageId={currentMessageId}
         onPromptClick={handlePromptClick}
         onContinue={handleContinue}
         onRetry={retry}

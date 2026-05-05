@@ -126,6 +126,10 @@
   border-color: var(--error-border);
 }
 
+.work-card.stale {
+  border-color: var(--warning-color);
+}
+
 .work-card-header {
   border-top-left-radius: var(--radius-ml-inner);
   border-top-right-radius: var(--radius-ml-inner);
@@ -147,6 +151,12 @@
   background-color: var(--error-bg);
   color: var(--error-text);
   border-bottom-color: var(--error-border);
+}
+
+.work-card.stale .work-card-header {
+  background-color: var(--warning-bg);
+  color: var(--warning-text);
+  border-bottom-color: var(--warning-color);
 }
 
 .work-card-title-group {
@@ -179,6 +189,10 @@
 
 .work-card-status.error {
   color: var(--error-text);
+}
+
+.work-card-status.stale {
+  color: var(--warning-text);
 }
 
 .work-card-actions {
@@ -266,6 +280,10 @@
   background: var(--error-color);
 }
 
+.work-card-icon.stale {
+  background: var(--warning-color);
+}
+
 .work-card.refinement-step .work-card-icon {
   background: var(--accent-color);
 }
@@ -282,6 +300,10 @@
   background: var(--error-color);
 }
 
+.work-card.refinement-step .work-card-icon.stale {
+  background: var(--warning-color);
+}
+
 .work-card.synthesis_step .work-card-icon {
   background: var(--success-color);
 }
@@ -296,6 +318,10 @@
 
 .work-card.synthesis_step .work-card-icon.error {
   background: var(--error-color);
+}
+
+.work-card.synthesis_step .work-card-icon.stale {
+  background: var(--warning-color);
 }
 
 .work-card-icon svg {

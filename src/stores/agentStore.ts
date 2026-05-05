@@ -1,77 +1,256 @@
 import { create } from 'zustand';
-import { type AgentState, type TokenUsage, type Work } from '@/types';
+import {
+  type AgentState,
+  type SwarmSession,
+  type SwarmSessionStatus,
+  type TokenUsage,
+  type Work,
+} from '@/types';
 import { type StepId } from '@/types/steps';
-import { updateAgentWork } from '@/utils/swarm/workHelpers';
+import {
+  cloneWork,
+  markDownstreamStale as markWorkDownstreamStale,
+  snapshotWorkWithAgents,
+  updateAgentWork,
+} from '@/utils/swarm/workHelpers';
 import { Logger } from '@shared/utils/logger';
 
 const logger = new Logger('AgentStore');
 
+type SessionMap = Record<string, SwarmSession>;
+
+type SessionSeedOptions = {
+  agentStates?: AgentState[];
+  status?: SwarmSessionStatus;
+  isLoading?: boolean;
+  isPaused?: boolean;
+  loadingStatus?: string;
+  error?: string | null;
+};
+
+type SessionRuntimeUpdate = Partial<Pick<SwarmSession, 'status' | 'isLoading' | 'isPaused' | 'loadingStatus' | 'error'>>;
+
+const cloneAgentStates = (agentStates: AgentState[]): AgentState[] => {
+  return agentStates.map(agent => ({ ...agent }));
+};
+
+const cloneSession = (session: SwarmSession): SwarmSession => {
+  return {
+    ...session,
+    work: cloneWork(session.work),
+    agentStates: cloneAgentStates(session.agentStates),
+  };
+};
+
+const getDefaultSessionUiState = (status: SwarmSessionStatus): Pick<SwarmSession, 'isLoading' | 'isPaused'> => {
+  return {
+    isLoading: status === 'running' || status === 'paused' || status === 'error',
+    isPaused: status === 'paused' || status === 'error',
+  };
+};
+
+const createSession = (
+  messageId: string,
+  seedWork: Work,
+  options?: SessionSeedOptions
+): SwarmSession => {
+  const status = options?.status ?? 'running';
+  const defaultUiState = getDefaultSessionUiState(status);
+
+  return {
+    messageId,
+    work: cloneWork(seedWork),
+    agentStates: cloneAgentStates(options?.agentStates ?? seedWork.agentStates ?? []),
+    status,
+    isLoading: options?.isLoading ?? defaultUiState.isLoading,
+    isPaused: options?.isPaused ?? defaultUiState.isPaused,
+    loadingStatus: options?.loadingStatus ?? '',
+    error: options?.error ?? null,
+    updatedAt: Date.now(),
+  };
+};
+
+const getActiveSessionUiPatch = (
+  activeSessionMessageId: string | undefined,
+  sessionsByMessageId: SessionMap,
+  globalError: string | null,
+): Pick<AgentStore, 'isLoading' | 'isPaused' | 'loadingStatus' | 'error'> => {
+  if (!activeSessionMessageId) {
+    return {
+      isLoading: false,
+      isPaused: false,
+      loadingStatus: '',
+      error: globalError,
+    };
+  }
+
+  const activeSession = sessionsByMessageId[activeSessionMessageId];
+  if (!activeSession) {
+    return {
+      isLoading: false,
+      isPaused: false,
+      loadingStatus: '',
+      error: globalError,
+    };
+  }
+
+  return {
+    isLoading: activeSession.isLoading,
+    isPaused: activeSession.isPaused,
+    loadingStatus: activeSession.loadingStatus,
+    error: activeSession.error,
+  };
+};
+
+const emptyWork: Work = { results: {} };
+
 interface AgentStore {
-  // Agent state
-  agents: AgentState[];
-  currentWork: Work | undefined;
-  
-  /**
-   * Swarm state machine flags:
-   * 
-   * 1. { isLoading: false, isPaused: false } -> Idle / Process Finished
-   * 2. { isLoading: true,  isPaused: false } -> Active processing
-   * 3. { isLoading: true,  isPaused: true  } -> Interrupted / Error (waiting for Retry)
-   * 4. { isLoading: false, isPaused: true  } -> Transition state (usually treated as Idle)
-   */
   isLoading: boolean;
   isPaused: boolean;
   loadingStatus: string;
   error: string | null;
-  currentMessageId: string | undefined;
-  
-  // Abort controller registry for centralized stop functionality
+  globalError: string | null;
+  sessionsByMessageId: SessionMap;
+  activeSessionMessageId: string | undefined;
+
   abortControllers: Map<string, AbortController>;
   registerAbortController: (key: string, controller: AbortController) => void;
   unregisterAbortController: (key: string) => void;
   abortAll: () => void;
-  
-  // Agent actions
-  updateAgent: (stepId: StepId, agentIndex: number, status: AgentState['status'], label: string, messageId: string, name?: string) => void;
-  hydrate: (agents: AgentState[]) => void;
+
+  updateSessionAgent: (stepId: StepId, agentIndex: number, status: AgentState['status'], label: string, messageId: string, name?: string) => void;
+  replaceSessionAgents: (messageId: string, agentStates: AgentState[]) => void;
   clear: () => void;
-  
-  // Work actions
-  setCurrentWork: (work: Work | undefined) => void;
-  updateWorkResult: (stepId: StepId, agentIndex: number, updates: { text?: string; thought?: string; usage?: TokenUsage | null }) => void;
-  
-  // Status actions
-  setIsLoading: (value: boolean) => void;
-  setIsPaused: (value: boolean) => void;
-  setLoadingStatus: (status: string) => void;
-  setError: (error: string | null) => void;
-  setCurrentMessageId: (id: string | undefined) => void;
-  
+
+  updateSessionWorkResult: (messageId: string, stepId: StepId, agentIndex: number, updates: { text?: string; thought?: string; usage?: TokenUsage | null }) => void;
+
+  setActiveSession: (id: string | undefined) => void;
+  updateSessionRuntime: (messageId: string, updates: SessionRuntimeUpdate) => void;
+  setGlobalError: (error: string | null) => void;
+
+  startSession: (messageId: string, seedWork: Work, options?: SessionSeedOptions) => void;
+  replaceSessionWork: (messageId: string, work: Work) => void;
+  setSessionStatus: (messageId: string, status: SwarmSessionStatus) => void;
+  snapshotSessionWork: (messageId: string) => Work | undefined;
+  markDownstreamStale: (messageId: string, changedStepId: StepId) => void;
+  clearSession: (messageId: string) => void;
 }
 
+export const selectActiveSessionMessageId = (state: AgentStore): string | undefined => {
+  return state.activeSessionMessageId;
+};
+
+export const selectActiveSession = (state: AgentStore): SwarmSession | undefined => {
+  const activeMessageId = state.activeSessionMessageId;
+  return activeMessageId ? state.sessionsByMessageId[activeMessageId] : undefined;
+};
+
+export const createSessionWorkSelector = (messageId: string | undefined) => {
+  return (state: AgentStore): Work | undefined => {
+    return messageId ? state.sessionsByMessageId[messageId]?.work : undefined;
+  };
+};
+
+export const createSessionAgentsSelector = (messageId: string | undefined) => {
+  return (state: AgentStore): AgentState[] | undefined => {
+    return messageId ? state.sessionsByMessageId[messageId]?.agentStates : undefined;
+  };
+};
+
+const buildUpdatedSessionAgentState = (
+  state: AgentStore,
+  messageId: string,
+  stepId: StepId,
+  agentIndex: number,
+  status: AgentState['status'],
+  label: string,
+  name?: string,
+): { nextSessions: SessionMap } => {
+  const currentSession = state.sessionsByMessageId[messageId] ?? createSession(messageId, emptyWork, {
+    status: messageId === state.activeSessionMessageId ? 'running' : 'done',
+  });
+  const existingIndex = currentSession.agentStates.findIndex(
+    agent => agent.stepId === stepId && agent.agentIndex === agentIndex && agent.messageId === messageId
+  );
+
+  const nextAgent: AgentState = {
+    id: `${messageId}-${stepId}-agent-${agentIndex}`,
+    stepId,
+    agentIndex,
+    status,
+    label,
+    messageId,
+    name: name || (existingIndex >= 0 ? currentSession.agentStates[existingIndex].name : `Agent ${agentIndex + 1}`),
+  };
+
+  const nextSessionAgents = cloneAgentStates(currentSession.agentStates);
+  if (existingIndex >= 0) {
+    nextSessionAgents[existingIndex] = { ...nextSessionAgents[existingIndex], ...nextAgent };
+  } else {
+    nextSessionAgents.push(nextAgent);
+  }
+
+  return {
+    nextSessions: {
+      ...state.sessionsByMessageId,
+      [messageId]: {
+        ...cloneSession(currentSession),
+        agentStates: nextSessionAgents,
+        updatedAt: Date.now(),
+      },
+    },
+  };
+};
+
+const buildUpdatedSessionWorkState = (
+  state: AgentStore,
+  messageId: string,
+  stepId: StepId,
+  agentIndex: number,
+  updates: { text?: string; thought?: string; usage?: TokenUsage | null },
+): { nextWork: Work; nextSessions: SessionMap } | null => {
+  const targetSession = state.sessionsByMessageId[messageId];
+  if (!targetSession) {
+    return null;
+  }
+
+  const nextWork = updateAgentWork(targetSession.work, stepId, agentIndex, updates);
+  return {
+    nextWork,
+    nextSessions: {
+      ...state.sessionsByMessageId,
+      [messageId]: {
+        ...cloneSession(targetSession),
+        work: nextWork,
+        updatedAt: Date.now(),
+      },
+    },
+  };
+};
+
 export const useAgentStore = create<AgentStore>((set, get) => ({
-  // Initial state
-  agents: [],
-  currentWork: undefined,
   isLoading: false,
   isPaused: false,
   loadingStatus: '',
   error: null,
-  currentMessageId: undefined,
+  globalError: null,
+  sessionsByMessageId: {},
+  activeSessionMessageId: undefined,
   abortControllers: new Map(),
-  
-  // Abort controller management
+
   registerAbortController: (key, controller) => {
     set(state => {
       const newMap = new Map(state.abortControllers);
-      // If there's already a controller with this key, abort it first
       const existing = newMap.get(key);
-      if (existing) existing.abort();
+      if (existing) {
+        existing.abort();
+      }
+
       newMap.set(key, controller);
       return { abortControllers: newMap };
     });
   },
-  
+
   unregisterAbortController: (key) => {
     set(state => {
       const newMap = new Map(state.abortControllers);
@@ -79,7 +258,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
       return { abortControllers: newMap };
     });
   },
-  
+
   abortAll: () => {
     const state = get();
     logger.debug('abortAll called', { count: state.abortControllers.size });
@@ -89,85 +268,245 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     });
     set({ abortControllers: new Map() });
   },
-  
-  // Agent actions
-  updateAgent: (stepId, agentIndex, status, label, messageId, name) => {
-    set(state => {
-      // Check if agent exists to preserve order
-      const existingIndex = state.agents.findIndex(
-        a => a.stepId === stepId && a.agentIndex === agentIndex && a.messageId === messageId
-      );
 
-      const newItem = {
-        id: `${messageId}-${stepId}-agent-${agentIndex}`,
+  updateSessionAgent: (stepId, agentIndex, status, label, messageId, name) => {
+    set(state => {
+      const { nextSessions } = buildUpdatedSessionAgentState(
+        state,
+        messageId,
         stepId,
         agentIndex,
         status,
         label,
-        messageId,
-        name: name || (existingIndex >= 0 ? state.agents[existingIndex].name : `Agent ${agentIndex + 1}`)
+        name,
+      );
+
+      return {
+        sessionsByMessageId: nextSessions,
       };
-
-
-
-      if (existingIndex >= 0) {
-        // Update in place (stable sort)
-        const newAgents = [...state.agents];
-        newAgents[existingIndex] = { ...newAgents[existingIndex], ...newItem };
-        return { agents: newAgents };
-      }
-
-      // Append if new
-      return { agents: [...state.agents, newItem] };
     });
   },
-  
-  hydrate: (agents) => set({ agents }),
-  
-  clear: () => set({ 
-    agents: [], 
-    currentWork: undefined,
+
+  replaceSessionAgents: (messageId, agentStates) => {
+    set(state => {
+      const existingSession = state.sessionsByMessageId[messageId] ?? createSession(messageId, emptyWork, {
+        status: messageId === state.activeSessionMessageId ? 'running' : 'done',
+      });
+      const scopedAgents = cloneAgentStates(agentStates.filter(agent => agent.messageId === messageId));
+      const nextSessions = {
+        ...state.sessionsByMessageId,
+        [messageId]: {
+          ...cloneSession(existingSession),
+          agentStates: scopedAgents,
+          updatedAt: Date.now(),
+        },
+      };
+
+      return {
+        sessionsByMessageId: nextSessions,
+      };
+    });
+  },
+
+  clear: () => set({
     isLoading: false,
     isPaused: false,
     loadingStatus: '',
     error: null,
-    currentMessageId: undefined
+    globalError: null,
+    sessionsByMessageId: {},
+    activeSessionMessageId: undefined,
   }),
-  
-  // Work actions
-  setCurrentWork: (work) => set({ currentWork: work }),
-  
-  updateWorkResult: (stepId, agentIndex, updates) => {
+
+  updateSessionWorkResult: (messageId, stepId, agentIndex, updates) => {
     set(state => {
-      if (!state.currentWork) return state;
-      
-      const newWork = updateAgentWork(state.currentWork, stepId, agentIndex, updates);
-      return { currentWork: newWork };
+      const updatedSessionState = buildUpdatedSessionWorkState(state, messageId, stepId, agentIndex, updates);
+      if (!updatedSessionState) {
+        return state;
+      }
+
+      return {
+        sessionsByMessageId: updatedSessionState.nextSessions,
+      };
     });
   },
-  
-  // Status actions
-  setIsLoading: (value) => {
-    const currentAgents = get().agents;
-    const agentSummary = currentAgents.map(a => ({
-      id: a.id,
-      status: a.status,
-      label: a.label,
-      stepId: a.stepId
+
+  setActiveSession: (id) => {
+    set(state => {
+      return {
+        activeSessionMessageId: id,
+        ...getActiveSessionUiPatch(id, state.sessionsByMessageId, state.globalError),
+      };
+    });
+  },
+
+  updateSessionRuntime: (messageId, updates) => {
+    const currentSession = get().sessionsByMessageId[messageId];
+    const agentSummary = (currentSession?.agentStates ?? []).map(agent => ({
+      id: agent.id,
+      status: agent.status,
+      label: agent.label,
+      stepId: agent.stepId,
     }));
-    
-    logger.debug(`setIsLoading: ${value}`, { 
-      agentStates: agentSummary,
-      // stack: new Error().stack 
+
+    logger.debug('updateSessionRuntime', { messageId, updates, agentStates: agentSummary });
+
+    set(state => {
+      const existingSession = state.sessionsByMessageId[messageId] ?? createSession(messageId, emptyWork, {
+        status: messageId === state.activeSessionMessageId ? 'running' : 'done',
+      });
+
+      const nextSession: SwarmSession = {
+        ...cloneSession(existingSession),
+        ...(Object.prototype.hasOwnProperty.call(updates, 'status') ? { status: updates.status ?? existingSession.status } : {}),
+        ...(Object.prototype.hasOwnProperty.call(updates, 'isLoading') ? { isLoading: updates.isLoading ?? existingSession.isLoading } : {}),
+        ...(Object.prototype.hasOwnProperty.call(updates, 'isPaused') ? { isPaused: updates.isPaused ?? existingSession.isPaused } : {}),
+        ...(Object.prototype.hasOwnProperty.call(updates, 'loadingStatus') ? { loadingStatus: updates.loadingStatus ?? '' } : {}),
+        ...(Object.prototype.hasOwnProperty.call(updates, 'error') ? { error: updates.error ?? null } : {}),
+        updatedAt: Date.now(),
+      };
+
+      const nextSessions = {
+        ...state.sessionsByMessageId,
+        [messageId]: nextSession,
+      };
+
+      return messageId === state.activeSessionMessageId
+        ? {
+            sessionsByMessageId: nextSessions,
+            ...getActiveSessionUiPatch(messageId, nextSessions, state.globalError),
+          }
+        : {
+            sessionsByMessageId: nextSessions,
+          };
     });
-    
-    set({ isLoading: value });
   },
-  
-  setIsPaused: (value) => set({ isPaused: value }),
-  setLoadingStatus: (status) => set({ loadingStatus: status }),
-  setError: (error) => set({ error }),
-  setCurrentMessageId: (id) => set({ currentMessageId: id }),
-  
-  // Selectors
+
+  setGlobalError: (error) => {
+    set(state => {
+      if (state.activeSessionMessageId) {
+        return { globalError: error };
+      }
+
+      return {
+        globalError: error,
+        error,
+      };
+    });
+  },
+
+  startSession: (messageId, seedWork, options) => {
+    set(state => {
+      const nextSession = createSession(messageId, seedWork, options);
+      const nextSessions = {
+        ...state.sessionsByMessageId,
+        [messageId]: nextSession,
+      };
+
+      return {
+        sessionsByMessageId: nextSessions,
+        activeSessionMessageId: messageId,
+        globalError: null,
+        ...getActiveSessionUiPatch(messageId, nextSessions, null),
+      };
+    });
+  },
+
+  replaceSessionWork: (messageId, work) => {
+    set(state => {
+      const existingSession = state.sessionsByMessageId[messageId] ?? createSession(messageId, work, {
+        status: messageId === state.activeSessionMessageId ? 'running' : 'done',
+      });
+      const nextSession: SwarmSession = {
+        ...cloneSession(existingSession),
+        work: cloneWork(work),
+        updatedAt: Date.now(),
+      };
+      const nextSessions = {
+        ...state.sessionsByMessageId,
+        [messageId]: nextSession,
+      };
+
+      return {
+        sessionsByMessageId: nextSessions,
+      };
+    });
+  },
+
+  setSessionStatus: (messageId, status) => {
+    set(state => {
+      const existingSession = state.sessionsByMessageId[messageId] ?? createSession(messageId, emptyWork, { status });
+      const nextSession: SwarmSession = {
+        ...cloneSession(existingSession),
+        ...getDefaultSessionUiState(status),
+        status,
+        updatedAt: Date.now(),
+      };
+      const nextSessions = {
+        ...state.sessionsByMessageId,
+        [messageId]: nextSession,
+      };
+
+      return messageId === state.activeSessionMessageId
+        ? {
+            sessionsByMessageId: nextSessions,
+            ...getActiveSessionUiPatch(messageId, nextSessions, state.globalError),
+          }
+        : {
+            sessionsByMessageId: nextSessions,
+        };
+    });
+  },
+
+  snapshotSessionWork: (messageId) => {
+    const session = get().sessionsByMessageId[messageId];
+    return session ? snapshotWorkWithAgents(session.work, session.agentStates) : undefined;
+  },
+
+  markDownstreamStale: (messageId, changedStepId) => {
+    set(state => {
+      const existingSession = state.sessionsByMessageId[messageId];
+      if (!existingSession) {
+        return state;
+      }
+
+      const nextWork = markWorkDownstreamStale(existingSession.work, changedStepId);
+      const nextSession: SwarmSession = {
+        ...cloneSession(existingSession),
+        work: nextWork,
+        updatedAt: Date.now(),
+      };
+      const nextSessions = {
+        ...state.sessionsByMessageId,
+        [messageId]: nextSession,
+      };
+
+      return {
+        sessionsByMessageId: nextSessions,
+      };
+    });
+  },
+
+  clearSession: (messageId) => {
+    set(state => {
+      if (!(messageId in state.sessionsByMessageId)) {
+        return state;
+      }
+
+      const nextSessions = { ...state.sessionsByMessageId };
+      delete nextSessions[messageId];
+
+      const clearedState = messageId === state.activeSessionMessageId
+        ? {
+            activeSessionMessageId: undefined,
+            ...getActiveSessionUiPatch(undefined, nextSessions, state.globalError),
+          }
+        : {};
+
+      return {
+        sessionsByMessageId: nextSessions,
+        ...clearedState,
+      };
+    });
+  },
 }));

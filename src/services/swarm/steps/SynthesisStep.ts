@@ -6,7 +6,6 @@ import { BaseStep } from './BaseStep';
 import { getStepResults } from '@/utils/swarm/workHelpers';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { Logger } from '@shared/utils/logger';
-import { useAgentStore } from '@/stores/agentStore';
 import { updateAgentStatus } from '@/utils/swarm/statusHelpers';
 import { formatSystemInstruction, formatDrafts, buildSynthesisContext } from '@/utils/swarm/promptHelpers';
 import { createFirstTextJumpTracker } from '@/utils/swarm/jumpHelper';
@@ -73,7 +72,7 @@ export class SynthesisStep extends BaseStep {
     // Persistent error count check for synthesis
     const errorCountKey = this.getErrorCountKey();
     const errorCountData = work.results?.[errorCountKey];
-    const errorCount = Array.isArray(errorCountData) ? (errorCountData[0] || 0) : (errorCountData as number || 0);
+    const errorCount = (errorCountData as number) || 0;
     const isSimulatingError = settings.simulateSynthesisError !== 'none' && errorCount < settings.simulateSynthesisErrorAttempts;
     const isRetrying = hadError || isSimulatingError;
 
@@ -133,6 +132,7 @@ export class SynthesisStep extends BaseStep {
           systemInstruction,
           tools: settings.useSearchInSynthesis ? [{ googleSearch: {} }] : undefined,
           signal,
+          messageId,
           agentIndex: 0, // Synthesis always uses agent index 0
           simulateError: settings.simulateSynthesisError,
           simulateErrorAttempts: settings.simulateSynthesisErrorAttempts,
@@ -241,7 +241,7 @@ export class SynthesisStep extends BaseStep {
       updateAgentStatus(STEPS.SYNTHESIS, 0, 'error', messageId, errorLabel);
       
       // SYNC: Ensure work results (including error flag) are updated in the global store
-      useAgentStore.getState().setCurrentWork({ ...work });
+      this.syncLiveWork(context, work);
       
       throw error;
     }

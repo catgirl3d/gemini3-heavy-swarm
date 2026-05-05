@@ -133,6 +133,28 @@ export abstract class BaseStep implements StepDescriptor {
     if (!work.results) work.results = {};
   }
 
+  protected syncLiveWork(context: Pick<StepContext, 'messageId'>, work: Work): void {
+    const nextWork = { ...work };
+    if (!context.messageId) {
+      return;
+    }
+
+    useAgentStore.getState().replaceSessionWork(context.messageId, nextWork);
+  }
+
+  protected syncLiveWorkResult(
+    context: Pick<StepContext, 'messageId'>,
+    stepId: StepId,
+    agentIndex: number,
+    updates: { text?: string; thought?: string; usage?: TokenUsage | null }
+  ): void {
+    if (!context.messageId) {
+      return;
+    }
+
+    useAgentStore.getState().updateSessionWorkResult(context.messageId, stepId, agentIndex, updates);
+  }
+
   /**
    * Centralized stream chunk handler for execute and regenerate.
    * Updates results, thoughts, usage, and UI consistently.
@@ -240,7 +262,7 @@ export abstract class BaseStep implements StepDescriptor {
       * will incorrectly create an array [text] instead of an object {text, sources}.
       * This breaks 'synthesisText' retrieval in the UI (ShowWork).
       */
-     useAgentStore.getState().updateWorkResult(stepId, storageIndex, { text, thought, usage });
+     this.syncLiveWorkResult(context, stepId, storageIndex, { text, thought, usage });
 
      const hasContent = text.length > 0;
      const hasThought = !!(thought && thought.length > 0);
@@ -287,7 +309,9 @@ export abstract class BaseStep implements StepDescriptor {
     const updated = this.updateAgentStatus(states, index, nextStatus, label);
     
     // CRITICAL: Restore loading indicator when any retry starts
-    useAgentStore.getState().setIsLoading(true);
+    if (context.messageId) {
+      useAgentStore.getState().updateSessionRuntime(context.messageId, { isLoading: true });
+    }
 
     updateAgentStatus(
       this.id,
@@ -392,18 +416,18 @@ export abstract class BaseStep implements StepDescriptor {
     
     if (this.checkGlobalRateLimitFailure(failures, settings.numAgents)) {
         work.results[this.id] = [...results];
-        useAgentStore.getState().setCurrentWork({ ...work });
+        this.syncLiveWork(context, work);
         throw failures[0];
     }
 
     if (this.checkGlobalStepFailure(failures, settings.numAgents)) {
       work.results[this.id] = [...results];
-      useAgentStore.getState().setCurrentWork({ ...work });
+      this.syncLiveWork(context, work);
       throw failures[0];
     }
 
     work.results[this.id] = [...results];
-    useAgentStore.getState().setCurrentWork({ ...work });
+    this.syncLiveWork(context, work);
     
     return results;
   }
@@ -512,6 +536,7 @@ export abstract class BaseStep implements StepDescriptor {
           systemInstruction,
           tools: config.tools,
           signal,
+          messageId: context.messageId,
           agentIndex: i,
           simulateError: config.simulateError,
           simulateErrorAttempts: config.simulateErrorAttempts,
@@ -555,7 +580,7 @@ export abstract class BaseStep implements StepDescriptor {
     config: StreamConfig,
     callbacks: StreamCallbacks
   ): Promise<StreamResult> {
-    const { ai, settings, model, contents, systemInstruction, tools, signal, agentIndex, devModeDuration, simulateError, simulateErrorAttempts, work: configWork } = config;
+    const { ai, settings, model, contents, systemInstruction, tools, signal, agentIndex, devModeDuration, simulateError, simulateErrorAttempts, work: configWork, messageId } = config;
     const logger = new Logger(`${this.id}${agentIndex !== undefined ? `:Agent${agentIndex + 1}` : ''}`, settings.debugMode);
 
     // Persistent error simulation logic (works across manual regenerations)
@@ -563,7 +588,7 @@ export abstract class BaseStep implements StepDescriptor {
       const maxErrorAttempts = simulateErrorAttempts ?? 1;
 
       // Use work from config (passed from context) or fallback to store
-      const targetWork = configWork || useAgentStore.getState().currentWork;
+      const targetWork = configWork;
       
       if (targetWork) {
         this.ensureResults(targetWork);
@@ -573,22 +598,8 @@ export abstract class BaseStep implements StepDescriptor {
         if (agentIndex === undefined) {
           currentCount = (targetWork.results[errorKey] as number) || 0;
         } else {
-          /**
-           * ERROR SIMULATION PERSISTENCE MODEL
-           * Synthesis models use a scalar 'number' for errors (since there is only 1 agent).
-           * Multi-agent steps (Initial/Refinement) use an 'Array<number>'.
-           * 
-           * MIGRATION LOGIC:
-           * If we encounter a scalar where an array is expected (e.g. if a step was 
-           * converted from single to multi-agent), we migrate it on-the-fly to 
-           * prevent regeneration from seeing a stale "failed" state globally.
-           */
           if (!Array.isArray(targetWork.results[errorKey])) {
-            const previousValue = (targetWork.results[errorKey] as number) || 0;
-            const migratedArray = Array(settings.numAgents).fill(0);
-            if (agentIndex === 0) migratedArray[0] = previousValue;
-            targetWork.results[errorKey] = migratedArray;
-            logger.debug(`SIMULATION: Migrated scalar error count (${previousValue}) to array for agent ${agentIndex}`);
+            targetWork.results[errorKey] = Array(settings.numAgents).fill(0);
           }
           currentCount = (targetWork.results[errorKey] as number[])[agentIndex] || 0;
         }
@@ -602,7 +613,9 @@ export abstract class BaseStep implements StepDescriptor {
           }
           
           // Update store to persist count
-          useAgentStore.getState().setCurrentWork({ ...targetWork });
+          if (messageId) {
+            useAgentStore.getState().replaceSessionWork(messageId, targetWork);
+          }
 
           logger.debug(`SIMULATION: Throwing simulated ${simulateError} error (Persistent Attempt ${currentCount + 1}/${maxErrorAttempts})`);
           
@@ -862,7 +875,7 @@ export abstract class BaseStep implements StepDescriptor {
     }
     
     // Clear store as well (usage AND text)
-    useAgentStore.getState().updateWorkResult(this.id, storageIndex, { usage: null, text: '' });
+    this.syncLiveWorkResult(context, this.id, storageIndex, { usage: null, text: '' });
     
     // Determine model
     const model = roleType 
@@ -878,6 +891,7 @@ export abstract class BaseStep implements StepDescriptor {
           tools: tools ?? [{ googleSearch: {} }],
           signal,
           agentIndex,
+          messageId,
           simulateError,
           simulateErrorAttempts,
           work: context.work
@@ -914,7 +928,7 @@ export abstract class BaseStep implements StepDescriptor {
         this.ensureStepUsage(work, this.id, settings.numAgents)[agentIndex] = finalUsage;
         
         // Also update the store atomically for immediate UI update
-        useAgentStore.getState().updateWorkResult(this.id, agentIndex, { usage: finalUsage });
+        this.syncLiveWorkResult(context, this.id, agentIndex, { usage: finalUsage });
       }
       
       // Set final 'done' status after successful completion
@@ -924,7 +938,7 @@ export abstract class BaseStep implements StepDescriptor {
       this.updateStepMetadata(work, 'done');
       
       // Update store with final snapshot
-      useAgentStore.getState().setCurrentWork({ ...work });
+      this.syncLiveWork(context, work);
       
       return { text: fullText, work, groundingChunks };
     } catch (error) {
@@ -942,7 +956,7 @@ export abstract class BaseStep implements StepDescriptor {
       work.results[this.id] = currentResults;
       
       // Update store with error state
-      useAgentStore.getState().setCurrentWork({ ...work });
+      this.syncLiveWork(context, work);
       
       // Re-throw to let caller handle additional UI updates (e.g., message parts)
       throw error;

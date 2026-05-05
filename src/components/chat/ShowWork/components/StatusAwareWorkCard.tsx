@@ -4,7 +4,7 @@ import { type StepId } from '@/types/steps';
 import { WorkCard, type CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
 import { useResolvedAgentState } from '@/hooks/swarm/useResolvedSwarmState';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
-import { getStepContent } from '@/utils/swarm/workHelpers';
+import { getStepContent, getStepMeta } from '@/utils/swarm/workHelpers';
 import { useAgentStore } from '@/stores/agentStore';
 import { Logger } from '@shared/utils/logger';
 
@@ -36,13 +36,14 @@ interface StatusAwareWorkCardProps {
   debugInfo?: unknown;
   downloadFilename: string;
   className?: string;
+  preferLiveSession?: boolean;
   
   // Callbacks
   onCardAction: (cardId: string, action: CardActionType) => void;
   allowRegenerate?: boolean;
 }
 
-export type DisplayStatus = 'waiting' | 'working' | 'done' | 'error';
+export type DisplayStatus = 'waiting' | 'working' | 'done' | 'error' | 'stale';
 
 // StatusAwareWorkCard - Simplified wrapper with inline Zustand-based status logic.
 export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
@@ -58,20 +59,27 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
   debugInfo,
   downloadFilename,
   className,
+  preferLiveSession = false,
   onCardAction,
   allowRegenerate
 }) => {
   const config = getStepConfig(step);
   const lastEmptyDoneLogRef = useRef<string | null>(null);
   
-  // Resolve agent state from either live store or historical snapshot
-  const agent = useResolvedAgentState(messageId, step, index, work);
-  const status: DisplayStatus = 
-    agent ? (agent.status as DisplayStatus) :
-    content ? 'done' :
-    'waiting';
+  const agent = useResolvedAgentState(messageId, step, index, work, preferLiveSession);
+  const metaStatus = getStepMeta(work, step)?.status;
+  const status: DisplayStatus = (() => {
+    if (metaStatus === 'stale') return 'stale';
+    if (metaStatus === 'error') return 'error';
+    if (metaStatus === 'working') return 'working';
+    if (agent) return agent.status;
+    if (metaStatus === 'done' || content) return 'done';
+    return 'waiting';
+  })();
   
-  const label = agent?.label || config.labels[status];
+  const label = status === 'stale'
+    ? 'Stale'
+    : agent?.label || config.labels[status];
   
   // Use live agent name from state when available, otherwise fallback to passed title
   // This ensures role names (e.g., "Agent 1 (Researcher)") are shown during generation
@@ -85,8 +93,12 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
 
     // Intentionally read a one-time store snapshot here: this effect only emits a
     // diagnostic warning for the suspicious "done + empty" state, and subscribing
-    // to currentWork would add extra rerenders and duplicate log noise.
-    const liveWork = useAgentStore.getState().currentWork;
+    // to session work would add extra rerenders and duplicate log noise.
+    const activeSessionMessageId = useAgentStore.getState().activeSessionMessageId;
+    const sessionWork = preferLiveSession && messageId && activeSessionMessageId === messageId
+      ? useAgentStore.getState().sessionsByMessageId[messageId]?.work
+      : undefined;
+    const liveWork = sessionWork ?? work;
     const propLen = content?.length ?? -1;
     const snapshotLen = getWorkContentLength(work, step, index);
     const liveLen = getWorkContentLength(liveWork ?? work, step, index);
@@ -109,7 +121,7 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
       liveLen,
       hasThought: !!thought,
     });
-  }, [content, index, label, messageId, status, step, thought, work]);
+  }, [content, index, label, messageId, preferLiveSession, status, step, thought, work]);
 
   return (
     <WorkCard
