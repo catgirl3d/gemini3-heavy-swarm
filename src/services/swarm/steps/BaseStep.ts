@@ -1,6 +1,6 @@
 import { type StepDescriptor, type StepContext, type StepId, STEPS, type StreamConfig, type StreamCallbacks, type StreamResult, type AgentInstruction, type MultiAgentConfig } from '@/types/steps';
 import { type SimulateError, ProviderType, type RoleType } from '@/types';
-import { type Tool, type Content } from '@google/genai';
+import { type Tool } from '@google/genai';
 import { getStepConfig, type StepConfig } from '@/utils/swarm/stepConstants';
 import type { GroundingChunk } from './utils/streamUtils';
 import { type AgentState, type Source, type TokenUsage, type Work, type StepDebugInfo, type WorkResultUpdates } from '@/types';
@@ -1023,52 +1023,6 @@ export abstract class BaseStep implements StepDescriptor {
       // Re-throw to let caller handle additional UI updates (e.g., message parts)
       throw error;
     }
-  }
-
-  /**
-   * Thin wrapper around runAgentRegeneration for synthesis step.
-   * Handles synthesis-specific behaviors: sources extraction and onSynthesisJump callback.
-   */
-  protected async runSynthesisRegeneration(
-    context: StepContext,
-    instruction: { systemInstruction: string; userTurn: Content; mainChatHistory: Content[] },
-    agentStates: AgentState[],
-    tools?: Tool[],
-    simulateError?: SimulateError,
-    simulateErrorAttempts?: number
-  ): Promise<{ text: string; sources?: Source[]; work: Work }> {
-    const { systemInstruction, userTurn, mainChatHistory } = instruction;
-    
-    // Synthesis always uses agentIndex 0
-    const agentIndex = 0;
-    const agentInstruction: AgentInstruction = { systemInstruction, userTurn, mainChatHistory };
-    
-    // Delegate to base regeneration logic
-    const result = await this.runAgentRegeneration(
-      context,
-      agentIndex,
-      agentInstruction,
-      agentStates,
-      undefined, // No roleType for synthesis
-      tools,
-      () => context.onSynthesisJump?.(), // Pass callback for synthesis jump
-      simulateError,
-      simulateErrorAttempts
-    );
-    
-    // Extract sources from grounding chunks
-    const sources = this.extractSources(result.groundingChunks);
-    
-    // Update work.results to include sources
-    if (sources && sources.length > 0) {
-      this.ensureResults(result.work);
-      const currentResult = result.work.results?.[this.id];
-      if (isSynthesisResult(currentResult)) {
-        result.work.results[STEPS.SYNTHESIS] = { ...currentResult, sources };
-      }
-    }
-    
-    return { text: result.text, sources, work: result.work };
   }
 
   /**

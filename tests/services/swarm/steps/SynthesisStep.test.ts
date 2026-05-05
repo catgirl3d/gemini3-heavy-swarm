@@ -56,7 +56,11 @@ vi.mock('@/utils/swarm/workHelpers', () => ({
   getStepResults: vi.fn((work, stepId) => {
     const raw = work.results?.[stepId];
     return Array.isArray(raw) ? raw : [];
-  })
+  }),
+  getSynthesisResult: vi.fn((work) => {
+    const raw = work.results?.[STEPS.SYNTHESIS];
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
+  }),
 }));
 
 vi.mock('@shared/utils/logger', () => ({
@@ -273,6 +277,40 @@ let updateSessionRuntimeMock: any;
     await step.regenerate(context, 0, []);
 
     expect(runRegenSpy.mock.calls[0][3]).toEqual([{ googleSearch: {} }]);
+  });
+
+  it('should attach extracted sources and trigger synthesis jump on first text chunk during synthesis regeneration', async () => {
+    const source = { web: { uri: 'https://source.test', title: 'Source' } };
+    const context = createContext({
+      work: createWork({
+        [STEPS.SYNTHESIS]: { text: 'old final' },
+      }),
+    });
+    const stream = (async function* () {
+      yield { text: 'final answer', thought: '', usage: null, groundingChunks: [source] };
+    })();
+
+    ((context.ai.models.generateContentStream as unknown) as ReturnType<typeof vi.fn>).mockResolvedValue({ stream });
+
+    const result = await (step as any).runSynthesisRegeneration(
+      context,
+      {
+        systemInstruction: 'system',
+        userTurn: { role: 'user', parts: [{ text: 'prompt' }] },
+        mainChatHistory: [],
+      },
+      [{ id: 'synth', name: 'Synthesizer', status: 'done', label: 'Done', messageId: 'msg-123' }],
+    );
+
+    expect(result).toMatchObject({
+      text: 'final answer',
+      sources: [{ uri: 'https://source.test', title: 'Source' }],
+    });
+    expect(context.work.results[STEPS.SYNTHESIS]).toEqual({
+      text: 'final answer',
+      sources: [{ uri: 'https://source.test', title: 'Source' }],
+    });
+    expect(context.onSynthesisJump).toHaveBeenCalledTimes(1);
   });
 
   it('should extract unique sources from grounding metadata', () => {

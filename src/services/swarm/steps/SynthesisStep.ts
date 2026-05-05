@@ -1,9 +1,9 @@
-import { type Content } from '@google/genai';
+import { type Content, type Tool } from '@google/genai';
 import { type StepContext, type StepId, STEPS } from '@/types/steps';
-import { type AgentState, type Source, type Work } from '@/types';
+import { type AgentState, type SimulateError, type Source, type Work } from '@/types';
 import { prepareGeminiContent } from '@/services/swarm/contentUtils';
 import { BaseStep } from './BaseStep';
-import { getStepResults } from '@/utils/swarm/workHelpers';
+import { getStepResults, getSynthesisResult } from '@/utils/swarm/workHelpers';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { Logger } from '@shared/utils/logger';
 import { updateAgentStatus } from '@/utils/swarm/statusHelpers';
@@ -267,6 +267,41 @@ export class SynthesisStep extends BaseStep {
       settings.simulateSynthesisError,
       settings.simulateSynthesisErrorAttempts
     );
+  }
+
+  protected async runSynthesisRegeneration(
+    context: StepContext,
+    instruction: { systemInstruction: string; userTurn: Content; mainChatHistory: Content[] },
+    agentStates: AgentState[],
+    tools?: Tool[],
+    simulateError?: SimulateError,
+    simulateErrorAttempts?: number
+  ): Promise<{ text: string; sources?: Source[]; work: Work }> {
+    const { systemInstruction, userTurn, mainChatHistory } = instruction;
+
+    const result = await this.runAgentRegeneration(
+      context,
+      0,
+      { systemInstruction, userTurn, mainChatHistory },
+      agentStates,
+      undefined,
+      tools,
+      () => context.onSynthesisJump?.(),
+      simulateError,
+      simulateErrorAttempts
+    );
+
+    const sources = this.extractSources(result.groundingChunks ?? []);
+
+    if (sources && sources.length > 0) {
+      this.ensureResults(result.work);
+      const currentResult = getSynthesisResult(result.work);
+      if (currentResult) {
+        result.work.results[STEPS.SYNTHESIS] = { ...currentResult, sources };
+      }
+    }
+
+    return { text: result.text, sources, work: result.work };
   }
 
   private prepareSynthesis(context: StepContext, refinedDrafts: string[]) {

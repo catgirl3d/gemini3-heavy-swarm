@@ -194,14 +194,6 @@ class TestStep extends BaseStep {
     );
   }
 
-  public testRunSynthesisRegeneration(
-    context: StepContext,
-    instruction: any,
-    agentStates: AgentState[],
-    tools?: any[]
-  ): Promise<{ text: string; sources?: Source[]; work: Work }> {
-    return this.runSynthesisRegeneration(context, instruction, agentStates, tools);
-  }
 }
 
 class RetryCallbackStep extends TestStep {
@@ -1454,53 +1446,5 @@ describe('BaseStep', () => {
     });
   });
 
-  describe('runSynthesisRegeneration', () => {
-    it('should attach extracted sources and trigger synthesis jump on first text chunk', async () => {
-      step.id = STEPS.SYNTHESIS;
-      const source = { web: { uri: 'https://source.test', title: 'Source' } } as GroundingChunk;
-      const provider = {
-        name: 'mock',
-        isProxy: false,
-        getDefaultModel: vi.fn(() => 'mock-model'),
-        models: {
-          generateContentStream: vi.fn().mockResolvedValue({
-            stream: (async function* () {
-              yield { text: 'final answer', thought: '', usage: null, groundingChunks: [source] };
-            })()
-          })
-        }
-      };
-      const work: Work = { results: { [STEPS.SYNTHESIS]: { text: 'old final' } } };
-      const onSynthesisJump = vi.fn();
-
-      const result = await step.testRunSynthesisRegeneration(
-        {
-          ai: provider,
-          settings: { debugMode: false, numAgents: 1, model: 'global-model' } as AppSettings,
-          work,
-          signal: new AbortController().signal,
-          messageId: 'msg-1',
-          onMessageUpdate: vi.fn(),
-          onSynthesisJump
-        } as any,
-        {
-          systemInstruction: 'system',
-          userTurn: { role: 'user', parts: [{ text: 'prompt' }] },
-          mainChatHistory: []
-        },
-        [{ id: 'synth', name: 'Synthesizer', status: 'done', label: 'Done', messageId: 'msg-1' }]
-      );
-
-      expect(result).toMatchObject({
-        text: 'final answer',
-        sources: [{ uri: 'https://source.test', title: 'Source' }]
-      });
-      expect(work.results?.[STEPS.SYNTHESIS]).toEqual({
-        text: 'final answer',
-        sources: [{ uri: 'https://source.test', title: 'Source' }]
-      });
-      expect(onSynthesisJump).toHaveBeenCalledTimes(1);
-    });
-  });
 });
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SynthesisStep } from '@/services/swarm/steps/SynthesisStep';
 import { STEPS } from '@/types/steps';
 import { useAgentStore } from '@/stores/agentStore';
@@ -131,7 +131,13 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     };
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('should clear old synthesis text before regeneration and use storageIndex -1', async () => {
+    vi.useFakeTimers();
+
     let capturedOnChunk: any;
     
     // Mock runModelStream to capture onChunk and simulate streaming
@@ -148,7 +154,7 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     const regenPromise = step.regenerate(mockContext, 0, agentStates);
     
     // Wait for async setup
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await vi.advanceTimersByTimeAsync(0);
 
     // Check that old text was cleared BEFORE streaming starts
     // Note: This happens in runAgentRegeneration before runModelStream is called
@@ -170,16 +176,16 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     
     // First chunk: thought only (no text yet)
     capturedOnChunk('', 'Thinking about regeneration...', null);
-    
+
+    expect(updateWorkResultSpy).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(75);
+     
     // Verify updateWorkResult was called with storageIndex = -1 for thought
     expect(updateWorkResultSpy).toHaveBeenCalledWith(
       'msg-integration-test',
       STEPS.SYNTHESIS,
       -1,  // Must be -1 to maintain object structure
-      expect.objectContaining({
-        text: '',
-        thought: 'Thinking about regeneration...'
-      })
+      { thought: 'Thinking about regeneration...' }
     );
 
     // Second chunk: text arrives
