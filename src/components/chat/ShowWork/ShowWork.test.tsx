@@ -71,7 +71,6 @@ vi.mock('@/hooks/ui/useAutoCollapse', () => ({
 vi.mock('@/stores/agentStore', () => ({
   useAgentStore: (selector: any) => selector(mocks.store),
   createSessionAgentsSelector: (messageId: string | undefined) => (state: any) => messageId ? state.sessionsByMessageId[messageId]?.agentStates : undefined,
-  createSessionWorkSelector: (messageId: string | undefined) => (state: any) => messageId ? state.sessionsByMessageId[messageId]?.work : undefined,
   selectActiveSessionMessageId: (state: any) => state.activeSessionMessageId,
 }));
 
@@ -184,7 +183,7 @@ describe('ShowWork', () => {
     expect(onRegenerate).toHaveBeenCalledWith(STEPS.REFINEMENT, 0);
   });
 
-  it('uses live store work for the current message and hides refinement when unavailable', () => {
+  it('uses the passed work for the current message and hides refinement when unavailable', () => {
     mocks.resolvedSwarmState.mockReturnValue({
       synthesizerState: undefined,
       refinementStarted: false,
@@ -193,32 +192,22 @@ describe('ShowWork', () => {
     mocks.store.activeSessionMessageId = 'message-1';
     mocks.store.sessionsByMessageId = {
       'message-1': {
-        work: createWork({
-          results: {
-            [STEPS.SYNTHESIS]: ['Live synthesis'],
-            synthesis_step_thoughts: ['Live synthesis thought'],
-            synthesis_step_usage: [{ promptTokens: 2, candidatesTokens: 7, totalTokens: 9 }],
-          },
-        }),
         agentStates: [],
       },
     };
 
+    const liveWork = createWork({
+      results: {
+        [STEPS.SYNTHESIS]: ['Live synthesis'],
+        synthesis_step_thoughts: ['Live synthesis thought'],
+        synthesis_step_usage: [{ promptTokens: 2, candidatesTokens: 7, totalTokens: 9 }],
+      },
+    });
+
     render(
       <ShowWork
         {...createProps({
-          work: createWork({
-            results: {
-              [STEPS.INITIAL]: ['Initial draft'],
-              [STEPS.SYNTHESIS]: ['Historical synthesis'],
-              initial_step_usage: [{ promptTokens: 5, candidatesTokens: 5, totalTokens: 10 }],
-              synthesis_step_usage: [{ promptTokens: 1, candidatesTokens: 0, totalTokens: 1 }],
-            },
-            debugInfo: {
-              [STEPS.INITIAL]: [createDebugInfo('initial')],
-              [STEPS.SYNTHESIS]: createDebugInfo('historical'),
-            },
-          }),
+          work: liveWork,
         })}
       />
     );
@@ -234,7 +223,7 @@ describe('ShowWork', () => {
     }));
   });
 
-  it('uses live session work for initial and refinement cards while the message snapshot is stale', () => {
+  it('uses the passed work for initial and refinement cards', () => {
     const liveWork = createWork({
       results: {
         [STEPS.INITIAL]: ['Live initial draft'],
@@ -253,7 +242,6 @@ describe('ShowWork', () => {
     mocks.store.activeSessionMessageId = 'message-1';
     mocks.store.sessionsByMessageId = {
       'message-1': {
-        work: liveWork,
         agentStates: [],
       },
     };
@@ -261,13 +249,7 @@ describe('ShowWork', () => {
     render(
       <ShowWork
         {...createProps({
-          work: createWork({
-            results: {
-              [STEPS.INITIAL]: [''],
-              [STEPS.REFINEMENT]: ['', ''],
-              [STEPS.SYNTHESIS]: [''],
-            },
-          }),
+          work: liveWork,
           isLive: true,
         })}
       />
@@ -427,13 +409,10 @@ describe('ShowWork', () => {
     expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
   });
 
-  it('hides Continue when live work for the current message already finished synthesis', () => {
+  it('hides Continue when the passed work for the current message already finished synthesis', () => {
     mocks.store.activeSessionMessageId = 'message-1';
     mocks.store.sessionsByMessageId = {
       'message-1': {
-        work: createWork({
-          stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'done' }],
-        }),
         agentStates: [],
       },
     };
@@ -442,7 +421,7 @@ describe('ShowWork', () => {
       <ShowWork
         {...createProps({
           work: createWork({
-            stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'pending' }],
+            stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'done' }],
           }),
           isLive: true,
           isPaused: true,

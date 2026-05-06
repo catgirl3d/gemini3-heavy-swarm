@@ -1,7 +1,13 @@
 import { type Message, type Source, type Work } from '@/types';
 import { getSynthesisSources, getSynthesisText } from '@/utils/swarm/workHelpers';
 
-const getModelProjectionWork = (message: Message, liveWork?: Work): Work | undefined => {
+// Model rows prefer the live session snapshot while generation is active,
+// but historical rows must keep rendering from the persisted message snapshot.
+export const getMessageDisplayWork = (message: Message, liveWork?: Work): Work | undefined => {
+  if (message.role !== 'model') {
+    return undefined;
+  }
+
   return liveWork ?? message.work;
 };
 
@@ -10,7 +16,7 @@ export const getMessageDisplayText = (message: Message, liveWork?: Work): string
     return message.parts[0]?.text ?? '';
   }
 
-  return getSynthesisText(getModelProjectionWork(message, liveWork));
+  return getSynthesisText(getMessageDisplayWork(message, liveWork));
 };
 
 export const getMessageDisplaySources = (message: Message, liveWork?: Work): Source[] | undefined => {
@@ -18,7 +24,7 @@ export const getMessageDisplaySources = (message: Message, liveWork?: Work): Sou
     return undefined;
   }
 
-  return getSynthesisSources(getModelProjectionWork(message, liveWork));
+  return getSynthesisSources(getMessageDisplayWork(message, liveWork));
 };
 
 export const getHistoryParts = (message: Message): { text: string }[] => {
