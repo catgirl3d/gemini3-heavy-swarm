@@ -17,15 +17,8 @@ import { updateAgentStatus, updateAgentStatusIfChanged } from '@/utils/swarm/sta
 import { createFirstTextJumpTracker } from '@/utils/swarm/jumpHelper';
 import { LiveWorkSyncBuffer } from './utils/liveWorkSyncBuffer';
 
-type WorkResults = NonNullable<Work['results']>;
-type SynthesisResult = NonNullable<WorkResults[typeof STEPS.SYNTHESIS]>;
-
 // Small delay to batch token-level stream noise while keeping the first visible chunk immediate.
 const LIVE_WORK_SYNC_THROTTLE_MS = 75;
-
-const isSynthesisResult = (value: unknown): value is SynthesisResult => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
 
 export abstract class BaseStep implements StepDescriptor {
   private readonly liveWorkSyncBuffer = new LiveWorkSyncBuffer({
@@ -84,13 +77,17 @@ export abstract class BaseStep implements StepDescriptor {
 
   /**
    * Returns the storage key used for persistent error simulation counts.
-   *
-   * The key name is always plural for consistency across single-agent and
-   * multi-agent steps. The stored value shape (scalar vs array) is determined
-   * by the caller's context, not by the key name itself.
    */
   protected getErrorCountKey(): string {
     return `${this.id}_error_counts`;
+  }
+
+  protected getStepSlotCount(stepId: StepId, numAgents: number, agentIndex = 0): number {
+    if (stepId === STEPS.SYNTHESIS) {
+      return 1;
+    }
+
+    return Math.max(numAgents, agentIndex + 1);
   }
 
   /**
@@ -222,15 +219,7 @@ export abstract class BaseStep implements StepDescriptor {
 
     // Ensure storage is ready
     this.ensureResults(work);
-
-    /**
-     * INDEX NORMALIZATION
-     * - 'index' is the execution index (0 to N). For synthesis, it's always 0.
-     * - 'storageIndex' is the persistence index. 
-     * - CRITICAL: Synthesis ALWAYS uses -1 in results storage to maintain its 
-     *   distinct object-based structure {text, sources} vs agent result arrays.
-     */
-    const storageIndex = (stepId === STEPS.SYNTHESIS) ? -1 : index;
+    const slotCount = this.getStepSlotCount(stepId, settings.numAgents, index);
 
     // Update main text results
     if (options.localResults) {
@@ -239,100 +228,70 @@ export abstract class BaseStep implements StepDescriptor {
     } else {
       // In regeneration, localResults is usually missing, so update work.results directly
       const current = work.results[stepId];
-      if (storageIndex === -1) {
-          /**
-           * SYNTHESIS DATA STRUCTURE
-           * Synthesis results are stored as a single object (not a string array)
-           * because they optionally contain metadata like 'sources' or 'error' info.
-           * This object shape is expected by getStepResults() helpers.
-           */
-          // Synthesis/Single agent
-          // Always maintain object shape for synthesis - { text, sources? }
-          if (isSynthesisResult(current)) {
-              work.results[STEPS.SYNTHESIS] = { ...current, text };
-          } else {
-              // Initialize as object from first chunk
-              work.results[STEPS.SYNTHESIS] = { text };
-          }
-      } else {
-          // Multi-agent array (Drafters/Critics)
-          const newArray = Array.isArray(current) ? [...current] : Array(settings.numAgents).fill('');
-          // Ensure array is large enough (e.g. if numAgents changed or migration)
-          if (newArray.length <= storageIndex) {
-            const padding = Array(Math.max(settings.numAgents, storageIndex+1) - newArray.length).fill('');
-            newArray.push(...padding);
-          }
-          newArray[storageIndex] = text;
-          work.results[stepId] = newArray;
+      const newArray = Array.isArray(current) ? [...current] : Array(slotCount).fill('');
+      if (newArray.length <= index) {
+        const padding = Array(index + 1 - newArray.length).fill('');
+        newArray.push(...padding);
       }
+      newArray[index] = text;
+      work.results[stepId] = newArray;
     }
 
     // Update thoughts
     if (thought) {
-      const thoughtsKey = storageIndex === -1 ? `${stepId}_thought` : `${stepId}_thoughts`;
-      if (storageIndex === -1) {
-        work.results[thoughtsKey] = thought;
-      } else {
-        if (!work.results[thoughtsKey] || !Array.isArray(work.results[thoughtsKey])) {
-          work.results[thoughtsKey] = Array(settings.numAgents).fill('');
-        }
-        (work.results[thoughtsKey] as string[])[storageIndex] = thought;
+      const thoughtsKey = `${stepId}_thoughts`;
+      const currentThoughts = Array.isArray(work.results[thoughtsKey])
+        ? [...work.results[thoughtsKey] as string[]]
+        : Array(slotCount).fill('');
+      if (currentThoughts.length <= index) {
+        const padding = Array(index + 1 - currentThoughts.length).fill('');
+        currentThoughts.push(...padding);
       }
+      currentThoughts[index] = thought;
+      work.results[thoughtsKey] = currentThoughts;
     }
 
 
     // Update usage
     if (usage) {
-      const usageKey = `${stepId}_usage`;
-      if (storageIndex === -1) {
-        work.results[usageKey] = usage;
-      } else {
-        this.ensureStepUsage(work, stepId, settings.numAgents)[storageIndex] = usage;
-      }
+      this.ensureStepUsage(work, stepId, slotCount)[index] = usage;
     }
 
     // Optional UI updates
-     if (options.statusMsg) {
-        const targetIndex = index === -1 ? 0 : index;
-        // Use conditional update to prevent redundant store updates during streaming
-        updateAgentStatusIfChanged(stepId, targetIndex, 'working', context.messageId, options.statusMsg);
-     }
+    if (options.statusMsg) {
+      // Use conditional update to prevent redundant store updates during streaming
+      updateAgentStatusIfChanged(stepId, index, 'working', context.messageId, options.statusMsg);
+    }
 
-     // SYNC: Ensure work results are updated in the global store for live streaming visibility
-     // Use atomic update to prevent race conditions during parallel execution
-     /**
-      * SYNC WARNING
-      * We MUST use storageIndex here. If we use 'index' (0) for synthesis, the store
-      * will incorrectly create an array [text] instead of an object {text, sources}.
-      * This breaks 'synthesisText' retrieval in the UI (ShowWork).
-      */
-     const liveWorkUpdates: WorkResultUpdates = {};
-     if (text.length > 0) {
-       liveWorkUpdates.text = text;
-     }
-     if (thought.length > 0) {
-       liveWorkUpdates.thought = thought;
-     }
-     if (usage) {
-       liveWorkUpdates.usage = usage;
-     }
+    // SYNC: Ensure work results are updated in the global store for live streaming visibility
+    // Use atomic update to prevent race conditions during parallel execution
+    const liveWorkUpdates: WorkResultUpdates = {};
+    if (text.length > 0) {
+      liveWorkUpdates.text = text;
+    }
+    if (thought.length > 0) {
+      liveWorkUpdates.thought = thought;
+    }
+    if (usage) {
+      liveWorkUpdates.usage = usage;
+    }
 
-     if (Object.keys(liveWorkUpdates).length > 0) {
-       this.syncLiveWorkResult(context, stepId, storageIndex, liveWorkUpdates);
-     }
+    if (Object.keys(liveWorkUpdates).length > 0) {
+      this.syncLiveWorkResult(context, stepId, index, liveWorkUpdates);
+    }
 
-     const hasContent = text.length > 0;
-     const hasThought = !!(thought && thought.length > 0);
-     const hasUsage = !!usage;
+    const hasContent = text.length > 0;
+    const hasThought = !!(thought && thought.length > 0);
+    const hasUsage = !!usage;
 
-     // Allow UI updates even if text is empty!
-     // Issue: Some providers (like OpenRouter with reasoning models) send 'thought' or 'usage' chunks 
-     // BEFORE any actual text content. If we only gate this on (text.length > 0), the UI (TokenUsage panel, 
-     // Thinking state) will remain stale until the first text character arrives.
-     // This ensures the "Show Work" token counter updates immediately during the reasoning phase.
-     if ((hasContent || hasThought || hasUsage) && onMessageUpdate && options.streamToMessage) {
-       onMessageUpdate(text, options.isFirstChunk ?? false, thought, usage);
-     }
+    // Allow UI updates even if text is empty!
+    // Issue: Some providers (like OpenRouter with reasoning models) send 'thought' or 'usage' chunks 
+    // BEFORE any actual text content. If we only gate this on (text.length > 0), the UI (TokenUsage panel, 
+    // Thinking state) will remain stale until the first text character arrives.
+    // This ensures the "Show Work" token counter updates immediately during the reasoning phase.
+    if ((hasContent || hasThought || hasUsage) && onMessageUpdate && options.streamToMessage) {
+      onMessageUpdate(text, options.isFirstChunk ?? false, thought, usage);
+    }
   }
 
   /**
@@ -515,18 +474,18 @@ export abstract class BaseStep implements StepDescriptor {
 
   /**
    * Ensures usage array is initialized for a step.
-   * Returns the initialized usage array (or object if numAgents is 1).
+   * Returns the initialized usage array.
    */
   protected ensureStepUsage(
     work: StepContext['work'], 
     stepId: StepId, 
-    numAgents: number
+    slotCount: number
   ): (TokenUsage | null)[] {
     this.ensureResults(work);
     const key = `${stepId}_usage`;
     if (!Array.isArray(work.results[key])) {
       // Always initialize as an array to allow indexed access
-      work.results[key] = Array(numAgents).fill(null);
+      work.results[key] = Array(slotCount).fill(null);
     }
     return work.results[key] as (TokenUsage | null)[];
   }
@@ -659,7 +618,7 @@ export abstract class BaseStep implements StepDescriptor {
           currentCount = (targetWork.results[errorKey] as number) || 0;
         } else {
           if (!Array.isArray(targetWork.results[errorKey])) {
-            targetWork.results[errorKey] = Array(settings.numAgents).fill(0);
+            targetWork.results[errorKey] = Array(this.getStepSlotCount(this.id, settings.numAgents, agentIndex)).fill(0);
           }
           currentCount = (targetWork.results[errorKey] as number[])[agentIndex] || 0;
         }
@@ -905,16 +864,11 @@ export abstract class BaseStep implements StepDescriptor {
     // Set initial 'working' status - Step manages its own lifecycle
     updateAgentStatus(this.id, agentIndex, 'working', messageId);
 
-    const storageIndex = (this.id === STEPS.SYNTHESIS) ? -1 : agentIndex;
+    const slotCount = this.getStepSlotCount(this.id, settings.numAgents, agentIndex);
     this.ensureResults(work);
 
     // Clear previous usage to avoid displaying stale data during regeneration
-    const usageKey = `${this.id}_usage`;
-    if (storageIndex === -1) {
-      work.results[usageKey] = null;
-    } else {
-      this.ensureStepUsage(work, this.id, settings.numAgents)[storageIndex] = null;
-    }
+    this.ensureStepUsage(work, this.id, slotCount)[agentIndex] = null;
     
     /**
      * STATE CLEARING FOR REGENERATION
@@ -926,23 +880,17 @@ export abstract class BaseStep implements StepDescriptor {
      * before the new first chunk arrives. Clearing text ensures cards stay open
      * until the new synthesis actually starts producing text.
      */
-    if (this.id === STEPS.SYNTHESIS) {
-      // Maintain object structure {text, sources} but clear text
-      const current = work.results[this.id];
-      work.results[this.id] = typeof current === 'object' && !Array.isArray(current) && current !== null
-        ? { ...current, text: '' } 
-        : { text: '' };
-    } else {
-      // Multi-agent array - clear specific agent's text
-      const arr = Array.isArray(work.results[this.id]) 
-        ? [...work.results[this.id] as string[]] 
-        : Array(settings.numAgents).fill('');
-      arr[agentIndex] = '';
-      work.results[this.id] = arr;
+    const arr = Array.isArray(work.results[this.id]) 
+      ? [...work.results[this.id] as string[]] 
+      : Array(slotCount).fill('');
+    if (arr.length <= agentIndex) {
+      arr.push(...Array(agentIndex + 1 - arr.length).fill(''));
     }
+    arr[agentIndex] = '';
+    work.results[this.id] = arr;
     
     // Clear store as well (usage AND text)
-    this.syncLiveWorkResult(context, this.id, storageIndex, { usage: null, text: '' }, { forceImmediate: true });
+    this.syncLiveWorkResult(context, this.id, agentIndex, { usage: null, text: '' }, { forceImmediate: true });
     
     // Determine model
     const model = roleType 
@@ -992,14 +940,10 @@ export abstract class BaseStep implements StepDescriptor {
       // CRITICAL: Save final usage after streaming completes
       // This ensures token usage displays correctly for regenerated agents
       if (finalUsage) {
-        if (storageIndex === -1) {
-          work.results[usageKey] = finalUsage;
-        } else {
-          this.ensureStepUsage(work, this.id, settings.numAgents)[storageIndex] = finalUsage;
-        }
+        this.ensureStepUsage(work, this.id, slotCount)[agentIndex] = finalUsage;
         
         // Also update the store atomically for immediate UI update
-        this.syncLiveWorkResult(context, this.id, storageIndex, { usage: finalUsage });
+        this.syncLiveWorkResult(context, this.id, agentIndex, { usage: finalUsage });
       }
       
       // Set final 'done' status after successful completion
@@ -1009,7 +953,7 @@ export abstract class BaseStep implements StepDescriptor {
       this.updateStepMetadata(work, 'done');
       
       // Update store with final snapshot
-      this.discardLiveWorkResultBuffer(context, this.id, storageIndex);
+       this.discardLiveWorkResultBuffer(context, this.id, agentIndex);
       this.syncLiveWork(context, work);
       
       return { text: fullText, work, groundingChunks };
@@ -1022,13 +966,20 @@ export abstract class BaseStep implements StepDescriptor {
       this.ensureResults(work);
       const currentResults = Array.isArray(work.results[this.id]) 
         ? [...(work.results[this.id] as string[])]
-        : Array(settings.numAgents).fill('');
+        : Array(slotCount).fill('');
       
       // Preserve any partial text that was streamed before error
       work.results[this.id] = currentResults;
+
+      if (this.id === STEPS.SYNTHESIS) {
+        work.results[`${this.id}_error`] = {
+          flag: true,
+          message: this.getFriendlyErrorMessage(error),
+        };
+      }
       
       // Update store with error state
-      this.discardLiveWorkResultBuffer(context, this.id, storageIndex);
+      this.discardLiveWorkResultBuffer(context, this.id, agentIndex);
       this.syncLiveWork(context, work);
       
       // Re-throw to let caller handle additional UI updates (e.g., message parts)

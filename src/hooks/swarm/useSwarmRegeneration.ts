@@ -12,9 +12,8 @@ import {
   getStepResults,
   getStepThoughts,
   getStepUsage,
-  getSynthesisResult,
-  getSynthesisThought,
-  getSynthesisUsage,
+  getSynthesisErrorState,
+  getSynthesisSources,
   markDownstreamStale as markWorkDownstreamStale,
   setStepMetaStatus,
   updateAgentWork,
@@ -42,36 +41,41 @@ const mergeRegeneratedStepWork = (
   agentIndex: number
 ): Work => {
   let mergedWork = cloneWork(baseWork);
+  const nextText = getStepResults(updatedStepWork, stepId)[agentIndex];
+  const nextThought = getStepThoughts(updatedStepWork, stepId)[agentIndex];
+  const stepUsages = getStepUsage(updatedStepWork, stepId);
+  const hasUsageEntry = agentIndex < stepUsages.length;
+  const nextUsage = stepUsages[agentIndex];
+
+  mergedWork = updateAgentWork(mergedWork, stepId, agentIndex, {
+    ...(typeof nextText === 'string' ? { text: nextText } : {}),
+    ...(typeof nextThought === 'string' ? { thought: nextThought } : {}),
+    ...(hasUsageEntry ? { usage: nextUsage ?? null } : {}),
+  });
 
   if (stepId === STEPS.SYNTHESIS) {
-    const synthesisResult = getSynthesisResult(updatedStepWork);
     if (!mergedWork.results) {
       mergedWork.results = {};
     }
 
-    if (synthesisResult !== null) {
-      mergedWork.results[STEPS.SYNTHESIS] = synthesisResult;
+    const sourceKey = `${STEPS.SYNTHESIS}_sources`;
+    if (Object.prototype.hasOwnProperty.call(updatedStepWork.results ?? {}, sourceKey)) {
+      const synthesisSources = getSynthesisSources(updatedStepWork);
+      if (synthesisSources) {
+        mergedWork.results[sourceKey] = synthesisSources;
+      } else {
+        delete mergedWork.results[sourceKey];
+      }
+    } else {
+      delete mergedWork.results[sourceKey];
     }
 
-    const synthesisThought = getSynthesisThought(updatedStepWork);
-    if (synthesisThought !== null) {
-      mergedWork.results[`${STEPS.SYNTHESIS}_thought`] = synthesisThought;
+    const errorKey = `${STEPS.SYNTHESIS}_error`;
+    if (Object.prototype.hasOwnProperty.call(updatedStepWork.results ?? {}, errorKey)) {
+      mergedWork.results[errorKey] = getSynthesisErrorState(updatedStepWork);
+    } else {
+      delete mergedWork.results[errorKey];
     }
-
-    const synthesisUsage = getSynthesisUsage(updatedStepWork);
-    if (synthesisUsage !== null) {
-      mergedWork.results[`${STEPS.SYNTHESIS}_usage`] = synthesisUsage;
-    }
-  } else {
-    const nextText = getStepResults(updatedStepWork, stepId)[agentIndex];
-    const nextThought = getStepThoughts(updatedStepWork, stepId)[agentIndex];
-    const nextUsage = getStepUsage(updatedStepWork, stepId)[agentIndex];
-
-    mergedWork = updateAgentWork(mergedWork, stepId, agentIndex, {
-      ...(typeof nextText === 'string' ? { text: nextText } : {}),
-      ...(typeof nextThought === 'string' ? { thought: nextThought } : {}),
-      ...(nextUsage ? { usage: nextUsage } : {}),
-    });
   }
 
   const latestMeta = updatedStepWork.stepMetadata?.find(meta => meta.id === stepId);
@@ -312,7 +316,7 @@ export function useSwarmRegeneration({
           const updatedMessage: Message = {
               ...existingMessage,
               work: sessionSnapshot ?? fallbackMessageWork,
-              sources: result.sources || existingMessage.sources
+              sources: stepId === STEPS.SYNTHESIS ? result.sources : existingMessage.sources
           };
           
           const newMessages = [...prev];

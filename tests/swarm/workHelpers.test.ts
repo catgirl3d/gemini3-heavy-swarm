@@ -6,10 +6,8 @@ import {
     getStepResults,
     getStepThoughts,
     getStepUsage,
-    getSynthesisErrorMessage,
-    getSynthesisResult,
-    getSynthesisThought,
-    getSynthesisUsage,
+    getSynthesisErrorState,
+    getSynthesisSources,
     isSynthesisComplete,
     updateAgentWork,
     updateStepResult,
@@ -45,7 +43,7 @@ describe('workHelpers', () => {
         it('returns empty arrays for missing or non-array step data', () => {
             const work: Work = {
                 results: {
-                    [STEPS.SYNTHESIS]: { text: 'final' },
+                    [STEPS.SYNTHESIS]: { text: 'final' } as any,
                     [`${STEPS.INITIAL}_thoughts`]: 'not an array' as any,
                     [`${STEPS.SYNTHESIS}_usage`]: usage
                 }
@@ -59,44 +57,34 @@ describe('workHelpers', () => {
             expect(getStepUsage(work, STEPS.SYNTHESIS)).toEqual([]);
         });
 
-        it('returns synthesis thought, usage, result, and error message when valid', () => {
+        it('returns synthesis lane data and sidecars when valid', () => {
             const work: Work = {
                 results: {
-                    [STEPS.SYNTHESIS]: {
-                        text: 'final',
-                        error: true,
-                        errorMessage: 'failed',
-                        sources: []
-                    } as any,
-                    [`${STEPS.SYNTHESIS}_thought`]: 'synthesis thought',
-                    [`${STEPS.SYNTHESIS}_usage`]: usage
+                    [STEPS.SYNTHESIS]: ['final'],
+                    [`${STEPS.SYNTHESIS}_thoughts`]: ['synthesis thought'],
+                    [`${STEPS.SYNTHESIS}_usage`]: [usage],
+                    [`${STEPS.SYNTHESIS}_sources`]: [],
+                    [`${STEPS.SYNTHESIS}_error`]: { flag: true, message: 'failed' }
                 }
             };
 
-            expect(getSynthesisThought(work)).toBe('synthesis thought');
-            expect(getSynthesisUsage(work)).toBe(usage);
-            expect(getSynthesisResult(work)).toEqual({
-                text: 'final',
-                error: true,
-                errorMessage: 'failed',
-                sources: []
-            });
+            expect(getStepResults(work, STEPS.SYNTHESIS)).toEqual(['final']);
+            expect(getStepThoughts(work, STEPS.SYNTHESIS)).toEqual(['synthesis thought']);
+            expect(getStepUsage(work, STEPS.SYNTHESIS)).toEqual([usage]);
             expect(getStepContent(work, STEPS.SYNTHESIS, 0)).toBe('final');
-            expect(getSynthesisErrorMessage(work)).toBe('failed');
+            expect(getSynthesisSources(work)).toEqual([]);
+            expect(getSynthesisErrorState(work)).toEqual({ flag: true, message: 'failed' });
         });
 
         it('handles malformed synthesis data safely', () => {
-            expect(getSynthesisResult({ results: { [STEPS.SYNTHESIS]: { error: true } as any } })).toEqual({ error: true });
             expect(getStepContent({ results: { [STEPS.SYNTHESIS]: { error: true } as any } }, STEPS.SYNTHESIS, 0)).toBeNull();
-            expect(getSynthesisResult({ results: { [STEPS.SYNTHESIS]: { sources: [] } as any } })).toEqual({ sources: [] });
-            expect(getSynthesisResult({ results: { [STEPS.SYNTHESIS]: ['bad'] as any } })).toBeNull();
-            expect(getStepContent({ results: { [STEPS.SYNTHESIS]: ['bad'] as any } }, STEPS.SYNTHESIS, 0)).toBeNull();
-            expect(getSynthesisThought({ results: { [`${STEPS.SYNTHESIS}_thought`]: { text: 'bad' } as any } })).toBeNull();
-            expect(getSynthesisUsage({ results: { [`${STEPS.SYNTHESIS}_usage`]: { promptTokens: 1 } as any } })).toBeNull();
-            expect(getSynthesisErrorMessage({ results: { [STEPS.SYNTHESIS]: { text: 'ok' } as any } })).toBeNull();
-            expect(getSynthesisErrorMessage({ results: { [STEPS.SYNTHESIS]: { errorMessage: undefined } as any } })).toBeNull();
-            expect(getSynthesisErrorMessage({ results: { [STEPS.SYNTHESIS]: { errorMessage: null } as any } })).toBeNull();
-            expect(getSynthesisErrorMessage({ results: { [STEPS.SYNTHESIS]: { errorMessage: 123 } as any } })).toBeNull();
+            expect(getStepResults({ results: { [STEPS.SYNTHESIS]: { sources: [] } as any } }, STEPS.SYNTHESIS)).toEqual([]);
+            expect(getStepContent({ results: { [STEPS.SYNTHESIS]: ['bad'] as any } }, STEPS.SYNTHESIS, 0)).toBe('bad');
+            expect(getStepThoughts({ results: { [`${STEPS.SYNTHESIS}_thoughts`]: { text: 'bad' } as any } }, STEPS.SYNTHESIS)).toEqual([]);
+            expect(getStepUsage({ results: { [`${STEPS.SYNTHESIS}_usage`]: { promptTokens: 1 } as any } }, STEPS.SYNTHESIS)).toEqual([]);
+            expect(getSynthesisSources({ results: { [`${STEPS.SYNTHESIS}_sources`]: { uri: 'bad' } as any } })).toBeUndefined();
+            expect(getSynthesisErrorState({ results: { [`${STEPS.SYNTHESIS}_error`]: { message: 'missing flag' } as any } })).toBeNull();
+            expect(getSynthesisErrorState({ results: { [`${STEPS.SYNTHESIS}_error`]: { flag: true, message: 123 } as any } })).toBeNull();
         });
     });
 
@@ -117,17 +105,16 @@ describe('workHelpers', () => {
             expect(updated.results).not.toBe(originalWork.results);
         });
 
-        it('should update synthesis results as an object', () => {
+        it('should update synthesis results as a slot-0 lane', () => {
             const originalWork: Work = {
                 results: {
-                    [STEPS.SYNTHESIS]: { text: 'old synthesis' }
+                    [STEPS.SYNTHESIS]: ['old synthesis']
                 }
             };
             
-            const updated = updateStepResult(originalWork, STEPS.SYNTHESIS, -1, 'new synthesis');
+            const updated = updateStepResult(originalWork, STEPS.SYNTHESIS, 0, 'new synthesis');
             
-            const result = updated.results?.[STEPS.SYNTHESIS] as { text: string };
-            expect(result.text).toBe('new synthesis');
+            expect(updated.results?.[STEPS.SYNTHESIS]).toEqual(['new synthesis']);
             expect(updated.results).not.toBe(originalWork.results);
         });
 
@@ -137,24 +124,20 @@ describe('workHelpers', () => {
             
             expect(updated.results?.[STEPS.INITIAL]).toEqual(['first']);
         });
-        it('should preserve existing synthesis object fields while updating text', () => {
+        it('should preserve synthesis sidecars while updating text lane', () => {
             const originalWork: Work = {
                 results: {
-                    [STEPS.SYNTHESIS]: {
-                        text: 'old synthesis',
-                        error: true,
-                        errorMessage: 'old error'
-                    }
+                    [STEPS.SYNTHESIS]: ['old synthesis'],
+                    [`${STEPS.SYNTHESIS}_error`]: { flag: true, message: 'old error' },
+                    [`${STEPS.SYNTHESIS}_sources`]: [{ uri: 'https://example.com', title: 'Example' }]
                 }
             };
 
-            const updated = updateStepResult(originalWork, STEPS.SYNTHESIS, -1, 'new synthesis');
+            const updated = updateStepResult(originalWork, STEPS.SYNTHESIS, 0, 'new synthesis');
 
-            expect(updated.results?.[STEPS.SYNTHESIS]).toEqual({
-                text: 'new synthesis',
-                error: true,
-                errorMessage: 'old error'
-            });
+            expect(updated.results?.[STEPS.SYNTHESIS]).toEqual(['new synthesis']);
+            expect(updated.results?.[`${STEPS.SYNTHESIS}_error`]).toEqual({ flag: true, message: 'old error' });
+            expect(updated.results?.[`${STEPS.SYNTHESIS}_sources`]).toEqual([{ uri: 'https://example.com', title: 'Example' }]);
         });
 
         it('should sparsely extend multi-agent result arrays', () => {
@@ -194,9 +177,9 @@ describe('workHelpers', () => {
                 usage: { totalTokens: 10, promptTokens: 5, candidatesTokens: 5 }
             });
             
-            expect(updated.results?.[STEPS.SYNTHESIS]).toEqual({ text: "text" });
-            expect(updated.results?.[`${STEPS.SYNTHESIS}_thought`]).toBe("thought");
-            expect(updated.results?.[`${STEPS.SYNTHESIS}_usage`]).toEqual({ totalTokens: 10, promptTokens: 5, candidatesTokens: 5 });
+            expect(updated.results?.[STEPS.SYNTHESIS]).toEqual(["text"]);
+            expect(updated.results?.[`${STEPS.SYNTHESIS}_thoughts`]).toEqual(["thought"]);
+            expect(updated.results?.[`${STEPS.SYNTHESIS}_usage`]).toEqual([{ totalTokens: 10, promptTokens: 5, candidatesTokens: 5 }]);
         });
 
         it('should update multi-agent text, thought, and usage without mutating original arrays', () => {
@@ -339,10 +322,8 @@ describe('workHelpers', () => {
         it('should recursively clone nested synthesis sources and debug content payloads', () => {
             const original: Work = {
                 results: {
-                    [STEPS.SYNTHESIS]: {
-                        text: 'final answer',
-                        sources: [{ uri: 'https://example.com', title: 'Example' }]
-                    }
+                    [STEPS.SYNTHESIS]: ['final answer'],
+                    [`${STEPS.SYNTHESIS}_sources`]: [{ uri: 'https://example.com', title: 'Example' }]
                 },
                 debugInfo: {
                     [STEPS.SYNTHESIS]: {
@@ -366,8 +347,8 @@ describe('workHelpers', () => {
             };
 
             const clone = cloneWork(original);
-            const originalSynthesis = original.results?.[STEPS.SYNTHESIS] as { sources: { uri: string; title: string }[] };
-            const clonedSynthesis = clone.results?.[STEPS.SYNTHESIS] as { sources: { uri: string; title: string }[] };
+            const originalSynthesis = original.results?.[`${STEPS.SYNTHESIS}_sources`] as { uri: string; title: string }[];
+            const clonedSynthesis = clone.results?.[`${STEPS.SYNTHESIS}_sources`] as { uri: string; title: string }[];
             const originalDebug = original.debugInfo?.[STEPS.SYNTHESIS] as {
                 history: Array<{ parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }>;
                 userTurn: { parts: Array<{ text?: string; thought?: boolean }> };
@@ -376,8 +357,7 @@ describe('workHelpers', () => {
 
             expect(clonedSynthesis).toEqual(originalSynthesis);
             expect(clonedSynthesis).not.toBe(originalSynthesis);
-            expect(clonedSynthesis.sources).not.toBe(originalSynthesis.sources);
-            expect(clonedSynthesis.sources[0]).not.toBe(originalSynthesis.sources[0]);
+            expect(clonedSynthesis[0]).not.toBe(originalSynthesis[0]);
 
             expect(clonedDebug).toEqual(originalDebug);
             expect(clonedDebug).not.toBe(originalDebug);

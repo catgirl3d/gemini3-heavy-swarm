@@ -92,7 +92,7 @@ const createWork = (overrides: Partial<Work> = {}): Work => ({
   results: {
     [STEPS.INITIAL]: ['draft 1', 'draft 2'],
     [STEPS.REFINEMENT]: ['refined 1', 'refined 2'],
-    [STEPS.SYNTHESIS]: { text: 'final answer' },
+    [STEPS.SYNTHESIS]: ['final answer'],
   },
   stepMetadata: [
     { id: STEPS.INITIAL, status: 'done' },
@@ -293,7 +293,7 @@ describe('useSwarmOrchestration', () => {
       results: {
         [STEPS.INITIAL]: ['partial draft'],
         [STEPS.REFINEMENT]: [],
-        [STEPS.SYNTHESIS]: {},
+        [STEPS.SYNTHESIS]: [''],
       },
       agentStates: pausedAgents,
       stepMetadata: [
@@ -417,14 +417,14 @@ describe('useSwarmOrchestration', () => {
       results: {
         [STEPS.INITIAL]: ['failed draft 1', 'failed draft 2'],
         [STEPS.REFINEMENT]: ['failed refined 1', 'failed refined 2'],
-        [STEPS.SYNTHESIS]: { text: 'failed answer' },
+        [STEPS.SYNTHESIS]: ['failed answer'],
       },
     });
     const secondWork = createWork({
       results: {
         [STEPS.INITIAL]: ['retry draft 1', 'retry draft 2'],
         [STEPS.REFINEMENT]: ['retry refined 1', 'retry refined 2'],
-        [STEPS.SYNTHESIS]: { text: 'retried answer' },
+        [STEPS.SYNTHESIS]: ['retried answer'],
       },
     });
     const runSwarm = vi.fn(async (...args: any[]) => {
@@ -472,7 +472,7 @@ describe('useSwarmOrchestration', () => {
       results: {
         [STEPS.INITIAL]: ['partial draft'],
         [STEPS.REFINEMENT]: [],
-        [STEPS.SYNTHESIS]: {},
+        [STEPS.SYNTHESIS]: [''],
       },
       stepMetadata: [
         { id: STEPS.INITIAL, status: 'done' },
@@ -524,7 +524,7 @@ describe('useSwarmOrchestration', () => {
       results: {
         [STEPS.INITIAL]: ['partial draft'],
         [STEPS.REFINEMENT]: [],
-        [STEPS.SYNTHESIS]: {},
+        [STEPS.SYNTHESIS]: [''],
       },
       stepMetadata: [
         { id: STEPS.INITIAL, status: 'done' },
@@ -573,7 +573,7 @@ describe('useSwarmOrchestration', () => {
       results: {
         [STEPS.INITIAL]: ['draft'],
         [STEPS.REFINEMENT]: ['refined'],
-        [STEPS.SYNTHESIS]: { text: 'partial answer' },
+        [STEPS.SYNTHESIS]: ['partial answer'],
       },
     });
     const initialMessages: Message[] = [
@@ -602,7 +602,7 @@ describe('useSwarmOrchestration', () => {
       results: {
         [STEPS.INITIAL]: ['partial draft'],
         [STEPS.REFINEMENT]: [],
-        [STEPS.SYNTHESIS]: {},
+        [STEPS.SYNTHESIS]: [''],
       },
     });
     const runSwarm = vi.fn(async () => {
@@ -647,7 +647,7 @@ describe('useSwarmOrchestration', () => {
       results: {
         [STEPS.INITIAL]: ['partial draft'],
         [STEPS.REFINEMENT]: [],
-        [STEPS.SYNTHESIS]: {},
+        [STEPS.SYNTHESIS]: [''],
       },
     });
     const runSwarm = vi.fn(async () => {
@@ -847,7 +847,7 @@ describe('useSwarmOrchestration', () => {
       results: {
         [STEPS.INITIAL]: ['partial draft', ''],
         [STEPS.REFINEMENT]: [],
-        [STEPS.SYNTHESIS]: {},
+        [STEPS.SYNTHESIS]: [''],
       },
     });
     const failure = new Error('network failed');

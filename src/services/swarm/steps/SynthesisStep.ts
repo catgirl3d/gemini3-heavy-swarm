@@ -3,20 +3,12 @@ import { type StepContext, type StepId, STEPS } from '@/types/steps';
 import { type AgentState, type SimulateError, type Source, type Work } from '@/types';
 import { prepareGeminiContent } from '@/services/swarm/contentUtils';
 import { BaseStep } from './BaseStep';
-import { getStepResults, getSynthesisResult } from '@/utils/swarm/workHelpers';
+import { getStepResults, getStepThoughts, getSynthesisErrorState } from '@/utils/swarm/workHelpers';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { Logger } from '@shared/utils/logger';
 import { updateAgentStatus } from '@/utils/swarm/statusHelpers';
 import { formatSystemInstruction, formatDrafts, buildSynthesisContext } from '@/utils/swarm/promptHelpers';
 import { createFirstTextJumpTracker } from '@/utils/swarm/jumpHelper';
-
-const getSynthesisText = (value: unknown): string => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value) || !('text' in value)) {
-    return '';
-  }
-
-  return typeof value.text === 'string' ? value.text : '';
-};
 
 export class SynthesisStep extends BaseStep {
   id: StepId = STEPS.SYNTHESIS;
@@ -28,7 +20,7 @@ export class SynthesisStep extends BaseStep {
     allowPause: false
   };
 
-  async execute(context: StepContext): Promise<{ text: string; sources?: Source[] }> {
+  async execute(context: StepContext): Promise<string[]> {
     const { ai, settings, work, signal, messageId } = context;
 
     // Initialize logger early so it's available for all logging
@@ -64,15 +56,14 @@ export class SynthesisStep extends BaseStep {
     });
 
     // Check if this is a regeneration after error
-    const existingSynthesisResult = work.results?.[STEPS.SYNTHESIS];
-    const hadError = typeof existingSynthesisResult === 'object' && existingSynthesisResult?.error === true;
+    const hadError = getSynthesisErrorState(work)?.flag === true;
     
     const config = getStepConfig(this.id);
     
     // Persistent error count check for synthesis
     const errorCountKey = this.getErrorCountKey();
     const errorCountData = work.results?.[errorCountKey];
-    const errorCount = (errorCountData as number) || 0;
+    const errorCount = Array.isArray(errorCountData) ? (errorCountData[0] ?? 0) : 0;
     const isSimulatingError = settings.simulateSynthesisError !== 'none' && errorCount < settings.simulateSynthesisErrorAttempts;
     const isRetrying = hadError || isSimulatingError;
 
@@ -157,7 +148,7 @@ export class SynthesisStep extends BaseStep {
 
             // CRITICAL: Update store with synthesis text BEFORE triggering jump
             // ShowWork's useEffect needs both 'working' status AND synthesisText to collapse cards
-            this.handleStreamChunk(context, -1, text, thought, usage, {
+            this.handleStreamChunk(context, 0, text, thought, usage, {
               isFirstChunk: false, // We handle first chunk logic via jumpTracker
               streamToMessage: true,
               agentStates: currentAgentStates,
@@ -196,11 +187,16 @@ export class SynthesisStep extends BaseStep {
         sourcesCount: sources?.length || 0 
       });
 
-      this.flushLiveWorkResult(context, STEPS.SYNTHESIS, -1);
+      this.flushLiveWorkResult(context, STEPS.SYNTHESIS, 0);
 
-      // Update generic results map (already an object due to handleStreamChunk, but ensuring it here)
-      work.results[STEPS.SYNTHESIS] = { text: finalResponseText, sources };
-      this.discardLiveWorkResultBuffer(context, STEPS.SYNTHESIS, -1);
+      work.results[STEPS.SYNTHESIS] = [finalResponseText];
+      if (sources && sources.length > 0) {
+        work.results[`${STEPS.SYNTHESIS}_sources`] = sources;
+      } else {
+        delete work.results[`${STEPS.SYNTHESIS}_sources`];
+      }
+      work.results[`${STEPS.SYNTHESIS}_error`] = null;
+      this.discardLiveWorkResultBuffer(context, STEPS.SYNTHESIS, 0);
 
       // Mark synthesizer as completed
       currentAgentStates = this.updateAgentStateById(currentAgentStates, `${messageId}-synthesizer_agent`, {
@@ -212,11 +208,11 @@ export class SynthesisStep extends BaseStep {
       
       updateAgentStatus(STEPS.SYNTHESIS, 0, 'done', messageId, config.labels.done);
 
-      return { text: finalResponseText, sources };
+      return [finalResponseText];
     } catch (error) {
       logger.debug('SYNTHESIS FAILED', { 
         error: error instanceof Error ? error.message : String(error),
-        thoughtLength: (work.results?.[`${STEPS.SYNTHESIS}_thought`] as string)?.length || 0
+        thoughtLength: getStepThoughts(work, STEPS.SYNTHESIS)[0]?.length || 0
       });
       logger.debug('SYNTHESIS ERROR (will be logged at top level)', { error });
       
@@ -226,12 +222,12 @@ export class SynthesisStep extends BaseStep {
       
       // Save error info for UI display in ShowWork card, but don't pollute the main text
       // Preservation: if we had some partial text before error, keep it.
-      const currentText = getSynthesisText(work.results[STEPS.SYNTHESIS]);
+      const currentText = getStepResults(work, STEPS.SYNTHESIS)[0] ?? '';
       
-      work.results[STEPS.SYNTHESIS] = { 
-        text: currentText, // Don't add [System: Synthesis failed...] here
-        error: true,
-        errorMessage 
+      work.results[STEPS.SYNTHESIS] = [currentText];
+      work.results[`${STEPS.SYNTHESIS}_error`] = {
+        flag: true,
+        message: errorMessage,
       };
       
       currentAgentStates = this.updateAgentStateById(currentAgentStates, `${messageId}-synthesizer_agent`, {
@@ -244,7 +240,7 @@ export class SynthesisStep extends BaseStep {
       updateAgentStatus(STEPS.SYNTHESIS, 0, 'error', messageId, errorLabel);
       
       // SYNC: Ensure work results (including error flag) are updated in the global store
-      this.discardLiveWorkResultBuffer(context, STEPS.SYNTHESIS, -1);
+      this.discardLiveWorkResultBuffer(context, STEPS.SYNTHESIS, 0);
       this.syncLiveWork(context, work);
       
       throw error;
@@ -293,13 +289,13 @@ export class SynthesisStep extends BaseStep {
 
     const sources = this.extractSources(result.groundingChunks ?? []);
 
+    this.ensureResults(result.work);
     if (sources && sources.length > 0) {
-      this.ensureResults(result.work);
-      const currentResult = getSynthesisResult(result.work);
-      if (currentResult) {
-        result.work.results[STEPS.SYNTHESIS] = { ...currentResult, sources };
-      }
+      result.work.results[`${STEPS.SYNTHESIS}_sources`] = sources;
+    } else {
+      delete result.work.results[`${STEPS.SYNTHESIS}_sources`];
     }
+    result.work.results[`${STEPS.SYNTHESIS}_error`] = null;
 
     return { text: result.text, sources, work: result.work };
   }

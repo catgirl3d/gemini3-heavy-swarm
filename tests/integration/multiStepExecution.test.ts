@@ -141,7 +141,7 @@ describe('Multi-Step Execution Integration', () => {
     });
 
     // Verify final synthesis
-    expect(finalResult).toHaveProperty('text', 'Final synthesized answer');
+    expect(finalResult).toEqual(['Final synthesized answer']);
     expect(work.results[STEPS.SYNTHESIS]).toBeDefined();
 
     // Verify all generateContentStream calls were made (7 total: 3 + 3 + 1)

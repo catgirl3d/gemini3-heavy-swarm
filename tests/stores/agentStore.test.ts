@@ -263,12 +263,13 @@ describe('agentStore', () => {
     expect(initialWork.results?.[STEPS.INITIAL]).toEqual(['old 1', 'old 2']);
   });
 
-  it('updates synthesis work using object, scalar thought, and scalar usage shapes', () => {
+  it('updates synthesis work using slot-0 arrays while preserving sidecars', () => {
     const usage = createUsage(100);
     const sources = [{ uri: 'https://example.com', title: 'Example' }];
     const initialWork: Work = {
       results: {
-        [STEPS.SYNTHESIS]: { text: 'old synthesis', sources },
+        [STEPS.SYNTHESIS]: ['old synthesis'],
+        [`${STEPS.SYNTHESIS}_sources`]: sources,
         unrelated: ['keep'],
       },
     };
@@ -276,7 +277,7 @@ describe('agentStore', () => {
 
     store.startSession('msg-1', initialWork);
     const previousWork = useAgentStore.getState().sessionsByMessageId['msg-1']?.work;
-    store.updateSessionWorkResult('msg-1', STEPS.SYNTHESIS, -1, {
+    store.updateSessionWorkResult('msg-1', STEPS.SYNTHESIS, 0, {
       text: 'final synthesis',
       thought: 'synthesis thought',
       usage,
@@ -284,14 +285,12 @@ describe('agentStore', () => {
 
     const updatedWork = useAgentStore.getState().sessionsByMessageId['msg-1']?.work;
     expect(updatedWork).not.toBe(previousWork);
-    expect(updatedWork?.results?.[STEPS.SYNTHESIS]).toEqual({
-      text: 'final synthesis',
-      sources,
-    });
-    expect(updatedWork?.results?.[`${STEPS.SYNTHESIS}_thought`]).toBe('synthesis thought');
-    expect(updatedWork?.results?.[`${STEPS.SYNTHESIS}_usage`]).toBe(usage);
+    expect(updatedWork?.results?.[STEPS.SYNTHESIS]).toEqual(['final synthesis']);
+    expect(updatedWork?.results?.[`${STEPS.SYNTHESIS}_thoughts`]).toEqual(['synthesis thought']);
+    expect(updatedWork?.results?.[`${STEPS.SYNTHESIS}_usage`]).toEqual([usage]);
+    expect(updatedWork?.results?.[`${STEPS.SYNTHESIS}_sources`]).toEqual(sources);
     expect(updatedWork?.results?.unrelated).toEqual(['keep']);
-    expect(initialWork.results?.[STEPS.SYNTHESIS]).toEqual({ text: 'old synthesis', sources });
+    expect(initialWork.results?.[STEPS.SYNTHESIS]).toEqual(['old synthesis']);
   });
 
   it('reuses unchanged session fields during streaming work updates', () => {
@@ -355,12 +354,12 @@ describe('agentStore', () => {
     expect(nextSession?.work).toBe(previousWork);
   });
 
-  it('skips synthesis work updates when object text and usage are unchanged', () => {
+  it('skips synthesis work updates when slot-0 text and usage are unchanged', () => {
     const initialWork: Work = {
       results: {
-        [STEPS.SYNTHESIS]: { text: 'final answer' },
-        [`${STEPS.SYNTHESIS}_thought`]: 'existing synthesis thought',
-        [`${STEPS.SYNTHESIS}_usage`]: createUsage(24),
+        [STEPS.SYNTHESIS]: ['final answer'],
+        [`${STEPS.SYNTHESIS}_thoughts`]: ['existing synthesis thought'],
+        [`${STEPS.SYNTHESIS}_usage`]: [createUsage(24)],
       },
     };
     const store = useAgentStore.getState();
@@ -370,7 +369,7 @@ describe('agentStore', () => {
     const previousSessions = useAgentStore.getState().sessionsByMessageId;
     const previousSession = previousSessions['msg-1'];
 
-    store.updateSessionWorkResult('msg-1', STEPS.SYNTHESIS, -1, {
+    store.updateSessionWorkResult('msg-1', STEPS.SYNTHESIS, 0, {
       text: 'final answer',
       thought: 'existing synthesis thought',
       usage: createUsage(24),
@@ -387,18 +386,18 @@ describe('agentStore', () => {
       results: {
         [STEPS.INITIAL]: ['draft 1'],
         [`${STEPS.INITIAL}_usage`]: [createUsage(12)],
-        [STEPS.SYNTHESIS]: { text: 'synthesis' },
-        [`${STEPS.SYNTHESIS}_usage`]: createUsage(24),
+        [STEPS.SYNTHESIS]: ['synthesis'],
+        [`${STEPS.SYNTHESIS}_usage`]: [createUsage(24)],
       },
     };
     const store = useAgentStore.getState();
 
     store.startSession('msg-1', initialWork);
     store.updateSessionWorkResult('msg-1', STEPS.INITIAL, 0, { usage: null as never });
-    store.updateSessionWorkResult('msg-1', STEPS.SYNTHESIS, -1, { usage: null as never });
+    store.updateSessionWorkResult('msg-1', STEPS.SYNTHESIS, 0, { usage: null as never });
 
     const results = useAgentStore.getState().sessionsByMessageId['msg-1']?.work.results;
     expect(results?.[`${STEPS.INITIAL}_usage`]).toEqual([null]);
-    expect(results?.[`${STEPS.SYNTHESIS}_usage`]).toBeNull();
+    expect(results?.[`${STEPS.SYNTHESIS}_usage`]).toEqual([null]);
   });
 });

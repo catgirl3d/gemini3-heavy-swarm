@@ -72,7 +72,7 @@ describe('useGeminiSwarm', () => {
       openRouterModel: '',
     });
     const messages = [{ id: 'm1', role: 'user', parts: [{ text: 'hello' }] }] as any;
-    const currentWork: Work = { results: { [STEPS.SYNTHESIS]: { text: 'done' } } };
+    const currentWork: Work = { results: { [STEPS.SYNTHESIS]: ['done'] } };
 
     mocks.appSettingsReturn = {
       settings,

@@ -58,7 +58,7 @@ const createBaseWork = (overrides: Partial<Work> = {}): Work => ({
     [STEPS.REFINEMENT]: ['old critic 0', 'old critic 1'],
     [`${STEPS.REFINEMENT}_thoughts`]: ['old critic thought 0', 'old critic thought 1'],
     [`${STEPS.REFINEMENT}_usage`]: [createUsage(30), createUsage(40)],
-    [STEPS.SYNTHESIS]: { text: 'old final answer' },
+    [STEPS.SYNTHESIS]: ['old final answer'],
   },
   stepMetadata: [
     { id: STEPS.INITIAL, status: 'done', label: 'Initial Step' },
@@ -90,9 +90,9 @@ const createRegeneratedWork = ({
   if (stepId === STEPS.SYNTHESIS) {
     return {
       results: {
-        [STEPS.SYNTHESIS]: { text },
-        [`${STEPS.SYNTHESIS}_thought`]: thought,
-        [`${STEPS.SYNTHESIS}_usage`]: usage,
+        [STEPS.SYNTHESIS]: [text],
+        [`${STEPS.SYNTHESIS}_thoughts`]: [thought],
+        [`${STEPS.SYNTHESIS}_usage`]: [usage],
       },
       stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'done', label: 'Regenerated Synthesis' }],
     };
@@ -548,9 +548,9 @@ describe('useSwarmRegeneration', () => {
       staleFromStepId: STEPS.INITIAL,
     });
     expect(updatedWork.results?.[STEPS.REFINEMENT]).toEqual(['old critic 0', 'old critic 1']);
-    expect(updatedWork.results?.[STEPS.SYNTHESIS]).toEqual({ text: 'old final answer' });
+    expect(updatedWork.results?.[STEPS.SYNTHESIS]).toEqual(['old final answer']);
     expect(updatedWork.agentStates).toEqual(snapshotAgents.slice(0, 2));
-    expect(updatedMessage.sources).toEqual([source]);
+    expect(updatedMessage.sources).toEqual([{ uri: 'https://old-source.test', title: 'Old Source' }]);
     expect(useAgentStore.getState()).toMatchObject({
       isLoading: false,
       isPaused: false,
@@ -578,7 +578,7 @@ describe('useSwarmRegeneration', () => {
     });
 
     expect(messagesState.messages[1].work?.results?.[STEPS.REFINEMENT]).toEqual(['old critic 0', 'new critic 1']);
-    expect(messagesState.messages[1].work?.results?.[STEPS.SYNTHESIS]).toEqual({ text: 'old final answer' });
+    expect(messagesState.messages[1].work?.results?.[STEPS.SYNTHESIS]).toEqual(['old final answer']);
     expect(messagesState.messages[1].work?.stepMetadata?.find(m => m.id === STEPS.SYNTHESIS)).toMatchObject({
       status: 'stale',
       staleFromStepId: STEPS.REFINEMENT,
@@ -600,7 +600,7 @@ describe('useSwarmRegeneration', () => {
       results: {
         [STEPS.INITIAL]: ['old agent 0', 'old agent 1'],
         [STEPS.REFINEMENT]: ['old critic 0', 'old critic 1'],
-        [STEPS.SYNTHESIS]: {},
+        [STEPS.SYNTHESIS]: [''],
       },
     });
     const regenerateResponse = vi.fn(async () => ({
@@ -693,7 +693,7 @@ describe('useSwarmRegeneration', () => {
     const secondCall = toRegenerateResponseCall(regenerateResponse.mock.calls[1]);
     expect(secondCall.workContext.results?.[STEPS.REFINEMENT]).toEqual(['old critic 0', 'new critic 1']);
     expect(messagesState.messages[1].work?.results?.[STEPS.REFINEMENT]).toEqual(['old critic 0', 'new critic 1']);
-    expect(messagesState.messages[1].work?.results?.[STEPS.SYNTHESIS]).toEqual({ text: 'new final answer' });
+    expect(messagesState.messages[1].work?.results?.[STEPS.SYNTHESIS]).toEqual(['new final answer']);
   });
 
   it('writes final message work from the session snapshot instead of a stale message snapshot', async () => {
@@ -705,7 +705,7 @@ describe('useSwarmRegeneration', () => {
         [STEPS.REFINEMENT]: ['live critic 0', 'live critic 1'],
         [`${STEPS.REFINEMENT}_thoughts`]: ['live critic thought 0', 'live critic thought 1'],
         [`${STEPS.REFINEMENT}_usage`]: [createUsage(103), createUsage(104)],
-        [STEPS.SYNTHESIS]: { text: 'live final answer' },
+        [STEPS.SYNTHESIS]: ['live final answer'],
       },
     });
     const staleMessageWork = createBaseWork();
@@ -737,7 +737,7 @@ describe('useSwarmRegeneration', () => {
 
     expect(messagesState.messages[1].work?.results?.[STEPS.INITIAL]).toEqual(['live agent 0', 'live agent 1']);
     expect(messagesState.messages[1].work?.results?.[STEPS.REFINEMENT]).toEqual(['live critic 0', 'new critic 1']);
-    expect(messagesState.messages[1].work?.results?.[STEPS.SYNTHESIS]).toEqual({ text: 'live final answer' });
+    expect(messagesState.messages[1].work?.results?.[STEPS.SYNTHESIS]).toEqual(['live final answer']);
     expect(messagesState.messages[1].work?.stepMetadata?.find(m => m.id === STEPS.SYNTHESIS)).toMatchObject({
       status: 'stale',
       staleFromStepId: STEPS.REFINEMENT,
@@ -891,9 +891,9 @@ describe('useSwarmRegeneration', () => {
     });
 
     expect(messagesState.messages[1]).toMatchObject(originalConversation[1]);
-    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.work.results?.[STEPS.SYNTHESIS]).toEqual({
-      text: 'old final answer',
-    });
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.work.results?.[STEPS.SYNTHESIS]).toEqual([
+      'old final answer',
+    ]);
     expect(useAgentStore.getState()).toMatchObject({
       isLoading: false,
       isPaused: false,

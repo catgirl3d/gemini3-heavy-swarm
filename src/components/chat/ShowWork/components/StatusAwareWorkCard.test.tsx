@@ -189,7 +189,7 @@ describe('StatusAwareWorkCard', () => {
     });
   });
 
-  it('diagnoses empty done synthesis cards using object synthesis text length from work results', async () => {
+  it('diagnoses empty done synthesis cards using synthesis lane text length from work results', async () => {
     const snapshotText = 'Object synthesis text';
     mocks.useResolvedAgentState.mockReturnValue(createAgentState({
       status: 'done',
@@ -201,7 +201,7 @@ describe('StatusAwareWorkCard', () => {
     render(
       <StatusAwareWorkCard
         cardId="synthesis"
-        work={createWork({ results: { [STEPS.SYNTHESIS]: { text: snapshotText } } })}
+        work={createWork({ results: { [STEPS.SYNTHESIS]: [snapshotText] } })}
         step={STEPS.SYNTHESIS}
         index={0}
         title="Synthesizer"
@@ -234,7 +234,7 @@ describe('StatusAwareWorkCard', () => {
     render(
       <StatusAwareWorkCard
         cardId="synthesis"
-        work={createWork({ results: { [STEPS.SYNTHESIS]: { text: snapshotText } } })}
+        work={createWork({ results: { [STEPS.SYNTHESIS]: [snapshotText] } })}
         step={STEPS.SYNTHESIS}
         index={0}
         title="Synthesizer"

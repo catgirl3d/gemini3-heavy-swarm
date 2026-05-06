@@ -193,7 +193,7 @@ export function useSwarmOrchestration({
       results: {
         [STEPS.INITIAL]: new Array(settings.numAgents).fill(''),
         [STEPS.REFINEMENT]: new Array(settings.numAgents).fill(''),
-        [STEPS.SYNTHESIS]: {}
+        [STEPS.SYNTHESIS]: ['']
       }
     };
 

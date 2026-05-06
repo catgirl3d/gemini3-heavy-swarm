@@ -102,13 +102,13 @@ const createWork = (overrides: Partial<Work> = {}): Work => ({
   results: {
     [STEPS.INITIAL]: ['Initial draft'],
     [STEPS.REFINEMENT]: ['Refined draft'],
-    [STEPS.SYNTHESIS]: { text: 'Historical synthesis' },
+    [STEPS.SYNTHESIS]: ['Historical synthesis'],
     initial_step_thoughts: ['Initial thought'],
     refinement_step_thoughts: ['Refinement thought'],
-    synthesis_step_thought: 'Synthesis thought',
+    synthesis_step_thoughts: ['Synthesis thought'],
     initial_step_usage: [{ promptTokens: 1, candidatesTokens: 2, totalTokens: 3 }],
     refinement_step_usage: [{ promptTokens: 4, candidatesTokens: 5, totalTokens: 9 }],
-    synthesis_step_usage: { promptTokens: 6, candidatesTokens: 7, totalTokens: 13 },
+    synthesis_step_usage: [{ promptTokens: 6, candidatesTokens: 7, totalTokens: 13 }],
   },
   debugInfo: {
     [STEPS.INITIAL]: [createDebugInfo('initial')],
@@ -195,9 +195,9 @@ describe('ShowWork', () => {
       'message-1': {
         work: createWork({
           results: {
-            [STEPS.SYNTHESIS]: { text: 'Live synthesis' },
-            synthesis_step_thought: 'Live synthesis thought',
-            synthesis_step_usage: { promptTokens: 2, candidatesTokens: 7, totalTokens: 9 },
+            [STEPS.SYNTHESIS]: ['Live synthesis'],
+            synthesis_step_thoughts: ['Live synthesis thought'],
+            synthesis_step_usage: [{ promptTokens: 2, candidatesTokens: 7, totalTokens: 9 }],
           },
         }),
         agentStates: [],
@@ -210,9 +210,9 @@ describe('ShowWork', () => {
           work: createWork({
             results: {
               [STEPS.INITIAL]: ['Initial draft'],
-              [STEPS.SYNTHESIS]: { text: 'Historical synthesis' },
+              [STEPS.SYNTHESIS]: ['Historical synthesis'],
               initial_step_usage: [{ promptTokens: 5, candidatesTokens: 5, totalTokens: 10 }],
-              synthesis_step_usage: { promptTokens: 1, candidatesTokens: 0, totalTokens: 1 },
+              synthesis_step_usage: [{ promptTokens: 1, candidatesTokens: 0, totalTokens: 1 }],
             },
             debugInfo: {
               [STEPS.INITIAL]: [createDebugInfo('initial')],
@@ -239,7 +239,7 @@ describe('ShowWork', () => {
       results: {
         [STEPS.INITIAL]: ['Live initial draft'],
         [STEPS.REFINEMENT]: ['Live refinement 1', 'Live refinement 2'],
-        [STEPS.SYNTHESIS]: {},
+        [STEPS.SYNTHESIS]: [''],
         initial_step_thoughts: ['Live initial thought'],
         refinement_step_thoughts: ['Live refinement thought 1', 'Live refinement thought 2'],
         initial_step_usage: [{ promptTokens: 1, candidatesTokens: 1, totalTokens: 2 }],
@@ -265,7 +265,7 @@ describe('ShowWork', () => {
             results: {
               [STEPS.INITIAL]: [''],
               [STEPS.REFINEMENT]: ['', ''],
-              [STEPS.SYNTHESIS]: {},
+              [STEPS.SYNTHESIS]: [''],
             },
           }),
           isLive: true,
@@ -512,7 +512,7 @@ describe('ShowWork', () => {
               results: {
                 [STEPS.INITIAL]: ['Initial draft', null],
                 [STEPS.REFINEMENT]: ['Historical refinement'],
-                [STEPS.SYNTHESIS]: { text: 'Historical synthesis' },
+                [STEPS.SYNTHESIS]: ['Historical synthesis'],
                 initial_step_thoughts: ['Initial thought'],
                 refinement_step_thoughts: ['Refinement thought'],
               } as unknown as Work['results'],

@@ -512,12 +512,12 @@ describe('BaseStep', () => {
         onMessageUpdate: vi.fn()
       } as any;
 
-      step.testHandleStreamChunk(context, -1, 'synthesis text', '', null, {
+      step.testHandleStreamChunk(context, 0, 'synthesis text', '', null, {
         isFirstChunk: false,
         streamToMessage: false
       });
 
-      expect((work.results[STEPS.SYNTHESIS] as any).text).toBe('synthesis text');
+      expect(work.results[STEPS.SYNTHESIS]).toEqual(['synthesis text']);
     });
 
     it('should call onMessageUpdate when streamToMessage is true', () => {

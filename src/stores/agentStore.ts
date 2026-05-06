@@ -7,15 +7,12 @@ import {
   type Work,
   type WorkResultUpdates,
 } from '@/types';
-import { type StepId, STEPS } from '@/types/steps';
+import { type StepId } from '@/types/steps';
 import {
   cloneWork,
   getStepResults,
   getStepThoughts,
   getStepUsage,
-  getSynthesisResult,
-  getSynthesisThought,
-  getSynthesisUsage,
   markDownstreamStale as markWorkDownstreamStale,
   snapshotWorkWithAgents,
   updateAgentWork,
@@ -67,27 +64,21 @@ const hasWorkResultChanges = (
   updates: WorkResultUpdates,
 ): boolean => {
   if (hasOwnUpdate(updates, 'text')) {
-    const currentText = stepId === STEPS.SYNTHESIS
-      ? getSynthesisResult(work)?.text
-      : getStepResults(work, stepId)[agentIndex];
+    const currentText = getStepResults(work, stepId)[agentIndex];
     if (currentText !== updates.text) {
       return true;
     }
   }
 
   if (hasOwnUpdate(updates, 'thought')) {
-    const currentThought = stepId === STEPS.SYNTHESIS
-      ? getSynthesisThought(work)
-      : getStepThoughts(work, stepId)[agentIndex];
+    const currentThought = getStepThoughts(work, stepId)[agentIndex];
     if (currentThought !== updates.thought) {
       return true;
     }
   }
 
   if (hasOwnUpdate(updates, 'usage')) {
-    const currentUsage = stepId === STEPS.SYNTHESIS
-      ? getSynthesisUsage(work)
-      : getStepUsage(work, stepId)[agentIndex];
+    const currentUsage = getStepUsage(work, stepId)[agentIndex];
     if (!isTokenUsageEqual(currentUsage, updates.usage)) {
       return true;
     }
