@@ -6,9 +6,10 @@ import { useAgentStore } from '@/stores/agentStore';
 vi.mock('@/stores/agentStore', () => ({
   useAgentStore: {
     getState: vi.fn(() => ({
-      updateAgent: vi.fn(),
-      updateWorkResult: vi.fn(),
-      setCurrentWork: vi.fn(),
+      updateSessionAgent: vi.fn(),
+      updateSessionWorkResult: vi.fn(),
+      replaceSessionWork: vi.fn(),
+      updateSessionRuntime: vi.fn(),
       agents: []
     }))
   }
@@ -56,9 +57,10 @@ describe('Synthesis Jump behavior', () => {
     
     updateAgentMock = vi.fn();
     (useAgentStore.getState as any).mockReturnValue({
-      updateAgent: updateAgentMock,
-      updateWorkResult: vi.fn(),
-      setCurrentWork: vi.fn(),
+      updateSessionAgent: updateAgentMock,
+      updateSessionWorkResult: vi.fn(),
+      replaceSessionWork: vi.fn(),
+      updateSessionRuntime: vi.fn(),
       agents: []
     });
 

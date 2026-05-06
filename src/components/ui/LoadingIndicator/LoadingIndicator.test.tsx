@@ -1,8 +1,24 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-import type { AgentState } from '@/types';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentState, Work } from '@/types';
 import { ProviderType } from '@/types';
 import { STEPS } from '@/types/steps';
+
+const mocks = vi.hoisted(() => ({
+  loggerDebug: vi.fn(),
+}));
+
+vi.mock('@shared/utils/logger', () => ({
+  Logger: class {
+    debug(...args: unknown[]) {
+      mocks.loggerDebug(...args);
+    }
+
+    error() {}
+    info() {}
+    warn() {}
+  },
+}));
 
 vi.mock('@/components/chat', () => ({
   AgentAvatar: ({ type, provider, model }: any) => (
@@ -28,7 +44,15 @@ const createAgentState = (overrides: Partial<AgentState> = {}): AgentState => ({
   ...overrides,
 });
 
+const createWork = (overrides: Partial<Work> = {}): Work => ({
+  ...overrides,
+});
+
 describe('LoadingIndicator', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('derives a step-specific status while rendering the wrapped avatar layout', () => {
     const { container } = render(
       <LoadingIndicator
@@ -130,5 +154,104 @@ describe('LoadingIndicator', () => {
 
     expect(onRegenerate).toHaveBeenNthCalledWith(1, STEPS.INITIAL, 0);
     expect(onRegenerate).toHaveBeenNthCalledWith(2, STEPS.INITIAL, 1);
+  });
+
+  it('treats stale synthesis metadata as incomplete and keeps Continue available for paused live sessions', () => {
+    const onContinue = vi.fn();
+
+    render(
+      <LoadingIndicator
+        status="Paused"
+        agentStates={[createAgentState({ messageId: 'message-1', status: 'done', label: 'Drafted' })]}
+        isPaused
+        messageId="message-1"
+        onContinue={onContinue}
+        work={createWork({
+          stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'stale', label: 'Synthesis Step', staleFromStepId: STEPS.REFINEMENT }],
+          results: {
+            [STEPS.SYNTHESIS]: { text: 'Old final answer' },
+          },
+        })}
+        noWrapper
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(onContinue).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs render debug output only when the visible indicator state changes', () => {
+    const baseAgent = createAgentState({
+      status: 'working',
+      label: 'Drafting...',
+      messageId: 'message-1',
+    });
+
+    const { rerender } = render(
+      <LoadingIndicator
+        status="Drafting initial responses..."
+        agentStates={[
+          baseAgent,
+          createAgentState({
+            id: 'other-message-agent',
+            name: 'Agent 2',
+            status: 'waiting',
+            label: 'Waiting...',
+            messageId: 'message-2',
+            agentIndex: 1,
+          }),
+        ]}
+        messageId="message-1"
+        noWrapper
+      />
+    );
+
+    const getRenderLogCalls = () => mocks.loggerDebug.mock.calls.filter(([message]) => message === 'LoadingIndicator RENDER');
+
+    expect(getRenderLogCalls()).toHaveLength(1);
+
+    rerender(
+      <LoadingIndicator
+        status="Drafting initial responses..."
+        agentStates={[
+          { ...baseAgent },
+          createAgentState({
+            id: 'other-message-agent',
+            name: 'Agent 2',
+            status: 'error',
+            label: 'Failed elsewhere',
+            messageId: 'message-2',
+            agentIndex: 1,
+          }),
+        ]}
+        messageId="message-1"
+        noWrapper
+      />
+    );
+
+    expect(getRenderLogCalls()).toHaveLength(1);
+
+    rerender(
+      <LoadingIndicator
+        status="Paused"
+        agentStates={[
+          { ...baseAgent, status: 'done', label: 'Drafted' },
+          createAgentState({
+            id: 'other-message-agent',
+            name: 'Agent 2',
+            status: 'error',
+            label: 'Failed elsewhere',
+            messageId: 'message-2',
+            agentIndex: 1,
+          }),
+        ]}
+        isPaused
+        messageId="message-1"
+        noWrapper
+      />
+    );
+
+    expect(getRenderLogCalls()).toHaveLength(2);
   });
 });

@@ -106,14 +106,12 @@ const renderOrchestration = ({
   initialMessages = [],
   runSwarm = vi.fn(),
   mainAbort = createAbortHook(),
-  pauseResolverRef = { current: null },
   orchestratorRef = { current: { runSwarm } },
   settings = createMockSettings({ numAgents: 2 }),
 }: {
   initialMessages?: Message[];
   runSwarm?: ReturnType<typeof vi.fn>;
   mainAbort?: AbortControllerHook;
-  pauseResolverRef?: { current: (() => void) | null };
   orchestratorRef?: { current: { runSwarm: ReturnType<typeof vi.fn> } | null };
   settings?: ReturnType<typeof createMockSettings>;
 } = {}) => {
@@ -124,7 +122,6 @@ const renderOrchestration = ({
     messagesRef: messagesState.messagesRef,
     setMessages: messagesState.setMessages,
     mainAbort,
-    pauseResolverRef,
     orchestratorRef: orchestratorRef as any,
   }));
 
@@ -133,7 +130,6 @@ const renderOrchestration = ({
     settings,
     messagesState,
     mainAbort,
-    pauseResolverRef,
     runSwarm,
   };
 };
@@ -148,7 +144,6 @@ const toRunSwarmCall = (args: any[]) => {
     messageId,
     onMessageUpdate,
     signal,
-    pauseResolverRef,
     onPause,
     onStatusUpdate,
     onSynthesisJump,
@@ -164,7 +159,6 @@ const toRunSwarmCall = (args: any[]) => {
     messageId,
     onMessageUpdate: onMessageUpdate as (text: string, isFirstChunk: boolean, thought?: string, usage?: TokenUsage | null) => void,
     signal,
-    pauseResolverRef,
     onPause,
     onStatusUpdate,
     onSynthesisJump,
@@ -196,7 +190,7 @@ describe('useSwarmOrchestration', () => {
     expect(mainAbort.create).not.toHaveBeenCalled();
     expect(runSwarm).not.toHaveBeenCalled();
     expect(messagesState.setMessages).not.toHaveBeenCalled();
-    expect(useAgentStore.getState().currentMessageId).toBeUndefined();
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
   });
 
   it('throws before mutating state when the orchestrator is missing', async () => {
@@ -215,9 +209,8 @@ describe('useSwarmOrchestration', () => {
     expect(runSwarm).not.toHaveBeenCalled();
     expect(messagesState.setMessages).not.toHaveBeenCalled();
     expect(useAgentStore.getState()).toMatchObject({
-      currentMessageId: undefined,
+      activeSessionMessageId: undefined,
       isLoading: false,
-      currentWork: undefined,
     });
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
     expect(mainAbort.ref.current).toBeNull();
@@ -232,7 +225,7 @@ describe('useSwarmOrchestration', () => {
       const { messageId, onMessageUpdate } = toRunSwarmCall(args);
 
       expect(useAgentStore.getState().abortControllers.has(`main-${messageId}`)).toBe(true);
-      useAgentStore.getState().updateAgent(STEPS.INITIAL, 0, 'done', 'Done', messageId);
+      useAgentStore.getState().updateSessionAgent(STEPS.INITIAL, 0, 'done', 'Done', messageId);
       onMessageUpdate('streamed answer', true);
 
       return { text: 'final answer', sources, work: finalWork };
@@ -284,28 +277,73 @@ describe('useSwarmOrchestration', () => {
     expect(useAgentStore.getState()).toMatchObject({
       isLoading: false,
       isPaused: false,
-      currentMessageId: undefined,
-      currentWork: undefined,
+      activeSessionMessageId: undefined,
     });
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
     expect(mainAbort.ref.current).toBeNull();
   });
 
-  it('continues an active pause without starting a new swarm run', async () => {
-    const resumePausedExecution = vi.fn();
-    const pauseResolverRef = { current: resumePausedExecution };
-    const { result, runSwarm, messagesState } = renderOrchestration({ pauseResolverRef });
-    useAgentStore.getState().setIsPaused(true);
+  it('persists a paused partial run and continues by starting a fresh run from the latest snapshot', async () => {
+    mocks.generateUUID.mockReturnValueOnce('model-1').mockReturnValueOnce('user-1');
+    const pausedAgents = [
+      createAgent({ id: 'model-1-initial-0', agentIndex: 0, status: 'done', label: 'Drafted' }),
+      createAgent({ id: 'model-1-initial-1', agentIndex: 1, status: 'done', label: 'Drafted', name: 'Agent 2' }),
+    ];
+    const pausedWork = createWork({
+      results: {
+        [STEPS.INITIAL]: ['partial draft'],
+        [STEPS.REFINEMENT]: [],
+        [STEPS.SYNTHESIS]: {},
+      },
+      agentStates: pausedAgents,
+      stepMetadata: [
+        { id: STEPS.INITIAL, status: 'done' },
+        { id: STEPS.SYNTHESIS, status: 'pending' },
+      ],
+    });
+    const finalWork = createWork();
+    const runSwarm = vi.fn(async (...args: any[]) => {
+      const { messageId } = toRunSwarmCall(args);
+
+      if (runSwarm.mock.calls.length === 1) {
+        useAgentStore.getState().replaceSessionAgents(messageId, pausedAgents);
+        return { text: '', sources: [], work: pausedWork, paused: true };
+      }
+
+      expect(useAgentStore.getState().sessionsByMessageId[messageId]?.agentStates).toEqual(pausedAgents);
+      return { text: 'final answer', sources: [], work: finalWork, paused: false };
+    });
+    const { result, messagesState } = renderOrchestration({ runSwarm });
+
+    await act(async () => {
+      await result.current.sendMessage('hello', null, null);
+    });
+
+    expect(useAgentStore.getState()).toMatchObject({
+      isLoading: true,
+      isPaused: true,
+      activeSessionMessageId: 'model-1',
+    });
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.work).toEqual(pausedWork);
+    expect(messagesState.messages[1]).toMatchObject({
+      id: 'model-1',
+      work: expect.objectContaining({ results: pausedWork.results }),
+    });
 
     await act(async () => {
       await result.current.continueGeneration();
     });
 
-    expect(resumePausedExecution).toHaveBeenCalledTimes(1);
-    expect(pauseResolverRef.current).toBeNull();
-    expect(useAgentStore.getState().isPaused).toBe(false);
-    expect(runSwarm).not.toHaveBeenCalled();
-    expect(messagesState.setMessages).not.toHaveBeenCalled();
+    expect(runSwarm).toHaveBeenCalledTimes(2);
+    const resumeCall = toRunSwarmCall(runSwarm.mock.calls[1]);
+    expect(resumeCall.messageId).toBe('model-1');
+    expect(resumeCall.existingWork).toMatchObject(pausedWork);
+    expect(resumeCall.existingWork?.agentStates).toEqual(pausedAgents);
+    expect(useAgentStore.getState()).toMatchObject({
+      isLoading: false,
+      isPaused: false,
+      activeSessionMessageId: undefined,
+    });
   });
 
   it('does nothing when retry() is called before any successful input is captured', () => {
@@ -477,6 +515,58 @@ describe('useSwarmOrchestration', () => {
     });
   });
 
+  it('preserves live session agent states when resumed work returns a stale agentStates snapshot', async () => {
+    const staleAgents = [
+      createAgent({ id: 'resume-agent-1', messageId: 'resume-model', status: 'done', label: 'Drafted' }),
+      createAgent({ id: 'resume-agent-2', messageId: 'resume-model', agentIndex: 1, status: 'waiting', label: 'Waiting...', name: 'Agent 2' }),
+    ];
+    const existingWork = createWork({
+      results: {
+        [STEPS.INITIAL]: ['partial draft'],
+        [STEPS.REFINEMENT]: [],
+        [STEPS.SYNTHESIS]: {},
+      },
+      stepMetadata: [
+        { id: STEPS.INITIAL, status: 'done' },
+        { id: STEPS.SYNTHESIS, status: 'pending' },
+      ],
+      agentStates: staleAgents,
+    });
+    const liveAgents = [
+      createAgent({ id: 'resume-agent-1', messageId: 'resume-model', status: 'done', label: 'Done' }),
+      createAgent({ id: 'resume-agent-2', messageId: 'resume-model', agentIndex: 1, status: 'done', label: 'Done', name: 'Agent 2' }),
+    ];
+    const initialMessages: Message[] = [
+      { id: 'resume-user', role: 'user', parts: [{ text: 'resume' }] },
+      { id: 'resume-model', role: 'model', parts: [{ text: 'partial answer' }], work: existingWork },
+    ];
+    const runSwarm = vi.fn(async (...args: any[]) => {
+      const { messageId, onMessageUpdate } = toRunSwarmCall(args);
+      onMessageUpdate('resumed stream', false);
+      useAgentStore.getState().replaceSessionAgents(messageId, liveAgents);
+
+      return {
+        text: 'resumed final',
+        sources: [],
+        work: createWork({
+          stepMetadata: [
+            { id: STEPS.INITIAL, status: 'done' },
+            { id: STEPS.SYNTHESIS, status: 'done' },
+          ],
+          agentStates: staleAgents,
+        }),
+      };
+    });
+    const { result, messagesState } = renderOrchestration({ initialMessages, runSwarm });
+
+    await act(async () => {
+      await result.current.continueGeneration();
+    });
+
+    expect(useAgentStore.getState().sessionsByMessageId['resume-model']?.agentStates).toEqual(liveAgents);
+    expect(messagesState.messages[1].work?.agentStates).toEqual(liveAgents);
+  });
+
   it('does not clear resumed visible text when synthesis emits a thought-only chunk', async () => {
     const existingWork = createWork({
       stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'pending' }],
@@ -598,10 +688,11 @@ describe('useSwarmOrchestration', () => {
     const { result, messagesState } = renderOrchestration({ initialMessages });
     const store = useAgentStore.getState();
 
-    store.setCurrentMessageId('model-1');
-    store.setCurrentWork(currentWork);
-    store.setIsLoading(true);
-    store.setIsPaused(true);
+    store.startSession('model-1', currentWork, {
+      status: 'paused',
+      isLoading: true,
+      isPaused: true,
+    });
     store.registerAbortController('main-model-1', controller);
 
     act(() => {
@@ -613,14 +704,18 @@ describe('useSwarmOrchestration', () => {
     expect(useAgentStore.getState()).toMatchObject({
       isLoading: false,
       isPaused: false,
-      currentMessageId: undefined,
-      loadingStatus: 'Stopped',
-      currentWork: expect.objectContaining({ isStopped: true }),
+      activeSessionMessageId: undefined,
+      loadingStatus: '',
     });
-    expect(messagesState.messages[1].work).toEqual(expect.objectContaining({ isStopped: true }));
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.work).toEqual(expect.objectContaining({ isStopped: true }));
+    expect(messagesState.messages[1].work).toEqual(expect.objectContaining({
+      isStopped: true,
+      results: currentWork.results,
+      stepMetadata: currentWork.stepMetadata,
+    }));
   });
 
-  it('marks a history message as stopped even when store.currentWork is missing', () => {
+  it('marks a history message as stopped even when the session has no meaningful work snapshot', () => {
     const controller = new AbortController();
     const abortSpy = vi.spyOn(controller, 'abort');
     const initialMessages: Message[] = [
@@ -630,9 +725,11 @@ describe('useSwarmOrchestration', () => {
     const { result, messagesState } = renderOrchestration({ initialMessages });
     const store = useAgentStore.getState();
 
-    store.setCurrentMessageId('model-1');
-    store.setIsLoading(true);
-    store.setIsPaused(true);
+    store.startSession('model-1', { results: {} }, {
+      status: 'paused',
+      isLoading: true,
+      isPaused: true,
+    });
     store.registerAbortController('main-model-1', controller);
 
     act(() => {
@@ -641,7 +738,7 @@ describe('useSwarmOrchestration', () => {
 
     expect(abortSpy).toHaveBeenCalledTimes(1);
     expect(messagesState.messages[1].work).toEqual({ isStopped: true });
-    expect(useAgentStore.getState().currentWork).toBeUndefined();
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
   });
 
   it('pushes a model message from streaming updates when resuming a message id that is not in history', async () => {
@@ -711,7 +808,7 @@ describe('useSwarmOrchestration', () => {
 
     expect(useAgentStore.getState()).toMatchObject({
       isLoading: false,
-      loadingStatus: 'Stopped by user',
+      loadingStatus: '',
     });
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
     expect(mainAbort.ref.current).toBeNull();
@@ -728,9 +825,6 @@ describe('useSwarmOrchestration', () => {
     const { result, messagesState } = renderOrchestration({ initialMessages });
     const store = useAgentStore.getState();
 
-    store.setCurrentWork(currentWork);
-    store.setIsLoading(true);
-    store.setIsPaused(true);
     store.registerAbortController('main-model-1', controller);
 
     act(() => {
@@ -742,9 +836,8 @@ describe('useSwarmOrchestration', () => {
     expect(useAgentStore.getState()).toMatchObject({
       isLoading: false,
       isPaused: false,
-      currentMessageId: undefined,
-      loadingStatus: 'Stopped',
-      currentWork,
+      activeSessionMessageId: undefined,
+      loadingStatus: '',
     });
   });
 
@@ -759,7 +852,7 @@ describe('useSwarmOrchestration', () => {
     });
     const failure = new Error('network failed');
     const runSwarm = vi.fn(async () => {
-      useAgentStore.getState().setCurrentWork(partialWork);
+      useAgentStore.getState().replaceSessionWork('model-error', partialWork);
       throw failure;
     });
     const { result, messagesState, mainAbort } = renderOrchestration({ runSwarm });
@@ -784,7 +877,7 @@ describe('useSwarmOrchestration', () => {
       isLoading: true,
       isPaused: true,
       loadingStatus: 'Error: Friendly failure',
-      error: null,
+      error: 'Friendly failure',
     });
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
     expect(mainAbort.ref.current).toBeNull();
@@ -806,7 +899,7 @@ describe('useSwarmOrchestration', () => {
     expect(useAgentStore.getState()).toMatchObject({
       isLoading: false,
       isPaused: false,
-      currentWork: undefined,
+      activeSessionMessageId: undefined,
       error: 'Friendly failure',
     });
     expect(messagesState.messages[1]).toMatchObject({

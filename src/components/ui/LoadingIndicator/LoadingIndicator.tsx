@@ -11,6 +11,68 @@ import './LoadingIndicator.css';
 
 const logger = new Logger('LoadingIndicator');
 
+type LoadingIndicatorAgentDetail = {
+  id: string;
+  name: string;
+  status: AgentState['status'];
+  label: string;
+  stepId: AgentState['stepId'];
+  messageId: string | undefined;
+  agentIndex: number | undefined;
+};
+
+type LoadingIndicatorLogSnapshot = {
+  status: string;
+  messageId?: string;
+  isPaused?: boolean;
+  agentDetails: LoadingIndicatorAgentDetail[];
+};
+
+const toAgentDetail = (agent: AgentState): LoadingIndicatorAgentDetail => ({
+  id: agent.id,
+  name: agent.name,
+  status: agent.status,
+  label: agent.label,
+  stepId: agent.stepId,
+  messageId: agent.messageId,
+  agentIndex: agent.agentIndex
+});
+
+const getAgentsByMessage = (agentDetails: LoadingIndicatorAgentDetail[]): Record<string, number> => {
+  return agentDetails.reduce<Record<string, number>>((acc, agent) => {
+    const key = agent.messageId || 'no-message-id';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+};
+
+const areAgentDetailsEqual = (
+  previous: LoadingIndicatorAgentDetail[],
+  next: LoadingIndicatorAgentDetail[]
+): boolean => {
+  return previous.length === next.length && previous.every((agent, index) => {
+    const nextAgent = next[index];
+
+    return agent.id === nextAgent.id
+      && agent.name === nextAgent.name
+      && agent.status === nextAgent.status
+      && agent.label === nextAgent.label
+      && agent.stepId === nextAgent.stepId
+      && agent.messageId === nextAgent.messageId
+      && agent.agentIndex === nextAgent.agentIndex;
+  });
+};
+
+const areLogSnapshotsEqual = (
+  previous: LoadingIndicatorLogSnapshot,
+  next: LoadingIndicatorLogSnapshot
+): boolean => {
+  return previous.status === next.status
+    && previous.messageId === next.messageId
+    && previous.isPaused === next.isPaused
+    && areAgentDetailsEqual(previous.agentDetails, next.agentDetails);
+};
+
 export const LoadingIndicator: FC<{
     status: string;
     agentStates: AgentState[];
@@ -19,29 +81,11 @@ export const LoadingIndicator: FC<{
     onContinue?: () => void;
     onRegenerate?: (stepId: StepId, agentIndex: number) => void;
     noWrapper?: boolean;
-    work?: Work;
-    provider?: ProviderType;
-    model?: string;
+  work?: Work;
+  provider?: ProviderType;
+  model?: string;
 }> = ({ status, agentStates, isPaused, messageId, onContinue, onRegenerate, noWrapper, work, provider, model }) => {
-  const latestLogStateRef = useRef<{
-    status: string;
-    messageId?: string;
-    isPaused?: boolean;
-    agentDetails: Array<{
-      id: string;
-      name: string;
-      status: AgentState['status'];
-      label: string;
-      stepId: AgentState['stepId'];
-      messageId: string | undefined;
-      agentIndex: number | undefined;
-    }>;
-  }>({
-    status,
-    messageId,
-    isPaused,
-    agentDetails: []
-  });
+  const latestLogStateRef = useRef<LoadingIndicatorLogSnapshot | null>(null);
 
   // Check for errors in any step to determine button state
   const erroredAgents = getErroredAgents(agentStates, messageId);
@@ -70,60 +114,56 @@ export const LoadingIndicator: FC<{
        }
    }
 
-  const agentDetails = useMemo(() => agentStates.map(a => ({
-    id: a.id,
-    name: a.name,
-    status: a.status,
-    label: a.label,
-    stepId: a.stepId,
-    messageId: a.messageId,
-    agentIndex: a.agentIndex
-  })), [agentStates]);
+  // Filter agents to show only those belonging to the current generation/regeneration.
+  // This also keeps debug output stable when other messages update in the same store.
+  const filteredAgents = useMemo(() => {
+    return messageId
+      ? agentStates.filter(agent => agent.messageId === messageId)
+      : agentStates;
+  }, [agentStates, messageId]);
 
-  const agentsByMessage = useMemo(() => {
-    return agentDetails.reduce<Record<string, number>>((acc, a) => {
-      const key = a.messageId || 'no-message-id';
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-  }, [agentDetails]);
+  const agentDetails = useMemo(() => filteredAgents.map(toAgentDetail), [filteredAgents]);
 
   useEffect(() => {
-    latestLogStateRef.current = {
+    const nextLogSnapshot: LoadingIndicatorLogSnapshot = {
       status,
       messageId,
       isPaused,
       agentDetails
     };
-    
+
+    const previousLogSnapshot = latestLogStateRef.current;
+    latestLogStateRef.current = nextLogSnapshot;
+
+    if (previousLogSnapshot && areLogSnapshotsEqual(previousLogSnapshot, nextLogSnapshot)) {
+      return;
+    }
+
     logger.debug('LoadingIndicator RENDER', { 
       status, 
       currentMessageId: messageId,
       agentStatesCount: agentDetails.length,
       agents: agentDetails,
-      agentsByMessage
+      agentsByMessage: getAgentsByMessage(agentDetails)
     });
-  }, [status, messageId, isPaused, agentDetails, agentsByMessage]);
+  }, [status, messageId, isPaused, agentDetails]);
 
   useEffect(() => {
-    
     return () => {
-      const { status: lastStatus, messageId: lastMessageId, isPaused: lastIsPaused, agentDetails: lastAgentDetails } = latestLogStateRef.current;
+      const lastSnapshot = latestLogStateRef.current;
+
+      if (!lastSnapshot) {
+        return;
+      }
 
       logger.debug('LoadingIndicator UNMOUNTED', { 
-        lastStatus,
-        messageId: lastMessageId,
-        isPaused: lastIsPaused,
-        agents: lastAgentDetails
+        lastStatus: lastSnapshot.status,
+        messageId: lastSnapshot.messageId,
+        isPaused: lastSnapshot.isPaused,
+        agents: lastSnapshot.agentDetails
       });
     };
   }, []);
-
-  // Filter agents to show only those belonging to the current generation/regeneration
-  // This prevents showing agents from other messages that might be in the store
-  const filteredAgents = messageId 
-    ? agentStates.filter(agent => agent.messageId === messageId)
-    : agentStates;
 
   const content = (
     <div className="loading-container-wrapper">

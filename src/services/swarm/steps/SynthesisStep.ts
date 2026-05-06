@@ -1,12 +1,11 @@
-import { type Content } from '@google/genai';
+import { type Content, type Tool } from '@google/genai';
 import { type StepContext, type StepId, STEPS } from '@/types/steps';
-import { type AgentState, type Source, type Work } from '@/types';
+import { type AgentState, type SimulateError, type Source, type Work } from '@/types';
 import { prepareGeminiContent } from '@/services/swarm/contentUtils';
 import { BaseStep } from './BaseStep';
-import { getStepResults } from '@/utils/swarm/workHelpers';
+import { getStepResults, getSynthesisResult } from '@/utils/swarm/workHelpers';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { Logger } from '@shared/utils/logger';
-import { useAgentStore } from '@/stores/agentStore';
 import { updateAgentStatus } from '@/utils/swarm/statusHelpers';
 import { formatSystemInstruction, formatDrafts, buildSynthesisContext } from '@/utils/swarm/promptHelpers';
 import { createFirstTextJumpTracker } from '@/utils/swarm/jumpHelper';
@@ -73,7 +72,7 @@ export class SynthesisStep extends BaseStep {
     // Persistent error count check for synthesis
     const errorCountKey = this.getErrorCountKey();
     const errorCountData = work.results?.[errorCountKey];
-    const errorCount = Array.isArray(errorCountData) ? (errorCountData[0] || 0) : (errorCountData as number || 0);
+    const errorCount = (errorCountData as number) || 0;
     const isSimulatingError = settings.simulateSynthesisError !== 'none' && errorCount < settings.simulateSynthesisErrorAttempts;
     const isRetrying = hadError || isSimulatingError;
 
@@ -133,6 +132,7 @@ export class SynthesisStep extends BaseStep {
           systemInstruction,
           tools: settings.useSearchInSynthesis ? [{ googleSearch: {} }] : undefined,
           signal,
+          messageId,
           agentIndex: 0, // Synthesis always uses agent index 0
           simulateError: settings.simulateSynthesisError,
           simulateErrorAttempts: settings.simulateSynthesisErrorAttempts,
@@ -196,8 +196,11 @@ export class SynthesisStep extends BaseStep {
         sourcesCount: sources?.length || 0 
       });
 
+      this.flushLiveWorkResult(context, STEPS.SYNTHESIS, -1);
+
       // Update generic results map (already an object due to handleStreamChunk, but ensuring it here)
       work.results[STEPS.SYNTHESIS] = { text: finalResponseText, sources };
+      this.discardLiveWorkResultBuffer(context, STEPS.SYNTHESIS, -1);
 
       // Mark synthesizer as completed
       currentAgentStates = this.updateAgentStateById(currentAgentStates, `${messageId}-synthesizer_agent`, {
@@ -241,7 +244,8 @@ export class SynthesisStep extends BaseStep {
       updateAgentStatus(STEPS.SYNTHESIS, 0, 'error', messageId, errorLabel);
       
       // SYNC: Ensure work results (including error flag) are updated in the global store
-      useAgentStore.getState().setCurrentWork({ ...work });
+      this.discardLiveWorkResultBuffer(context, STEPS.SYNTHESIS, -1);
+      this.syncLiveWork(context, work);
       
       throw error;
     }
@@ -263,6 +267,41 @@ export class SynthesisStep extends BaseStep {
       settings.simulateSynthesisError,
       settings.simulateSynthesisErrorAttempts
     );
+  }
+
+  protected async runSynthesisRegeneration(
+    context: StepContext,
+    instruction: { systemInstruction: string; userTurn: Content; mainChatHistory: Content[] },
+    agentStates: AgentState[],
+    tools?: Tool[],
+    simulateError?: SimulateError,
+    simulateErrorAttempts?: number
+  ): Promise<{ text: string; sources?: Source[]; work: Work }> {
+    const { systemInstruction, userTurn, mainChatHistory } = instruction;
+
+    const result = await this.runAgentRegeneration(
+      context,
+      0,
+      { systemInstruction, userTurn, mainChatHistory },
+      agentStates,
+      undefined,
+      tools,
+      () => context.onSynthesisJump?.(),
+      simulateError,
+      simulateErrorAttempts
+    );
+
+    const sources = this.extractSources(result.groundingChunks ?? []);
+
+    if (sources && sources.length > 0) {
+      this.ensureResults(result.work);
+      const currentResult = getSynthesisResult(result.work);
+      if (currentResult) {
+        result.work.results[STEPS.SYNTHESIS] = { ...currentResult, sources };
+      }
+    }
+
+    return { text: result.text, sources, work: result.work };
   }
 
   private prepareSynthesis(context: StepContext, refinedDrafts: string[]) {

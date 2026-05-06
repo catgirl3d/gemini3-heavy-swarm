@@ -234,6 +234,29 @@ describe('WorkCard', () => {
     expect(onCardAction).toHaveBeenCalledWith('card-3', 'expand');
   });
 
+  it('renders stale results as visible content and keeps regenerate available', () => {
+    const onCardAction = vi.fn();
+
+    render(
+      <WorkCard
+        title="Critic 1"
+        statusLabel="Stale"
+        status="stale"
+        content="Old refined answer"
+        cardId="stale-card"
+        onCardAction={onCardAction}
+        allowRegenerate
+        downloadFilename="Critic-1.md"
+      />
+    );
+
+    expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('Old refined answer');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
+
+    expect(onCardAction).toHaveBeenCalledWith('stale-card', 'regenerate');
+  });
+
   it('clears pending throttle timers when the first chunk arrives and again on unmount', () => {
     vi.useFakeTimers();
     const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');

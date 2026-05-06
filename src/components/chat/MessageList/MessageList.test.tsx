@@ -13,6 +13,10 @@ const mocks = vi.hoisted(() => ({
   loadingIndicator: vi.fn(),
   showWork: vi.fn(),
   sources: vi.fn(),
+  store: {
+    activeSessionMessageId: undefined as string | undefined,
+    sessionsByMessageId: {} as Record<string, { work?: Work; agentStates?: AgentState[] }>,
+  },
 }));
 
 vi.mock('@/components/chat/AgentAvatar', () => ({
@@ -74,6 +78,12 @@ vi.mock('@/components/chat/ShowWork/utils', () => ({
   downloadContent: mocks.downloadContent,
 }));
 
+vi.mock('@/stores/agentStore', () => ({
+  useAgentStore: (selector: (state: any) => unknown) => selector(mocks.store),
+  selectActiveSessionMessageId: (state: any) => state.activeSessionMessageId,
+  selectActiveSession: (state: any) => state.activeSessionMessageId ? state.sessionsByMessageId[state.activeSessionMessageId] : undefined,
+}));
+
 import { MessageList } from './MessageList';
 
 type MessageListProps = ComponentProps<typeof MessageList>;
@@ -94,13 +104,10 @@ const createMessageListProps = (overrides: Partial<MessageListProps> = {}): Mess
   isPaused: false,
   error: null,
   loadingStatus: 'Working...',
-  agentStates: [],
-  currentWork: undefined,
   modelDisplayName: 'Gemini 2.5 Flash',
   provider: ProviderType.Gemini,
   model: 'gemini-2.5-flash',
   messageListRef: createRef<HTMLDivElement>(),
-  messageId: undefined,
   onPromptClick: vi.fn(),
   onContinue: vi.fn(),
   onRetry: vi.fn(),
@@ -113,6 +120,8 @@ describe('MessageList', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.store.activeSessionMessageId = undefined;
+    mocks.store.sessionsByMessageId = {};
     clipboardWriteText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText: clipboardWriteText },
@@ -291,14 +300,19 @@ describe('MessageList', () => {
         },
       },
     ];
+    mocks.store.activeSessionMessageId = 'model-1';
+    mocks.store.sessionsByMessageId = {
+      'model-1': {
+        work: { agentStates: [createAgentState({ messageId: 'model-1', status: 'working', label: 'Drafting...' })] },
+        agentStates: [createAgentState({ messageId: 'model-1', status: 'working', label: 'Drafting...' })],
+      },
+    };
 
     render(
       <MessageList
         {...createMessageListProps({
           messages,
           isLoading: true,
-          messageId: 'model-1',
-          agentStates: [createAgentState({ messageId: 'model-1', status: 'working', label: 'Drafting...' })],
         })}
       />
     );
@@ -307,10 +321,52 @@ describe('MessageList', () => {
     expect(screen.getByTestId('show-work')).toHaveTextContent('show-work:model-1:live:noregen');
   });
 
+  it('hides regeneration actions for older assistant turns once a later user prompt exists', () => {
+    const messages: Message[] = [
+      {
+        id: 'user-1',
+        role: 'user',
+        parts: [{ text: 'Question 1' }],
+      },
+      {
+        id: 'model-1',
+        role: 'model',
+        parts: [{ text: 'Answer 1' }],
+        work: {
+          results: {
+            [STEPS.INITIAL]: ['Draft 1'],
+          },
+        },
+      },
+      {
+        id: 'user-2',
+        role: 'user',
+        parts: [{ text: 'Question 2' }],
+      },
+    ];
+
+    render(
+      <MessageList
+        {...createMessageListProps({
+          messages,
+        })}
+      />
+    );
+
+    expect(screen.getByTestId('show-work')).toHaveTextContent('show-work:model-1:history:noregen');
+  });
+
   it('renders the bottom loading block for a new message and keeps retry available for global errors', () => {
     const onRetry = vi.fn();
     const currentWork: Work = {
       agentStates: [createAgentState({ messageId: 'message-2', status: 'working', label: 'Drafting...' })],
+    };
+    mocks.store.activeSessionMessageId = 'message-2';
+    mocks.store.sessionsByMessageId = {
+      'message-2': {
+        work: currentWork,
+        agentStates: [createAgentState({ messageId: 'message-2', status: 'working', label: 'Drafting...' })],
+      },
     };
 
     render(
@@ -326,9 +382,6 @@ describe('MessageList', () => {
           isLoading: true,
           isPaused: true,
           error: 'Network failed',
-          messageId: 'message-2',
-          currentWork,
-          agentStates: [createAgentState({ messageId: 'message-2', status: 'working', label: 'Drafting...' })],
           onRetry,
         })}
       />

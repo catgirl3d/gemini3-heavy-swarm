@@ -129,18 +129,15 @@ export const setWorkName = (work: Work, stepId: StepId, index: number, name: str
  * This hides loading indicators and unpauses the UI when the first chunk of synthesis arrives.
  * Consolidated from synthesisHelpers.ts.
  *
- * @param setIsLoading - State setter for loading status
- * @param setIsPaused - State setter for pause status
+ * @param hideLoadingIndicator - Callback that hides the live loading indicator
  * @param onJump - Optional callback for additional jump logic (e.g., updating agent status)
  */
 export const handleSynthesisJump = (
-  setIsLoading: (b: boolean) => void,
-  setIsPaused: (b: boolean) => void,
+  hideLoadingIndicator: () => void,
   onJump?: () => void
 ) => {
   logger.info('SYNTHESIS JUMP - First chunk received, hiding LoadingIndicator');
-  setIsLoading(false);
-  setIsPaused(false);
+  hideLoadingIndicator();
   onJump?.();
 }
 

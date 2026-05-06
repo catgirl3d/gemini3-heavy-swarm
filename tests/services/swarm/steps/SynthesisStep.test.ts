@@ -10,9 +10,10 @@ import { AiProvider } from '@/types/ai-provider';
 vi.mock('@/stores/agentStore', () => ({
   useAgentStore: {
     getState: vi.fn(() => ({
-      updateAgent: vi.fn(),
-      updateWorkResult: vi.fn(),
-      setCurrentWork: vi.fn()
+      updateSessionAgent: vi.fn(),
+      updateSessionWorkResult: vi.fn(),
+      replaceSessionWork: vi.fn(),
+      updateSessionRuntime: vi.fn(),
     }))
   }
 }));
@@ -55,7 +56,11 @@ vi.mock('@/utils/swarm/workHelpers', () => ({
   getStepResults: vi.fn((work, stepId) => {
     const raw = work.results?.[stepId];
     return Array.isArray(raw) ? raw : [];
-  })
+  }),
+  getSynthesisResult: vi.fn((work) => {
+    const raw = work.results?.[STEPS.SYNTHESIS];
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
+  }),
 }));
 
 vi.mock('@shared/utils/logger', () => ({
@@ -78,10 +83,10 @@ describe('SynthesisStep', () => {
   };
 
   let mockContext: TestContext;
-  let updateAgentMock: any;
-  let updateWorkResultMock: any;
-  let setCurrentWorkMock: any;
-  let setIsLoadingMock: any;
+let updateAgentMock: any;
+let updateWorkResultMock: any;
+let setCurrentWorkMock: any;
+let updateSessionRuntimeMock: any;
 
   const createSettings = (overrides: Partial<AppSettings> = {}): AppSettings => ({
     provider: ProviderType.Gemini,
@@ -189,13 +194,14 @@ describe('SynthesisStep', () => {
     updateAgentMock = vi.fn();
     updateWorkResultMock = vi.fn();
     setCurrentWorkMock = vi.fn();
-    setIsLoadingMock = vi.fn();
+    updateSessionRuntimeMock = vi.fn();
     (useAgentStore.getState as any).mockReturnValue({
-      updateAgent: updateAgentMock,
-      updateWorkResult: updateWorkResultMock,
-      setCurrentWork: setCurrentWorkMock,
-      setIsLoading: setIsLoadingMock,
-      agents: []
+      updateSessionAgent: updateAgentMock,
+      updateSessionWorkResult: updateWorkResultMock,
+      replaceSessionWork: setCurrentWorkMock,
+      updateSessionRuntime: updateSessionRuntimeMock,
+      agents: [],
+      sessionsByMessageId: {}
     });
 
     step = new SynthesisStep();
@@ -271,6 +277,40 @@ describe('SynthesisStep', () => {
     await step.regenerate(context, 0, []);
 
     expect(runRegenSpy.mock.calls[0][3]).toEqual([{ googleSearch: {} }]);
+  });
+
+  it('should attach extracted sources and trigger synthesis jump on first text chunk during synthesis regeneration', async () => {
+    const source = { web: { uri: 'https://source.test', title: 'Source' } };
+    const context = createContext({
+      work: createWork({
+        [STEPS.SYNTHESIS]: { text: 'old final' },
+      }),
+    });
+    const stream = (async function* () {
+      yield { text: 'final answer', thought: '', usage: null, groundingChunks: [source] };
+    })();
+
+    ((context.ai.models.generateContentStream as unknown) as ReturnType<typeof vi.fn>).mockResolvedValue({ stream });
+
+    const result = await (step as any).runSynthesisRegeneration(
+      context,
+      {
+        systemInstruction: 'system',
+        userTurn: { role: 'user', parts: [{ text: 'prompt' }] },
+        mainChatHistory: [],
+      },
+      [{ id: 'synth', name: 'Synthesizer', status: 'done', label: 'Done', messageId: 'msg-123' }],
+    );
+
+    expect(result).toMatchObject({
+      text: 'final answer',
+      sources: [{ uri: 'https://source.test', title: 'Source' }],
+    });
+    expect(context.work.results[STEPS.SYNTHESIS]).toEqual({
+      text: 'final answer',
+      sources: [{ uri: 'https://source.test', title: 'Source' }],
+    });
+    expect(context.onSynthesisJump).toHaveBeenCalledTimes(1);
   });
 
   it('should extract unique sources from grounding metadata', () => {
@@ -450,6 +490,7 @@ describe('SynthesisStep', () => {
     await expect(step.execute(mockContext)).rejects.toBe(streamError);
 
     expect(updateWorkResultMock).toHaveBeenCalledWith(
+      'msg-123',
       STEPS.SYNTHESIS,
       -1,
       { text: 'partial text', thought: 'partial thought', usage }
@@ -467,7 +508,7 @@ describe('SynthesisStep', () => {
       'msg-123',
       undefined
     );
-    expect(setCurrentWorkMock).toHaveBeenCalledWith({ ...mockContext.work });
+    expect(setCurrentWorkMock).toHaveBeenCalledWith('msg-123', { ...mockContext.work });
   });
 
   it('should preserve an empty synthesis shell when execute fails with a non-Error value', async () => {
@@ -492,7 +533,7 @@ describe('SynthesisStep', () => {
       'msg-123',
       undefined
     );
-    expect(setCurrentWorkMock).toHaveBeenCalledWith({ ...context.work });
+    expect(setCurrentWorkMock).toHaveBeenCalledWith('msg-123', { ...context.work });
   });
 
   it('should initialize synthesis as retrying when previous synthesis ended with an error', async () => {
@@ -531,40 +572,11 @@ describe('SynthesisStep', () => {
         simulateSynthesisErrorAttempts: 2
       },
       work: createWork({
-        [`${STEPS.SYNTHESIS}_error_counts`]: [1]
-      })
-    });
-    vi.spyOn(step as any, 'runModelStream').mockResolvedValue({
-      text: 'eventual answer',
-      thought: '',
-      usage: null,
-      groundingChunks: []
-    });
-
-    await step.execute(context);
-
-    expect(updateAgentMock).toHaveBeenCalledWith(
-      STEPS.SYNTHESIS,
-      0,
-      'error',
-      'Retrying synthesis...',
-      'msg-123',
-      'Synthesizer Agent'
-    );
-  });
-
-  it('should treat scalar synthesis error counts as retrying state too', async () => {
-    const context = createContext({
-      settings: {
-        simulateSynthesisError: '500',
-        simulateSynthesisErrorAttempts: 2
-      },
-      work: createWork({
         [`${STEPS.SYNTHESIS}_error_counts`]: 1
       })
     });
     vi.spyOn(step as any, 'runModelStream').mockResolvedValue({
-      text: 'eventual scalar answer',
+      text: 'eventual answer',
       thought: '',
       usage: null,
       groundingChunks: []
@@ -597,7 +609,7 @@ describe('SynthesisStep', () => {
     let capturedCallbacks: any;
     let resolveStream!: (value: any) => void;
 
-    updateWorkResultMock.mockImplementation((_stepId: string, _agentIndex: number, updates: any) => {
+    updateWorkResultMock.mockImplementation((_messageId: string, _stepId: string, _agentIndex: number, updates: any) => {
       if (updates.text === 'First visible text') {
         callOrder.push('updateWorkResult');
       }
@@ -673,7 +685,7 @@ describe('SynthesisStep', () => {
     expect(context.onSynthesisJump).toHaveBeenCalledTimes(1);
 
     capturedCallbacks.onRetry(2);
-    expect(setIsLoadingMock).toHaveBeenCalledWith(true);
+    expect(updateSessionRuntimeMock).toHaveBeenCalledWith('msg-123', { isLoading: true });
     expect(updateAgentMock).toHaveBeenCalledWith(
       STEPS.SYNTHESIS,
       0,

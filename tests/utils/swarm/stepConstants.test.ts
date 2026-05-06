@@ -142,26 +142,22 @@ describe('stepConstants', () => {
   });
 
   describe('handleSynthesisJump', () => {
-    it('clears loading, unpauses, logs, and calls onJump once', () => {
-      const setIsLoading = vi.fn();
-      const setIsPaused = vi.fn();
+    it('hides loading, logs, and calls onJump once', () => {
+      const hideLoadingIndicator = vi.fn();
       const onJump = vi.fn();
 
-      handleSynthesisJump(setIsLoading, setIsPaused, onJump);
+      handleSynthesisJump(hideLoadingIndicator, onJump);
 
       expect(loggerInfo).toHaveBeenCalledWith('SYNTHESIS JUMP - First chunk received, hiding LoadingIndicator');
-      expect(setIsLoading).toHaveBeenCalledExactlyOnceWith(false);
-      expect(setIsPaused).toHaveBeenCalledExactlyOnceWith(false);
+      expect(hideLoadingIndicator).toHaveBeenCalledTimes(1);
       expect(onJump).toHaveBeenCalledTimes(1);
     });
 
     it('works without an optional onJump callback', () => {
-      const setIsLoading = vi.fn();
-      const setIsPaused = vi.fn();
+      const hideLoadingIndicator = vi.fn();
 
-      expect(() => handleSynthesisJump(setIsLoading, setIsPaused)).not.toThrow();
-      expect(setIsLoading).toHaveBeenCalledExactlyOnceWith(false);
-      expect(setIsPaused).toHaveBeenCalledExactlyOnceWith(false);
+      expect(() => handleSynthesisJump(hideLoadingIndicator)).not.toThrow();
+      expect(hideLoadingIndicator).toHaveBeenCalledTimes(1);
     });
   });
 });

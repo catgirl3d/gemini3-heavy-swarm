@@ -1,9 +1,9 @@
 import { type StepDescriptor, type StepContext, type StepId, STEPS, type StreamConfig, type StreamCallbacks, type StreamResult, type AgentInstruction, type MultiAgentConfig } from '@/types/steps';
 import { type SimulateError, ProviderType, type RoleType } from '@/types';
-import { type Tool, type Content } from '@google/genai';
+import { type Tool } from '@google/genai';
 import { getStepConfig, type StepConfig } from '@/utils/swarm/stepConstants';
 import type { GroundingChunk } from './utils/streamUtils';
-import { type AgentState, type Source, type TokenUsage, type Work, type StepDebugInfo } from '@/types';
+import { type AgentState, type Source, type TokenUsage, type Work, type StepDebugInfo, type WorkResultUpdates } from '@/types';
 import { createAgentStates, updateAgentState, updateAgentStateById } from './utils/agentStateUtils';
 import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from './utils/devModeUtils';
 import { extractTextFromParts, extractTokenUsage } from './utils/streamUtils';
@@ -15,15 +15,26 @@ import { withRetry } from '@/utils/common/retryStrategy';
 import { useAgentStore } from '@/stores/agentStore';
 import { updateAgentStatus, updateAgentStatusIfChanged } from '@/utils/swarm/statusHelpers';
 import { createFirstTextJumpTracker } from '@/utils/swarm/jumpHelper';
+import { LiveWorkSyncBuffer } from './utils/liveWorkSyncBuffer';
 
 type WorkResults = NonNullable<Work['results']>;
 type SynthesisResult = NonNullable<WorkResults[typeof STEPS.SYNTHESIS]>;
+
+// Small delay to batch token-level stream noise while keeping the first visible chunk immediate.
+const LIVE_WORK_SYNC_THROTTLE_MS = 75;
 
 const isSynthesisResult = (value: unknown): value is SynthesisResult => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
 
 export abstract class BaseStep implements StepDescriptor {
+  private readonly liveWorkSyncBuffer = new LiveWorkSyncBuffer({
+    throttleMs: LIVE_WORK_SYNC_THROTTLE_MS,
+    onFlush: (messageId, stepId, agentIndex, updates) => {
+      useAgentStore.getState().updateSessionWorkResult(messageId, stepId, agentIndex, updates);
+    },
+  });
+
   abstract id: StepId;
 
   abstract name: string;
@@ -133,6 +144,61 @@ export abstract class BaseStep implements StepDescriptor {
     if (!work.results) work.results = {};
   }
 
+  protected syncLiveWork(context: Pick<StepContext, 'messageId'>, work: Work): void {
+    const nextWork = { ...work };
+    if (!context.messageId) {
+      return;
+    }
+
+    useAgentStore.getState().replaceSessionWork(context.messageId, nextWork);
+  }
+
+  protected syncLiveWorkResult(
+    context: Pick<StepContext, 'messageId'>,
+    stepId: StepId,
+    agentIndex: number,
+    updates: WorkResultUpdates,
+    options?: { forceImmediate?: boolean }
+  ): void {
+    if (!context.messageId) {
+      return;
+    }
+
+    this.liveWorkSyncBuffer.buffer(context.messageId, stepId, agentIndex, updates, options);
+  }
+
+  protected flushLiveWorkResult(
+    context: Pick<StepContext, 'messageId'>,
+    stepId: StepId,
+    agentIndex: number,
+  ): void {
+    if (!context.messageId) {
+      return;
+    }
+
+    this.liveWorkSyncBuffer.flush(context.messageId, stepId, agentIndex);
+  }
+
+  protected discardLiveWorkResultBuffer(
+    context: Pick<StepContext, 'messageId'>,
+    stepId: StepId,
+    agentIndex: number,
+  ): void {
+    if (!context.messageId) {
+      return;
+    }
+
+    this.liveWorkSyncBuffer.discard(context.messageId, stepId, agentIndex);
+  }
+
+  protected discardStepLiveWorkBuffers(context: Pick<StepContext, 'messageId'>, stepId: StepId): void {
+    if (!context.messageId) {
+      return;
+    }
+
+    this.liveWorkSyncBuffer.discardStep(context.messageId, stepId);
+  }
+
   /**
    * Centralized stream chunk handler for execute and regenerate.
    * Updates results, thoughts, usage, and UI consistently.
@@ -240,7 +306,20 @@ export abstract class BaseStep implements StepDescriptor {
       * will incorrectly create an array [text] instead of an object {text, sources}.
       * This breaks 'synthesisText' retrieval in the UI (ShowWork).
       */
-     useAgentStore.getState().updateWorkResult(stepId, storageIndex, { text, thought, usage });
+     const liveWorkUpdates: WorkResultUpdates = {};
+     if (text.length > 0) {
+       liveWorkUpdates.text = text;
+     }
+     if (thought.length > 0) {
+       liveWorkUpdates.thought = thought;
+     }
+     if (usage) {
+       liveWorkUpdates.usage = usage;
+     }
+
+     if (Object.keys(liveWorkUpdates).length > 0) {
+       this.syncLiveWorkResult(context, stepId, storageIndex, liveWorkUpdates);
+     }
 
      const hasContent = text.length > 0;
      const hasThought = !!(thought && thought.length > 0);
@@ -287,7 +366,9 @@ export abstract class BaseStep implements StepDescriptor {
     const updated = this.updateAgentStatus(states, index, nextStatus, label);
     
     // CRITICAL: Restore loading indicator when any retry starts
-    useAgentStore.getState().setIsLoading(true);
+    if (context.messageId) {
+      useAgentStore.getState().updateSessionRuntime(context.messageId, { isLoading: true });
+    }
 
     updateAgentStatus(
       this.id,
@@ -392,18 +473,21 @@ export abstract class BaseStep implements StepDescriptor {
     
     if (this.checkGlobalRateLimitFailure(failures, settings.numAgents)) {
         work.results[this.id] = [...results];
-        useAgentStore.getState().setCurrentWork({ ...work });
+        this.discardStepLiveWorkBuffers(context, this.id);
+        this.syncLiveWork(context, work);
         throw failures[0];
     }
 
     if (this.checkGlobalStepFailure(failures, settings.numAgents)) {
       work.results[this.id] = [...results];
-      useAgentStore.getState().setCurrentWork({ ...work });
+      this.discardStepLiveWorkBuffers(context, this.id);
+      this.syncLiveWork(context, work);
       throw failures[0];
     }
 
     work.results[this.id] = [...results];
-    useAgentStore.getState().setCurrentWork({ ...work });
+    this.discardStepLiveWorkBuffers(context, this.id);
+    this.syncLiveWork(context, work);
     
     return results;
   }
@@ -512,6 +596,7 @@ export abstract class BaseStep implements StepDescriptor {
           systemInstruction,
           tools: config.tools,
           signal,
+          messageId: context.messageId,
           agentIndex: i,
           simulateError: config.simulateError,
           simulateErrorAttempts: config.simulateErrorAttempts,
@@ -555,7 +640,7 @@ export abstract class BaseStep implements StepDescriptor {
     config: StreamConfig,
     callbacks: StreamCallbacks
   ): Promise<StreamResult> {
-    const { ai, settings, model, contents, systemInstruction, tools, signal, agentIndex, devModeDuration, simulateError, simulateErrorAttempts, work: configWork } = config;
+    const { ai, settings, model, contents, systemInstruction, tools, signal, agentIndex, devModeDuration, simulateError, simulateErrorAttempts, work: configWork, messageId } = config;
     const logger = new Logger(`${this.id}${agentIndex !== undefined ? `:Agent${agentIndex + 1}` : ''}`, settings.debugMode);
 
     // Persistent error simulation logic (works across manual regenerations)
@@ -563,7 +648,7 @@ export abstract class BaseStep implements StepDescriptor {
       const maxErrorAttempts = simulateErrorAttempts ?? 1;
 
       // Use work from config (passed from context) or fallback to store
-      const targetWork = configWork || useAgentStore.getState().currentWork;
+      const targetWork = configWork;
       
       if (targetWork) {
         this.ensureResults(targetWork);
@@ -573,22 +658,8 @@ export abstract class BaseStep implements StepDescriptor {
         if (agentIndex === undefined) {
           currentCount = (targetWork.results[errorKey] as number) || 0;
         } else {
-          /**
-           * ERROR SIMULATION PERSISTENCE MODEL
-           * Synthesis models use a scalar 'number' for errors (since there is only 1 agent).
-           * Multi-agent steps (Initial/Refinement) use an 'Array<number>'.
-           * 
-           * MIGRATION LOGIC:
-           * If we encounter a scalar where an array is expected (e.g. if a step was 
-           * converted from single to multi-agent), we migrate it on-the-fly to 
-           * prevent regeneration from seeing a stale "failed" state globally.
-           */
           if (!Array.isArray(targetWork.results[errorKey])) {
-            const previousValue = (targetWork.results[errorKey] as number) || 0;
-            const migratedArray = Array(settings.numAgents).fill(0);
-            if (agentIndex === 0) migratedArray[0] = previousValue;
-            targetWork.results[errorKey] = migratedArray;
-            logger.debug(`SIMULATION: Migrated scalar error count (${previousValue}) to array for agent ${agentIndex}`);
+            targetWork.results[errorKey] = Array(settings.numAgents).fill(0);
           }
           currentCount = (targetWork.results[errorKey] as number[])[agentIndex] || 0;
         }
@@ -602,7 +673,9 @@ export abstract class BaseStep implements StepDescriptor {
           }
           
           // Update store to persist count
-          useAgentStore.getState().setCurrentWork({ ...targetWork });
+          if (messageId) {
+            useAgentStore.getState().replaceSessionWork(messageId, targetWork);
+          }
 
           logger.debug(`SIMULATION: Throwing simulated ${simulateError} error (Persistent Attempt ${currentCount + 1}/${maxErrorAttempts})`);
           
@@ -832,8 +905,16 @@ export abstract class BaseStep implements StepDescriptor {
     // Set initial 'working' status - Step manages its own lifecycle
     updateAgentStatus(this.id, agentIndex, 'working', messageId);
 
+    const storageIndex = (this.id === STEPS.SYNTHESIS) ? -1 : agentIndex;
+    this.ensureResults(work);
+
     // Clear previous usage to avoid displaying stale data during regeneration
-    this.ensureStepUsage(work, this.id, settings.numAgents)[agentIndex] = null;
+    const usageKey = `${this.id}_usage`;
+    if (storageIndex === -1) {
+      work.results[usageKey] = null;
+    } else {
+      this.ensureStepUsage(work, this.id, settings.numAgents)[storageIndex] = null;
+    }
     
     /**
      * STATE CLEARING FOR REGENERATION
@@ -845,7 +926,6 @@ export abstract class BaseStep implements StepDescriptor {
      * before the new first chunk arrives. Clearing text ensures cards stay open
      * until the new synthesis actually starts producing text.
      */
-    const storageIndex = (this.id === STEPS.SYNTHESIS) ? -1 : agentIndex;
     if (this.id === STEPS.SYNTHESIS) {
       // Maintain object structure {text, sources} but clear text
       const current = work.results[this.id];
@@ -862,7 +942,7 @@ export abstract class BaseStep implements StepDescriptor {
     }
     
     // Clear store as well (usage AND text)
-    useAgentStore.getState().updateWorkResult(this.id, storageIndex, { usage: null, text: '' });
+    this.syncLiveWorkResult(context, this.id, storageIndex, { usage: null, text: '' }, { forceImmediate: true });
     
     // Determine model
     const model = roleType 
@@ -878,6 +958,7 @@ export abstract class BaseStep implements StepDescriptor {
           tools: tools ?? [{ googleSearch: {} }],
           signal,
           agentIndex,
+          messageId,
           simulateError,
           simulateErrorAttempts,
           work: context.work
@@ -911,10 +992,14 @@ export abstract class BaseStep implements StepDescriptor {
       // CRITICAL: Save final usage after streaming completes
       // This ensures token usage displays correctly for regenerated agents
       if (finalUsage) {
-        this.ensureStepUsage(work, this.id, settings.numAgents)[agentIndex] = finalUsage;
+        if (storageIndex === -1) {
+          work.results[usageKey] = finalUsage;
+        } else {
+          this.ensureStepUsage(work, this.id, settings.numAgents)[storageIndex] = finalUsage;
+        }
         
         // Also update the store atomically for immediate UI update
-        useAgentStore.getState().updateWorkResult(this.id, agentIndex, { usage: finalUsage });
+        this.syncLiveWorkResult(context, this.id, storageIndex, { usage: finalUsage });
       }
       
       // Set final 'done' status after successful completion
@@ -924,7 +1009,8 @@ export abstract class BaseStep implements StepDescriptor {
       this.updateStepMetadata(work, 'done');
       
       // Update store with final snapshot
-      useAgentStore.getState().setCurrentWork({ ...work });
+      this.discardLiveWorkResultBuffer(context, this.id, storageIndex);
+      this.syncLiveWork(context, work);
       
       return { text: fullText, work, groundingChunks };
     } catch (error) {
@@ -942,57 +1028,12 @@ export abstract class BaseStep implements StepDescriptor {
       work.results[this.id] = currentResults;
       
       // Update store with error state
-      useAgentStore.getState().setCurrentWork({ ...work });
+      this.discardLiveWorkResultBuffer(context, this.id, storageIndex);
+      this.syncLiveWork(context, work);
       
       // Re-throw to let caller handle additional UI updates (e.g., message parts)
       throw error;
     }
-  }
-
-  /**
-   * Thin wrapper around runAgentRegeneration for synthesis step.
-   * Handles synthesis-specific behaviors: sources extraction and onSynthesisJump callback.
-   */
-  protected async runSynthesisRegeneration(
-    context: StepContext,
-    instruction: { systemInstruction: string; userTurn: Content; mainChatHistory: Content[] },
-    agentStates: AgentState[],
-    tools?: Tool[],
-    simulateError?: SimulateError,
-    simulateErrorAttempts?: number
-  ): Promise<{ text: string; sources?: Source[]; work: Work }> {
-    const { systemInstruction, userTurn, mainChatHistory } = instruction;
-    
-    // Synthesis always uses agentIndex 0
-    const agentIndex = 0;
-    const agentInstruction: AgentInstruction = { systemInstruction, userTurn, mainChatHistory };
-    
-    // Delegate to base regeneration logic
-    const result = await this.runAgentRegeneration(
-      context,
-      agentIndex,
-      agentInstruction,
-      agentStates,
-      undefined, // No roleType for synthesis
-      tools,
-      () => context.onSynthesisJump?.(), // Pass callback for synthesis jump
-      simulateError,
-      simulateErrorAttempts
-    );
-    
-    // Extract sources from grounding chunks
-    const sources = this.extractSources(result.groundingChunks);
-    
-    // Update work.results to include sources
-    if (sources && sources.length > 0) {
-      this.ensureResults(result.work);
-      const currentResult = result.work.results?.[this.id];
-      if (isSynthesisResult(currentResult)) {
-        result.work.results[STEPS.SYNTHESIS] = { ...currentResult, sources };
-      }
-    }
-    
-    return { text: result.text, sources, work: result.work };
   }
 
   /**

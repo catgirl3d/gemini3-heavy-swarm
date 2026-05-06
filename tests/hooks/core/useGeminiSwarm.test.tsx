@@ -40,6 +40,8 @@ vi.mock('@/hooks/swarm/useSwarmRegeneration', () => ({
 
 vi.mock('@/stores/agentStore', () => ({
   useAgentStore: (selector: (state: any) => unknown) => selector(mocks.storeState),
+  selectActiveSessionMessageId: (state: any) => state.activeSessionMessageId,
+  selectActiveSession: (state: any) => state.activeSessionMessageId ? state.sessionsByMessageId[state.activeSessionMessageId] : undefined,
 }));
 
 vi.mock('@/services/ai', () => ({
@@ -97,13 +99,22 @@ describe('useGeminiSwarm', () => {
       regenerateAgentResponse: vi.fn(),
     };
     mocks.storeState = {
-      agents: [{ id: 'agent-1', name: 'Agent 1', status: 'working', label: 'Working' }],
-      currentWork,
       isLoading: true,
       isPaused: false,
       loadingStatus: 'Loading...',
       error: 'boom',
-      currentMessageId: 'message-1',
+      activeSessionMessageId: 'message-1',
+      sessionsByMessageId: {
+        'message-1': {
+          messageId: 'message-1',
+          work: currentWork,
+          agentStates: [{ id: 'agent-1', name: 'Agent 1', status: 'working', label: 'Working' }],
+          status: 'running',
+          loadingStatus: 'Loading...',
+          error: 'boom',
+          updatedAt: 1,
+        },
+      },
     };
 
     mocks.factoryCreate.mockReset().mockImplementation((currentSettings) => ({
@@ -127,12 +138,9 @@ describe('useGeminiSwarm', () => {
     expect(result.current.isLoading).toBe(true);
     expect(result.current.isPaused).toBe(false);
     expect(result.current.loadingStatus).toBe('Loading...');
-    expect(result.current.agentStates).toBe(mocks.storeState.agents);
-    expect(result.current.currentWork).toBe(mocks.storeState.currentWork);
     expect(result.current.settings).toBe(mocks.appSettingsReturn.settings);
     expect(result.current.settingsLoaded).toBe(true);
     expect(result.current.error).toBe('boom');
-    expect(result.current.currentMessageId).toBe('message-1');
     expect(result.current.loadError).toBe('load error');
     expect(result.current.setSettings).toBe(mocks.appSettingsReturn.setSettings);
     expect(result.current.resetSettings).toBe(mocks.appSettingsReturn.resetSettings);
@@ -144,18 +152,12 @@ describe('useGeminiSwarm', () => {
 
     const orchestrationArgs = mocks.useSwarmOrchestration.mock.calls[0][0];
     result.current.regenerateAgentResponse('msg-7', STEPS.REFINEMENT, 2);
-    expect(mocks.regenerationReturn.regenerateAgentResponse).toHaveBeenCalledExactlyOnceWith(
-      'msg-7',
-      STEPS.REFINEMENT,
-      2,
-      orchestrationArgs.pauseResolverRef
-    );
+    expect(mocks.regenerationReturn.regenerateAgentResponse).toHaveBeenCalledExactlyOnceWith('msg-7', STEPS.REFINEMENT, 2);
 
     expect(orchestrationArgs.settings).toBe(mocks.appSettingsReturn.settings);
     expect(orchestrationArgs.messagesRef).toBe(mocks.messagesReturn.messagesRef);
     expect(orchestrationArgs.setMessages).toBe(mocks.messagesReturn.setMessages);
     expect(orchestrationArgs.mainAbort).toBe(mocks.mainAbort);
-    expect(orchestrationArgs.pauseResolverRef.current).toBeNull();
     expect(orchestrationArgs.orchestratorRef.current).toBeDefined();
 
     const regenerationArgs = mocks.useSwarmRegeneration.mock.calls[0][0];
@@ -163,8 +165,7 @@ describe('useGeminiSwarm', () => {
     expect(regenerationArgs.messages).toBe(mocks.messagesReturn.messages);
     expect(regenerationArgs.messagesRef).toBe(mocks.messagesReturn.messagesRef);
     expect(regenerationArgs.setMessages).toBe(mocks.messagesReturn.setMessages);
-    expect(regenerationArgs.currentWork).toBe(mocks.storeState.currentWork);
-    expect(regenerationArgs.currentMessageId).toBe('message-1');
+    expect(regenerationArgs.orchestratorRef.current).toBeDefined();
     expect(regenerationArgs.lastInput).toBe(mocks.orchestrationReturn.lastInput);
 
     await waitFor(() => {

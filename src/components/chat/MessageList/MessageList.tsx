@@ -6,13 +6,16 @@ import { ShowWork } from '@/components/chat/ShowWork';
 import { DownloadIcon, CopyIcon, CheckIcon } from '@/components/chat/ShowWork/icons';
 import { downloadContent } from '@/components/chat/ShowWork/utils';
 import { Sources } from '@/components/chat/Sources';
-import { type Message, type AgentState, type Work, type ProviderType } from '@/types';
+import { type Message, type Work, type ProviderType } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
+import { selectActiveSession, selectActiveSessionMessageId, useAgentStore } from '@/stores/agentStore';
 import { getStepResults } from '@/utils/swarm/workHelpers';
+import { isLatestRegenerableMessage } from '@/utils/swarm/sessionHelpers';
 import { Logger } from '@shared/utils/logger';
 import { copyTextToClipboard } from '@/utils/common/clipboard';
 
 const logger = new Logger('MessageList');
+const EMPTY_WORK: Work = { results: {} };
 
 type ActionButtonClickResult = boolean | void | Promise<boolean | void>;
 
@@ -70,13 +73,10 @@ interface MessageListProps {
   isPaused: boolean;
   error: string | null;
   loadingStatus: string;
-  agentStates: AgentState[];
-  currentWork: Work | undefined;
   modelDisplayName: string;
   provider: ProviderType;
   model: string;
   messageListRef: RefObject<HTMLDivElement>;
-  messageId?: string; // ID of the message currently being generated
   onPromptClick: (prompt: string) => void;
   onContinue: () => void;
   onRetry: () => void;
@@ -89,18 +89,19 @@ const MessageListComponent: FC<MessageListProps> = ({
   isPaused,
   error,
   loadingStatus,
-  agentStates,
-  currentWork,
   modelDisplayName,
   provider,
   model,
   messageListRef,
-  messageId,
   onPromptClick,
   onContinue,
   onRetry,
   onRegenerate
 }) => {
+  const activeSessionMessageId = useAgentStore(selectActiveSessionMessageId);
+  const activeSession = useAgentStore(selectActiveSession);
+  const activeAgentStates = activeSession?.agentStates ?? [];
+  const activeWork = activeSession?.work;
 
   return (
     <div className="message-list" ref={messageListRef}>
@@ -124,7 +125,7 @@ const MessageListComponent: FC<MessageListProps> = ({
           );
           
           // Determine if this message is actively being generated/regenerated
-          const isActiveGeneration = isLoading && msg.id === messageId;
+          const isActiveGeneration = isLoading && msg.id === activeSessionMessageId;
           
           const isLast = index === messages.length - 1;
           
@@ -183,12 +184,12 @@ const MessageListComponent: FC<MessageListProps> = ({
                       <LoadingIndicator
                         noWrapper
                         status={loadingStatus}
-                        agentStates={agentStates}
+                        agentStates={activeAgentStates}
                         isPaused={isPaused}
-                        messageId={messageId}
+                        messageId={activeSessionMessageId}
                         onContinue={onContinue}
                         onRegenerate={(phase, agentIndex) => onRegenerate(msg.id, phase as StepId, agentIndex)}
-                        work={msg.work || currentWork}
+                        work={activeWork ?? msg.work}
                         provider={provider}
                         model={model}
                       />
@@ -196,17 +197,17 @@ const MessageListComponent: FC<MessageListProps> = ({
 
                     {/* 2. Work Content (Live or History) */}
                     {(() => {
-                      if (!(msg.work || (isActiveGeneration && currentWork))) return null;
-                      
-                      // Allow regeneration only if the message wasn't manually stopped
-                      const canRegenerate = !msg.work?.isStopped;
+                      if (!(msg.work || (isActiveGeneration && activeWork))) return null;
+                        
+                      // Allow regeneration only for the latest assistant turn that was not manually stopped.
+                      const canRegenerate = isLatestRegenerableMessage(messages, msg.id) && !msg.work?.isStopped;
                       const handleRegenerate = canRegenerate 
                         ? (phase: string, agentIndex: number) => onRegenerate(msg.id, phase as StepId, agentIndex)
                         : undefined;
                       
                       return (
                         <ShowWork
-                          work={msg.work || currentWork!}
+                          work={msg.work ?? activeWork ?? EMPTY_WORK}
                           messageId={msg.id}
                           isLive={isActiveGeneration}
                           isPaused={isPaused}
@@ -226,31 +227,31 @@ const MessageListComponent: FC<MessageListProps> = ({
       )}
       
       {/* Show loading indicator at bottom only if generating a NEW message not yet in the list */}
-      {isLoading && !messages.some(m => m.id === messageId) && (
+      {isLoading && activeSessionMessageId && !messages.some(m => m.id === activeSessionMessageId) && (
         <div className="message-wrapper model loading-state">
           <AgentAvatar type="model" provider={provider} model={model} />
           <div className="loading-container-wrapper">
             <LoadingIndicator
               noWrapper
               status={loadingStatus}
-              agentStates={agentStates}
+              agentStates={activeAgentStates}
               isPaused={isPaused}
-              messageId={messageId}
+              messageId={activeSessionMessageId}
               onContinue={onContinue}
-              onRegenerate={messageId ? (phase, agentIndex) => onRegenerate(messageId, phase as StepId, agentIndex) : undefined}
-              work={currentWork}
+              onRegenerate={(phase, agentIndex) => onRegenerate(activeSessionMessageId, phase as StepId, agentIndex)}
+              work={activeWork}
               provider={provider}
               model={model}
             />
-            {currentWork && (
+            {activeWork && (
               <div className="show-work-wrapper">
                 <ShowWork
-                  work={currentWork}
+                  work={activeWork}
                   isLive={true}
-                  messageId={messageId}
+                  messageId={activeSessionMessageId}
                   isPaused={isPaused}
                   onContinue={onContinue}
-                  onRegenerate={messageId && isPaused ? (phase, agentIndex) => onRegenerate(messageId, phase as StepId, agentIndex) : undefined}
+                  onRegenerate={isPaused ? (phase, agentIndex) => onRegenerate(activeSessionMessageId, phase as StepId, agentIndex) : undefined}
                 />
               </div>
             )}

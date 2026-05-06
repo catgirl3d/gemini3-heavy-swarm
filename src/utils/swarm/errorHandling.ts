@@ -28,11 +28,11 @@ export function hasPartialWorkResults(work: Work | undefined): boolean {
 export function handleSendMessageError(
   error: unknown,
   latestWork: Work | undefined,
-  setLoadingStatus: (s: string) => void,
-  setIsPaused: (p: boolean) => void,
-  setIsLoading: (l: boolean) => void,
-  setCurrentWork: (w: Work | undefined) => void,
-  setError: (e: string) => void,
+  handlers: {
+    onAborted: () => void;
+    onPartialFailure: (errorMessage: string) => void;
+    onTotalFailure: (errorMessage: string) => void;
+  },
   settings: AppSettings
 ): boolean {
   const logger = new Logger('Swarm', settings.debugMode);
@@ -44,8 +44,7 @@ export function handleSendMessageError(
     (error instanceof DOMException && error.name === 'AbortError')
   ) {
     logger.info('Generation aborted by user - clearing loading state');
-    setIsLoading(false);
-    setLoadingStatus('Stopped by user');
+    handlers.onAborted();
     return true;
   }
 
@@ -60,17 +59,14 @@ export function handleSendMessageError(
     logger.info('Partial results detected, pausing instead of unmounting', { 
         status: `Error: ${errorMessage}` 
     });
-    setLoadingStatus(`Error: ${errorMessage}`);
-    setIsPaused(true);
+    handlers.onPartialFailure(errorMessage);
   } else {
     // Total failure, clean up UI
     logger.error('Total failure (no partial results), unmounting LoadingIndicator', { 
         error: errorMessage,
         stack: error instanceof Error ? error.stack : 'No stack'
     });
-    setIsLoading(false);
-    setCurrentWork(undefined);
-    setError(errorMessage);
+    handlers.onTotalFailure(errorMessage);
   }
   
   return false;

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const loggerSpies = vi.hoisted(() => ({
   debug: vi.fn(),
@@ -27,10 +27,9 @@ import { AppError, ErrorCode } from '@/utils/errors/AppError';
 // Mock dependencies
 vi.mock('@/stores/agentStore', () => {
   const mockState = {
-    setIsLoading: vi.fn(),
-    updateWorkResult: vi.fn(),
-    setCurrentWork: vi.fn(),
-    currentWork: null
+    updateSessionRuntime: vi.fn(),
+    updateSessionWorkResult: vi.fn(),
+    replaceSessionWork: vi.fn(),
   };
   const useAgentStore = vi.fn(() => mockState);
   (useAgentStore as any).getState = vi.fn(() => mockState);
@@ -195,14 +194,6 @@ class TestStep extends BaseStep {
     );
   }
 
-  public testRunSynthesisRegeneration(
-    context: StepContext,
-    instruction: any,
-    agentStates: AgentState[],
-    tools?: any[]
-  ): Promise<{ text: string; sources?: Source[]; work: Work }> {
-    return this.runSynthesisRegeneration(context, instruction, agentStates, tools);
-  }
 }
 
 class RetryCallbackStep extends TestStep {
@@ -220,6 +211,10 @@ describe('BaseStep', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     step = new TestStep();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('getRoleModel', () => {
@@ -550,6 +545,8 @@ describe('BaseStep', () => {
     });
 
     it('should call onMessageUpdate for thought or usage chunks even when text is empty', () => {
+      vi.useFakeTimers();
+
       const work: Work = {
         results: {}
       };
@@ -571,12 +568,100 @@ describe('BaseStep', () => {
       expect(work.results[STEPS.INITIAL]).toEqual(['', '']);
       expect(work.results[`${STEPS.INITIAL}_thoughts`]).toEqual(['reasoning first', '']);
       expect(work.results[`${STEPS.INITIAL}_usage`]).toEqual([usage, null]);
-      expect(useAgentStore.getState().updateWorkResult).toHaveBeenCalledWith(
+      expect(useAgentStore.getState().updateSessionWorkResult).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(75);
+
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
+         'msg-1',
+         STEPS.INITIAL,
+         0,
+         { thought: 'reasoning first', usage }
+       );
+      expect(onMessageUpdate).toHaveBeenCalledWith('', false, 'reasoning first', usage);
+    });
+
+    it('should flush buffered reasoning immediately when the first text chunk arrives', () => {
+      vi.useFakeTimers();
+
+      const work: Work = {
+        results: {}
+      };
+      const usage = { totalTokens: 7, promptTokens: 3, candidatesTokens: 4 };
+
+      const context = {
+        work,
+        settings: { numAgents: 2 } as AppSettings,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn()
+      } as any;
+
+      step.testHandleStreamChunk(context, 0, '', 'reasoning first', usage, {
+        isFirstChunk: false,
+        streamToMessage: false
+      });
+
+      expect(useAgentStore.getState().updateSessionWorkResult).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(50);
+      step.testHandleStreamChunk(context, 0, 'visible text', 'reasoning first', usage, {
+        isFirstChunk: false,
+        streamToMessage: false
+      });
+
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledTimes(1);
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
+        'msg-1',
         STEPS.INITIAL,
         0,
-        { text: '', thought: 'reasoning first', usage }
+        { text: 'visible text', thought: 'reasoning first', usage }
       );
-      expect(onMessageUpdate).toHaveBeenCalledWith('', false, 'reasoning first', usage);
+
+      vi.advanceTimersByTime(100);
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throttle subsequent visible text sync updates after the first flush', () => {
+      vi.useFakeTimers();
+
+      const context = {
+        work: { results: {} },
+        settings: { numAgents: 1 } as AppSettings,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn()
+      } as any;
+
+      step.testHandleStreamChunk(context, 0, 'first chunk', '', null, {
+        isFirstChunk: false,
+        streamToMessage: false
+      });
+
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledTimes(1);
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenLastCalledWith(
+        'msg-1',
+        STEPS.INITIAL,
+        0,
+        { text: 'first chunk' }
+      );
+
+      step.testHandleStreamChunk(context, 0, 'first chunk plus more', '', null, {
+        isFirstChunk: false,
+        streamToMessage: false
+      });
+
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(74);
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(1);
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledTimes(2);
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenLastCalledWith(
+        'msg-1',
+        STEPS.INITIAL,
+        0,
+        { text: 'first chunk plus more' }
+      );
     });
   });
 
@@ -789,7 +874,7 @@ describe('BaseStep', () => {
         label: 'Retrying (Attempt 2)...',
         messageId: 'msg-1'
       });
-      expect(useAgentStore.getState().setIsLoading).toHaveBeenCalledWith(true);
+      expect(useAgentStore.getState().updateSessionRuntime).toHaveBeenCalledWith('msg-1', { isLoading: true });
 
       step.id = STEPS.SYNTHESIS;
       const synthesisStates: AgentState[] = [
@@ -811,7 +896,8 @@ describe('BaseStep', () => {
       const work: Work = { results: {} };
       const context = {
         work,
-        settings: { numAgents: 2 } as AppSettings
+        settings: { numAgents: 2 } as AppSettings,
+        messageId: 'msg-1',
       } as StepContext;
 
       expect(() => step.testFinalizeStep(
@@ -822,7 +908,7 @@ describe('BaseStep', () => {
       )).toThrow(rateLimitError);
 
       expect(work.results?.[STEPS.INITIAL]).toEqual(['partial 1', 'partial 2']);
-      expect(useAgentStore.getState().setCurrentWork).toHaveBeenCalledWith({ ...work });
+      expect(useAgentStore.getState().replaceSessionWork).toHaveBeenCalledWith('msg-1', { ...work });
     });
   });
 
@@ -997,7 +1083,7 @@ describe('BaseStep', () => {
       }));
     });
 
-    it('should migrate scalar simulated error counts to per-agent counts and persist the failed attempt', async () => {
+    it('should reinitialize malformed per-agent simulated error counts and persist the failed attempt', async () => {
       const work: Work = {
         results: {
           [`${STEPS.INITIAL}_error_counts`]: 2
@@ -1013,6 +1099,7 @@ describe('BaseStep', () => {
         agentIndex: 1,
         simulateError: '503',
         simulateErrorAttempts: 1,
+        messageId: 'msg-1',
         work
       } as any, { onChunk: vi.fn() })).rejects.toMatchObject({
         code: ErrorCode.SERVICE_OVERLOADED,
@@ -1020,7 +1107,7 @@ describe('BaseStep', () => {
       } satisfies Partial<AppError>);
 
       expect(work.results?.[`${STEPS.INITIAL}_error_counts`]).toEqual([0, 1, 0]);
-      expect(useAgentStore.getState().setCurrentWork).toHaveBeenCalledWith(expect.objectContaining({
+      expect(useAgentStore.getState().replaceSessionWork).toHaveBeenCalledWith('msg-1', expect.objectContaining({
         results: work.results
       }));
     });
@@ -1277,15 +1364,17 @@ describe('BaseStep', () => {
       expect(work.results?.[STEPS.INITIAL]).toEqual(['old agent 0', 'new agent text']);
       expect(work.results?.[`${STEPS.INITIAL}_usage`]).toEqual([null, finalUsage]);
       expect(work.stepMetadata?.[0]).toMatchObject({ id: STEPS.INITIAL, status: 'done' });
-      expect(useAgentStore.getState().updateWorkResult).toHaveBeenCalledWith(
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
+        'msg-1',
         STEPS.INITIAL,
         1,
         { usage: null, text: '' }
       );
-      expect(useAgentStore.getState().updateWorkResult).toHaveBeenCalledWith(
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
+        'msg-1',
         STEPS.INITIAL,
         1,
-        { usage: finalUsage }
+        { text: 'new agent text', thought: 'new thought', usage: finalUsage }
       );
     });
 
@@ -1331,7 +1420,7 @@ describe('BaseStep', () => {
       )).rejects.toThrow('regeneration stream failed');
 
       expect(work.results?.[STEPS.INITIAL]).toEqual(['old agent 0', 'partial']);
-      expect(useAgentStore.getState().setCurrentWork).toHaveBeenCalledWith({ ...work });
+      expect(useAgentStore.getState().replaceSessionWork).toHaveBeenCalledWith('msg-1', { ...work });
     });
 
     it('should route retry callbacks through retry progress during regeneration', async () => {
@@ -1353,57 +1442,9 @@ describe('BaseStep', () => {
       );
 
       expect(result.text).toBe('retried text');
-      expect(useAgentStore.getState().setIsLoading).toHaveBeenCalledWith(true);
+      expect(useAgentStore.getState().updateSessionRuntime).toHaveBeenCalledWith('msg-1', { isLoading: true });
     });
   });
 
-  describe('runSynthesisRegeneration', () => {
-    it('should attach extracted sources and trigger synthesis jump on first text chunk', async () => {
-      step.id = STEPS.SYNTHESIS;
-      const source = { web: { uri: 'https://source.test', title: 'Source' } } as GroundingChunk;
-      const provider = {
-        name: 'mock',
-        isProxy: false,
-        getDefaultModel: vi.fn(() => 'mock-model'),
-        models: {
-          generateContentStream: vi.fn().mockResolvedValue({
-            stream: (async function* () {
-              yield { text: 'final answer', thought: '', usage: null, groundingChunks: [source] };
-            })()
-          })
-        }
-      };
-      const work: Work = { results: { [STEPS.SYNTHESIS]: { text: 'old final' } } };
-      const onSynthesisJump = vi.fn();
-
-      const result = await step.testRunSynthesisRegeneration(
-        {
-          ai: provider,
-          settings: { debugMode: false, numAgents: 1, model: 'global-model' } as AppSettings,
-          work,
-          signal: new AbortController().signal,
-          messageId: 'msg-1',
-          onMessageUpdate: vi.fn(),
-          onSynthesisJump
-        } as any,
-        {
-          systemInstruction: 'system',
-          userTurn: { role: 'user', parts: [{ text: 'prompt' }] },
-          mainChatHistory: []
-        },
-        [{ id: 'synth', name: 'Synthesizer', status: 'done', label: 'Done', messageId: 'msg-1' }]
-      );
-
-      expect(result).toMatchObject({
-        text: 'final answer',
-        sources: [{ uri: 'https://source.test', title: 'Source' }]
-      });
-      expect(work.results?.[STEPS.SYNTHESIS]).toEqual({
-        text: 'final answer',
-        sources: [{ uri: 'https://source.test', title: 'Source' }]
-      });
-      expect(onSynthesisJump).toHaveBeenCalledTimes(1);
-    });
-  });
 });
 

@@ -45,12 +45,9 @@ export function processSynthesisChunkUpdate(
 }
 
 /**
- * Updates a Work object with new text AND syncs usage/thought from the store.
- * During regeneration, usage and thought are updated in currentWork store but not
- * in the message's work object. This function merges them to keep UI in sync.
- * 
- * SAFETY: Only syncs thought/usage from store if currentMessageId matches the provided messageId,
- * preventing data leakage between parallel regenerations of different messages.
+ * Updates a Work object with new text/thought/usage for one step.
+ * During regeneration, live truth stays in the owning session; this helper mirrors
+ * the latest step payload back into the message snapshot used by the UI.
  */
 export function updateWorkForStep(
   work: Work,
@@ -113,11 +110,13 @@ export function calculateUpdatedStateForRegeneration(
   // Use workContext as fallback if msg.work is missing
   const workToUse = msg?.work || workContext;
   
-  if (msg && workToUse) {
-    // Update the work object in the message with new results
+  // Live regeneration truth now lives in the session store.
+  // We only mirror message.work during synthesis text updates, where the message snapshot
+  // itself is the visible user output while streaming.
+  if (stepId === STEPS.SYNTHESIS && msg && workToUse) {
     const updatedWork = updateWorkForStep(workToUse, stepId, agentIndex, text, settings, messageId, thought, usage);
     updatedMsgs[targetIdx] = { ...msg, work: updatedWork };
-  } else if (isFirstChunk) {
+  } else if (isFirstChunk && !msg) {
     logger.warn('calculateUpdatedState: Missing message or work', { 
         hasMsg: !!msg, 
         hasWorkToUse: !!workToUse, 

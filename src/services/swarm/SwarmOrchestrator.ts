@@ -1,6 +1,5 @@
 import { type AiProvider } from '@/types/ai-provider';
 import { type AppSettings, type Work, type AgentState, type Message, type Source, type TokenUsage } from '@/types';
-import type { MutableRefObject } from 'react';
 import { StepRunner } from '@/services/swarm/StepRunner';
 import { InitialStep } from '@/services/swarm/steps/InitialStep';
 import { RefinementStep } from '@/services/swarm/steps/RefinementStep';
@@ -37,12 +36,11 @@ export class SwarmOrchestrator {
     messageId: string,
     onMessageUpdate: (text: string, isFirstChunk: boolean, thought?: string, usage?: TokenUsage | null) => void,
     signal: AbortSignal,
-    pauseResolverRef: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>,
     onPause?: () => void,
     onStatusUpdate?: (status: string) => void,
     onSynthesisJump?: () => void,
     existingWork?: Work
-  ): Promise<{ text: string; sources?: Source[]; work: Work }> {
+  ): Promise<{ text: string; sources?: Source[]; work: Work; paused: boolean }> {
     
     // Provider handles its own settings adjustments
     const effectiveSettings = this.provider.getEffectiveSettings(settings);
@@ -85,7 +83,7 @@ export class SwarmOrchestrator {
     };
 
     const runner = new StepRunner(this.steps);
-    const finalWork = await runner.run(context, pauseResolverRef, onPause, onStatusUpdate);
+    const { work: finalWork, paused } = await runner.run(context, onPause, onStatusUpdate);
 
     // Extract final result from synthesis step
     const synthesisResult = finalWork.results?.[STEPS.SYNTHESIS] as { text?: string; sources?: Source[]; error?: boolean } | undefined;
@@ -96,7 +94,8 @@ export class SwarmOrchestrator {
     return {
       text: finalText,
       sources: synthesisResult?.sources,
-      work: finalWork
+      work: finalWork,
+      paused,
     };
   }
 
@@ -116,8 +115,6 @@ export class SwarmOrchestrator {
     agentStates: AgentState[],
     onUpdate: (text: string, isFirstChunk: boolean, thought?: string, usage?: TokenUsage | null) => void,
     signal: AbortSignal,
-    pauseResolverRef?: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>,
-    onPause?: () => void,
     onSynthesisJump?: () => void
   ): Promise<{ text: string; sources?: Source[]; work: Work }> {
     
@@ -148,9 +145,7 @@ export class SwarmOrchestrator {
         onSynthesisJump,
         signal,
         messageId,
-        pauseResolverRef,
-        onPause
-    };
+      };
 
     return step.regenerate(context, agentIndex, agentStates) as Promise<{ text: string; sources?: Source[]; work: Work }>;
   }

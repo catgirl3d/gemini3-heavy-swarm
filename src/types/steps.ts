@@ -2,7 +2,6 @@ import { type AppSettings, type Message, type AgentState, type Work, type StepId
 export type { StepId };
 export { STEPS };
 import { type Content, type Tool, type GroundingChunk } from '@google/genai';
-import type { MutableRefObject } from 'react';
 import { type AiProvider } from './ai-provider';
 import type { AppError } from '@/utils/errors/AppError';
 
@@ -14,6 +13,7 @@ export interface StreamConfig {
   systemInstruction: string;
   tools?: Tool[];
   signal: AbortSignal;
+  messageId?: string;
   agentIndex?: number;
   /** Duration in milliseconds for dev mode simulation. Default: 1000ms */
   devModeDuration?: number;
@@ -71,10 +71,6 @@ export interface StepContext {
 
   // Unique identifier for the message being processed
   messageId: string;
-
-  // Optional pause support (for regeneration flows)
-  pauseResolverRef?: MutableRefObject<((value: void | PromiseLike<void>) => void) | null>;
-  onPause?: () => void;
 }
 
 export interface StepDescriptor {

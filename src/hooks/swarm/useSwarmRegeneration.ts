@@ -1,35 +1,110 @@
-import { useRef, useEffect, type RefObject, type Dispatch, type SetStateAction, type MutableRefObject } from 'react';
+import { useRef, useEffect, type RefObject, type Dispatch, type SetStateAction } from 'react';
 import { type AppSettings, type Message, type Work } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
 import { Logger } from '@shared/utils/logger';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
-import { getMissingAgentsForMessage } from '@/utils/swarm/agentHelpers';
 import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
 
 import { calculateUpdatedStateForRegeneration } from '@/utils/swarm/regenerationHelpers';
 import {
   cloneWork,
+  getStepMeta,
   getStepResults,
   getStepThoughts,
   getStepUsage,
   getSynthesisResult,
   getSynthesisThought,
   getSynthesisUsage,
+  markDownstreamStale as markWorkDownstreamStale,
+  setStepMetaStatus,
   updateAgentWork,
 } from '@/utils/swarm/workHelpers';
 import { getFriendlyErrorMessage } from '@/services/swarm/steps/utils/errorUtils';
 import { type SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { useAgentStore } from '@/stores/agentStore';
+import { isLatestRegenerableMessage } from '@/utils/swarm/sessionHelpers';
 
 const regenLogger = new Logger('Regeneration');
+
+const cloneMessageSnapshot = (message: Message): Message => {
+  return {
+    ...message,
+    parts: message.parts.map(part => ({ ...part })),
+    sources: message.sources ? [...message.sources] : undefined,
+    work: message.work ? cloneWork(message.work) : undefined,
+  };
+};
+
+const mergeRegeneratedStepWork = (
+  baseWork: Work,
+  updatedStepWork: Work,
+  stepId: StepId,
+  agentIndex: number
+): Work => {
+  let mergedWork = cloneWork(baseWork);
+
+  if (stepId === STEPS.SYNTHESIS) {
+    const synthesisResult = getSynthesisResult(updatedStepWork);
+    if (!mergedWork.results) {
+      mergedWork.results = {};
+    }
+
+    if (synthesisResult !== null) {
+      mergedWork.results[STEPS.SYNTHESIS] = synthesisResult;
+    }
+
+    const synthesisThought = getSynthesisThought(updatedStepWork);
+    if (synthesisThought !== null) {
+      mergedWork.results[`${STEPS.SYNTHESIS}_thought`] = synthesisThought;
+    }
+
+    const synthesisUsage = getSynthesisUsage(updatedStepWork);
+    if (synthesisUsage !== null) {
+      mergedWork.results[`${STEPS.SYNTHESIS}_usage`] = synthesisUsage;
+    }
+  } else {
+    const nextText = getStepResults(updatedStepWork, stepId)[agentIndex];
+    const nextThought = getStepThoughts(updatedStepWork, stepId)[agentIndex];
+    const nextUsage = getStepUsage(updatedStepWork, stepId)[agentIndex];
+
+    mergedWork = updateAgentWork(mergedWork, stepId, agentIndex, {
+      ...(typeof nextText === 'string' ? { text: nextText } : {}),
+      ...(typeof nextThought === 'string' ? { thought: nextThought } : {}),
+      ...(nextUsage ? { usage: nextUsage } : {}),
+    });
+  }
+
+  const latestMeta = updatedStepWork.stepMetadata?.find(meta => meta.id === stepId);
+  if (latestMeta) {
+    mergedWork = setStepMetaStatus(mergedWork, stepId, latestMeta.status, {
+      label: latestMeta.label,
+      staleFromStepId: latestMeta.staleFromStepId,
+    });
+  }
+
+  if (updatedStepWork.agentNames) {
+    mergedWork.agentNames = [...updatedStepWork.agentNames];
+  }
+
+  if (updatedStepWork.criticNames) {
+    mergedWork.criticNames = [...updatedStepWork.criticNames];
+  }
+
+  if (updatedStepWork.debugInfo?.[stepId]) {
+    mergedWork.debugInfo = {
+      ...mergedWork.debugInfo,
+      [stepId]: updatedStepWork.debugInfo[stepId],
+    };
+  }
+
+  return mergedWork;
+};
 
 interface RegenerationDependencies {
   settings: AppSettings;
   messages: Message[];
   messagesRef: RefObject<Message[]>;
   setMessages: Dispatch<SetStateAction<Message[]>>;
-  currentWork: Work | undefined;
-  currentMessageId: string | undefined;
   orchestratorRef: RefObject<SwarmOrchestrator>;
   lastInput: { text: string, image: string | null, imageFile: File | null } | null;
 }
@@ -39,8 +114,6 @@ export function useSwarmRegeneration({
   messages,
   messagesRef,
   setMessages,
-  currentWork,
-  currentMessageId,
   orchestratorRef,
   lastInput
 }: RegenerationDependencies) {
@@ -62,12 +135,16 @@ export function useSwarmRegeneration({
     messageId: string,
     stepId: StepId,
     agentIndex: number,
-    pauseResolverRef?: MutableRefObject<(() => void) | null>
   ) => {
     regenLogger.info('regenerateAgentResponse START', { messageId, stepId, agentIndex });
     
     // FIX: Use messagesRef to avoid stale closure over messages array
     const currentMessages = messagesRef.current || messages;
+
+    if (!isLatestRegenerableMessage(currentMessages, messageId)) {
+      regenLogger.info('Skipping regeneration for non-latest assistant message', { messageId, stepId, agentIndex });
+      return;
+    }
     
     // PROTECTION: Prevent parallel regenerations of the same agent
     const regenerationKey = `${messageId}-${stepId}-${agentIndex}`;
@@ -99,52 +176,60 @@ export function useSwarmRegeneration({
     }
 
     const targetMessage = currentMessages[messageIndex];
+    const store = useAgentStore.getState();
+    const liveSession = store.sessionsByMessageId[messageId];
+    const stepConfig = getStepConfig(stepId);
+    const hasLiveSessionWork = !!liveSession?.work.results && Object.keys(liveSession.work.results).length > 0;
     
     // Regeneration preserves global flags to prevent UI remounting and state loss.
-    // Use message's work if available. Fallback to currentWork ONLY if it belongs to the same message.
-    const baseWork = targetMessage?.work || (currentMessageId === messageId ? currentWork : undefined);
+    const baseWork = (hasLiveSessionWork ? liveSession?.work : undefined)
+      || targetMessage?.work;
     const workContext = baseWork ? cloneWork(baseWork) : undefined;
+    const wasCompletedMessage = getStepMeta(baseWork, STEPS.SYNTHESIS)?.status === 'done';
+    const seededAgentStates = (liveSession?.agentStates ?? workContext?.agentStates ?? [])
+      .filter(agent => agent.messageId === messageId);
+    const previousAgentStates = seededAgentStates.map(agent => ({ ...agent }));
+    const previousActiveSessionId = store.activeSessionMessageId;
+    const previousSessionRuntime = liveSession
+      ? {
+          status: liveSession.status,
+          isLoading: liveSession.isLoading,
+          isPaused: liveSession.isPaused,
+          loadingStatus: liveSession.loadingStatus,
+          error: liveSession.error,
+        }
+      : {
+          status: wasCompletedMessage ? 'done' as const : 'paused' as const,
+          isLoading: !wasCompletedMessage,
+          isPaused: !wasCompletedMessage,
+          loadingStatus: wasCompletedMessage ? '' : 'Paused. Waiting for user confirmation...',
+          error: null,
+        };
+    const originalMessageSnapshot = cloneMessageSnapshot(targetMessage);
     
     if (!workContext) {
       const errorMsg = `Cannot regenerate: No work context for message ${messageId}. ` +
-        `Source: message.work=${!!targetMessage?.work}, currentWork=${!!currentWork}, ` +
-        `currentMessageId match=${currentMessageId === messageId}`;
+        `Source: message.work=${!!targetMessage?.work}, liveSession=${!!liveSession}`;
       
       regenLogger.error(errorMsg);
-      useAgentStore.getState().setError('Cannot regenerate this message. Please try again.');
+      useAgentStore.getState().setGlobalError('Cannot regenerate this message. Please try again.');
       activeRegenerationsRef.current.delete(regenerationKey);
       return;
     }
 
-    // MINIMAL HYDRATION: Ensure agents exist for this message
-    // 1. Check if agents are already in store (active session)
-    const currentAgents = useAgentStore.getState().agents;
-    const hasAgentsForMessage = currentAgents.some(a => a.messageId === messageId);
-    
-    if (!hasAgentsForMessage) {
-      // 2. If not, try to recover them (Legacy/Reload support)
-      const missingAgents = getMissingAgentsForMessage(messageId, workContext);
-      
-      if (missingAgents.length > 0) {
-        regenLogger.debug('Restoring missing agents', { count: missingAgents.length, source: 'helper' });
-        useAgentStore.getState().hydrate([...currentAgents, ...missingAgents]);
-      }
-    }
+    store.startSession(messageId, workContext, {
+      agentStates: seededAgentStates,
+      status: 'running',
+      isLoading: true,
+      isPaused: false,
+      loadingStatus: stepConfig.progressMsg || '',
+      error: null,
+    });
 
     // Create AbortController for this regeneration and register it centrally
     const controller = new AbortController();
     const controllerKey = `regen-${messageId}-${stepId}-${agentIndex}`;
     useAgentStore.getState().registerAbortController(controllerKey, controller);
-
-    const stepConfig = getStepConfig(stepId);
-    const store = useAgentStore.getState();
-    
-    // Reset global error and update status to reflect the new attempt.
-    // This ensures any previous error banner hides and the indicator shows new progress.
-    store.setError(null);
-    store.setCurrentMessageId(messageId);
-    store.setIsLoading(true);
-    store.setLoadingStatus(stepConfig.progressMsg || '');
 
     try {
       // Steps now manage their own status lifecycle (working → done/error)
@@ -179,7 +264,7 @@ export function useSwarmRegeneration({
         agentIndex,
         stepId,
         workContext,
-        useAgentStore.getState().agents, // Use store for current truth
+        useAgentStore.getState().sessionsByMessageId[messageId]?.agentStates ?? [],
         (text, isFirstChunk, thought, usage) => {
           setMessages(prev => {
             return calculateUpdatedStateForRegeneration(
@@ -198,76 +283,35 @@ export function useSwarmRegeneration({
           });
         },
         controller.signal,
-        pauseResolverRef,
-        () => {
-          useAgentStore.getState().setIsPaused(true);
-          useAgentStore.getState().setLoadingStatus('Paused. Waiting for user confirmation...');
-        },
         () => {
           // Pass synthesis jump callback - invoked by SynthesisStep when it starts streaming
-          useAgentStore.getState().setIsLoading(false);
-          useAgentStore.getState().setIsPaused(false);
+          useAgentStore.getState().updateSessionRuntime(messageId, {
+            isLoading: false,
+            isPaused: false,
+          });
         }
       );
 
-      const synthesisResult = stepId === STEPS.SYNTHESIS ? getSynthesisResult(result.work) : null;
-      const text = stepId === STEPS.SYNTHESIS
-        ? typeof synthesisResult === 'string'
-          ? synthesisResult
-          : typeof synthesisResult?.text === 'string'
-            ? synthesisResult.text
-            : undefined
-        : (() => {
-            const stepText = getStepResults(result.work, stepId)[agentIndex];
-            return typeof stepText === 'string' ? stepText : undefined;
-          })();
-
-      const thought = stepId === STEPS.SYNTHESIS
-        ? getSynthesisThought(result.work) ?? undefined
-        : (() => {
-            const stepThought = getStepThoughts(result.work, stepId)[agentIndex];
-            return typeof stepThought === 'string' ? stepThought : undefined;
-          })();
-
-      const usage = stepId === STEPS.SYNTHESIS
-        ? getSynthesisUsage(result.work)
-        : getStepUsage(result.work, stepId)[agentIndex];
-
       // Handle final result
-      // "result" contains the authoritative updated Work object for THIS agent from the step.
-      // We use it to surgically update the latest message state without overwriting other agents' work.
+      const mergedWork = mergeRegeneratedStepWork(workContext, result.work, stepId, agentIndex);
+      store.replaceSessionWork(messageId, mergedWork);
+      if (stepId !== STEPS.SYNTHESIS) {
+        store.markDownstreamStale(messageId, stepId);
+      }
+
+      const sessionSnapshot = store.snapshotSessionWork(messageId);
+      const fallbackMessageWork = stepId === STEPS.SYNTHESIS
+        ? mergedWork
+        : markWorkDownstreamStale(mergedWork, stepId);
+
       setMessages(prev => {
           const idx = prev.findIndex(m => m.id === messageId);
           if (idx === -1) return prev;
 
           const existingMessage = prev[idx];
-          const existingWork = existingMessage.work || workContext;
-
-          // 2. Perform atomic update into the LATEST messages work state
-          const updatedWork = updateAgentWork(existingWork, stepId, agentIndex, {
-              text,
-              thought,
-              usage
-          });
-          
-          // 3. Sync step metadata (status: done/error) from the result
-          if (result.work.stepMetadata) {
-              const latestMeta = result.work.stepMetadata.find(m => m.id === stepId);
-              if (latestMeta) {
-                if (!updatedWork.stepMetadata) updatedWork.stepMetadata = [];
-                const mIdx = updatedWork.stepMetadata.findIndex(m => m.id === stepId);
-                if (mIdx >= 0) updatedWork.stepMetadata[mIdx] = { ...updatedWork.stepMetadata[mIdx], ...latestMeta };
-                else updatedWork.stepMetadata.push(latestMeta);
-              }
-          }
-
-          // 4. Snapshot current agent states for history tracking
-          const currentAgents = useAgentStore.getState().agents.filter(a => a.messageId === messageId);
-          updatedWork.agentStates = currentAgents;
-          
           const updatedMessage: Message = {
               ...existingMessage,
-              work: updatedWork,
+              work: sessionSnapshot ?? fallbackMessageWork,
               sources: result.sources || existingMessage.sources
           };
           
@@ -285,12 +329,22 @@ export function useSwarmRegeneration({
       // If we are in multi-agent steps, pause to allow user to continue or review
       // Synthesis step completion usually handles its own cleanup in StepRunner/Orchestrator
       if (stepId !== STEPS.SYNTHESIS) {
-          useAgentStore.getState().setIsPaused(true);
+          if (wasCompletedMessage) {
+              store.setSessionStatus(messageId, 'done');
+              store.setActiveSession(undefined);
+          } else {
+              store.updateSessionRuntime(messageId, {
+                status: 'paused',
+                isLoading: true,
+                isPaused: true,
+                loadingStatus: 'Paused. Waiting for user confirmation...',
+                error: null,
+              });
+          }
       } else {
           // If synthesis completed successfully, we can finish the global loading state
-          useAgentStore.getState().setIsLoading(false);
-          useAgentStore.getState().setIsPaused(false);
-          useAgentStore.getState().setCurrentMessageId(undefined);
+          store.setSessionStatus(messageId, 'done');
+          store.setActiveSession(undefined);
       }
       
     } catch (error) {
@@ -300,15 +354,21 @@ export function useSwarmRegeneration({
         (error instanceof DOMException && error.name === 'AbortError')
       ) {
         regenLogger.info('Regeneration aborted by user - cleanup', { stepId, agentIndex });
-        
-        // Clear live regeneration state so ShowWork falls back to the historical snapshot.
-        useAgentStore.getState().setIsLoading(false);
-        useAgentStore.getState().setIsPaused(false);
-        useAgentStore.getState().setLoadingStatus('');
-        useAgentStore.getState().setCurrentMessageId(undefined);
+
+        store.replaceSessionWork(messageId, workContext);
+        store.replaceSessionAgents(messageId, previousAgentStates);
+        store.updateSessionRuntime(messageId, previousSessionRuntime);
+
+        if (stepId === STEPS.SYNTHESIS) {
+          setMessages(prev => prev.map(message => (
+            message.id === messageId ? cloneMessageSnapshot(originalMessageSnapshot) : message
+          )));
+        }
+
+        store.setActiveSession(previousActiveSessionId);
         
         activeRegenerationsRef.current.delete(regenerationKey);
-        useAgentStore.getState().unregisterAbortController(controllerKey);
+        store.unregisterAbortController(controllerKey);
         return;
       }
 
@@ -320,10 +380,13 @@ export function useSwarmRegeneration({
       // CRITICAL: isLoading must remain true so that MessageList keeps the LoadingIndicator mounted.
       // In our state machine, this specific combination signals to the UI
       // (LoadingIndicator) that the process has errored and needs a Retry button.
-      const store = useAgentStore.getState();
-      store.setIsLoading(true);
-      store.setIsPaused(true);
-      store.setLoadingStatus(`Error: ${errorMessage}`);
+      store.updateSessionRuntime(messageId, {
+        status: 'error',
+        isLoading: true,
+        isPaused: true,
+        loadingStatus: `Error: ${errorMessage}`,
+        error: errorMessage,
+      });
 
       // Steps already updated work.results and status - just save work snapshot and update message
       setMessages(prev => {
@@ -334,7 +397,7 @@ export function useSwarmRegeneration({
         // Steps already updated work.results with error - just add agentStates snapshot
         const updatedWork = workToUpdate ? {
           ...workToUpdate,
-          agentStates: useAgentStore.getState().agents.filter(a => a.messageId === messageId)
+          agentStates: useAgentStore.getState().sessionsByMessageId[messageId]?.agentStates ?? []
         } : undefined;
         
         // We no longer update message parts with [System: ...] error text to avoid polluting the main UI.
@@ -350,8 +413,7 @@ export function useSwarmRegeneration({
       // Steps already updated work.results with error info
       activeRegenerationsRef.current.delete(regenerationKey);
       useAgentStore.getState().unregisterAbortController(controllerKey);
-      // DON'T clear currentMessageId here - leave it set so error state remains visible
-      // It will be cleared when next regeneration/orchestration starts
+      // Keep the active session selected so the retry UI remains visible.
     }
   };
 

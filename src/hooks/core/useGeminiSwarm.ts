@@ -19,14 +19,11 @@ export const useGeminiSwarm = () => {
   const { settings, settingsLoaded, setSettings, resetSettings, loadError, clearLoadError } = useAppSettings();
   const { messages, setMessages, messagesRef } = useMessages();
   
-  // Zustand Store - All swarm state in one place
-  const agents = useAgentStore(state => state.agents);
-  const currentWork = useAgentStore(state => state.currentWork);
+  // Zustand Store - read live UI state from the active session view.
   const isLoading = useAgentStore(state => state.isLoading);
   const isPaused = useAgentStore(state => state.isPaused);
   const loadingStatus = useAgentStore(state => state.loadingStatus);
   const error = useAgentStore(state => state.error);
-  const currentMessageId = useAgentStore(state => state.currentMessageId);
   
   // 2. Shared Infrastructure
   const mainAbort = useAbortController();
@@ -49,7 +46,6 @@ export const useGeminiSwarm = () => {
   const orchestrator = useMemo(() => new SwarmOrchestrator(provider), [provider]);
   const orchestratorRef = useRef<SwarmOrchestrator>(orchestrator);
   orchestratorRef.current = orchestrator;
-  const pauseResolverRef = useRef<(() => void) | null>(null);
 
   // 3. Specialized Orchestration Hook (SendMessage, Stop, Retry, Continue)
   const orchestration = useSwarmOrchestration({
@@ -57,7 +53,6 @@ export const useGeminiSwarm = () => {
     messagesRef,
     setMessages,
     mainAbort,
-    pauseResolverRef,
     orchestratorRef
   });
 
@@ -67,8 +62,6 @@ export const useGeminiSwarm = () => {
     messages,
     messagesRef,
     setMessages,
-    currentWork,
-    currentMessageId,
     orchestratorRef,
     lastInput: orchestration.lastInput
   });
@@ -80,12 +73,9 @@ export const useGeminiSwarm = () => {
     isLoading,
     isPaused,
     loadingStatus,
-    agentStates: agents,
-    currentWork,
     settings,
     settingsLoaded,
     error,
-    currentMessageId,
     loadError,
     
     // Actions
@@ -96,8 +86,7 @@ export const useGeminiSwarm = () => {
     stopGeneration: orchestration.stopGeneration,
     retry: orchestration.retry,
     continueGeneration: orchestration.continueGeneration,
-    // Bind pauseResolverRef to regenerateAgentResponse for cleaner API
     regenerateAgentResponse: (messageId: string, stepId: StepId, agentIndex: number) =>
-      regeneration.regenerateAgentResponse(messageId, stepId, agentIndex, pauseResolverRef)
+      regeneration.regenerateAgentResponse(messageId, stepId, agentIndex)
   };
 };

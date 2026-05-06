@@ -1,7 +1,7 @@
 import React, { type FC, type ReactNode, memo, useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { type TokenUsage as TokenUsageType } from '@/types';
 import { MarkdownRenderer } from '@/components/ui';
-import { SpinnerIcon, ErrorIcon, CheckIcon, ExpandIcon, ThoughtIcon, DebugIcon, DownloadIcon, RegenerateIcon } from '@/components/chat/ShowWork/icons';
+import { SpinnerIcon, ErrorIcon, CheckIcon, StaleIcon, ExpandIcon, ThoughtIcon, DebugIcon, DownloadIcon, RegenerateIcon } from '@/components/chat/ShowWork/icons';
 import { ActionMenu } from './ActionMenu';
 import { TokenUsage } from './TokenUsage';
 import { downloadContent } from '@/components/chat/ShowWork/utils';
@@ -12,7 +12,7 @@ export type CardActionType = 'expand' | 'showThought' | 'showDebug' | 'regenerat
 interface WorkCardProps {
   title: string;
   statusLabel: string;
-  status: 'working' | 'done' | 'error' | 'waiting';
+  status: 'working' | 'done' | 'error' | 'waiting' | 'stale';
   icon?: ReactNode;
   content: string | null;
   tokenUsage?: TokenUsageType | null;
@@ -228,7 +228,7 @@ const WorkCardComponent: FC<WorkCardProps> = ({
         icon: <DownloadIcon />,
         onClick: () => downloadContent(downloadFilename, content)
     }] : []),
-    ...(canRegenerate && status !== 'working' ? [{
+            ...(canRegenerate && status !== 'working' ? [{
         label: status === 'error' ? 'Retry' : 'Regenerate',
         icon: <RegenerateIcon />,
         onClick: handleRegenerate,
@@ -243,17 +243,18 @@ const WorkCardComponent: FC<WorkCardProps> = ({
           <div className={`work-card-icon ${status}`}>
             {status === 'working' ? <SpinnerIcon /> : 
              status === 'error' ? <ErrorIcon /> : 
+             status === 'stale' ? <StaleIcon /> : 
              status === 'done' ? <CheckIcon /> : 
              icon || null}
-          </div>
-          <div className="work-card-info">
-            <span className="work-card-name">{title}</span>
-            <span className={`work-card-status ${status === 'error' ? 'error' : ''}`}>
-              {statusLabel}
-            </span>
-          </div>
-        </div>
-        {(content || status === 'error' || status === 'done') && (
+           </div>
+           <div className="work-card-info">
+             <span className="work-card-name">{title}</span>
+             <span className={`work-card-status ${status === 'error' ? 'error' : status === 'stale' ? 'stale' : ''}`}>
+               {statusLabel}
+             </span>
+           </div>
+         </div>
+        {(content || status === 'error' || status === 'done' || status === 'stale') && (
           <div className="work-card-actions">
             {content && (
               <button

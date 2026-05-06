@@ -37,13 +37,14 @@ describe('useResolvedSwarmState', () => {
   it('prefers live agent state over the historical snapshot for the same message/step/index', () => {
     const snapshotAgent = createAgent({ status: 'error', label: 'Failed' });
     const liveAgent = createAgent({ status: 'working', label: 'Working' });
-    useAgentStore.getState().hydrate([liveAgent]);
+    useAgentStore.getState().replaceSessionAgents('message-1', [liveAgent]);
 
     const { result } = renderHook(() => useResolvedAgentState(
       'message-1',
       STEPS.INITIAL,
       0,
-      createWork({ agentStates: [snapshotAgent] })
+      createWork({ agentStates: [snapshotAgent] }),
+      true,
     ));
 
     expect(result.current).toMatchObject({
@@ -56,7 +57,7 @@ describe('useResolvedSwarmState', () => {
   });
 
   it('falls back to work.agentStates when live state is missing or belongs to another message', () => {
-    useAgentStore.getState().hydrate([
+    useAgentStore.getState().replaceSessionAgents('other-message', [
       createAgent({ messageId: 'other-message', status: 'working', label: 'Other working' }),
     ]);
     const snapshotAgent = createAgent({ messageId: 'snapshot-message', status: 'done', label: 'Snapshot done' });
@@ -65,7 +66,8 @@ describe('useResolvedSwarmState', () => {
       'message-1',
       STEPS.INITIAL,
       0,
-      createWork({ agentStates: [snapshotAgent] })
+      createWork({ agentStates: [snapshotAgent] }),
+      true,
     ));
 
     expect(result.current).toMatchObject({
@@ -75,7 +77,7 @@ describe('useResolvedSwarmState', () => {
     });
   });
 
-  it('resolves synthesizer state from live store, while refinementStarted can fall back to snapshot', () => {
+  it('resolves synthesizer state from live store, while refinementStarted can still fall back to snapshot', () => {
     const liveSynth = createAgent({
       id: 'synth-live',
       name: 'Synthesizer',
@@ -85,7 +87,7 @@ describe('useResolvedSwarmState', () => {
       status: 'working',
       label: 'Synthesizing',
     });
-    useAgentStore.getState().hydrate([liveSynth]);
+    useAgentStore.getState().replaceSessionAgents('message-1', [liveSynth]);
     const work = createWork({
       agentStates: [
         createAgent({
@@ -107,7 +109,7 @@ describe('useResolvedSwarmState', () => {
       ],
     });
 
-    const { result } = renderHook(() => useResolvedSwarmState('message-1', work));
+    const { result } = renderHook(() => useResolvedSwarmState('message-1', work, true));
 
     expect(result.current.synthesizerState).toMatchObject({
       id: 'synth-live',
@@ -119,13 +121,15 @@ describe('useResolvedSwarmState', () => {
   });
 
   it('treats only live initial/refinement working agents for the same message as early-stage work', () => {
-    useAgentStore.getState().hydrate([
+    useAgentStore.getState().replaceSessionAgents('message-1', [
       createAgent({ id: 'initial-working', stepId: STEPS.INITIAL, messageId: 'message-1', status: 'working', label: 'Drafting' }),
       createAgent({ id: 'synth-working', stepId: STEPS.SYNTHESIS, messageId: 'message-1', status: 'working', label: 'Synthesizing' }),
+    ]);
+    useAgentStore.getState().replaceSessionAgents('other-message', [
       createAgent({ id: 'other-message', stepId: STEPS.REFINEMENT, messageId: 'other-message', status: 'working', label: 'Other refine' }),
     ]);
 
-    const { result } = renderHook(() => useResolvedSwarmState('message-1', createWork()));
+    const { result } = renderHook(() => useResolvedSwarmState('message-1', createWork(), true));
 
     expect(result.current.isEarlyStageWorking).toBe(true);
     expect(result.current.refinementStarted).toBe(false);
@@ -136,10 +140,43 @@ describe('useResolvedSwarmState', () => {
   });
 
   it('returns falsy fallbacks when neither live nor historical state is available', () => {
-    const { result } = renderHook(() => useResolvedSwarmState(undefined, createWork()));
+    const { result } = renderHook(() => useResolvedSwarmState(undefined, createWork(), false));
 
     expect(result.current.synthesizerState).toBeUndefined();
     expect(result.current.refinementStarted).toBe(false);
     expect(result.current.isEarlyStageWorking).toBe(false);
+  });
+
+  it('keeps historical reads snapshot-only even if a matching session still exists', () => {
+    const liveAgent = createAgent({ status: 'working', label: 'Live working' });
+    const snapshotAgent = createAgent({ status: 'done', label: 'Snapshot done' });
+    useAgentStore.getState().startSession('message-1', { results: {} }, {
+      agentStates: [liveAgent],
+      status: 'paused',
+      isLoading: true,
+      isPaused: true,
+    });
+    useAgentStore.getState().setActiveSession(undefined);
+
+    const { result: agentResult } = renderHook(() => useResolvedAgentState(
+      'message-1',
+      STEPS.INITIAL,
+      0,
+      createWork({ agentStates: [snapshotAgent] }),
+      false,
+    ));
+
+    expect(agentResult.current).toMatchObject({
+      status: 'done',
+      label: 'Snapshot done',
+    });
+
+    const { result: swarmResult } = renderHook(() => useResolvedSwarmState(
+      'message-1',
+      createWork({ agentStates: [snapshotAgent] }),
+      false,
+    ));
+
+    expect(swarmResult.current.isEarlyStageWorking).toBe(false);
   });
 });

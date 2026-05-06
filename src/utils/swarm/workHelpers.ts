@@ -1,5 +1,38 @@
-import { type Work, type TokenUsage, type AgentState } from '@/types';
+import { type Work, type TokenUsage, type AgentState, type WorkStepMetadata, type WorkStepStatus, type DebugInfo, type StepDebugInfo } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+
+const cloneResultEntry = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(entry => cloneResultEntry(entry));
+  }
+
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entryValue]) => [key, cloneResultEntry(entryValue)])
+    );
+  }
+
+  return value;
+};
+
+const hasVisibleStepContent = (work: Work, stepId: StepId): boolean => {
+  if (stepId === STEPS.SYNTHESIS) {
+    const synthesis = getSynthesisResult(work);
+    const synthesisText = synthesis?.text;
+    return typeof synthesisText === 'string' && synthesisText.length > 0;
+  }
+
+  return getStepResults(work, stepId).some(result => typeof result === 'string' && result.length > 0);
+};
 
 /**
  * Safely extracts array-based results for a specific step from the Work object.
@@ -28,7 +61,7 @@ export function getStepContent(
 
   if (stepId === STEPS.SYNTHESIS) {
     const result = getSynthesisResult(work);
-    return typeof result === 'string' ? result : result?.text ?? null;
+    return result?.text ?? null;
   }
 
   const result = getStepResults(work, stepId)[agentIndex];
@@ -88,19 +121,15 @@ export function getSynthesisUsage(work: Work): TokenUsage | null {
 }
 
 /**
- * Safely extracts synthesis result (can be string or object with text/error/sources).
+ * Safely extracts synthesis result.
  * 
  * @param work - The Work object containing synthesis results
- * @returns The synthesis result as either:
- *          - A string (legacy format)
- *          - An object with optional text, error, and sources properties
- *          - null if not available
+ * @returns The synthesis result object, or null if not available.
  */
 export function getSynthesisResult(
   work: Work
-): NonNullable<NonNullable<Work['results']>[typeof STEPS.SYNTHESIS]> | string | null {
+): NonNullable<NonNullable<Work['results']>[typeof STEPS.SYNTHESIS]> | null {
   const raw = work.results?.[STEPS.SYNTHESIS as keyof NonNullable<Work['results']>];
-  if (typeof raw === 'string') return raw;
   if (raw && typeof raw === 'object' && !Array.isArray(raw) && ('text' in raw || 'error' in raw || 'sources' in raw)) {
     return raw as NonNullable<NonNullable<Work['results']>[typeof STEPS.SYNTHESIS]>;
   }
@@ -119,6 +148,81 @@ export function getSynthesisErrorMessage(work: Work): string | null {
     return typeof raw.errorMessage === 'string' ? raw.errorMessage : null;
   }
   return null;
+}
+
+export function getStepMeta(work: Work | undefined, stepId: StepId): WorkStepMetadata | undefined {
+  return work?.stepMetadata?.find(meta => meta.id === stepId);
+}
+
+export function setStepMetaStatus(
+  work: Work,
+  stepId: StepId,
+  status: WorkStepStatus,
+  options?: {
+    label?: string;
+    staleFromStepId?: StepId;
+  }
+): Work {
+  const nextWork = cloneWork(work);
+  const existingMeta = getStepMeta(nextWork, stepId);
+  const nextMeta: WorkStepMetadata = {
+    id: stepId,
+    label: options?.label ?? existingMeta?.label,
+    status,
+    ...(status === 'stale' && options?.staleFromStepId ? { staleFromStepId: options.staleFromStepId } : {}),
+  };
+
+  if (!nextWork.stepMetadata) {
+    nextWork.stepMetadata = [nextMeta];
+    return nextWork;
+  }
+
+  const metaIndex = nextWork.stepMetadata.findIndex(meta => meta.id === stepId);
+  if (metaIndex >= 0) {
+    nextWork.stepMetadata[metaIndex] = nextMeta;
+  } else {
+    nextWork.stepMetadata.push(nextMeta);
+  }
+
+  return nextWork;
+}
+
+export function getDownstreamSteps(stepId: StepId): StepId[] {
+  switch (stepId) {
+    case STEPS.INITIAL:
+      return [STEPS.REFINEMENT, STEPS.SYNTHESIS];
+    case STEPS.REFINEMENT:
+      return [STEPS.SYNTHESIS];
+    case STEPS.SYNTHESIS:
+    default:
+      return [];
+  }
+}
+
+export function markDownstreamStale(work: Work, changedStepId: StepId): Work {
+  return getDownstreamSteps(changedStepId).reduce((nextWork, downstreamStepId) => {
+    const meta = getStepMeta(nextWork, downstreamStepId);
+    const shouldMarkStale = hasVisibleStepContent(nextWork, downstreamStepId)
+      || meta?.status === 'done'
+      || meta?.status === 'error'
+      || meta?.status === 'stale';
+
+    if (!shouldMarkStale) {
+      return nextWork;
+    }
+
+    return setStepMetaStatus(nextWork, downstreamStepId, 'stale', {
+      label: meta?.label,
+      staleFromStepId: changedStepId,
+    });
+  }, cloneWork(work));
+}
+
+export function snapshotWorkWithAgents(work: Work, agentStates: AgentState[]): Work {
+  return {
+    ...cloneWork(work),
+    agentStates: agentStates.map(agent => ({ ...agent })),
+  };
 }
 
 /**
@@ -155,7 +259,6 @@ export function updateStepResult(
   
   if (stepId === STEPS.SYNTHESIS) {
     const existing = currentResults[stepId];
-    // Explicit array check prevents incorrect spreading if existing is an array (legacy bug)
     const base = existing && typeof existing === 'object' && !Array.isArray(existing) 
       ? (existing as Record<string, unknown>) 
       : {};
@@ -192,10 +295,16 @@ export function updateAgentWork(
     usage?: TokenUsage | null;
   }
 ): Work {
-  const nextWork = cloneWork(work);
-  if (!nextWork.results) nextWork.results = {};
-  
-  const results = nextWork.results;
+  const results: NonNullable<Work['results']> = {
+    ...(work.results ?? {}),
+  };
+  const nextWork: Work = {
+    ...work,
+    results,
+    // Step metadata is still mutated in-place in step execution code, so keep it detached
+    // from the previous Work snapshot even while we structurally share other unchanged fields.
+    stepMetadata: work.stepMetadata ? work.stepMetadata.map(meta => ({ ...meta })) : undefined,
+  };
   const currentStepResult = results[stepId];
   const numAgents = Math.max(
     Array.isArray(currentStepResult) ? currentStepResult.length : 0,
@@ -206,7 +315,6 @@ export function updateAgentWork(
   if (updates.text !== undefined) {
     if (stepId === STEPS.SYNTHESIS) {
       const raw = results[stepId];
-      // Guard: only spread if it's a plain object, not string/array (legacy formats)
       const existing = raw && typeof raw === 'object' && !Array.isArray(raw)
         ? (raw as Record<string, unknown>)
         : {};
@@ -253,19 +361,30 @@ export function updateAgentWork(
 
 
 /**
- * Deeply clones a Work object to prevent accidental mutations of state.
- * Specifically ensures that nested objects like 'results' and 'debugInfo' are new references.
+ * Clones Work snapshot data to prevent accidental mutations of persisted state.
+ * Recursively clones plain-data payloads inside results/debugInfo while leaving non-plain
+ * references intact.
  *
  * @param work - The source Work object
  * @returns A new Work object with cloned nested structures
  */
 export function cloneWork(work: Work): Work {
+  const clonedResults = work.results
+    ? Object.fromEntries(
+        Object.entries(work.results).map(([key, value]) => [key, cloneResultEntry(value)])
+      )
+    : undefined;
+
   return {
     ...work,
-    results: work.results ? { ...work.results } : undefined,
-    debugInfo: work.debugInfo ? { ...work.debugInfo } : undefined,
-    agentStates: work.agentStates ? [...work.agentStates] : undefined,
-    stepMetadata: work.stepMetadata ? [...work.stepMetadata] : undefined,
+    results: clonedResults,
+    debugInfo: work.debugInfo
+      ? Object.fromEntries(
+          Object.entries(work.debugInfo).map(([key, value]) => [key, cloneResultEntry(value) as StepDebugInfo | StepDebugInfo[]])
+        ) as DebugInfo
+      : undefined,
+    agentStates: work.agentStates ? work.agentStates.map(agent => ({ ...agent })) : undefined,
+    stepMetadata: work.stepMetadata ? work.stepMetadata.map(meta => ({ ...meta })) : undefined,
     agentNames: work.agentNames ? [...work.agentNames] : undefined,
     criticNames: work.criticNames ? [...work.criticNames] : undefined,
   };

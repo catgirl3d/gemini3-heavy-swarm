@@ -127,6 +127,35 @@ describe('StatusAwareWorkCard', () => {
     expect(screen.getByTestId('work-card-content')).toHaveTextContent('<null>');
   });
 
+  it('prefers stale step metadata over done agent snapshots while keeping old content visible', () => {
+    mocks.useResolvedAgentState.mockReturnValue(createAgentState({
+      status: 'done',
+      label: 'Refined',
+      stepId: STEPS.REFINEMENT,
+    }));
+
+    render(
+      <StatusAwareWorkCard
+        cardId="refined-0"
+        work={createWork({
+          stepMetadata: [{ id: STEPS.REFINEMENT, status: 'stale', label: 'Refinement Step', staleFromStepId: STEPS.INITIAL }],
+        })}
+        step={STEPS.REFINEMENT}
+        index={0}
+        messageId="message-1"
+        title="Critic 1"
+        content="Old refined answer"
+        downloadFilename="Critic-1.md"
+        onCardAction={vi.fn()}
+        allowRegenerate
+      />
+    );
+
+    expect(screen.getByTestId('work-card')).toHaveAttribute('data-status', 'stale');
+    expect(screen.getByTestId('work-card')).toHaveAttribute('data-label', 'Stale');
+    expect(screen.getByTestId('work-card-content')).toHaveTextContent('Old refined answer');
+  });
+
   it('diagnoses empty done multi-agent cards using the content length from work results', async () => {
     const snapshotText = 'Initial snapshot text';
     mocks.useResolvedAgentState.mockReturnValue(createAgentState({
@@ -193,8 +222,8 @@ describe('StatusAwareWorkCard', () => {
     });
   });
 
-  it('diagnoses empty done synthesis cards using legacy synthesis string length from work results', async () => {
-    const snapshotText = 'Legacy synthesis text';
+  it('diagnoses empty done synthesis cards using snapshot synthesis text length from work results', async () => {
+    const snapshotText = 'Historical synthesis text';
     mocks.useResolvedAgentState.mockReturnValue(createAgentState({
       status: 'done',
       label: 'Synthesized',
@@ -205,7 +234,7 @@ describe('StatusAwareWorkCard', () => {
     render(
       <StatusAwareWorkCard
         cardId="synthesis"
-        work={createWork({ results: { [STEPS.SYNTHESIS]: snapshotText as any } })}
+        work={createWork({ results: { [STEPS.SYNTHESIS]: { text: snapshotText } } })}
         step={STEPS.SYNTHESIS}
         index={0}
         title="Synthesizer"

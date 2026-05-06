@@ -172,6 +172,12 @@ export interface TokenUsage {
   isEstimated?: boolean;
 }
 
+export type WorkResultUpdates = {
+  text?: string;
+  thought?: string;
+  usage?: TokenUsage | null;
+};
+
 /**
  * Type-safe keys for accessing work.results.
  * Prevents typos and ensures only valid result keys are used.
@@ -204,6 +210,17 @@ export interface StepDebugInfo {
   history: Content[];
   userTurn: Content;
 }
+
+export type WorkStepStatus = 'pending' | 'working' | 'done' | 'error' | 'stale';
+
+export interface WorkStepMetadata {
+  id: string;
+  status: WorkStepStatus;
+  label?: string;
+  staleFromStepId?: StepId;
+}
+
+export type SwarmSessionStatus = 'running' | 'paused' | 'done' | 'error' | 'stopped';
 
 /**
  * Debug information stored per step.
@@ -244,11 +261,7 @@ export interface Work {
 
   
   // Metadata about the steps that ran
-  stepMetadata?: {
-    id: string;
-    status: 'pending' | 'working' | 'done' | 'error';
-    label?: string;
-  }[];
+  stepMetadata?: WorkStepMetadata[];
 
   agentNames?: string[];
   criticNames?: string[];
@@ -282,6 +295,18 @@ export interface AgentState {
   stepId?: StepId; // Track which step this status belongs to
   agentIndex?: number; // Track agent index within the step
   messageId?: string; // Scope state to specific message to prevent global leakage
+}
+
+export interface SwarmSession {
+  messageId: string;
+  work: Work;
+  agentStates: AgentState[];
+  status: SwarmSessionStatus;
+  isLoading: boolean;
+  isPaused: boolean;
+  loadingStatus: string;
+  error: string | null;
+  updatedAt: number;
 }
 
 export interface ServerStatus {
