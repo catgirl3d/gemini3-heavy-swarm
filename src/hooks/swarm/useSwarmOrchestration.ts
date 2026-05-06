@@ -7,7 +7,7 @@ import { updateMessageParts } from '@/utils/chat/messageHelpers';
 import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
 import { handleSendMessageError, hasPartialWorkResults } from '@/utils/swarm/errorHandling';
 import { handleSynthesisJump } from '@/utils/swarm/stepConstants';
-import { getStepMeta } from '@/utils/swarm/workHelpers';
+import { getStepMeta, getSynthesisErrorState } from '@/utils/swarm/workHelpers';
 import { type AbortControllerHook } from '@/hooks/network/useAbortController';
 import { Logger } from '@shared/utils/logger';
 import { useAgentStore } from '@/stores/agentStore';
@@ -348,6 +348,7 @@ export function useSwarmOrchestration({
       setMessages(prev => {
         const currentWork = workAtTimeOfError;
         const agentsForThisMessage = errorStates;
+        const shouldClearSources = !!currentWork && getSynthesisErrorState(currentWork) !== null;
         
         logger.debug('Saving error state agents to message.work', {
           messageId: modelMessageId,
@@ -356,7 +357,8 @@ export function useSwarmOrchestration({
         });
         
         const updated = updateTargetMessage(prev, prev.length - 1, STEPS.SYNTHESIS, {
-          work: currentWork ?? { agentStates: agentsForThisMessage }
+          work: currentWork ?? { agentStates: agentsForThisMessage },
+          ...(shouldClearSources ? { sources: undefined } : {}),
         });
         
         return updated ?? prev;

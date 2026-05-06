@@ -225,6 +225,7 @@ export class SynthesisStep extends BaseStep {
       const currentText = getStepResults(work, STEPS.SYNTHESIS)[0] ?? '';
       
       work.results[STEPS.SYNTHESIS] = [currentText];
+      delete work.results[`${STEPS.SYNTHESIS}_sources`];
       work.results[`${STEPS.SYNTHESIS}_error`] = {
         flag: true,
         message: errorMessage,

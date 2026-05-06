@@ -406,7 +406,10 @@ export function useSwarmRegeneration({
         
         // We no longer update message parts with [System: ...] error text to avoid polluting the main UI.
         // The error is already saved in work.results[stepId] and will be shown in the "Show Work" card.
-        const updates: Partial<Message> = { work: updatedWork };
+        const updates: Partial<Message> = {
+          work: updatedWork,
+          ...(stepId === STEPS.SYNTHESIS ? { sources: undefined } : {}),
+        };
 
         const updated = updateTargetMessage(prev, messageIndex, stepId, updates, { workContext });
         

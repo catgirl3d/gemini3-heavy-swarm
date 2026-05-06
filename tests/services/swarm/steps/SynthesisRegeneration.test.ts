@@ -300,4 +300,24 @@ describe('Synthesis Regeneration - Integration Tests', () => {
 
     await regenPromise;
   });
+
+  it('should clear stale synthesis sources when regeneration fails', async () => {
+    const streamError = new Error('Regeneration failed');
+    mockContext.work.results.synthesis_step = ['Partial regenerated text'];
+    mockContext.work.results.synthesis_step_sources = [{ uri: 'http://stale.test', title: 'Stale Source' }];
+
+    (step as any).runModelStream = vi.fn().mockImplementation(async (_config: any, callbacks: any) => {
+      callbacks.onChunk('Partial regenerated text', '', null);
+      throw streamError;
+    });
+
+    await expect(step.regenerate(mockContext, 0, [])).rejects.toBe(streamError);
+
+    expect(mockContext.work.results.synthesis_step).toEqual(['Partial regenerated text']);
+    expect(mockContext.work.results[`${STEPS.SYNTHESIS}_sources`]).toBeUndefined();
+    expect(mockContext.work.results[`${STEPS.SYNTHESIS}_error`]).toEqual({
+      flag: true,
+      message: expect.any(String)
+    });
+  });
 });

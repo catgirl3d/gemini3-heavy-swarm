@@ -944,4 +944,30 @@ describe('useSwarmRegeneration', () => {
     expect(messagesState.messages[1].work?.agentStates).toEqual([savedAgent]);
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
   });
+
+  it('clears stale message.sources when synthesis regeneration fails', async () => {
+    const failure = new Error('network failed');
+    const regenerateResponse = vi.fn(async (...args: any[]) => {
+      const { workContext } = toRegenerateResponseCall(args);
+      workContext.results ??= {};
+      delete workContext.results[`${STEPS.SYNTHESIS}_sources`];
+      workContext.results[`${STEPS.SYNTHESIS}_error`] = {
+        flag: true,
+        message: 'Friendly failure',
+      };
+      throw failure;
+    });
+    const { result, messagesState } = renderRegeneration({ regenerateResponse });
+
+    await act(async () => {
+      await result.current.regenerateAgentResponse('model-1', STEPS.SYNTHESIS, 0);
+    });
+
+    expect(messagesState.messages[1].sources).toBeUndefined();
+    expect(messagesState.messages[1].work?.results?.[`${STEPS.SYNTHESIS}_sources`]).toBeUndefined();
+    expect(messagesState.messages[1].work?.results?.[`${STEPS.SYNTHESIS}_error`]).toEqual({
+      flag: true,
+      message: 'Friendly failure',
+    });
+  });
 });

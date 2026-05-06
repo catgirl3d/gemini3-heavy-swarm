@@ -91,7 +91,7 @@ export class SwarmOrchestrator {
     
     return {
       text: finalText,
-      sources: getSynthesisSources(finalWork),
+      sources: synthesisError ? undefined : getSynthesisSources(finalWork),
       work: finalWork,
       paused,
     };

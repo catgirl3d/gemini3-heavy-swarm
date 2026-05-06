@@ -965,6 +965,7 @@ export abstract class BaseStep implements StepDescriptor {
       work.results[this.id] = currentResults;
 
       if (this.id === STEPS.SYNTHESIS) {
+        delete work.results[`${this.id}_sources`];
         work.results[`${this.id}_error`] = {
           flag: true,
           message: this.getFriendlyErrorMessage(error),

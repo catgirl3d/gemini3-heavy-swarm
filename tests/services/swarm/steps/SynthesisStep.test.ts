@@ -481,15 +481,21 @@ let updateSessionRuntimeMock: any;
     );
   });
 
-  it('should preserve partial synthesis text and sync store when execute fails', async () => {
+  it('should preserve partial synthesis text, clear stale sources, and sync store when execute fails', async () => {
     const usage = { promptTokens: 3, candidatesTokens: 4, totalTokens: 7 };
     const streamError = new Error('Model exploded');
+    const context = createContext({
+      work: createWork({
+        [STEPS.SYNTHESIS]: ['old text'],
+        [`${STEPS.SYNTHESIS}_sources`]: [{ uri: 'https://stale.test', title: 'Stale Source' }],
+      }),
+    });
     vi.spyOn(step as any, 'runModelStream').mockImplementation(async (_config: any, callbacks: any) => {
       callbacks.onChunk('partial text', 'partial thought', usage);
       throw streamError;
     });
 
-    await expect(step.execute(mockContext)).rejects.toBe(streamError);
+    await expect(step.execute(context)).rejects.toBe(streamError);
 
     expect(updateWorkResultMock).toHaveBeenCalledWith(
       'msg-123',
@@ -497,8 +503,9 @@ let updateSessionRuntimeMock: any;
       0,
       { text: 'partial text', thought: 'partial thought', usage }
     );
-    expect(mockContext.work.results[STEPS.SYNTHESIS]).toEqual(['partial text']);
-    expect(mockContext.work.results[`${STEPS.SYNTHESIS}_error`]).toEqual({
+    expect(context.work.results[STEPS.SYNTHESIS]).toEqual(['partial text']);
+    expect(context.work.results[`${STEPS.SYNTHESIS}_sources`]).toBeUndefined();
+    expect(context.work.results[`${STEPS.SYNTHESIS}_error`]).toEqual({
       flag: true,
       message: expect.any(String)
     });
@@ -510,7 +517,7 @@ let updateSessionRuntimeMock: any;
       'msg-123',
       undefined
     );
-    expect(setCurrentWorkMock).toHaveBeenCalledWith('msg-123', { ...mockContext.work });
+    expect(setCurrentWorkMock).toHaveBeenCalledWith('msg-123', { ...context.work });
   });
 
   it('should preserve an empty synthesis shell when execute fails with a non-Error value', async () => {

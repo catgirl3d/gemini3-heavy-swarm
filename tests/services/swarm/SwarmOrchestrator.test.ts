@@ -129,10 +129,12 @@ describe('SwarmOrchestrator Integrated', () => {
     });
 
     it('should suppress final text when synthesis returns an error result', async () => {
+        const sources = [{ uri: 'https://stale-source.test', title: 'Stale Source' }];
         const synthesisStep: StepDescriptor = {
             ...mockStep(STEPS.SYNTHESIS),
             execute: vi.fn(async (context) => {
                 context.work.results ??= {};
+                context.work.results[`${STEPS.SYNTHESIS}_sources`] = sources;
                 context.work.results[`${STEPS.SYNTHESIS}_error`] = { flag: true, message: 'failed' };
                 return ['partial failure text'];
             })
@@ -151,6 +153,7 @@ describe('SwarmOrchestrator Integrated', () => {
         );
 
         expect(result.text).toBe('');
+        expect(result.sources).toBeUndefined();
         expect(result.work.results?.[STEPS.SYNTHESIS]).toEqual(['partial failure text']);
         expect(result.work.results?.[`${STEPS.SYNTHESIS}_error`]).toEqual({ flag: true, message: 'failed' });
     });

@@ -883,6 +883,48 @@ describe('useSwarmOrchestration', () => {
     expect(mainAbort.ref.current).toBeNull();
   });
 
+  it('clears stale message.sources when resumed synthesis fails', async () => {
+    const staleSources: Source[] = [{ uri: 'https://stale-source.test', title: 'Stale Source' }];
+    const existingWork = createWork({
+      results: {
+        [STEPS.INITIAL]: ['draft 1', 'draft 2'],
+        [STEPS.REFINEMENT]: ['refined 1', 'refined 2'],
+        [STEPS.SYNTHESIS]: ['old final answer'],
+        [`${STEPS.SYNTHESIS}_sources`]: staleSources,
+      },
+      stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'pending' }],
+    });
+    const initialMessages: Message[] = [
+      { id: 'user-1', role: 'user', parts: [{ text: 'hello' }] },
+      { id: 'model-1', role: 'model', parts: [{ text: 'old final answer' }], work: existingWork, sources: staleSources },
+    ];
+    const failure = new Error('network failed');
+    const failedWork = createWork({
+      results: {
+        [STEPS.INITIAL]: ['draft 1', 'draft 2'],
+        [STEPS.REFINEMENT]: ['refined 1', 'refined 2'],
+        [STEPS.SYNTHESIS]: ['partial answer'],
+        [`${STEPS.SYNTHESIS}_error`]: { flag: true, message: 'Friendly failure' },
+      },
+      stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'error' }],
+    });
+    const runSwarm = vi.fn(async () => {
+      useAgentStore.getState().replaceSessionWork('model-1', failedWork);
+      throw failure;
+    });
+    const { result, messagesState } = renderOrchestration({ initialMessages, runSwarm });
+
+    await act(async () => {
+      await result.current.sendMessage('hello', null, null, false, 'model-1', existingWork);
+    });
+
+    expect(messagesState.messages[1].sources).toBeUndefined();
+    expect(messagesState.messages[1].work?.results?.[`${STEPS.SYNTHESIS}_error`]).toEqual({
+      flag: true,
+      message: 'Friendly failure',
+    });
+  });
+
   it('surfaces a total failure when no partial work exists', async () => {
     mocks.generateUUID.mockReturnValueOnce('model-total-failure').mockReturnValueOnce('user-total-failure');
     const failure = new Error('network failed');
