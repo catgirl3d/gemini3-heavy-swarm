@@ -53,8 +53,8 @@ vi.mock('@/utils/swarm/statusHelpers', () => ({
  * 
  * These tests verify that the regeneration flow correctly:
  * 1. Clears old synthesis text before streaming starts
- * 2. Uses storageIndex = -1 (not agentIndex = 0) for store updates
- * 3. Maintains object structure {text, sources} (not array)
+ * 2. Uses synthesis slot 0 consistently for store updates
+ * 3. Maintains array lane storage plus synthesis sidecars
  * 4. Prevents premature card collapse by ensuring synthesisText is empty until first chunk
  */
 describe('Synthesis Regeneration - Integration Tests', () => {
@@ -117,11 +117,8 @@ describe('Synthesis Regeneration - Integration Tests', () => {
         results: {
           initial_step: ['initial 1', 'initial 2'],
           refinement_step: ['refined 1', 'refined 2'],
-          // Old synthesis result with object structure
-          synthesis_step: {
-            text: 'Old synthesis text that should be cleared',
-            sources: [{ uri: 'http://example.com', title: 'Example' }]
-          }
+          synthesis_step: ['Old synthesis text that should be cleared'],
+          synthesis_step_sources: [{ uri: 'http://example.com', title: 'Example' }]
         }
       },
       messageId: 'msg-integration-test',
@@ -135,7 +132,7 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     vi.useRealTimers();
   });
 
-  it('should clear old synthesis text before regeneration and use storageIndex -1', async () => {
+  it('should clear old synthesis text before regeneration and use slot 0', async () => {
     vi.useFakeTimers();
 
     let capturedOnChunk: any;
@@ -158,16 +155,16 @@ describe('Synthesis Regeneration - Integration Tests', () => {
 
     // Check that old text was cleared BEFORE streaming starts
     // Note: This happens in runAgentRegeneration before runModelStream is called
-    expect(mockContext.work.results.synthesis_step).toEqual({ 
-      text: '',  // Text cleared
-      sources: [{ uri: 'http://example.com', title: 'Example' }]  // Sources preserved
-    });
+    expect(mockContext.work.results.synthesis_step).toEqual(['']);
+    expect(mockContext.work.results.synthesis_step_sources).toEqual([
+      { uri: 'http://example.com', title: 'Example' }
+    ]);
 
-    // Check that updateWorkResult was called to clear store with storageIndex = -1
+    // Check that updateWorkResult was called to clear store with synthesis slot 0
     expect(updateWorkResultSpy).toHaveBeenCalledWith(
       'msg-integration-test',
       STEPS.SYNTHESIS, 
-      -1,  // CRITICAL: Must use -1, not 0
+      0,
       { usage: null, text: '' }
     );
 
@@ -180,22 +177,22 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     expect(updateWorkResultSpy).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(75);
      
-    // Verify updateWorkResult was called with storageIndex = -1 for thought
+    // Verify updateWorkResult was called with synthesis slot 0 for thought
     expect(updateWorkResultSpy).toHaveBeenCalledWith(
       'msg-integration-test',
       STEPS.SYNTHESIS,
-      -1,  // Must be -1 to maintain object structure
+      0,
       { thought: 'Thinking about regeneration...' }
     );
 
     // Second chunk: text arrives
     capturedOnChunk('New regenerated text', '', { totalTokens: 50 });
     
-    // Verify final updateWorkResult uses storageIndex = -1
+    // Verify final updateWorkResult uses synthesis slot 0
     expect(updateWorkResultSpy).toHaveBeenCalledWith(
       'msg-integration-test',
       STEPS.SYNTHESIS,
-      -1,  // CRITICAL: storageIndex, not agentIndex
+      0,
       expect.objectContaining({
         text: 'New regenerated text',
         usage: expect.objectContaining({ totalTokens: 50 })
@@ -212,60 +209,58 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     const callCountBeforeBufferWindow = updateWorkResultSpy.mock.calls.length;
     await vi.advanceTimersByTimeAsync(100);
 
-    // Verify final work.results structure is object, not array
-    expect(mockContext.work.results.synthesis_step).toEqual(
-      expect.objectContaining({
-        text: expect.any(String)
-      })
-    );
-    expect(Array.isArray(mockContext.work.results.synthesis_step)).toBe(false);
-    expect(mockContext.work.results[`${STEPS.SYNTHESIS}_usage`]).toEqual(finalUsage);
-    expect(Array.isArray(mockContext.work.results[`${STEPS.SYNTHESIS}_usage`])).toBe(false);
+    expect(mockContext.work.results.synthesis_step).toEqual(['New regenerated text']);
+    expect(mockContext.work.results[`${STEPS.SYNTHESIS}_usage`]).toEqual([finalUsage]);
+    expect(mockContext.work.results[`${STEPS.SYNTHESIS}_sources`]).toBeUndefined();
     expect(updateWorkResultSpy.mock.calls).toHaveLength(callCountBeforeBufferWindow);
     expect(
       updateWorkResultSpy.mock.calls
         .filter(([, stepId]) => stepId === STEPS.SYNTHESIS)
         .map(([, , agentIndex]) => agentIndex)
-    ).not.toContain(0);
+    ).not.toContain(-1);
   });
 
-  it('should maintain object structure even when regenerating from error state', async () => {
+  it('should preserve error sidecar while clearing the synthesis lane during regeneration', async () => {
     // Simulate error state with partial text
-    mockContext.work.results.synthesis_step = {
-      text: 'Partial text before error',
-      error: true,
-      errorMessage: 'Service unavailable'
+    mockContext.work.results.synthesis_step = ['Partial text before error'];
+    mockContext.work.results[`${STEPS.SYNTHESIS}_error`] = {
+      flag: true,
+      message: 'Service unavailable'
     };
 
     let capturedOnChunk: any;
+    let resolveStream: ((value: any) => void) | undefined;
     (step as any).runModelStream = vi.fn().mockImplementation((config: any, callbacks: any) => {
       capturedOnChunk = callbacks.onChunk;
-      return Promise.resolve({ 
-        text: 'Recovered text', 
-        groundingChunks: [] 
+      return new Promise(resolve => {
+        resolveStream = resolve;
       });
     });
 
     const regenPromise = step.regenerate(mockContext, 0, []);
     await new Promise(resolve => setTimeout(resolve, 0));
 
-    // Old text should be cleared, error flags preserved temporarily
-    expect(mockContext.work.results.synthesis_step).toEqual({
-      text: '',
-      error: true,
-      errorMessage: 'Service unavailable'
+    // Old text should be cleared, error sidecar preserved temporarily
+    expect(mockContext.work.results.synthesis_step).toEqual(['']);
+    expect(mockContext.work.results[`${STEPS.SYNTHESIS}_error`]).toEqual({
+      flag: true,
+      message: 'Service unavailable'
     });
 
     // Simulate successful regeneration
     capturedOnChunk('Recovered text', '', null);
 
-    // Verify store update uses storageIndex = -1
+    // Verify store update uses synthesis slot 0
     const lastCall = updateWorkResultSpy.mock.calls[updateWorkResultSpy.mock.calls.length - 1];
     expect(lastCall[0]).toBe('msg-integration-test');
     expect(lastCall[1]).toBe(STEPS.SYNTHESIS);
-    expect(lastCall[2]).toBe(-1);  // storageIndex
+    expect(lastCall[2]).toBe(0);
     expect(lastCall[3]).toMatchObject({ text: 'Recovered text' });
 
+    resolveStream?.({
+      text: 'Recovered text',
+      groundingChunks: []
+    });
     await regenPromise;
   });
 
@@ -273,10 +268,8 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     // This test verifies the fix for the bug where cards collapsed immediately
     // because old text wasn't cleared
     
-    mockContext.work.results.synthesis_step = {
-      text: 'Old text that triggers hasContent=true',
-      sources: []
-    };
+    mockContext.work.results.synthesis_step = ['Old text that triggers hasContent=true'];
+    mockContext.work.results.synthesis_step_sources = [];
 
     (step as any).runModelStream = vi.fn().mockImplementation(() => {
       // Simulate delay before first chunk (representing network/model processing)
@@ -291,20 +284,40 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
 
     // CRITICAL: At this point, before any chunks arrive:
-    // 1. work.results.synthesis_step.text should be '' (cleared)
+    // 1. work.results.synthesis_step[0] should be '' (cleared)
     // 2. This prevents hasContent=true in useAutoCollapse
     // 3. Cards stay open until first TEXT chunk
     
-    expect(mockContext.work.results.synthesis_step.text).toBe('');
+    expect(mockContext.work.results.synthesis_step[0]).toBe('');
     
     // Verify store was also cleared
     expect(updateWorkResultSpy).toHaveBeenCalledWith(
       'msg-integration-test',
       STEPS.SYNTHESIS,
-      -1,
+      0,
       expect.objectContaining({ text: '' })
     );
 
     await regenPromise;
+  });
+
+  it('should clear stale synthesis sources when regeneration fails', async () => {
+    const streamError = new Error('Regeneration failed');
+    mockContext.work.results.synthesis_step = ['Partial regenerated text'];
+    mockContext.work.results.synthesis_step_sources = [{ uri: 'http://stale.test', title: 'Stale Source' }];
+
+    (step as any).runModelStream = vi.fn().mockImplementation(async (_config: any, callbacks: any) => {
+      callbacks.onChunk('Partial regenerated text', '', null);
+      throw streamError;
+    });
+
+    await expect(step.regenerate(mockContext, 0, [])).rejects.toBe(streamError);
+
+    expect(mockContext.work.results.synthesis_step).toEqual(['Partial regenerated text']);
+    expect(mockContext.work.results[`${STEPS.SYNTHESIS}_sources`]).toBeUndefined();
+    expect(mockContext.work.results[`${STEPS.SYNTHESIS}_error`]).toEqual({
+      flag: true,
+      message: expect.any(String)
+    });
   });
 });

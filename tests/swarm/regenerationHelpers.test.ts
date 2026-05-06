@@ -122,6 +122,7 @@ describe('calculateUpdatedStateForRegeneration', () => {
         
         expect(updated[0].parts[0].text).toBe(text);
         expect(updated[0].work?.results[stepId]).toBeDefined();
+        expect(updated[0].work?.results[stepId]).toEqual([text]);
     });
 
     it('does not clear visible synthesis text on thought-only chunks', () => {
@@ -145,8 +146,8 @@ describe('calculateUpdatedStateForRegeneration', () => {
         );
 
         expect(updated[0].parts[0].text).toBe('Previous synthesis');
-        expect((updated[0].work?.results?.[STEPS.SYNTHESIS] as { text?: string })?.text).toBe('');
-        expect(updated[0].work?.results?.[`${STEPS.SYNTHESIS}_thought` as any]).toBe(thought);
+        expect(updated[0].work?.results?.[STEPS.SYNTHESIS]).toEqual(['']);
+        expect(updated[0].work?.results?.[`${STEPS.SYNTHESIS}_thoughts` as any]).toEqual([thought]);
     });
 
     it('creates a new model message for synthesis when no target model exists yet', () => {
@@ -171,7 +172,7 @@ describe('calculateUpdatedStateForRegeneration', () => {
             role: 'model',
             parts: [{ text: 'Fresh synthesis' }]
         });
-        expect((updated[1].work?.results?.[STEPS.SYNTHESIS] as { text?: string })?.text).toBe('Fresh synthesis');
+        expect(updated[1].work?.results?.[STEPS.SYNTHESIS]).toEqual(['Fresh synthesis']);
     });
 
     it('falls back to workContext for synthesis when the target message has no work of its own', () => {
@@ -195,7 +196,7 @@ describe('calculateUpdatedStateForRegeneration', () => {
             null
         );
 
-        expect((updated[0].work?.results?.[STEPS.SYNTHESIS] as { text?: string })?.text).toBe('Recovered text');
+        expect(updated[0].work?.results?.[STEPS.SYNTHESIS]).toEqual(['Recovered text']);
         expect(updated[0].parts[0].text).toBe('Recovered text');
     });
 

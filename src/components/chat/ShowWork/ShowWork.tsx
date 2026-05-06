@@ -6,7 +6,7 @@ import { DebugModal } from '@/components/chat/ShowWork/components/DebugModal';
 import { StatusAwareWorkCard } from '@/components/chat/ShowWork/components/StatusAwareWorkCard';
 import { type CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
 import { ArrowDownIcon, TokenIcon } from '@/components/chat/ShowWork/icons';
-import { getStepResults, getStepThoughts, getStepUsage, getSynthesisThought, getSynthesisUsage, getSynthesisResult, isSynthesisComplete } from '@/utils/swarm/workHelpers';
+import { getStepResults, getStepThoughts, getStepUsage, isSynthesisComplete } from '@/utils/swarm/workHelpers';
 import { useResolvedSwarmState } from '@/hooks/swarm/useResolvedSwarmState';
 import { getErroredAgents, isAnyAgentWorking, isErrorState, getContinueButtonText, handleContinueClick as handleContinueClickHelper } from '@/utils/swarm/continueHelpers';
 import { createSessionAgentsSelector, createSessionWorkSelector, selectActiveSessionMessageId, useAgentStore } from '@/stores/agentStore';
@@ -49,20 +49,20 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
 
   const effectiveWork = isCurrentMessage && liveSessionWork ? liveSessionWork : work;
 
-  const synthesisResult = useMemo(() => getSynthesisResult(effectiveWork), [effectiveWork]);
   const initialResults = useMemo(() => getStepResults(effectiveWork, STEPS.INITIAL), [effectiveWork]);
   const refinementResults = useMemo(() => getStepResults(effectiveWork, STEPS.REFINEMENT), [effectiveWork]);
+  const synthesisResults = useMemo(() => getStepResults(effectiveWork, STEPS.SYNTHESIS), [effectiveWork]);
 
   // Cache helper results to avoid repeated calls in .map()
   const initialUsages = useMemo(() => getStepUsage(effectiveWork, STEPS.INITIAL), [effectiveWork]);
   const initialThoughts = useMemo(() => getStepThoughts(effectiveWork, STEPS.INITIAL), [effectiveWork]);
   const refinementUsages = useMemo(() => getStepUsage(effectiveWork, STEPS.REFINEMENT), [effectiveWork]);
   const refinementThoughts = useMemo(() => getStepThoughts(effectiveWork, STEPS.REFINEMENT), [effectiveWork]);
-  const synthesisUsage = useMemo(() => getSynthesisUsage(effectiveWork), [effectiveWork]);
-  const synthesisThought = useMemo(() => getSynthesisThought(effectiveWork), [effectiveWork]);
+  const synthesisUsages = useMemo(() => getStepUsage(effectiveWork, STEPS.SYNTHESIS), [effectiveWork]);
+  const synthesisThoughts = useMemo(() => getStepThoughts(effectiveWork, STEPS.SYNTHESIS), [effectiveWork]);
   const isSynthesisDone = useMemo(() => isSynthesisComplete(effectiveWork, effectiveAgentStates), [effectiveAgentStates, effectiveWork]);
 
-  const synthesisText: string | null = synthesisResult?.text ?? null;
+  const synthesisText: string | null = synthesisResults[0] ?? null;
 
   // Manage automatic collapsing of agent work details via custom hook
   useAutoCollapse({
@@ -125,12 +125,12 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
     thoughtTitle: 'Synthesizer - Thought Process',
     debugTitle: 'Synthesizer - Debug Info',
     content: synthesisText,
-    thought: synthesisThought,
+    thought: synthesisThoughts[0],
     debugInfo: effectiveWork.debugInfo?.[STEPS.SYNTHESIS],
-    tokenUsage: synthesisUsage,
+    tokenUsage: synthesisUsages[0] ?? null,
     downloadFilename: 'Synthesis_Report.md',
     className: STEPS.SYNTHESIS,
-  }), [effectiveWork, synthesisText, synthesisThought, synthesisUsage]);
+  }), [effectiveWork, synthesisText, synthesisThoughts, synthesisUsages]);
 
   const allCards = useMemo(() => {
     return [...initialCards, ...refinementCards, synthesisCard];

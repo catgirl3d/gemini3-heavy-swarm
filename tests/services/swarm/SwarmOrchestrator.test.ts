@@ -54,7 +54,7 @@ describe('SwarmOrchestrator Integrated', () => {
         const step2 = mockStep(STEPS.REFINEMENT);
         const step3: StepDescriptor = {
             ...mockStep(STEPS.SYNTHESIS),
-            execute: vi.fn().mockResolvedValue({ text: 'Final answer' })
+            execute: vi.fn().mockResolvedValue(['Final answer'])
         };
 
         const orchestrator = new SwarmOrchestrator(mockProvider, [step1, step2, step3]);
@@ -79,12 +79,12 @@ describe('SwarmOrchestrator Integrated', () => {
         const step1 = mockStep(STEPS.INITIAL);
         const step2: StepDescriptor = {
             ...mockStep(STEPS.SYNTHESIS),
-            execute: vi.fn().mockResolvedValue({ text: 'Resumed final' })
+            execute: vi.fn().mockResolvedValue(['Resumed final'])
         };
         const existingWork: Work = {
             results: {
                 [STEPS.INITIAL]: ['already complete'],
-                [STEPS.SYNTHESIS]: {}
+                [STEPS.SYNTHESIS]: ['']
             },
             stepMetadata: [
                 { id: STEPS.INITIAL, status: 'done', label: 'Initial Step' },
@@ -115,7 +115,7 @@ describe('SwarmOrchestrator Integrated', () => {
         expect(result.work).toMatchObject({
             results: {
                 [STEPS.INITIAL]: ['already complete'],
-                [STEPS.SYNTHESIS]: { text: 'Resumed final' }
+                [STEPS.SYNTHESIS]: ['Resumed final']
             },
             stepMetadata: [
                 { id: STEPS.INITIAL, status: 'done', label: 'Initial Step' },
@@ -129,9 +129,15 @@ describe('SwarmOrchestrator Integrated', () => {
     });
 
     it('should suppress final text when synthesis returns an error result', async () => {
+        const sources = [{ uri: 'https://stale-source.test', title: 'Stale Source' }];
         const synthesisStep: StepDescriptor = {
             ...mockStep(STEPS.SYNTHESIS),
-            execute: vi.fn().mockResolvedValue({ text: 'partial failure text', error: true })
+            execute: vi.fn(async (context) => {
+                context.work.results ??= {};
+                context.work.results[`${STEPS.SYNTHESIS}_sources`] = sources;
+                context.work.results[`${STEPS.SYNTHESIS}_error`] = { flag: true, message: 'failed' };
+                return ['partial failure text'];
+            })
         };
         const orchestrator = new SwarmOrchestrator(mockProvider, [synthesisStep]);
 
@@ -147,14 +153,20 @@ describe('SwarmOrchestrator Integrated', () => {
         );
 
         expect(result.text).toBe('');
-        expect(result.work.results?.[STEPS.SYNTHESIS]).toEqual({ text: 'partial failure text', error: true });
+        expect(result.sources).toBeUndefined();
+        expect(result.work.results?.[STEPS.SYNTHESIS]).toEqual(['partial failure text']);
+        expect(result.work.results?.[`${STEPS.SYNTHESIS}_error`]).toEqual({ flag: true, message: 'failed' });
     });
 
     it('should return synthesis sources when the final result includes them', async () => {
         const sources = [{ uri: 'https://source.test', title: 'Source' }];
         const synthesisStep: StepDescriptor = {
             ...mockStep(STEPS.SYNTHESIS),
-            execute: vi.fn().mockResolvedValue({ text: 'Final with sources', sources })
+            execute: vi.fn(async (context) => {
+                context.work.results ??= {};
+                context.work.results[`${STEPS.SYNTHESIS}_sources`] = sources;
+                return ['Final with sources'];
+            })
         };
         const orchestrator = new SwarmOrchestrator(mockProvider, [synthesisStep]);
 

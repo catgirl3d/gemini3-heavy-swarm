@@ -7,7 +7,7 @@ const createCompletedWork = (): Work => ({
   results: {
     [STEPS.INITIAL]: ['draft 1', 'draft 2'],
     [STEPS.REFINEMENT]: ['refined 1', 'refined 2'],
-    [STEPS.SYNTHESIS]: { text: 'final answer' },
+    [STEPS.SYNTHESIS]: ['final answer'],
   },
   stepMetadata: [
     { id: STEPS.INITIAL, status: 'done', label: 'Initial Step' },
@@ -21,7 +21,7 @@ describe('workHelpers markDownstreamStale', () => {
     const nextWork = markDownstreamStale(createCompletedWork(), STEPS.INITIAL);
 
     expect(nextWork.results?.[STEPS.REFINEMENT]).toEqual(['refined 1', 'refined 2']);
-    expect(nextWork.results?.[STEPS.SYNTHESIS]).toEqual({ text: 'final answer' });
+    expect(nextWork.results?.[STEPS.SYNTHESIS]).toEqual(['final answer']);
     expect(nextWork.stepMetadata?.find(meta => meta.id === STEPS.REFINEMENT)).toMatchObject({
       status: 'stale',
       staleFromStepId: STEPS.INITIAL,
@@ -37,7 +37,7 @@ describe('workHelpers markDownstreamStale', () => {
       results: {
         [STEPS.INITIAL]: ['draft 1', 'draft 2'],
         [STEPS.REFINEMENT]: ['refined 1', 'refined 2'],
-        [STEPS.SYNTHESIS]: {},
+        [STEPS.SYNTHESIS]: [''],
       },
       stepMetadata: [
         { id: STEPS.INITIAL, status: 'done', label: 'Initial Step' },

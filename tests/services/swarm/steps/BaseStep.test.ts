@@ -512,12 +512,12 @@ describe('BaseStep', () => {
         onMessageUpdate: vi.fn()
       } as any;
 
-      step.testHandleStreamChunk(context, -1, 'synthesis text', '', null, {
+      step.testHandleStreamChunk(context, 0, 'synthesis text', '', null, {
         isFirstChunk: false,
         streamToMessage: false
       });
 
-      expect((work.results[STEPS.SYNTHESIS] as any).text).toBe('synthesis text');
+      expect(work.results[STEPS.SYNTHESIS]).toEqual(['synthesis text']);
     });
 
     it('should call onMessageUpdate when streamToMessage is true', () => {
@@ -1174,6 +1174,7 @@ describe('BaseStep', () => {
         model: 'unused-model',
         contents: [],
         signal: new AbortController().signal,
+        agentIndex: 0,
         simulateError,
         simulateErrorAttempts: 1,
         work
@@ -1188,7 +1189,7 @@ describe('BaseStep', () => {
         await expectation.toThrow('custom Simulated error');
       }
 
-      expect(work.results?.[`${STEPS.INITIAL}_error_counts`]).toBe(1);
+      expect(work.results?.[`${STEPS.INITIAL}_error_counts`]).toEqual([1]);
     });
 
     it('should abort active stream during processing', async () => {

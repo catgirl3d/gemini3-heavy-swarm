@@ -57,9 +57,13 @@ vi.mock('@/utils/swarm/workHelpers', () => ({
     const raw = work.results?.[stepId];
     return Array.isArray(raw) ? raw : [];
   }),
-  getSynthesisResult: vi.fn((work) => {
-    const raw = work.results?.[STEPS.SYNTHESIS];
-    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
+  getStepThoughts: vi.fn((work, stepId) => {
+    const raw = work.results?.[`${stepId}_thoughts`];
+    return Array.isArray(raw) ? raw : [];
+  }),
+  getSynthesisErrorState: vi.fn((work) => {
+    const raw = work.results?.[`${STEPS.SYNTHESIS}_error`];
+    return raw && typeof raw === 'object' && !Array.isArray(raw) && raw.flag === true ? raw : null;
   }),
 }));
 
@@ -223,7 +227,7 @@ let updateSessionRuntimeMock: any;
 
   it('should trigger Synthesis Jump behavior on the first text chunk', async () => {
     // Calling handleStreamChunk directly as it would be from inside runModelStream
-    (step as any).handleStreamChunk(mockContext, -1, 'First chunk', '', null, {
+    (step as any).handleStreamChunk(mockContext, 0, 'First chunk', '', null, {
       isFirstChunk: true,
       agentStates: [],
       statusMsg: 'Synthesis Progress'
@@ -283,7 +287,7 @@ let updateSessionRuntimeMock: any;
     const source = { web: { uri: 'https://source.test', title: 'Source' } };
     const context = createContext({
       work: createWork({
-        [STEPS.SYNTHESIS]: { text: 'old final' },
+        [STEPS.SYNTHESIS]: ['old final'],
       }),
     });
     const stream = (async function* () {
@@ -306,10 +310,10 @@ let updateSessionRuntimeMock: any;
       text: 'final answer',
       sources: [{ uri: 'https://source.test', title: 'Source' }],
     });
-    expect(context.work.results[STEPS.SYNTHESIS]).toEqual({
-      text: 'final answer',
-      sources: [{ uri: 'https://source.test', title: 'Source' }],
-    });
+    expect(context.work.results[STEPS.SYNTHESIS]).toEqual(['final answer']);
+    expect(context.work.results[`${STEPS.SYNTHESIS}_sources`]).toEqual([
+      { uri: 'https://source.test', title: 'Source' },
+    ]);
     expect(context.onSynthesisJump).toHaveBeenCalledTimes(1);
   });
 
@@ -392,14 +396,12 @@ let updateSessionRuntimeMock: any;
     expect(streamConfig.contents[0]).toBe(mainChatHistory[0]);
     expect(streamConfig.contents[1].parts[0]).toEqual({ text: 'base user part' });
     expect(getInternalContext({ synthesizerTurn: streamConfig.contents[1] })).toContain('refined 1');
-    expect(result).toEqual({
-      text: 'final answer',
-      sources: [
-        { uri: 'https://a.test', title: 'Duplicate A' },
-        { uri: 'https://b.test', title: 'B' }
-      ]
-    });
-    expect(context.work.results[STEPS.SYNTHESIS]).toEqual(result);
+    expect(result).toEqual(['final answer']);
+    expect(context.work.results[STEPS.SYNTHESIS]).toEqual(['final answer']);
+    expect(context.work.results[`${STEPS.SYNTHESIS}_sources`]).toEqual([
+      { uri: 'https://a.test', title: 'Duplicate A' },
+      { uri: 'https://b.test', title: 'B' }
+    ]);
     expect(updateAgentMock).toHaveBeenCalledWith(
       STEPS.SYNTHESIS,
       0,
@@ -442,7 +444,7 @@ let updateSessionRuntimeMock: any;
       work: createWork({
         [STEPS.INITIAL]: ['initial 1', '', 'initial 3'],
         [STEPS.REFINEMENT]: [null, '', 'refined 3'],
-        [STEPS.SYNTHESIS]: { text: 'old successful answer' },
+        [STEPS.SYNTHESIS]: ['old successful answer'],
         [`${STEPS.SYNTHESIS}_error_counts`]: [0]
       })
     });
@@ -456,7 +458,7 @@ let updateSessionRuntimeMock: any;
     const result = await step.execute(context);
 
     const streamConfig = runModelStreamSpy.mock.calls[0][0] as StreamConfig;
-    expect(result).toEqual({ text: 'final debug answer', sources: undefined });
+    expect(result).toEqual(['final debug answer']);
     expect(streamConfig.contents[1].parts[0]).toEqual({ inlineData: { mimeType: 'image/png', data: 'abc' } });
     expect(streamConfig.contents[1].parts[1]).toEqual({ text: 'base user part' });
     expect(getInternalContext({ synthesizerTurn: streamConfig.contents[1] })).toContain('initial 1');
@@ -479,26 +481,33 @@ let updateSessionRuntimeMock: any;
     );
   });
 
-  it('should preserve partial synthesis text and sync store when execute fails', async () => {
+  it('should preserve partial synthesis text, clear stale sources, and sync store when execute fails', async () => {
     const usage = { promptTokens: 3, candidatesTokens: 4, totalTokens: 7 };
     const streamError = new Error('Model exploded');
+    const context = createContext({
+      work: createWork({
+        [STEPS.SYNTHESIS]: ['old text'],
+        [`${STEPS.SYNTHESIS}_sources`]: [{ uri: 'https://stale.test', title: 'Stale Source' }],
+      }),
+    });
     vi.spyOn(step as any, 'runModelStream').mockImplementation(async (_config: any, callbacks: any) => {
       callbacks.onChunk('partial text', 'partial thought', usage);
       throw streamError;
     });
 
-    await expect(step.execute(mockContext)).rejects.toBe(streamError);
+    await expect(step.execute(context)).rejects.toBe(streamError);
 
     expect(updateWorkResultMock).toHaveBeenCalledWith(
       'msg-123',
       STEPS.SYNTHESIS,
-      -1,
+      0,
       { text: 'partial text', thought: 'partial thought', usage }
     );
-    expect(mockContext.work.results[STEPS.SYNTHESIS]).toEqual({
-      text: 'partial text',
-      error: true,
-      errorMessage: expect.any(String)
+    expect(context.work.results[STEPS.SYNTHESIS]).toEqual(['partial text']);
+    expect(context.work.results[`${STEPS.SYNTHESIS}_sources`]).toBeUndefined();
+    expect(context.work.results[`${STEPS.SYNTHESIS}_error`]).toEqual({
+      flag: true,
+      message: expect.any(String)
     });
     expect(updateAgentMock).toHaveBeenCalledWith(
       STEPS.SYNTHESIS,
@@ -508,7 +517,7 @@ let updateSessionRuntimeMock: any;
       'msg-123',
       undefined
     );
-    expect(setCurrentWorkMock).toHaveBeenCalledWith('msg-123', { ...mockContext.work });
+    expect(setCurrentWorkMock).toHaveBeenCalledWith('msg-123', { ...context.work });
   });
 
   it('should preserve an empty synthesis shell when execute fails with a non-Error value', async () => {
@@ -520,10 +529,10 @@ let updateSessionRuntimeMock: any;
     await expect(step.execute(context)).rejects.toBe('stream exploded');
 
     expect(updateWorkResultMock).not.toHaveBeenCalled();
-    expect(context.work.results[STEPS.SYNTHESIS]).toEqual({
-      text: '',
-      error: true,
-      errorMessage: expect.any(String)
+    expect(context.work.results[STEPS.SYNTHESIS]).toEqual(['']);
+    expect(context.work.results[`${STEPS.SYNTHESIS}_error`]).toEqual({
+      flag: true,
+      message: expect.any(String)
     });
     expect(updateAgentMock).toHaveBeenCalledWith(
       STEPS.SYNTHESIS,
@@ -539,10 +548,10 @@ let updateSessionRuntimeMock: any;
   it('should initialize synthesis as retrying when previous synthesis ended with an error', async () => {
     const context = createContext({
       work: createWork({
-        [STEPS.SYNTHESIS]: {
-          text: 'partial',
-          error: true,
-          errorMessage: 'Previous failure'
+        [STEPS.SYNTHESIS]: ['partial'],
+        [`${STEPS.SYNTHESIS}_error`]: {
+          flag: true,
+          message: 'Previous failure'
         }
       })
     });
@@ -572,7 +581,7 @@ let updateSessionRuntimeMock: any;
         simulateSynthesisErrorAttempts: 2
       },
       work: createWork({
-        [`${STEPS.SYNTHESIS}_error_counts`]: 1
+        [`${STEPS.SYNTHESIS}_error_counts`]: [1]
       })
     });
     vi.spyOn(step as any, 'runModelStream').mockResolvedValue({
@@ -597,10 +606,10 @@ let updateSessionRuntimeMock: any;
   it('should update synthesis work before firing the first text jump and only jump once', async () => {
     const context = createContext({
       work: createWork({
-        [STEPS.SYNTHESIS]: {
-          text: 'old partial',
-          error: true,
-          errorMessage: 'Previous failure'
+        [STEPS.SYNTHESIS]: ['old partial'],
+        [`${STEPS.SYNTHESIS}_error`]: {
+          flag: true,
+          message: 'Previous failure'
         }
       })
     });
@@ -639,12 +648,12 @@ let updateSessionRuntimeMock: any;
 
     capturedCallbacks.onChunk('', 'thought only', usage);
     expect(context.onSynthesisJump).not.toHaveBeenCalled();
-    expect(context.work.results[`${STEPS.SYNTHESIS}_thought`]).toBe('thought only');
+    expect(context.work.results[`${STEPS.SYNTHESIS}_thoughts`]).toEqual(['thought only']);
 
     capturedCallbacks.onChunk('First visible text', 'thought only', usage);
     expect(callOrder).toEqual(['updateWorkResult', 'onSynthesisJump']);
     expect(context.onSynthesisJump).toHaveBeenCalledTimes(1);
-    expect(context.work.results[STEPS.SYNTHESIS]).toMatchObject({ text: 'First visible text' });
+    expect(context.work.results[STEPS.SYNTHESIS]).toEqual(['First visible text']);
     expect(updateAgentMock).toHaveBeenCalledWith(
       STEPS.SYNTHESIS,
       0,
@@ -663,7 +672,7 @@ let updateSessionRuntimeMock: any;
       usage: null,
       groundingChunks: []
     });
-    await expect(executePromise).resolves.toEqual({ text: 'Final answer', sources: undefined });
+    await expect(executePromise).resolves.toEqual(['Final answer']);
   });
 
   it('should re-arm the first-text jump after a retry callback', async () => {
@@ -705,7 +714,7 @@ let updateSessionRuntimeMock: any;
       groundingChunks: []
     });
 
-    await expect(executePromise).resolves.toEqual({ text: 'Recovered answer', sources: undefined });
+    await expect(executePromise).resolves.toEqual(['Recovered answer']);
   });
 
   it('should capture synthesis debug info with system instruction, history, and user turn', () => {

@@ -169,7 +169,7 @@ describe('LoadingIndicator', () => {
         work={createWork({
           stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'stale', label: 'Synthesis Step', staleFromStepId: STEPS.REFINEMENT }],
           results: {
-            [STEPS.SYNTHESIS]: { text: 'Old final answer' },
+            [STEPS.SYNTHESIS]: ['Old final answer'],
           },
         })}
         noWrapper

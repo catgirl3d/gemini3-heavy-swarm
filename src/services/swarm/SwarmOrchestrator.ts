@@ -6,6 +6,7 @@ import { RefinementStep } from '@/services/swarm/steps/RefinementStep';
 import { SynthesisStep } from '@/services/swarm/steps/SynthesisStep';
 import { type StepContext, type StepDescriptor, STEPS, type StepId } from '@/types/steps';
 import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
+import { getStepResults, getSynthesisErrorState, getSynthesisSources } from '@/utils/swarm/workHelpers';
 import { Logger } from '@shared/utils/logger';
 
 const getLogger = (settings: AppSettings) => new Logger('SwarmOrchestrator', settings.debugMode);
@@ -49,7 +50,7 @@ export class SwarmOrchestrator {
       results: {
         [STEPS.INITIAL]: new Array(settings.numAgents).fill(''),
         [STEPS.REFINEMENT]: new Array(settings.numAgents).fill(''),
-        [STEPS.SYNTHESIS]: {}
+        [STEPS.SYNTHESIS]: ['']
       },
       stepMetadata: [],
       agentNames: Array.from({ length: settings.numAgents }, (_, i) =>
@@ -85,15 +86,12 @@ export class SwarmOrchestrator {
     const runner = new StepRunner(this.steps);
     const { work: finalWork, paused } = await runner.run(context, onPause, onStatusUpdate);
 
-    // Extract final result from synthesis step
-    const synthesisResult = finalWork.results?.[STEPS.SYNTHESIS] as { text?: string; sources?: Source[]; error?: boolean } | undefined;
-    
-    // If there was an error in synthesis, we don't want to show partial/error text as final result
-    const finalText = synthesisResult?.error ? '' : (synthesisResult?.text || '');
+    const synthesisError = getSynthesisErrorState(finalWork);
+    const finalText = synthesisError ? '' : (getStepResults(finalWork, STEPS.SYNTHESIS)[0] || '');
     
     return {
       text: finalText,
-      sources: synthesisResult?.sources,
+      sources: synthesisError ? undefined : getSynthesisSources(finalWork),
       work: finalWork,
       paused,
     };

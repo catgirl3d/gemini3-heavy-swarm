@@ -129,7 +129,7 @@ describe('Synthesis Jump behavior', () => {
     capturedOnChunk('', 'Thinking...', null);
     expect(mockContext.onSynthesisJump).not.toHaveBeenCalled();
     expect((step as any).handleStreamChunk).toHaveBeenCalledWith(
-        mockContext, -1, '', 'Thinking...', null, expect.anything()
+        mockContext, 0, '', 'Thinking...', null, expect.anything()
     );
 
     // Text chunk - JUMP
@@ -250,7 +250,7 @@ describe('Synthesis Jump behavior', () => {
     
     expect(mockContext.onSynthesisJump).toHaveBeenCalledTimes(1);
     expect((step as any).handleStreamChunk).toHaveBeenCalledWith(
-        mockContext, -1, 'Mixed content', 'Thinking...', null, expect.anything()
+        mockContext, 0, 'Mixed content', 'Thinking...', null, expect.anything()
     );
 
     await runPromise;

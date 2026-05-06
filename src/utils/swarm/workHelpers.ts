@@ -1,4 +1,4 @@
-import { type Work, type TokenUsage, type AgentState, type WorkStepMetadata, type WorkStepStatus, type DebugInfo, type StepDebugInfo } from '@/types';
+import { type Work, type TokenUsage, type AgentState, type WorkStepMetadata, type WorkStepStatus, type DebugInfo, type StepDebugInfo, type Source, type SynthesisErrorState } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
@@ -25,12 +25,6 @@ const cloneResultEntry = (value: unknown): unknown => {
 };
 
 const hasVisibleStepContent = (work: Work, stepId: StepId): boolean => {
-  if (stepId === STEPS.SYNTHESIS) {
-    const synthesis = getSynthesisResult(work);
-    const synthesisText = synthesis?.text;
-    return typeof synthesisText === 'string' && synthesisText.length > 0;
-  }
-
   return getStepResults(work, stepId).some(result => typeof result === 'string' && result.length > 0);
 };
 
@@ -50,7 +44,6 @@ export function getStepResults(work: Work, stepId: StepId): (string | null)[] {
 
 /**
  * Safely extracts displayable content for any step.
- * Multi-agent steps read indexed array output; synthesis reads its single final result.
  */
 export function getStepContent(
   work: Work | undefined,
@@ -58,11 +51,6 @@ export function getStepContent(
   agentIndex: number
 ): string | null {
   if (!work) return null;
-
-  if (stepId === STEPS.SYNTHESIS) {
-    const result = getSynthesisResult(work);
-    return result?.text ?? null;
-  }
 
   const result = getStepResults(work, stepId)[agentIndex];
   return typeof result === 'string' ? result : null;
@@ -99,55 +87,28 @@ export function getStepUsage(work: Work, stepId: StepId): (TokenUsage | null)[] 
 }
 
 /**
- * Safely extracts synthesis thought (single value, not an array).
- * 
- * @param work - The Work object containing synthesis metadata
- * @returns The synthesis thought string, or null if not available or not a string.
+ * Safely extracts synthesis sources sidecar.
  */
-export function getSynthesisThought(work: Work): string | null {
-  const raw = work.results?.[`${STEPS.SYNTHESIS}_thought` as keyof NonNullable<Work['results']>];
-  return typeof raw === 'string' ? raw : null;
+export function getSynthesisSources(work: Work): Source[] | undefined {
+  const raw = work.results?.[`${STEPS.SYNTHESIS}_sources` as keyof NonNullable<Work['results']>];
+  return Array.isArray(raw) ? raw as Source[] : undefined;
 }
 
 /**
- * Safely extracts synthesis token usage (single value, not an array).
- * 
- * @param work - The Work object containing synthesis metadata
- * @returns The synthesis token usage object, or null if not available or invalid structure.
+ * Safely extracts synthesis error sidecar.
  */
-export function getSynthesisUsage(work: Work): TokenUsage | null {
-  const raw = work.results?.[`${STEPS.SYNTHESIS}_usage` as keyof NonNullable<Work['results']>];
-  return raw && typeof raw === 'object' && 'totalTokens' in raw ? raw as TokenUsage : null;
-}
+export function getSynthesisErrorState(work: Work): SynthesisErrorState | null {
+  const raw = work.results?.[`${STEPS.SYNTHESIS}_error` as keyof NonNullable<Work['results']>];
 
-/**
- * Safely extracts synthesis result.
- * 
- * @param work - The Work object containing synthesis results
- * @returns The synthesis result object, or null if not available.
- */
-export function getSynthesisResult(
-  work: Work
-): NonNullable<NonNullable<Work['results']>[typeof STEPS.SYNTHESIS]> | null {
-  const raw = work.results?.[STEPS.SYNTHESIS as keyof NonNullable<Work['results']>];
-  if (raw && typeof raw === 'object' && !Array.isArray(raw) && ('text' in raw || 'error' in raw || 'sources' in raw)) {
-    return raw as NonNullable<NonNullable<Work['results']>[typeof STEPS.SYNTHESIS]>;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw) || !('flag' in raw) || raw.flag !== true) {
+    return null;
   }
-  return null;
-}
 
-/**
- * Safely extracts synthesis error message.
- *
- * @param work - The Work object containing synthesis results
- * @returns The synthesis error message, or null if not available.
- */
-export function getSynthesisErrorMessage(work: Work): string | null {
-  const raw = work.results?.[STEPS.SYNTHESIS];
-  if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'errorMessage' in raw) {
-    return typeof raw.errorMessage === 'string' ? raw.errorMessage : null;
+  if ('message' in raw && raw.message !== undefined && typeof raw.message !== 'string') {
+    return null;
   }
-  return null;
+
+  return raw as SynthesisErrorState;
 }
 
 export function getStepMeta(work: Work | undefined, stepId: StepId): WorkStepMetadata | undefined {
@@ -243,7 +204,7 @@ export function withEnsuredResults(work: Work): Work & { results: NonNullable<Wo
  * 
  * @param work - The source Work object (not modified)
  * @param stepId - The step identifier
- * @param agentIndex - Agent index (ignored for synthesis_step)
+ * @param agentIndex - Agent index
  * @param text - The text content to store
  * @returns New Work object with updated results
  */
@@ -254,29 +215,17 @@ export function updateStepResult(
   text: string
 ): Work {
   const currentResults = work.results ?? {};
-  
-  let updatedStepData: unknown;
-  
-  if (stepId === STEPS.SYNTHESIS) {
-    const existing = currentResults[stepId];
-    const base = existing && typeof existing === 'object' && !Array.isArray(existing) 
-      ? (existing as Record<string, unknown>) 
-      : {};
-    updatedStepData = { ...base, text };
-  } else {
-    const currentArray = Array.isArray(currentResults[stepId])
-      ? [...currentResults[stepId] as string[]]
-      : [];
-    const newArray = [...currentArray];
-    newArray[agentIndex] = text;
-    updatedStepData = newArray;
-  }
+  const currentArray = Array.isArray(currentResults[stepId])
+    ? [...currentResults[stepId] as (string | null)[]]
+    : [];
+  const newArray = [...currentArray];
+  newArray[agentIndex] = text;
 
   return {
     ...work,
     results: {
       ...currentResults,
-      [stepId]: updatedStepData
+      [stepId]: newArray
     }
   };
 }
@@ -306,6 +255,8 @@ export function updateAgentWork(
     stepMetadata: work.stepMetadata ? work.stepMetadata.map(meta => ({ ...meta })) : undefined,
   };
   const currentStepResult = results[stepId];
+  const thoughtsKey = `${stepId}_thoughts`;
+  const usageKey = `${stepId}_usage`;
   const numAgents = Math.max(
     Array.isArray(currentStepResult) ? currentStepResult.length : 0,
     agentIndex + 1
@@ -313,47 +264,29 @@ export function updateAgentWork(
 
   // 1. Update Text
   if (updates.text !== undefined) {
-    if (stepId === STEPS.SYNTHESIS) {
-      const raw = results[stepId];
-      const existing = raw && typeof raw === 'object' && !Array.isArray(raw)
-        ? (raw as Record<string, unknown>)
-        : {};
-      results[stepId] = { ...existing, text: updates.text };
-    } else {
-      const arr: (string | null)[] = Array.isArray(results[stepId])
-        ? [...results[stepId] as (string | null)[]]
-        : Array<string | null>(numAgents).fill('');
-      arr[agentIndex] = updates.text;
-      results[stepId] = arr;
-    }
+    const arr: (string | null)[] = Array.isArray(results[stepId])
+      ? [...results[stepId] as (string | null)[]]
+      : Array<string | null>(numAgents).fill('');
+    arr[agentIndex] = updates.text;
+    results[stepId] = arr;
   }
 
   // 2. Update Thoughts
   if (updates.thought !== undefined) {
-    const key = stepId === STEPS.SYNTHESIS ? `${stepId}_thought` : `${stepId}_thoughts`;
-    if (stepId === STEPS.SYNTHESIS) {
-      results[key] = updates.thought;
-    } else {
-      const arr: (string | null)[] = Array.isArray(results[key])
-        ? [...results[key] as (string | null)[]]
-        : Array<string | null>(numAgents).fill('');
-      arr[agentIndex] = updates.thought;
-      results[key] = arr;
-    }
+    const arr: (string | null)[] = Array.isArray(results[thoughtsKey])
+      ? [...results[thoughtsKey] as (string | null)[]]
+      : Array<string | null>(numAgents).fill('');
+    arr[agentIndex] = updates.thought;
+    results[thoughtsKey] = arr;
   }
 
   // 3. Update Usage
   if (updates.usage !== undefined) {
-    const key = `${stepId}_usage`;
-    if (stepId === STEPS.SYNTHESIS) {
-      results[key] = updates.usage;
-    } else {
-      const arr: (TokenUsage | null)[] = Array.isArray(results[key])
-        ? [...results[key] as (TokenUsage | null)[]]
-        : Array<TokenUsage | null>(numAgents).fill(null);
-      arr[agentIndex] = updates.usage;
-      results[key] = arr;
-    }
+    const arr: (TokenUsage | null)[] = Array.isArray(results[usageKey])
+      ? [...results[usageKey] as (TokenUsage | null)[]]
+      : Array<TokenUsage | null>(numAgents).fill(null);
+    arr[agentIndex] = updates.usage;
+    results[usageKey] = arr;
   }
 
   return nextWork;

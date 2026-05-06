@@ -147,6 +147,11 @@ export interface Source {
   title: string;
 }
 
+export interface SynthesisErrorState {
+  flag: true;
+  message?: string;
+}
+
 export interface TokenUsage {
   promptTokens: number;
   candidatesTokens: number;
@@ -188,15 +193,14 @@ export type WorkResultKey =
   | typeof STEPS.SYNTHESIS
   | `${typeof STEPS.INITIAL}_thoughts`
   | `${typeof STEPS.REFINEMENT}_thoughts`
-  | `${typeof STEPS.SYNTHESIS}_thought`
+  | `${typeof STEPS.SYNTHESIS}_thoughts`
   | `${typeof STEPS.INITIAL}_usage`
   | `${typeof STEPS.REFINEMENT}_usage`
   | `${typeof STEPS.SYNTHESIS}_usage`
+  | `${typeof STEPS.SYNTHESIS}_sources`
+  | `${typeof STEPS.SYNTHESIS}_error`
   // Error count tracking for retry simulation
-  // Note: All steps use plural '_error_counts' suffix for naming consistency,
-  // but data structure differs by step type:
-  // - Multi-agent steps (initial, refinement): number[] (array of counts per agent)
-  // - Single-agent step (synthesis): number (scalar count)
+  // All steps use indexed arrays. Synthesis uses slot 0.
   | `${typeof STEPS.INITIAL}_error_counts`
   | `${typeof STEPS.REFINEMENT}_error_counts`
   | `${typeof STEPS.SYNTHESIS}_error_counts`;
@@ -244,16 +248,22 @@ export interface Work {
   results?: {
     [STEPS.INITIAL]?: (string | null)[];
     [STEPS.REFINEMENT]?: (string | null)[];
-    [STEPS.SYNTHESIS]?: { text?: string; error?: boolean; errorMessage?: string; sources?: Source[] };
+    [STEPS.SYNTHESIS]?: (string | null)[];
     
     // Unified step metadata (thoughts, token usage, etc.)
     initial_step_thoughts?: (string | null)[];
     refinement_step_thoughts?: (string | null)[];
-    synthesis_step_thought?: string | null;
+    synthesis_step_thoughts?: (string | null)[];
 
     initial_step_usage?: (TokenUsage | null)[];
     refinement_step_usage?: (TokenUsage | null)[];
-    synthesis_step_usage?: TokenUsage | null;
+    synthesis_step_usage?: (TokenUsage | null)[];
+
+    synthesis_step_sources?: Source[];
+    synthesis_step_error?: SynthesisErrorState | null;
+    initial_step_error_counts?: number[];
+    refinement_step_error_counts?: number[];
+    synthesis_step_error_counts?: number[];
     
     // Index signature for dynamic step keys (StepRunner extensibility)
     [key: string]: unknown;
