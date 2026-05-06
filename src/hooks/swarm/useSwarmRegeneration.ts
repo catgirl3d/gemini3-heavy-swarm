@@ -173,7 +173,7 @@ export function useSwarmRegeneration({
     const previousActiveSessionId = store.activeSessionMessageId;
     const stepConfig = getStepConfig(stepId);
 
-    const resolvedSession = resolveOperationalSessionWork(targetMessage, 'regeneration');
+    const resolvedSession = resolveOperationalSessionWork(targetMessage, { status: 'paused' });
     const sessionBeforeRun = useAgentStore.getState().sessionsByMessageId[messageId];
     const workContext = resolvedSession?.work ? cloneWork(resolvedSession.work) : undefined;
     const wasCompletedMessage = getStepMeta(workContext, STEPS.SYNTHESIS)?.status === 'done';
@@ -307,11 +307,11 @@ export function useSwarmRegeneration({
 
       if (shouldClearActiveSession) {
         flushSync(() => {
-          setMessages(prev => commitSessionSnapshotToMessage(prev, messageId, { reason: 'regeneration-success' }));
+          setMessages(prev => commitSessionSnapshotToMessage(prev, messageId));
         });
         store.setActiveSession(undefined);
       } else {
-        setMessages(prev => commitSessionSnapshotToMessage(prev, messageId, { reason: 'regeneration-success' }));
+        setMessages(prev => commitSessionSnapshotToMessage(prev, messageId));
       }
        
     } catch (error) {
@@ -350,7 +350,7 @@ export function useSwarmRegeneration({
         error: errorMessage,
       });
 
-      setMessages(prev => commitSessionSnapshotToMessage(prev, messageId, { reason: 'regeneration-error' }));
+      setMessages(prev => commitSessionSnapshotToMessage(prev, messageId));
       
       // Cleanup tracking on error (but keep error updates in messages)
       // Steps already updated work.results with error info

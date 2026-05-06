@@ -2,7 +2,6 @@ import { type AgentState, type Message, type SwarmSessionStatus, type Work } fro
 import { useAgentStore } from '@/stores/agentStore';
 import { cloneWork } from '@/utils/swarm/workHelpers';
 
-export type OperationalSessionWorkReason = 'resume' | 'retry' | 'regeneration';
 export type OperationalSessionResolutionSource = 'existing-session' | 'hydrated-snapshot';
 
 export interface OperationalSessionResolution {
@@ -11,14 +10,6 @@ export interface OperationalSessionResolution {
   sessionMessageId: string;
   source: OperationalSessionResolutionSource;
 }
-
-export type SessionSnapshotCommitReason =
-  | 'paused'
-  | 'done'
-  | 'stopped'
-  | 'partial-error'
-  | 'regeneration-success'
-  | 'regeneration-error';
 
 type SessionRuntimeOptions = {
   status?: SwarmSessionStatus;
@@ -31,7 +22,6 @@ type SessionRuntimeOptions = {
 };
 
 type SnapshotCommitOptions = {
-  reason: SessionSnapshotCommitReason;
   fallbackWork?: Work;
 };
 
@@ -95,7 +85,6 @@ export const hydrateSessionFromMessageSnapshot = (
 
 export const resolveOperationalSessionWork = (
   message: Message,
-  reason: OperationalSessionWorkReason,
   runtimeOptions?: SessionRuntimeOptions,
 ): OperationalSessionResolution | undefined => {
   if (message.role !== 'model') {
@@ -111,16 +100,15 @@ export const resolveOperationalSessionWork = (
   return hydrateSessionFromMessageSnapshot(message, {
     ...runtimeOptions,
     targetMessageId,
-    status: runtimeOptions?.status ?? (reason === 'regeneration' ? 'paused' : undefined),
   });
 };
 
 export const commitSessionSnapshotToMessage = (
   messages: Message[],
   messageId: string,
-  options: SnapshotCommitOptions,
+  options?: SnapshotCommitOptions,
 ): Message[] => {
-  const committedWork = getSessionSnapshot(messageId) ?? options.fallbackWork;
+  const committedWork = getSessionSnapshot(messageId) ?? options?.fallbackWork;
   if (!committedWork) {
     return messages;
   }

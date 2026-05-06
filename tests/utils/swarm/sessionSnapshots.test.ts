@@ -57,7 +57,7 @@ describe('sessionSnapshots', () => {
       isPaused: false,
     });
 
-    const resolved = resolveOperationalSessionWork(message, 'resume');
+    const resolved = resolveOperationalSessionWork(message);
 
     expect(resolved).toMatchObject({
       source: 'existing-session',
@@ -76,7 +76,7 @@ describe('sessionSnapshots', () => {
       work: createWork({ agentStates: snapshotAgents }),
     };
 
-    const resolved = resolveOperationalSessionWork(message, 'retry', {
+    const resolved = resolveOperationalSessionWork(message, {
       targetMessageId: 'retry-model',
     });
 
@@ -108,7 +108,7 @@ describe('sessionSnapshots', () => {
     });
     useAgentStore.getState().setGlobalError('existing global error');
 
-    const resolved = resolveOperationalSessionWork(snapshotMessage, 'retry', {
+    const resolved = resolveOperationalSessionWork(snapshotMessage, {
       targetMessageId: 'retry-model',
     });
 
@@ -122,6 +122,30 @@ describe('sessionSnapshots', () => {
       isLoading: true,
       isPaused: true,
       loadingStatus: 'Paused. Waiting for user confirmation...',
+    });
+  });
+
+  it('hydrates with an explicit status when the caller provides one', () => {
+    const message: Message = {
+      id: 'model-1',
+      role: 'model',
+      parts: [{ text: '' }],
+      work: createWork({ agentStates: [createAgent()] }),
+    };
+
+    const resolved = resolveOperationalSessionWork(message, {
+      status: 'paused',
+      targetMessageId: 'paused-model',
+    });
+
+    expect(resolved).toMatchObject({
+      source: 'hydrated-snapshot',
+      sessionMessageId: 'paused-model',
+    });
+    expect(useAgentStore.getState().sessionsByMessageId['paused-model']).toMatchObject({
+      status: 'paused',
+      isLoading: true,
+      isPaused: true,
     });
   });
 });

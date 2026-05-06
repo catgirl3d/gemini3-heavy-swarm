@@ -47,7 +47,7 @@ export function useSwarmOrchestration({
     const currentMessages = messagesRef.current || [];
     const lastModelMessage = [...currentMessages].reverse().find(m => m.role === 'model');
     const resolvedSession = lastModelMessage
-      ? resolveOperationalSessionWork(lastModelMessage, 'resume', {
+      ? resolveOperationalSessionWork(lastModelMessage, {
           status: 'paused',
           isLoading: true,
           isPaused: true,
@@ -125,7 +125,7 @@ export function useSwarmOrchestration({
         error: null,
       });
       flushSync(() => {
-        setMessages(prev => commitSessionSnapshotToMessage(prev, currentMsgId, { reason: 'stopped' }));
+        setMessages(prev => commitSessionSnapshotToMessage(prev, currentMsgId));
       });
     }
 
@@ -278,7 +278,7 @@ export function useSwarmOrchestration({
       if (paused) {
         useAgentStore.getState().setSessionStatus(modelMessageId, 'paused');
 
-        setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId, { reason: 'paused' }));
+        setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId));
 
         return;
       }
@@ -286,7 +286,7 @@ export function useSwarmOrchestration({
       useAgentStore.getState().setSessionStatus(modelMessageId, 'done');
 
       flushSync(() => {
-        setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId, { reason: 'done' }));
+        setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId));
       });
 
       logger.debug('Clearing loading state after success');
@@ -347,10 +347,9 @@ export function useSwarmOrchestration({
       }
 
       if (hasPartialWork) {
-        setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId, { reason: 'partial-error' }));
+        setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId));
       } else {
         setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId, {
-          reason: 'partial-error',
           fallbackWork: failureSnapshot,
         }));
         useAgentStore.getState().setActiveSession(undefined);
@@ -371,7 +370,7 @@ export function useSwarmOrchestration({
       const lastMsg = messages[messages.length - 1];
       const retryMessageId = generateUUID();
       const failedSession = lastMsg?.role === 'model'
-        ? resolveOperationalSessionWork(lastMsg, 'retry', { targetMessageId: retryMessageId })
+        ? resolveOperationalSessionWork(lastMsg, { targetMessageId: retryMessageId })
         : undefined;
 
       sendMessage(lastInput.text, lastInput.image, lastInput.imageFile, {
