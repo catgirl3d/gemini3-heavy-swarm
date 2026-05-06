@@ -10,7 +10,7 @@ import { type Message, type Work, type ProviderType } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
 import { selectActiveSession, selectActiveSessionMessageId, useAgentStore } from '@/stores/agentStore';
 import { getStepResults } from '@/utils/swarm/workHelpers';
-import { getMessageDisplaySources, getMessageDisplayText } from '@/utils/chat/messageProjection';
+import { getMessageDisplaySources, getMessageDisplayText, getMessageDisplayWork } from '@/utils/chat/messageProjection';
 import { isLatestRegenerableMessage } from '@/utils/swarm/sessionHelpers';
 import { Logger } from '@shared/utils/logger';
 import { copyTextToClipboard } from '@/utils/common/clipboard';
@@ -117,24 +117,29 @@ const MessageListComponent: FC<MessageListProps> = ({
         messages.map((msg, index) => {
           // Determine if this message is actively being generated/regenerated
           const isActiveGeneration = isLoading && msg.id === activeSessionMessageId;
-          const messageWork = isActiveGeneration ? activeWork ?? msg.work : msg.work;
-          const displayText = getMessageDisplayText(msg, isActiveGeneration ? activeWork : undefined);
-          const displaySources = getMessageDisplaySources(msg, isActiveGeneration ? activeWork : undefined);
+          // Only the active model row is allowed to read from the live session store.
+          // Historical rows must stay pinned to their message snapshot.
+          const liveWork = isActiveGeneration ? activeWork : undefined;
+          // This is the single render-time work source for the row: visibility checks,
+          // markdown text, sources, loading UI, and ShowWork all read from the same object.
+          const effectiveWork = getMessageDisplayWork(msg, liveWork);
+          const displayText = getMessageDisplayText(msg, liveWork);
+          const displaySources = getMessageDisplaySources(msg, liveWork);
           const hasText = displayText.length > 0;
           // Check if message has valid work content OR active agents (even if results are empty/error)
           // preventing the message from being hidden if it only contains error states
-          const hasWork = !!messageWork && (
-            (!!messageWork.results && Object.values(messageWork.results).some(v => 
+          const hasWork = !!effectiveWork && (
+            (!!effectiveWork.results && Object.values(effectiveWork.results).some(v => 
               Array.isArray(v) ? v.some(item => !!item) : !!v
             )) || 
-            (!!messageWork.agentStates && messageWork.agentStates.length > 0)
+            (!!effectiveWork.agentStates && effectiveWork.agentStates.length > 0)
           );
           
           const isLast = index === messages.length - 1;
           
           // Check if we have substantial completed work (like initial drafts) that should be shown despite an error
-          const hasCompletedDrafts = messageWork
-            ? getStepResults(messageWork, STEPS.INITIAL).some(draft => !!draft && draft.length > 0)
+          const hasCompletedDrafts = effectiveWork
+            ? getStepResults(effectiveWork, STEPS.INITIAL).some(draft => !!draft && draft.length > 0)
             : false;
 
           // CRITICAL: If a global error occurred, hide the last model message if it has no final text AND no completed drafts.
@@ -192,7 +197,7 @@ const MessageListComponent: FC<MessageListProps> = ({
                         messageId={activeSessionMessageId}
                         onContinue={onContinue}
                         onRegenerate={(phase, agentIndex) => onRegenerate(msg.id, phase as StepId, agentIndex)}
-                        work={activeWork ?? msg.work}
+                        work={effectiveWork}
                         provider={provider}
                         model={model}
                       />
@@ -200,17 +205,18 @@ const MessageListComponent: FC<MessageListProps> = ({
 
                     {/* 2. Work Content (Live or History) */}
                     {(() => {
-                      if (!messageWork) return null;
+                      if (!effectiveWork) return null;
                           
                       // Allow regeneration only for the latest assistant turn that was not manually stopped.
-                      const canRegenerate = isLatestRegenerableMessage(messages, msg.id) && !(msg.work?.isStopped || messageWork.isStopped);
+                      const isStopped = !!(effectiveWork.isStopped || msg.work?.isStopped);
+                      const canRegenerate = isLatestRegenerableMessage(messages, msg.id) && !isStopped;
                       const handleRegenerate = canRegenerate 
                         ? (phase: string, agentIndex: number) => onRegenerate(msg.id, phase as StepId, agentIndex)
                         : undefined;
                       
                       return (
                         <ShowWork
-                          work={messageWork ?? EMPTY_WORK}
+                          work={effectiveWork ?? EMPTY_WORK}
                           messageId={msg.id}
                           isLive={isActiveGeneration}
                           isPaused={isPaused}

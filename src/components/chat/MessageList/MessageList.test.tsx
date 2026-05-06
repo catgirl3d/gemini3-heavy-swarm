@@ -370,6 +370,74 @@ describe('MessageList', () => {
     expect(screen.getByTestId('show-work')).toHaveTextContent('show-work:model-1:live:noregen');
   });
 
+  it('passes live session work to active rows and snapshot work to historical rows', () => {
+    const historicalWork: Work = {
+      results: {
+        [STEPS.SYNTHESIS]: ['Historical answer'],
+      },
+    };
+    const staleActiveWork: Work = {
+      results: {
+        [STEPS.SYNTHESIS]: ['Stale snapshot answer'],
+      },
+    };
+    const liveActiveWork: Work = {
+      results: {
+        [STEPS.SYNTHESIS]: ['Live session answer'],
+      },
+      agentStates: [createAgentState({ messageId: 'model-2', status: 'working', label: 'Drafting...' })],
+    };
+    const messages: Message[] = [
+      {
+        id: 'user-1',
+        role: 'user',
+        parts: [{ text: 'Question 1' }],
+      },
+      {
+        id: 'model-1',
+        role: 'model',
+        parts: [{ text: '' }],
+        work: historicalWork,
+      },
+      {
+        id: 'user-2',
+        role: 'user',
+        parts: [{ text: 'Question 2' }],
+      },
+      {
+        id: 'model-2',
+        role: 'model',
+        parts: [{ text: '' }],
+        work: staleActiveWork,
+      },
+    ];
+
+    mocks.store.activeSessionMessageId = 'model-2';
+    mocks.store.sessionsByMessageId = {
+      'model-2': {
+        work: liveActiveWork,
+        agentStates: [createAgentState({ messageId: 'model-2', status: 'working', label: 'Drafting...' })],
+      },
+    };
+
+    render(
+      <MessageList
+        {...createMessageListProps({
+          messages,
+          isLoading: true,
+        })}
+      />
+    );
+
+    const showWorkPropsByMessageId = Object.fromEntries(
+      mocks.showWork.mock.calls.map(([props]) => [props.messageId, props])
+    );
+
+    expect(showWorkPropsByMessageId['model-1'].work).toBe(historicalWork);
+    expect(showWorkPropsByMessageId['model-2'].work).toBe(liveActiveWork);
+    expect(mocks.loadingIndicator.mock.calls[0]?.[0].work).toBe(liveActiveWork);
+  });
+
   it('hides regeneration actions for older assistant turns once a later user prompt exists', () => {
     const messages: Message[] = [
       {

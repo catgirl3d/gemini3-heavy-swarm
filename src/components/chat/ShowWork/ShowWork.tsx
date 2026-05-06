@@ -9,7 +9,7 @@ import { ArrowDownIcon, TokenIcon } from '@/components/chat/ShowWork/icons';
 import { getStepResults, getStepThoughts, getStepUsage, isSynthesisComplete } from '@/utils/swarm/workHelpers';
 import { useResolvedSwarmState } from '@/hooks/swarm/useResolvedSwarmState';
 import { getErroredAgents, isAnyAgentWorking, isErrorState, getContinueButtonText, handleContinueClick as handleContinueClickHelper } from '@/utils/swarm/continueHelpers';
-import { createSessionAgentsSelector, createSessionWorkSelector, selectActiveSessionMessageId, useAgentStore } from '@/stores/agentStore';
+import { createSessionAgentsSelector, selectActiveSessionMessageId, useAgentStore } from '@/stores/agentStore';
 import { type StepDebugInfo, type TokenUsage } from '@/types/app-types';
 import { useAutoCollapse } from '@/hooks/ui/useAutoCollapse';
 import './ShowWork.css';
@@ -35,9 +35,10 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
   const [debugModalData, setDebugModalData] = useState<DebugModalData | null>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
+  // MessageList already resolved live-vs-history work selection for this row.
+  // ShowWork only renders the provided work prop and uses the store for live agent status UI.
   const sessionAgentStates = useAgentStore(createSessionAgentsSelector(messageId));
   const activeSessionMessageId = useAgentStore(selectActiveSessionMessageId);
-  const liveSessionWork = useAgentStore(createSessionWorkSelector(messageId));
   const isCurrentMessage = activeSessionMessageId === messageId;
   const effectiveAgentStates = isCurrentMessage ? (sessionAgentStates ?? []) : (work.agentStates ?? []);
   
@@ -47,20 +48,18 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
     isEarlyStageWorking
   } = useResolvedSwarmState(messageId, work, isCurrentMessage);
 
-  const effectiveWork = isCurrentMessage && liveSessionWork ? liveSessionWork : work;
-
-  const initialResults = useMemo(() => getStepResults(effectiveWork, STEPS.INITIAL), [effectiveWork]);
-  const refinementResults = useMemo(() => getStepResults(effectiveWork, STEPS.REFINEMENT), [effectiveWork]);
-  const synthesisResults = useMemo(() => getStepResults(effectiveWork, STEPS.SYNTHESIS), [effectiveWork]);
+  const initialResults = useMemo(() => getStepResults(work, STEPS.INITIAL), [work]);
+  const refinementResults = useMemo(() => getStepResults(work, STEPS.REFINEMENT), [work]);
+  const synthesisResults = useMemo(() => getStepResults(work, STEPS.SYNTHESIS), [work]);
 
   // Cache helper results to avoid repeated calls in .map()
-  const initialUsages = useMemo(() => getStepUsage(effectiveWork, STEPS.INITIAL), [effectiveWork]);
-  const initialThoughts = useMemo(() => getStepThoughts(effectiveWork, STEPS.INITIAL), [effectiveWork]);
-  const refinementUsages = useMemo(() => getStepUsage(effectiveWork, STEPS.REFINEMENT), [effectiveWork]);
-  const refinementThoughts = useMemo(() => getStepThoughts(effectiveWork, STEPS.REFINEMENT), [effectiveWork]);
-  const synthesisUsages = useMemo(() => getStepUsage(effectiveWork, STEPS.SYNTHESIS), [effectiveWork]);
-  const synthesisThoughts = useMemo(() => getStepThoughts(effectiveWork, STEPS.SYNTHESIS), [effectiveWork]);
-  const isSynthesisDone = useMemo(() => isSynthesisComplete(effectiveWork, effectiveAgentStates), [effectiveAgentStates, effectiveWork]);
+  const initialUsages = useMemo(() => getStepUsage(work, STEPS.INITIAL), [work]);
+  const initialThoughts = useMemo(() => getStepThoughts(work, STEPS.INITIAL), [work]);
+  const refinementUsages = useMemo(() => getStepUsage(work, STEPS.REFINEMENT), [work]);
+  const refinementThoughts = useMemo(() => getStepThoughts(work, STEPS.REFINEMENT), [work]);
+  const synthesisUsages = useMemo(() => getStepUsage(work, STEPS.SYNTHESIS), [work]);
+  const synthesisThoughts = useMemo(() => getStepThoughts(work, STEPS.SYNTHESIS), [work]);
+  const isSynthesisDone = useMemo(() => isSynthesisComplete(work, effectiveAgentStates), [effectiveAgentStates, work]);
 
   const synthesisText: string | null = synthesisResults[0] ?? null;
 
@@ -77,7 +76,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
 
   const initialCards = useMemo<WorkCardViewModel[]>(() => {
     return initialResults.map((resp, i) => {
-      const name = effectiveWork.agentNames?.[i] || work.agentNames?.[i] || `Agent ${i + 1}`;
+      const name = work.agentNames?.[i] || `Agent ${i + 1}`;
       return {
         cardId: `initial-${i}`,
         step: STEPS.INITIAL,
@@ -88,16 +87,16 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
         debugTitle: `${name} - Initial Debug Info`,
         content: resp,
         thought: initialThoughts[i],
-        debugInfo: effectiveWork.debugInfo?.[STEPS.INITIAL]?.[i] || work.debugInfo?.[STEPS.INITIAL]?.[i],
+        debugInfo: work.debugInfo?.[STEPS.INITIAL]?.[i],
         tokenUsage: initialUsages[i] ?? null,
         downloadFilename: `${name.replace(/\s+/g, '-')}-Initial_Draft.md`,
       };
     });
-  }, [effectiveWork, initialResults, initialThoughts, initialUsages, work]);
+  }, [initialResults, initialThoughts, initialUsages, work]);
 
   const refinementCards = useMemo<WorkCardViewModel[]>(() => {
     return refinementResults.map((resp, i) => {
-      const name = effectiveWork.criticNames?.[i] || work.criticNames?.[i] || `Critic ${i + 1}`;
+      const name = work.criticNames?.[i] || `Critic ${i + 1}`;
       return {
         cardId: `refined-${i}`,
         step: STEPS.REFINEMENT,
@@ -108,13 +107,13 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
         debugTitle: `${name} - Refinement Debug Info`,
         content: resp,
         thought: refinementThoughts[i],
-        debugInfo: effectiveWork.debugInfo?.[STEPS.REFINEMENT]?.[i] || work.debugInfo?.[STEPS.REFINEMENT]?.[i],
+        debugInfo: work.debugInfo?.[STEPS.REFINEMENT]?.[i],
         tokenUsage: refinementUsages[i] ?? null,
         downloadFilename: `${name.replace(/\s+/g, '-')}-Refined_Response.md`,
         className: 'refinement-step',
       };
     });
-  }, [effectiveWork, refinementResults, refinementThoughts, refinementUsages, work]);
+  }, [refinementResults, refinementThoughts, refinementUsages, work]);
 
   const synthesisCard = useMemo<WorkCardViewModel>(() => ({
     cardId: 'synthesis',
@@ -126,11 +125,11 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
     debugTitle: 'Synthesizer - Debug Info',
     content: synthesisText,
     thought: synthesisThoughts[0],
-    debugInfo: effectiveWork.debugInfo?.[STEPS.SYNTHESIS],
+    debugInfo: work.debugInfo?.[STEPS.SYNTHESIS],
     tokenUsage: synthesisUsages[0] ?? null,
     downloadFilename: 'Synthesis_Report.md',
     className: STEPS.SYNTHESIS,
-  }), [effectiveWork, synthesisText, synthesisThoughts, synthesisUsages]);
+  }), [synthesisText, synthesisThoughts, synthesisUsages, work]);
 
   const allCards = useMemo(() => {
     return [...initialCards, ...refinementCards, synthesisCard];
@@ -216,7 +215,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
                 <StatusAwareWorkCard
                   key={card.cardId}
                   cardId={card.cardId}
-                  work={effectiveWork}
+                  work={work}
                   step={card.step}
                   index={card.index}
                   messageId={messageId}
@@ -243,7 +242,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
                   <StatusAwareWorkCard
                     key={card.cardId}
                     cardId={card.cardId}
-                    work={effectiveWork}
+                    work={work}
                     step={card.step}
                     index={card.index}
                     messageId={messageId}
@@ -268,7 +267,7 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
               <h4 className="work-category-title">Final Synthesis</h4>
               <StatusAwareWorkCard
                 cardId={synthesisCard.cardId}
-                work={effectiveWork}
+                work={work}
                 step={synthesisCard.step}
                 index={synthesisCard.index}
                 messageId={messageId}
