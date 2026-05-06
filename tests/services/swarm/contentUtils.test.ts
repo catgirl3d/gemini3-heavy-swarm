@@ -1,24 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { prepareGeminiContent } from '@/services/swarm/contentUtils';
 import { Message } from '@/types';
+import { STEPS } from '@/types/steps';
 
 describe('prepareGeminiContent', () => {
   it('maps chat history to Gemini content and drops message metadata', () => {
-    const parts = [{ text: 'previous answer' }];
+    const parts = [{ text: '' }];
     const history: Message[] = [
       {
         id: 'msg-1',
         role: 'model',
         parts,
         image: 'data:image/png;base64,ignored',
-        sources: [{ uri: 'https://example.test', title: 'Example' }],
+        work: {
+          results: {
+            [STEPS.SYNTHESIS]: ['previous answer'],
+            [`${STEPS.SYNTHESIS}_sources`]: [{ uri: 'https://example.test', title: 'Example' }],
+          },
+        },
       },
     ];
 
     const result = prepareGeminiContent(history, 'next question', null, null);
 
-    expect(result.history).toEqual([{ role: 'model', parts }]);
-    expect(result.history[0].parts).toBe(parts);
+    expect(result.history).toEqual([{ role: 'model', parts: [{ text: 'previous answer' }] }]);
   });
 
   it('adds non-empty user input as an untrimmed text part', () => {

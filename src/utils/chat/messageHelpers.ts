@@ -1,23 +1,6 @@
-import { type Message, type Work, type AppSettings } from '@/types';
+import { type Message, type Work } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
-import { generateUUID } from '@/utils/common/uuid';
 import { setWorkName } from '@/utils/swarm/stepConstants';
-import { Logger } from '@shared/utils/logger';
-
-/**
- * Immutably updates the text of the first part of a message.
- */
-export const updateMessageParts = (message: Message, text: string): Message => {
-  if (message.parts?.[0]?.text === text) {
-    return message;
-  }
-
-  const updatedParts = message.parts && message.parts.length > 0
-    ? [{ ...message.parts[0], text }, ...message.parts.slice(1)]
-    : [{ text }];
-  
-  return { ...message, parts: updatedParts };
-};
 
 /**
  * Immutably updates agent or critic names in a Work object based on the step.
@@ -25,48 +8,6 @@ export const updateMessageParts = (message: Message, text: string): Message => {
 export const updateWorkAgentNames = (work: Work, stepId: StepId, agentIndex: number, newName: string): Work => {
   return setWorkName(work, stepId, agentIndex, newName);
 };
-
-/**
- * Creates a new model message for synthesis regeneration.
- */
-const createRegeneratedModelMessage = (workContext: Work | undefined, text: string): Message => {
-  return {
-    id: generateUUID(),
-    role: 'model',
-    parts: [{ text }],
-    work: workContext
-  };
-}
-
-/**
- * Finds or creates the target model message for synthesis regeneration.
- * Handles the complex logic of:
- * - Checking if target message is already a model message
- * - Looking for an existing model message at the next index
- * - Creating a new model message if needed
- * 
- * @returns Object with message, index, and wasCreated flag
- */
-export const ensureModelMessageForSynthesis = (
-  messages: Message[],
-  messageIndex: number,
-  workContext: Work | undefined,
-  text: string,
-  settings?: AppSettings
-): { message: Message; index: number; wasCreated: boolean } => {
-  const logger = new Logger('Synthesis', settings?.debugMode);
-  
-  const targetIndex = findTargetMessageIndex(messages, messageIndex, STEPS.SYNTHESIS);
-  
-  if (targetIndex !== null) {
-    return { message: messages[targetIndex], index: targetIndex, wasCreated: false };
-  }
-  
-  // Create new model message
-  logger.debug('Creating NEW model message');
-  const newMsg = createRegeneratedModelMessage(workContext, text);
-  return { message: newMsg, index: messages.length, wasCreated: true };
-}
 
 /**
  * Finds the index of the target message for updates during regeneration.

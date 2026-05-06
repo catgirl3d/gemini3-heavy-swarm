@@ -10,6 +10,7 @@ import { type Message, type Work, type ProviderType } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
 import { selectActiveSession, selectActiveSessionMessageId, useAgentStore } from '@/stores/agentStore';
 import { getStepResults } from '@/utils/swarm/workHelpers';
+import { getMessageDisplaySources, getMessageDisplayText } from '@/utils/chat/messageProjection';
 import { isLatestRegenerableMessage } from '@/utils/swarm/sessionHelpers';
 import { Logger } from '@shared/utils/logger';
 import { copyTextToClipboard } from '@/utils/common/clipboard';
@@ -114,24 +115,26 @@ const MessageListComponent: FC<MessageListProps> = ({
         />
       ) : (
         messages.map((msg, index) => {
-          const hasText = !!msg.parts?.[0]?.text;
-          // Check if message has valid work content OR active agents (even if results are empty/error)
-          // preventing the message from being hidden if it only contains error states
-          const hasWork = !!msg.work && (
-            (!!msg.work.results && Object.values(msg.work.results).some(v => 
-              Array.isArray(v) ? v.some(item => !!item) : !!v
-            )) || 
-            (!!msg.work.agentStates && msg.work.agentStates.length > 0)
-          );
-          
           // Determine if this message is actively being generated/regenerated
           const isActiveGeneration = isLoading && msg.id === activeSessionMessageId;
+          const messageWork = isActiveGeneration ? activeWork ?? msg.work : msg.work;
+          const displayText = getMessageDisplayText(msg, isActiveGeneration ? activeWork : undefined);
+          const displaySources = getMessageDisplaySources(msg, isActiveGeneration ? activeWork : undefined);
+          const hasText = displayText.length > 0;
+          // Check if message has valid work content OR active agents (even if results are empty/error)
+          // preventing the message from being hidden if it only contains error states
+          const hasWork = !!messageWork && (
+            (!!messageWork.results && Object.values(messageWork.results).some(v => 
+              Array.isArray(v) ? v.some(item => !!item) : !!v
+            )) || 
+            (!!messageWork.agentStates && messageWork.agentStates.length > 0)
+          );
           
           const isLast = index === messages.length - 1;
           
           // Check if we have substantial completed work (like initial drafts) that should be shown despite an error
-          const hasCompletedDrafts = msg.work
-            ? getStepResults(msg.work, STEPS.INITIAL).some(draft => !!draft && draft.length > 0)
+          const hasCompletedDrafts = messageWork
+            ? getStepResults(messageWork, STEPS.INITIAL).some(draft => !!draft && draft.length > 0)
             : false;
 
           // CRITICAL: If a global error occurred, hide the last model message if it has no final text AND no completed drafts.
@@ -150,19 +153,19 @@ const MessageListComponent: FC<MessageListProps> = ({
             <div key={msg.id} className={`message-wrapper ${msg.role}`}>
               <AgentAvatar type={msg.role} provider={provider} model={model} />
               <div className={`message ${msg.role}`}>
-                {msg.role === 'model' && msg.parts?.[0]?.text && (
+                {msg.role === 'model' && hasText && (
                   <div className="agent-label-header">
                     <span className="agent-label">Synthesizer Agent</span>
                     <div className="message-actions-group">
                       <ActionButton 
-                        onClick={() => copyResponseText(msg.parts![0].text!)}
+                        onClick={() => copyResponseText(displayText)}
                         icon={<CopyIcon />}
                         successIcon={<CheckIcon />}
                         title="Copy Response"
                         successTitle="Copied!"
                       />
                       <ActionButton 
-                        onClick={() => downloadContent('Synthesis_Report.md', msg.parts![0].text!)}
+                        onClick={() => downloadContent('Synthesis_Report.md', displayText)}
                         icon={<DownloadIcon />}
                         successIcon={<CheckIcon />}
                         title="Export Response"
@@ -172,8 +175,8 @@ const MessageListComponent: FC<MessageListProps> = ({
                   </div>
                 )}
                 {msg.image && <img src={msg.image} alt="User upload" className="message-image" />}
-                {msg.parts?.[0]?.text && (
-                  msg.role === 'user' ? msg.parts[0].text : <MarkdownRenderer content={msg.parts[0].text} />
+                {hasText && (
+                  msg.role === 'user' ? displayText : <MarkdownRenderer content={displayText} />
                 )}
                 
                 {/* Model messages: Show work if available, otherwise show loading indicator if actively generating */}
@@ -197,17 +200,17 @@ const MessageListComponent: FC<MessageListProps> = ({
 
                     {/* 2. Work Content (Live or History) */}
                     {(() => {
-                      if (!(msg.work || (isActiveGeneration && activeWork))) return null;
-                        
+                      if (!messageWork) return null;
+                          
                       // Allow regeneration only for the latest assistant turn that was not manually stopped.
-                      const canRegenerate = isLatestRegenerableMessage(messages, msg.id) && !msg.work?.isStopped;
+                      const canRegenerate = isLatestRegenerableMessage(messages, msg.id) && !(msg.work?.isStopped || messageWork.isStopped);
                       const handleRegenerate = canRegenerate 
                         ? (phase: string, agentIndex: number) => onRegenerate(msg.id, phase as StepId, agentIndex)
                         : undefined;
                       
                       return (
                         <ShowWork
-                          work={msg.work ?? activeWork ?? EMPTY_WORK}
+                          work={messageWork ?? EMPTY_WORK}
                           messageId={msg.id}
                           isLive={isActiveGeneration}
                           isPaused={isPaused}
@@ -219,7 +222,7 @@ const MessageListComponent: FC<MessageListProps> = ({
                   </>
                 )}
                 
-                {msg.sources && <Sources sources={msg.sources} />}
+                {displaySources && <Sources sources={displaySources} />}
               </div>
             </div>
           );

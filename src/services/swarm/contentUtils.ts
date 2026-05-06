@@ -1,5 +1,6 @@
 import { type Content, type Part } from '@google/genai';
 import { type Message } from '@/types';
+import { getHistoryParts } from '@/utils/chat/messageProjection';
 
 export const prepareGeminiContent = (
   history: Message[],
@@ -9,7 +10,7 @@ export const prepareGeminiContent = (
 ): { history: Content[], baseApiParts: Part[] } => {
   const mainChatHistory: Content[] = history.map(msg => ({
     role: msg.role,
-    parts: msg.parts,
+    parts: getHistoryParts(msg),
   }));
 
   const baseApiParts: Part[] = [];

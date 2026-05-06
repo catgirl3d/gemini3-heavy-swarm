@@ -1,12 +1,11 @@
 import { type AiProvider } from '@/types/ai-provider';
-import { type AppSettings, type Work, type AgentState, type Message, type Source, type TokenUsage } from '@/types';
+import { type AppSettings, type Work, type AgentState, type Message, type TokenUsage } from '@/types';
 import { StepRunner } from '@/services/swarm/StepRunner';
 import { InitialStep } from '@/services/swarm/steps/InitialStep';
 import { RefinementStep } from '@/services/swarm/steps/RefinementStep';
 import { SynthesisStep } from '@/services/swarm/steps/SynthesisStep';
 import { type StepContext, type StepDescriptor, STEPS, type StepId } from '@/types/steps';
 import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
-import { getStepResults, getSynthesisErrorState, getSynthesisSources } from '@/utils/swarm/workHelpers';
 import { Logger } from '@shared/utils/logger';
 
 const getLogger = (settings: AppSettings) => new Logger('SwarmOrchestrator', settings.debugMode);
@@ -41,7 +40,7 @@ export class SwarmOrchestrator {
     onStatusUpdate?: (status: string) => void,
     onSynthesisJump?: () => void,
     existingWork?: Work
-  ): Promise<{ text: string; sources?: Source[]; work: Work; paused: boolean }> {
+  ): Promise<{ work: Work; paused: boolean }> {
     
     // Provider handles its own settings adjustments
     const effectiveSettings = this.provider.getEffectiveSettings(settings);
@@ -86,12 +85,7 @@ export class SwarmOrchestrator {
     const runner = new StepRunner(this.steps);
     const { work: finalWork, paused } = await runner.run(context, onPause, onStatusUpdate);
 
-    const synthesisError = getSynthesisErrorState(finalWork);
-    const finalText = synthesisError ? '' : (getStepResults(finalWork, STEPS.SYNTHESIS)[0] || '');
-    
     return {
-      text: finalText,
-      sources: synthesisError ? undefined : getSynthesisSources(finalWork),
       work: finalWork,
       paused,
     };
@@ -114,7 +108,7 @@ export class SwarmOrchestrator {
     onUpdate: (text: string, isFirstChunk: boolean, thought?: string, usage?: TokenUsage | null) => void,
     signal: AbortSignal,
     onSynthesisJump?: () => void
-  ): Promise<{ text: string; sources?: Source[]; work: Work }> {
+  ): Promise<{ work: Work }> {
     
     // Provider handles its own settings adjustments
     const effectiveSettings = this.provider.getEffectiveSettings(settings);
@@ -145,6 +139,6 @@ export class SwarmOrchestrator {
         messageId,
       };
 
-    return step.regenerate(context, agentIndex, agentStates) as Promise<{ text: string; sources?: Source[]; work: Work }>;
+    return step.regenerate(context, agentIndex, agentStates) as Promise<{ work: Work }>;
   }
 }

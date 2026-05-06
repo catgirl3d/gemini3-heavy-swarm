@@ -59,6 +59,7 @@ const createBaseWork = (overrides: Partial<Work> = {}): Work => ({
     [`${STEPS.REFINEMENT}_thoughts`]: ['old critic thought 0', 'old critic thought 1'],
     [`${STEPS.REFINEMENT}_usage`]: [createUsage(30), createUsage(40)],
     [STEPS.SYNTHESIS]: ['old final answer'],
+    [`${STEPS.SYNTHESIS}_sources`]: [{ uri: 'https://old-source.test', title: 'Old Source' }],
   },
   stepMetadata: [
     { id: STEPS.INITIAL, status: 'done', label: 'Initial Step' },
@@ -125,9 +126,8 @@ const createConversation = (work: Work = createBaseWork()): Message[] => [
   {
     id: 'model-1',
     role: 'model',
-    parts: [{ text: 'old final answer' }],
+    parts: [{ text: '' }],
     work,
-    sources: [{ uri: 'https://old-source.test', title: 'Old Source' }],
   },
 ];
 
@@ -426,9 +426,8 @@ describe('useSwarmRegeneration', () => {
     const orphanedMessages: Message[] = [{
       id: 'model-1',
       role: 'model',
-      parts: [{ text: 'old final answer' }],
+      parts: [{ text: '' }],
       work: createBaseWork(),
-      sources: [{ uri: 'https://old-source.test', title: 'Old Source' }],
     }];
     const regenerateResponse = vi.fn();
     const { result, messagesState } = renderRegeneration({
@@ -500,7 +499,7 @@ describe('useSwarmRegeneration', () => {
     });
   });
 
-  it('syncs the final regenerated work, metadata, sources, and agent snapshot back to the target message', async () => {
+  it('syncs the final regenerated work, metadata, work-owned sources, and agent snapshot back to the target message', async () => {
     const source: Source = { uri: 'https://new-source.test', title: 'New Source' };
     const finalUsage = createUsage(123);
     const snapshotAgents = [
@@ -549,14 +548,49 @@ describe('useSwarmRegeneration', () => {
     });
     expect(updatedWork.results?.[STEPS.REFINEMENT]).toEqual(['old critic 0', 'old critic 1']);
     expect(updatedWork.results?.[STEPS.SYNTHESIS]).toEqual(['old final answer']);
+    expect(updatedWork.results?.[`${STEPS.SYNTHESIS}_sources`]).toEqual([{ uri: 'https://old-source.test', title: 'Old Source' }]);
     expect(updatedWork.agentStates).toEqual(snapshotAgents.slice(0, 2));
-    expect(updatedMessage.sources).toEqual([{ uri: 'https://old-source.test', title: 'Old Source' }]);
+    expect(updatedMessage).not.toHaveProperty('sources');
     expect(useAgentStore.getState()).toMatchObject({
       isLoading: false,
       isPaused: false,
       activeSessionMessageId: undefined,
     });
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
+  });
+
+  it('streams regeneration through session work without mutating message snapshots on each chunk', async () => {
+    let resolveRegeneration: ((value: { work: Work }) => void) | undefined;
+    const finalWork = createRegeneratedWork({
+      agentIndex: 1,
+      text: 'new agent 1',
+      thought: 'new thought 1',
+      usage: createUsage(123),
+    });
+    const regenerateResponse = vi.fn((...args: any[]) => {
+      const { onUpdate } = toRegenerateResponseCall(args);
+      onUpdate('streamed agent 1', true, 'stream thought 1', createUsage(77));
+
+      return new Promise<{ work: Work }>(resolve => {
+        resolveRegeneration = resolve;
+      });
+    });
+    const { result, messagesState } = renderRegeneration({ regenerateResponse });
+    let regenerationPromise: Promise<void>;
+
+    act(() => {
+      regenerationPromise = result.current.regenerateAgentResponse('model-1', STEPS.INITIAL, 1);
+    });
+
+    expect(messagesState.setMessages).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveRegeneration?.({ work: finalWork });
+      await regenerationPromise;
+    });
+
+    expect(messagesState.setMessages).toHaveBeenCalledTimes(1);
+    expect(messagesState.messages[1].work?.results?.[STEPS.INITIAL]).toEqual(['old agent 0', 'new agent 1']);
   });
 
   it('marks synthesis stale after critic regeneration on a completed message without enabling global continue', async () => {
@@ -785,7 +819,7 @@ describe('useSwarmRegeneration', () => {
     ]));
   });
 
-  it('preserves existing sources when regeneration returns no replacement sources', async () => {
+  it('preserves existing work-owned sources when regeneration returns no replacement sources', async () => {
     const regenerateResponse = vi.fn(async () => {
       return {
         text: 'new agent 1',
@@ -798,7 +832,10 @@ describe('useSwarmRegeneration', () => {
       await result.current.regenerateAgentResponse('model-1', STEPS.INITIAL, 1);
     });
 
-    expect(messagesState.messages[1].sources).toEqual([{ uri: 'https://old-source.test', title: 'Old Source' }]);
+    expect(messagesState.messages[1]).not.toHaveProperty('sources');
+    expect(messagesState.messages[1].work?.results?.[`${STEPS.SYNTHESIS}_sources`]).toEqual([
+      { uri: 'https://old-source.test', title: 'Old Source' },
+    ]);
   });
 
   it('surfaces a friendly error when the orchestrator is unavailable', async () => {
@@ -877,7 +914,9 @@ describe('useSwarmRegeneration', () => {
   it('restores the original synthesis snapshot after an aborted synthesis regeneration', async () => {
     const originalConversation = createConversation();
     const regenerateResponse = vi.fn(async (...args: any[]) => {
-      const { onUpdate } = toRegenerateResponseCall(args);
+      const { onUpdate, workContext } = toRegenerateResponseCall(args);
+      workContext.results ??= {};
+      workContext.results[STEPS.SYNTHESIS] = ['mutated aborted answer'];
       onUpdate('partial regenerated answer', true, 'reasoning', createUsage(77));
       throw new DOMException('The operation was aborted.', 'AbortError');
     });
@@ -945,7 +984,7 @@ describe('useSwarmRegeneration', () => {
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
   });
 
-  it('clears stale message.sources when synthesis regeneration fails', async () => {
+  it('clears stale work-owned synthesis sources when synthesis regeneration fails', async () => {
     const failure = new Error('network failed');
     const regenerateResponse = vi.fn(async (...args: any[]) => {
       const { workContext } = toRegenerateResponseCall(args);
@@ -963,7 +1002,7 @@ describe('useSwarmRegeneration', () => {
       await result.current.regenerateAgentResponse('model-1', STEPS.SYNTHESIS, 0);
     });
 
-    expect(messagesState.messages[1].sources).toBeUndefined();
+    expect(messagesState.messages[1]).not.toHaveProperty('sources');
     expect(messagesState.messages[1].work?.results?.[`${STEPS.SYNTHESIS}_sources`]).toBeUndefined();
     expect(messagesState.messages[1].work?.results?.[`${STEPS.SYNTHESIS}_error`]).toEqual({
       flag: true,

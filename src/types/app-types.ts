@@ -243,6 +243,11 @@ export interface Work {
   /**
    * SNAPSHOT ONLY: content of message work.
    * `agentStates` here creates a historical record. Live updates use global state.
+   *
+   * Work owns synthesis payloads:
+   * - final text: results[STEPS.SYNTHESIS]?.[0]
+   * - sources: results.synthesis_step_sources
+   * - error state: results.synthesis_step_error
    */
   // Generic storage for step results. Keys match StepId (e.g., 'initial_step', 'refinement_step', 'synthesis_step')
   results?: {
@@ -291,9 +296,13 @@ export interface Work {
 export interface Message {
   id: string;
   role: 'user' | 'model';
+  /**
+   * User turns store their submitted text here. Model turns keep only a structural
+   * placeholder; final synthesis text is owned by message.work.results.
+   */
   parts: { text: string }[];
   image?: string;
-  sources?: Source[];
+  /** Historical snapshot used by UI/history projections. Live model turns use agentStore session work. */
   work?: Work;
 }
 

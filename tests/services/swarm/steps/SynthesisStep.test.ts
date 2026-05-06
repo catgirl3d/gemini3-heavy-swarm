@@ -255,9 +255,7 @@ let updateSessionRuntimeMock: any;
 
   it('should call runSynthesisRegeneration during regeneration', async () => {
     const runRegenSpy = vi.spyOn(step as any, 'runSynthesisRegeneration').mockResolvedValue({ 
-      text: 'regen result', 
       work: mockContext.work,
-      sources: []
     });
     const agentStates: any[] = [];
     
@@ -265,14 +263,12 @@ let updateSessionRuntimeMock: any;
     
     expect(runRegenSpy).toHaveBeenCalled();
     expect(runRegenSpy.mock.calls[0][3]).toEqual([]);
-    expect(result.text).toBe('regen result');
+    expect(result).toEqual({ work: mockContext.work });
   });
 
   it('should pass search tools during regeneration when synthesis search is enabled', async () => {
     const runRegenSpy = vi.spyOn(step as any, 'runSynthesisRegeneration').mockResolvedValue({
-      text: 'regen search result',
       work: mockContext.work,
-      sources: []
     });
     const context = createContext({
       settings: { useSearchInSynthesis: true }
@@ -306,10 +302,7 @@ let updateSessionRuntimeMock: any;
       [{ id: 'synth', name: 'Synthesizer', status: 'done', label: 'Done', messageId: 'msg-123' }],
     );
 
-    expect(result).toMatchObject({
-      text: 'final answer',
-      sources: [{ uri: 'https://source.test', title: 'Source' }],
-    });
+    expect(result).toEqual({ work: context.work });
     expect(context.work.results[STEPS.SYNTHESIS]).toEqual(['final answer']);
     expect(context.work.results[`${STEPS.SYNTHESIS}_sources`]).toEqual([
       { uri: 'https://source.test', title: 'Source' },

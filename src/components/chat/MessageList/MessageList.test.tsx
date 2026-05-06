@@ -165,8 +165,13 @@ describe('MessageList', () => {
       {
         id: 'model-1',
         role: 'model',
-        parts: [{ text: 'Final answer' }],
-        sources: [{ title: 'Source One', uri: 'https://example.com/source' }],
+        parts: [{ text: '' }],
+        work: {
+          results: {
+            [STEPS.SYNTHESIS]: ['Final answer'],
+            [`${STEPS.SYNTHESIS}_sources`]: [{ title: 'Source One', uri: 'https://example.com/source' }],
+          },
+        },
       },
     ];
 
@@ -216,7 +221,12 @@ describe('MessageList', () => {
             {
               id: 'model-1',
               role: 'model',
-              parts: [{ text: 'Final answer' }],
+              parts: [{ text: '' }],
+              work: {
+                results: {
+                  [STEPS.SYNTHESIS]: ['Final answer'],
+                },
+              },
             },
           ],
         })}
@@ -286,6 +296,45 @@ describe('MessageList', () => {
     );
 
     expect(screen.getByTestId('show-work')).toHaveTextContent('show-work:model-1:history:regen');
+  });
+
+  it('keeps the active model work card visible on error when live session work already has drafts', () => {
+    const messages: Message[] = [
+      {
+        id: 'user-1',
+        role: 'user',
+        parts: [{ text: 'Start' }],
+      },
+      {
+        id: 'model-1',
+        role: 'model',
+        parts: [{ text: '' }],
+      },
+    ];
+    mocks.store.activeSessionMessageId = 'model-1';
+    mocks.store.sessionsByMessageId = {
+      'model-1': {
+        work: {
+          results: {
+            [STEPS.INITIAL]: ['Live draft already generated'],
+          },
+          agentStates: [createAgentState({ messageId: 'model-1', status: 'working', label: 'Drafting...' })],
+        },
+        agentStates: [createAgentState({ messageId: 'model-1', status: 'working', label: 'Drafting...' })],
+      },
+    };
+
+    render(
+      <MessageList
+        {...createMessageListProps({
+          messages,
+          isLoading: true,
+          error: 'Synthesis failed',
+        })}
+      />
+    );
+
+    expect(screen.getByTestId('show-work')).toHaveTextContent('show-work:model-1:live:regen');
   });
 
   it('renders inline live progress for the active model message and disables regeneration for stopped work', () => {

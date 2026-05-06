@@ -216,11 +216,17 @@ describe('useSwarmOrchestration', () => {
     expect(mainAbort.ref.current).toBeNull();
   });
 
-  it('sends a new prompt, streams into the model message, and cleans the abort registry on success', async () => {
+  it('sends a new prompt, keeps the model message as a placeholder, and saves final work on success', async () => {
     mocks.generateUUID.mockReturnValueOnce('model-1').mockReturnValueOnce('user-1');
     const imageFile = new File(['image'], 'image.png', { type: 'image/png' });
     const sources: Source[] = [{ uri: 'https://source.test', title: 'Source' }];
-    const finalWork = createWork();
+    const baseFinalWork = createWork();
+    const finalWork = createWork({
+      results: {
+        ...baseFinalWork.results,
+        [`${STEPS.SYNTHESIS}_sources`]: sources,
+      },
+    });
     const runSwarm = vi.fn(async (...args: any[]) => {
       const { messageId, onMessageUpdate } = toRunSwarmCall(args);
 
@@ -247,9 +253,9 @@ describe('useSwarmOrchestration', () => {
     expect(messagesState.messages[1]).toMatchObject({
       id: 'model-1',
       role: 'model',
-      parts: [{ text: 'streamed answer' }],
-      sources,
+      parts: [{ text: '' }],
     });
+    expect(messagesState.messages[1]).not.toHaveProperty('sources');
     expect(messagesState.messages[1].work).toMatchObject({
       results: finalWork.results,
       agentStates: [
@@ -482,9 +488,9 @@ describe('useSwarmOrchestration', () => {
     });
     const initialMessages: Message[] = [
       { id: 'older-user', role: 'user', parts: [{ text: 'older question' }] },
-      { id: 'older-model', role: 'model', parts: [{ text: 'older answer' }] },
+      { id: 'older-model', role: 'model', parts: [{ text: '' }], work: createWork({ results: { [STEPS.SYNTHESIS]: ['older answer'] } }) },
       { id: 'resume-user', role: 'user', parts: [{ text: 'resume' }, { text: 'please' }], image: 'image-url' },
-      { id: 'resume-model', role: 'model', parts: [{ text: 'partial answer' }], work: existingWork },
+      { id: 'resume-model', role: 'model', parts: [{ text: '' }], work: existingWork },
     ];
     const resumedWork = createWork();
     const runSwarm = vi.fn(async (...args: any[]) => {
@@ -508,8 +514,9 @@ describe('useSwarmOrchestration', () => {
     expect(runSwarmCall.existingWork).toMatchObject(existingWork);
     expect(messagesState.messages[3]).toMatchObject({
       id: 'resume-model',
-      parts: [{ text: 'resumed stream' }],
+      parts: [{ text: '' }],
       work: expect.objectContaining({
+        results: resumedWork.results,
         agentStates: [expect.objectContaining({ id: 'old-agent', messageId: 'resume-model' })],
       }),
     });
@@ -567,7 +574,7 @@ describe('useSwarmOrchestration', () => {
     expect(messagesState.messages[1].work?.agentStates).toEqual(liveAgents);
   });
 
-  it('does not clear resumed visible text when synthesis emits a thought-only chunk', async () => {
+  it('keeps resumed synthesis text in work instead of message parts', async () => {
     const existingWork = createWork({
       stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'pending' }],
       results: {
@@ -578,7 +585,7 @@ describe('useSwarmOrchestration', () => {
     });
     const initialMessages: Message[] = [
       { id: 'user-1', role: 'user', parts: [{ text: 'continue' }] },
-      { id: 'model-1', role: 'model', parts: [{ text: 'partial answer' }], work: existingWork },
+      { id: 'model-1', role: 'model', parts: [{ text: '' }], work: existingWork },
     ];
     const runSwarm = vi.fn(async (...args: any[]) => {
       const { onMessageUpdate } = toRunSwarmCall(args);
@@ -591,7 +598,8 @@ describe('useSwarmOrchestration', () => {
       await result.current.continueGeneration();
     });
 
-    expect(messagesState.messages[1].parts[0].text).toBe('partial answer');
+    expect(messagesState.messages[1].parts[0].text).toBe('');
+    expect(messagesState.messages[1].work?.results?.[STEPS.SYNTHESIS]).toEqual(['final answer']);
   });
 
   it('reuses lastInput.imageFile during resume only when the image matches the triggering user message', async () => {
@@ -741,7 +749,7 @@ describe('useSwarmOrchestration', () => {
     expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
   });
 
-  it('pushes a model message from streaming updates when resuming a message id that is not in history', async () => {
+  it('adds a placeholder model message when resuming a message id that is not in history', async () => {
     const existingWork = createWork({
       stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'pending' }],
       agentStates: [],
@@ -764,7 +772,12 @@ describe('useSwarmOrchestration', () => {
     expect(resumeCall.history).toEqual(initialMessages);
     expect(messagesState.messages).toEqual([
       initialMessages[0],
-      expect.objectContaining({ id: 'missing-resume-id', role: 'model', parts: [{ text: 'streamed after missing resume id' }] }),
+      expect.objectContaining({
+        id: 'missing-resume-id',
+        role: 'model',
+        parts: [{ text: '' }],
+        work: expect.objectContaining({ results: createWork().results }),
+      }),
     ]);
   });
 
@@ -883,7 +896,7 @@ describe('useSwarmOrchestration', () => {
     expect(mainAbort.ref.current).toBeNull();
   });
 
-  it('clears stale message.sources when resumed synthesis fails', async () => {
+  it('clears stale work-owned synthesis sources when resumed synthesis fails', async () => {
     const staleSources: Source[] = [{ uri: 'https://stale-source.test', title: 'Stale Source' }];
     const existingWork = createWork({
       results: {
@@ -896,7 +909,7 @@ describe('useSwarmOrchestration', () => {
     });
     const initialMessages: Message[] = [
       { id: 'user-1', role: 'user', parts: [{ text: 'hello' }] },
-      { id: 'model-1', role: 'model', parts: [{ text: 'old final answer' }], work: existingWork, sources: staleSources },
+      { id: 'model-1', role: 'model', parts: [{ text: '' }], work: existingWork },
     ];
     const failure = new Error('network failed');
     const failedWork = createWork({
@@ -918,7 +931,8 @@ describe('useSwarmOrchestration', () => {
       await result.current.sendMessage('hello', null, null, false, 'model-1', existingWork);
     });
 
-    expect(messagesState.messages[1].sources).toBeUndefined();
+    expect(messagesState.messages[1]).not.toHaveProperty('sources');
+    expect(messagesState.messages[1].work?.results?.[`${STEPS.SYNTHESIS}_sources`]).toBeUndefined();
     expect(messagesState.messages[1].work?.results?.[`${STEPS.SYNTHESIS}_error`]).toEqual({
       flag: true,
       message: 'Friendly failure',
