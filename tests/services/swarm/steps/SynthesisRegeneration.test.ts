@@ -139,14 +139,14 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     vi.useFakeTimers();
 
     let capturedOnChunk: any;
+    let resolveStream: ((value: any) => void) | undefined;
+    const finalUsage = { totalTokens: 100 };
     
     // Mock runModelStream to capture onChunk and simulate streaming
     (step as any).runModelStream = vi.fn().mockImplementation((config: any, callbacks: any) => {
       capturedOnChunk = callbacks.onChunk;
-      return Promise.resolve({ 
-        text: 'New regenerated text', 
-        groundingChunks: [],
-        usage: { totalTokens: 100 }
+      return new Promise(resolve => {
+        resolveStream = resolve;
       });
     });
 
@@ -202,7 +202,15 @@ describe('Synthesis Regeneration - Integration Tests', () => {
       })
     );
 
+    resolveStream?.({
+      text: 'New regenerated text',
+      groundingChunks: [],
+      usage: finalUsage,
+    });
+
     await regenPromise;
+    const callCountBeforeBufferWindow = updateWorkResultSpy.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(100);
 
     // Verify final work.results structure is object, not array
     expect(mockContext.work.results.synthesis_step).toEqual(
@@ -211,6 +219,14 @@ describe('Synthesis Regeneration - Integration Tests', () => {
       })
     );
     expect(Array.isArray(mockContext.work.results.synthesis_step)).toBe(false);
+    expect(mockContext.work.results[`${STEPS.SYNTHESIS}_usage`]).toEqual(finalUsage);
+    expect(Array.isArray(mockContext.work.results[`${STEPS.SYNTHESIS}_usage`])).toBe(false);
+    expect(updateWorkResultSpy.mock.calls).toHaveLength(callCountBeforeBufferWindow);
+    expect(
+      updateWorkResultSpy.mock.calls
+        .filter(([, stepId]) => stepId === STEPS.SYNTHESIS)
+        .map(([, , agentIndex]) => agentIndex)
+    ).not.toContain(0);
   });
 
   it('should maintain object structure even when regenerating from error state', async () => {

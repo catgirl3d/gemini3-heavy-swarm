@@ -905,8 +905,16 @@ export abstract class BaseStep implements StepDescriptor {
     // Set initial 'working' status - Step manages its own lifecycle
     updateAgentStatus(this.id, agentIndex, 'working', messageId);
 
+    const storageIndex = (this.id === STEPS.SYNTHESIS) ? -1 : agentIndex;
+    this.ensureResults(work);
+
     // Clear previous usage to avoid displaying stale data during regeneration
-    this.ensureStepUsage(work, this.id, settings.numAgents)[agentIndex] = null;
+    const usageKey = `${this.id}_usage`;
+    if (storageIndex === -1) {
+      work.results[usageKey] = null;
+    } else {
+      this.ensureStepUsage(work, this.id, settings.numAgents)[storageIndex] = null;
+    }
     
     /**
      * STATE CLEARING FOR REGENERATION
@@ -918,7 +926,6 @@ export abstract class BaseStep implements StepDescriptor {
      * before the new first chunk arrives. Clearing text ensures cards stay open
      * until the new synthesis actually starts producing text.
      */
-    const storageIndex = (this.id === STEPS.SYNTHESIS) ? -1 : agentIndex;
     if (this.id === STEPS.SYNTHESIS) {
       // Maintain object structure {text, sources} but clear text
       const current = work.results[this.id];
@@ -985,10 +992,14 @@ export abstract class BaseStep implements StepDescriptor {
       // CRITICAL: Save final usage after streaming completes
       // This ensures token usage displays correctly for regenerated agents
       if (finalUsage) {
-        this.ensureStepUsage(work, this.id, settings.numAgents)[agentIndex] = finalUsage;
+        if (storageIndex === -1) {
+          work.results[usageKey] = finalUsage;
+        } else {
+          this.ensureStepUsage(work, this.id, settings.numAgents)[storageIndex] = finalUsage;
+        }
         
         // Also update the store atomically for immediate UI update
-        this.syncLiveWorkResult(context, this.id, agentIndex, { usage: finalUsage });
+        this.syncLiveWorkResult(context, this.id, storageIndex, { usage: finalUsage });
       }
       
       // Set final 'done' status after successful completion
