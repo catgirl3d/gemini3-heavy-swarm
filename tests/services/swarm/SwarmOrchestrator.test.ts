@@ -59,7 +59,7 @@ describe('SwarmOrchestrator Integrated', () => {
 
         const orchestrator = new SwarmOrchestrator(mockProvider, [step1, step2, step3]);
 
-        const result = await orchestrator.runSwarm(
+    const result = await orchestrator.runSwarm(
             { numAgents: 1, debugMode: false, devMode: false, pauseAfterInitial: false } as AppSettings,
             'input',
             null,
@@ -70,7 +70,9 @@ describe('SwarmOrchestrator Integrated', () => {
             new AbortController().signal
         );
 
-        expect(result.text).toBe('Final answer');
+        expect(result).not.toHaveProperty('text');
+        expect(result).not.toHaveProperty('sources');
+        expect(result.work.results?.[STEPS.SYNTHESIS]).toEqual(['Final answer']);
         expect(step1.execute).toHaveBeenCalled();
         expect(step3.execute).toHaveBeenCalled();
     });
@@ -111,7 +113,7 @@ describe('SwarmOrchestrator Integrated', () => {
             existingWork
         );
 
-        expect(result.text).toBe('Resumed final');
+        expect(result).not.toHaveProperty('text');
         expect(result.work).toMatchObject({
             results: {
                 [STEPS.INITIAL]: ['already complete'],
@@ -152,8 +154,8 @@ describe('SwarmOrchestrator Integrated', () => {
             new AbortController().signal
         );
 
-        expect(result.text).toBe('');
-        expect(result.sources).toBeUndefined();
+        expect(result).not.toHaveProperty('text');
+        expect(result).not.toHaveProperty('sources');
         expect(result.work.results?.[STEPS.SYNTHESIS]).toEqual(['partial failure text']);
         expect(result.work.results?.[`${STEPS.SYNTHESIS}_error`]).toEqual({ flag: true, message: 'failed' });
     });
@@ -181,8 +183,10 @@ describe('SwarmOrchestrator Integrated', () => {
             new AbortController().signal
         );
 
-        expect(result.text).toBe('Final with sources');
-        expect(result.sources).toBe(sources);
+        expect(result).not.toHaveProperty('text');
+        expect(result).not.toHaveProperty('sources');
+        expect(result.work.results?.[STEPS.SYNTHESIS]).toEqual(['Final with sources']);
+        expect(result.work.results?.[`${STEPS.SYNTHESIS}_sources`]).toEqual(sources);
     });
 
     it('should return empty text when no synthesis result exists', async () => {
@@ -203,8 +207,8 @@ describe('SwarmOrchestrator Integrated', () => {
             {}
         );
 
-        expect(result.text).toBe('');
-        expect(result.sources).toBeUndefined();
+        expect(result).not.toHaveProperty('text');
+        expect(result).not.toHaveProperty('sources');
     });
 
     it('should pass effective provider settings into step execution', async () => {
@@ -290,7 +294,6 @@ describe('SwarmOrchestrator Integrated', () => {
         expect(onSynthesisJump).toHaveBeenCalledTimes(1);
 
         expect(result).toMatchObject({
-            text: '',
             paused: true,
             work: expect.objectContaining({
                 results: expect.objectContaining({
@@ -304,7 +307,7 @@ describe('SwarmOrchestrator Integrated', () => {
         const step1 = mockStep(STEPS.INITIAL);
         const step2: StepDescriptor = {
             ...mockStep(STEPS.SYNTHESIS),
-            regenerate: vi.fn().mockResolvedValue({ text: 'Regen result', work: {} })
+            regenerate: vi.fn().mockResolvedValue({ work: { results: { [STEPS.SYNTHESIS]: ['Regen result'] } } })
         };
 
         const orchestrator = new SwarmOrchestrator(mockProvider, [step1, step2]);
@@ -324,7 +327,8 @@ describe('SwarmOrchestrator Integrated', () => {
             new AbortController().signal
         );
 
-        expect(result.text).toBe('Regen result');
+        expect(result).not.toHaveProperty('text');
+        expect(result.work.results?.[STEPS.SYNTHESIS]).toEqual(['Regen result']);
         expect(step2.regenerate).toHaveBeenCalled();
     });
 

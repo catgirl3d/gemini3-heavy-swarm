@@ -33,7 +33,7 @@ export class RefinementStep extends BaseStep {
     });
   }
 
-  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<{ text: string; work: Work }> {
+  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<{ work: Work }> {
     const { work } = context;
 
     const initialDrafts = getStepResults(work, STEPS.INITIAL);
@@ -44,7 +44,7 @@ export class RefinementStep extends BaseStep {
 
     const { settings } = context;
     const { systemInstruction, userTurn, mainChatHistory } = this.prepareRefinement(context, agentIndex, initialDrafts as string[]);
-    return this.runAgentRegeneration(
+    const result = await this.runAgentRegeneration(
       context,
       agentIndex,
       { systemInstruction, userTurn, mainChatHistory },
@@ -55,6 +55,8 @@ export class RefinementStep extends BaseStep {
       settings.simulateRefinementError,
       settings.simulateRefinementErrorAttempts
     );
+
+    return { work: result.work };
   }
 
   private prepareRefinement(context: StepContext, index: number, initialDrafts: string[]) {

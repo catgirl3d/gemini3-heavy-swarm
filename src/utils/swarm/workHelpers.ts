@@ -87,18 +87,28 @@ export function getStepUsage(work: Work, stepId: StepId): (TokenUsage | null)[] 
 }
 
 /**
+ * Safely extracts canonical synthesis text.
+ */
+export const getSynthesisText = (work: Work | undefined): string => {
+  if (!work) return '';
+
+  const synthesisText = getStepResults(work, STEPS.SYNTHESIS)[0];
+  return typeof synthesisText === 'string' ? synthesisText : '';
+};
+
+/**
  * Safely extracts synthesis sources sidecar.
  */
-export function getSynthesisSources(work: Work): Source[] | undefined {
-  const raw = work.results?.[`${STEPS.SYNTHESIS}_sources` as keyof NonNullable<Work['results']>];
+export function getSynthesisSources(work: Work | undefined): Source[] | undefined {
+  const raw = work?.results?.[`${STEPS.SYNTHESIS}_sources` as keyof NonNullable<Work['results']>];
   return Array.isArray(raw) ? raw as Source[] : undefined;
 }
 
 /**
  * Safely extracts synthesis error sidecar.
  */
-export function getSynthesisErrorState(work: Work): SynthesisErrorState | null {
-  const raw = work.results?.[`${STEPS.SYNTHESIS}_error` as keyof NonNullable<Work['results']>];
+export function getSynthesisErrorState(work: Work | undefined): SynthesisErrorState | null {
+  const raw = work?.results?.[`${STEPS.SYNTHESIS}_error` as keyof NonNullable<Work['results']>];
 
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw) || !('flag' in raw) || raw.flag !== true) {
     return null;

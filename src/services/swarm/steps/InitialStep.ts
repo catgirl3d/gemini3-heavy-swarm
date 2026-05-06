@@ -26,10 +26,10 @@ export class InitialStep extends BaseStep {
     });
   }
 
-  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<{ text: string; work: Work }> {
+  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<{ work: Work }> {
     const { settings } = context;
     const { systemInstruction, userTurn, mainChatHistory } = this.prepareInstruction(context, agentIndex);
-    return this.runAgentRegeneration(
+    const result = await this.runAgentRegeneration(
       context,
       agentIndex,
       { systemInstruction, userTurn, mainChatHistory },
@@ -40,6 +40,8 @@ export class InitialStep extends BaseStep {
       settings.simulateInitialError,
       settings.simulateInitialErrorAttempts
     );
+
+    return { work: result.work };
   }
 
   private prepareInstruction(context: StepContext, index: number) {

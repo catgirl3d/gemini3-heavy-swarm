@@ -1,6 +1,6 @@
 import { type Content, type Tool } from '@google/genai';
 import { type StepContext, type StepId, STEPS } from '@/types/steps';
-import { type AgentState, type SimulateError, type Source, type Work } from '@/types';
+import { type AgentState, type SimulateError, type Work } from '@/types';
 import { prepareGeminiContent } from '@/services/swarm/contentUtils';
 import { BaseStep } from './BaseStep';
 import { getStepResults, getStepThoughts, getSynthesisErrorState } from '@/utils/swarm/workHelpers';
@@ -248,7 +248,7 @@ export class SynthesisStep extends BaseStep {
     }
   }
 
-  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<{ text: string; sources?: Source[]; work: Work }> {
+  async regenerate(context: StepContext, agentIndex: number, agentStates: AgentState[]): Promise<{ work: Work }> {
     if (agentIndex !== 0) {
       throw new Error(`Synthesis regeneration only supports agent index 0, received ${agentIndex}`);
     }
@@ -273,7 +273,7 @@ export class SynthesisStep extends BaseStep {
     tools?: Tool[],
     simulateError?: SimulateError,
     simulateErrorAttempts?: number
-  ): Promise<{ text: string; sources?: Source[]; work: Work }> {
+  ): Promise<{ work: Work }> {
     const { systemInstruction, userTurn, mainChatHistory } = instruction;
 
     const result = await this.runAgentRegeneration(
@@ -298,7 +298,7 @@ export class SynthesisStep extends BaseStep {
     }
     result.work.results[`${STEPS.SYNTHESIS}_error`] = null;
 
-    return { text: result.text, sources, work: result.work };
+    return { work: result.work };
   }
 
   private prepareSynthesis(context: StepContext, refinedDrafts: string[]) {

@@ -3,11 +3,10 @@ import { type AppSettings, type Message, type AgentState, type Work } from '@/ty
 import { STEPS } from '@/types/steps';
 import { type SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { generateUUID } from '@/utils/common/uuid';
-import { updateMessageParts } from '@/utils/chat/messageHelpers';
 import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
 import { handleSendMessageError, hasPartialWorkResults } from '@/utils/swarm/errorHandling';
 import { handleSynthesisJump } from '@/utils/swarm/stepConstants';
-import { getStepMeta, getSynthesisErrorState } from '@/utils/swarm/workHelpers';
+import { getStepMeta } from '@/utils/swarm/workHelpers';
 import { type AbortControllerHook } from '@/hooks/network/useAbortController';
 import { Logger } from '@shared/utils/logger';
 import { useAgentStore } from '@/stores/agentStore';
@@ -167,6 +166,9 @@ export function useSwarmOrchestration({
       const msgIndex = historyForSwarm.findIndex(m => m.id === resumeMessageId);
       if (msgIndex !== -1) {
         historyForSwarm = historyForSwarm.slice(0, msgIndex);
+      } else {
+        const modelMessage: Message = { id: modelMessageId, role: 'model', parts: [{ text: '' }] };
+        setMessages([...historyForSwarm, modelMessage]);
       }
     } else if (!isRetry) {
       const userMessage: Message = { id: generateUUID(), role: 'user', parts: [{ text: userInput }], image: image || undefined };
@@ -229,40 +231,14 @@ export function useSwarmOrchestration({
     useAgentStore.getState().registerAbortController(controllerKey, controller);
 
     try {
-      const { sources, work, paused } = await orchestrator.runSwarm(
+      const { work, paused } = await orchestrator.runSwarm(
         settings,
         userInput,
         image,
         imageFile,
         historyForSwarm,
         modelMessageId,
-        (text, isFirstChunk, thought, usage) => {
-          // thought and usage are handled by individual steps/session work; only visible text belongs in message.parts.
-          // Message update callback - just update the message text
-          setMessages(prev => {
-            if (text === '' && (thought || usage)) {
-              return prev;
-            }
-
-            const newMessages = [...prev];
-            const targetIndex = newMessages.findIndex(m => m.id === modelMessageId);
-            
-            if (targetIndex !== -1) {
-              if (newMessages[targetIndex].parts?.[0]?.text === text) {
-                return prev;
-              }
-
-              newMessages[targetIndex] = updateMessageParts(newMessages[targetIndex], text);
-            } else {
-              if (text === '') {
-                return prev;
-              }
-
-              newMessages.push({ id: modelMessageId, role: 'model', parts: [{ text }] });
-            }
-            return newMessages;
-          });
-        },
+        () => undefined,
         signal,
         () => {
              useAgentStore.getState().updateSessionRuntime(modelMessageId, {
@@ -288,7 +264,6 @@ export function useSwarmOrchestration({
 
       logger.info('Swarm work COMPLETE', { 
         workKeys: work?.results ? Object.keys(work.results) : [],
-        sourcesCount: sources?.length,
         paused,
       });
 
@@ -303,7 +278,6 @@ export function useSwarmOrchestration({
         setMessages(prev => {
           const workSnapshot = useAgentStore.getState().snapshotSessionWork(modelMessageId) ?? work;
           const updated = updateTargetMessage(prev, prev.length - 1, STEPS.SYNTHESIS, {
-            sources: sources,
             work: workSnapshot,
           });
 
@@ -318,7 +292,6 @@ export function useSwarmOrchestration({
       setMessages(prev => {
         const workSnapshot = useAgentStore.getState().snapshotSessionWork(modelMessageId) ?? work;
         const updated = updateTargetMessage(prev, prev.length - 1, STEPS.SYNTHESIS, {
-          sources: sources,
           work: workSnapshot,
         });
         
@@ -348,7 +321,6 @@ export function useSwarmOrchestration({
       setMessages(prev => {
         const currentWork = workAtTimeOfError;
         const agentsForThisMessage = errorStates;
-        const shouldClearSources = !!currentWork && getSynthesisErrorState(currentWork) !== null;
         
         logger.debug('Saving error state agents to message.work', {
           messageId: modelMessageId,
@@ -358,7 +330,6 @@ export function useSwarmOrchestration({
         
         const updated = updateTargetMessage(prev, prev.length - 1, STEPS.SYNTHESIS, {
           work: currentWork ?? { agentStates: agentsForThisMessage },
-          ...(shouldClearSources ? { sources: undefined } : {}),
         });
         
         return updated ?? prev;
@@ -420,7 +391,10 @@ export function useSwarmOrchestration({
       // The step execution logic checks exiting work to decide if it's a retry
       const messages = messagesRef.current || [];
       const lastMsg = messages[messages.length - 1];
-      const failedWork = lastMsg?.role === 'model' ? lastMsg.work : undefined;
+      const store = useAgentStore.getState();
+      const failedWork = lastMsg?.role === 'model'
+        ? store.snapshotSessionWork(lastMsg.id) ?? lastMsg.work
+        : undefined;
 
       sendMessage(lastInput.text, lastInput.image, lastInput.imageFile, true, undefined, failedWork).catch((error: unknown) => {
         logger.error('Unhandled retry failure:', error);

@@ -4,8 +4,6 @@ import { type StepId, STEPS } from '@/types/steps';
 import { Logger } from '@shared/utils/logger';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
 import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
-
-import { calculateUpdatedStateForRegeneration } from '@/utils/swarm/regenerationHelpers';
 import {
   cloneWork,
   getStepMeta,
@@ -29,7 +27,6 @@ const cloneMessageSnapshot = (message: Message): Message => {
   return {
     ...message,
     parts: message.parts.map(part => ({ ...part })),
-    sources: message.sources ? [...message.sources] : undefined,
     work: message.work ? cloneWork(message.work) : undefined,
   };
 };
@@ -189,6 +186,7 @@ export function useSwarmRegeneration({
     const baseWork = (hasLiveSessionWork ? liveSession?.work : undefined)
       || targetMessage?.work;
     const workContext = baseWork ? cloneWork(baseWork) : undefined;
+    const originalWorkSnapshot = workContext ? cloneWork(workContext) : undefined;
     const wasCompletedMessage = getStepMeta(baseWork, STEPS.SYNTHESIS)?.status === 'done';
     const seededAgentStates = (liveSession?.agentStates ?? workContext?.agentStates ?? [])
       .filter(agent => agent.messageId === messageId);
@@ -258,7 +256,7 @@ export function useSwarmRegeneration({
         throw new Error('SwarmOrchestrator not initialized');
       }
 
-      const result = await orchestratorRef.current.regenerateResponse(
+      const { work: regeneratedWork } = await orchestratorRef.current.regenerateResponse(
         settings,
         userInput,
         image,
@@ -269,23 +267,7 @@ export function useSwarmRegeneration({
         stepId,
         workContext,
         useAgentStore.getState().sessionsByMessageId[messageId]?.agentStates ?? [],
-        (text, isFirstChunk, thought, usage) => {
-          setMessages(prev => {
-            return calculateUpdatedStateForRegeneration(
-              prev,
-              messageIndex,
-              stepId,
-              agentIndex,
-              workContext,
-              text,
-              settings,
-              isFirstChunk,
-              messageId,
-              thought,
-              usage
-            );
-          });
-        },
+        () => undefined,
         controller.signal,
         () => {
           // Pass synthesis jump callback - invoked by SynthesisStep when it starts streaming
@@ -297,7 +279,7 @@ export function useSwarmRegeneration({
       );
 
       // Handle final result
-      const mergedWork = mergeRegeneratedStepWork(workContext, result.work, stepId, agentIndex);
+      const mergedWork = mergeRegeneratedStepWork(workContext, regeneratedWork, stepId, agentIndex);
       store.replaceSessionWork(messageId, mergedWork);
       if (stepId !== STEPS.SYNTHESIS) {
         store.markDownstreamStale(messageId, stepId);
@@ -316,7 +298,6 @@ export function useSwarmRegeneration({
           const updatedMessage: Message = {
               ...existingMessage,
               work: sessionSnapshot ?? fallbackMessageWork,
-              sources: stepId === STEPS.SYNTHESIS ? result.sources : existingMessage.sources
           };
           
           const newMessages = [...prev];
@@ -359,7 +340,11 @@ export function useSwarmRegeneration({
       ) {
         regenLogger.info('Regeneration aborted by user - cleanup', { stepId, agentIndex });
 
-        store.replaceSessionWork(messageId, workContext);
+        if (originalWorkSnapshot) {
+          store.replaceSessionWork(messageId, originalWorkSnapshot);
+        } else {
+          store.replaceSessionWork(messageId, workContext);
+        }
         store.replaceSessionAgents(messageId, previousAgentStates);
         store.updateSessionRuntime(messageId, previousSessionRuntime);
 
@@ -408,7 +393,6 @@ export function useSwarmRegeneration({
         // The error is already saved in work.results[stepId] and will be shown in the "Show Work" card.
         const updates: Partial<Message> = {
           work: updatedWork,
-          ...(stepId === STEPS.SYNTHESIS ? { sources: undefined } : {}),
         };
 
         const updated = updateTargetMessage(prev, messageIndex, stepId, updates, { workContext });
