@@ -241,8 +241,8 @@ export type DebugInfo = {
 
 export interface Work {
   /**
-   * SNAPSHOT ONLY: content of message work.
-   * `agentStates` here creates a historical record. Live updates use global state.
+   * Work payload for a swarm run. When stored on Message.work it is a committed
+   * historical snapshot; active model turns render from SwarmSession.work instead.
    *
    * Work owns synthesis payloads:
    * - final text: results[STEPS.SYNTHESIS]?.[0]
@@ -281,8 +281,8 @@ export interface Work {
   agentNames?: string[];
   criticNames?: string[];
   /** 
-   * SNAPSHOT ONLY: Final agent states after a step/regeneration completes.
-   * Do NOT use this for live status updates in the UI (use global agentStates instead).
+   * SNAPSHOT ONLY: agent states committed into Message.work for history rendering.
+   * Live status is owned by SwarmSession.agentStates.
    */
   agentStates?: AgentState[];
   /** 
@@ -298,11 +298,12 @@ export interface Message {
   role: 'user' | 'model';
   /**
    * User turns store their submitted text here. Model turns keep only a structural
-   * placeholder; final synthesis text is owned by message.work.results.
+   * placeholder; synthesis text comes from active session work or the committed
+   * message.work snapshot.
    */
   parts: { text: string }[];
   image?: string;
-  /** Historical snapshot used by UI/history projections. Live model turns use agentStore session work. */
+  /** Stable snapshot committed from a SwarmSession for history rendering and explicit hydration only. */
   work?: Work;
 }
 

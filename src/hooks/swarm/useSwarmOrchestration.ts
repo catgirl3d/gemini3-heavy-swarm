@@ -1,15 +1,16 @@
 import { useState, type RefObject, type Dispatch, type SetStateAction } from 'react';
+import { flushSync } from 'react-dom';
 import { type AppSettings, type Message, type AgentState, type Work } from '@/types';
 import { STEPS } from '@/types/steps';
 import { type SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { generateUUID } from '@/utils/common/uuid';
-import { updateTargetMessage } from '@/utils/chat/messageUpdaters';
 import { handleSendMessageError, hasPartialWorkResults } from '@/utils/swarm/errorHandling';
 import { handleSynthesisJump } from '@/utils/swarm/stepConstants';
 import { getStepMeta } from '@/utils/swarm/workHelpers';
 import { type AbortControllerHook } from '@/hooks/network/useAbortController';
 import { Logger } from '@shared/utils/logger';
 import { useAgentStore } from '@/stores/agentStore';
+import { commitSessionSnapshotToMessage, resolveOperationalSessionWork } from '@/utils/swarm/sessionSnapshots';
 
 const logger = new Logger('Orchestration');
 
@@ -20,6 +21,13 @@ export interface OrchestrationDependencies {
   mainAbort: AbortControllerHook;
   orchestratorRef: RefObject<SwarmOrchestrator>;
 }
+
+type SendMessageOptions = {
+  isRetry?: boolean;
+  resumeMessageId?: string;
+  existingWork?: Work;
+  forcedMessageId?: string;
+};
 
 
 export function useSwarmOrchestration({
@@ -38,20 +46,28 @@ export function useSwarmOrchestration({
     // with already-completed cards when we restart from a paused step boundary.
     const currentMessages = messagesRef.current || [];
     const lastModelMessage = [...currentMessages].reverse().find(m => m.role === 'model');
-    const store = useAgentStore.getState();
-    const latestWork = lastModelMessage
-      ? store.snapshotSessionWork(lastModelMessage.id) ?? lastModelMessage.work
+    const resolvedSession = lastModelMessage
+      ? resolveOperationalSessionWork(lastModelMessage, 'resume', {
+          status: 'paused',
+          isLoading: true,
+          isPaused: true,
+          loadingStatus: 'Paused. Waiting for user confirmation...',
+          error: null,
+        })
       : undefined;
     
-    if (!lastModelMessage || !latestWork) {
+    if (!lastModelMessage || !resolvedSession) {
       logger.warn('Cannot resume: No model message or work found');
       return;
     }
 
-    const isComplete = getStepMeta(latestWork, STEPS.SYNTHESIS)?.status === 'done';
+    const isComplete = getStepMeta(resolvedSession.work, STEPS.SYNTHESIS)?.status === 'done';
     
     if (isComplete) {
       logger.info('Cannot resume: Swarm already complete');
+      if (resolvedSession.source === 'hydrated-snapshot') {
+        useAgentStore.getState().clearSession(resolvedSession.sessionMessageId);
+      }
       return;
     }
 
@@ -61,6 +77,9 @@ export function useSwarmOrchestration({
     
     if (!triggeringUserMessage) {
       logger.warn('Cannot resume: Triggering user message not found');
+      if (resolvedSession.source === 'hydrated-snapshot') {
+        useAgentStore.getState().clearSession(resolvedSession.sessionMessageId);
+      }
       return;
     }
 
@@ -72,11 +91,14 @@ export function useSwarmOrchestration({
 
     logger.info('Resuming swarm execution', {
       messageId: lastModelMessage.id,
-      completedSteps: latestWork.stepMetadata?.filter(m => m.status === 'done').map(m => m.id)
+      completedSteps: resolvedSession.work.stepMetadata?.filter(m => m.status === 'done').map(m => m.id)
     });
 
     // Re-run the swarm with existing work
-    await sendMessage(userInput, image, imageFile, false, lastModelMessage.id, latestWork);
+    await sendMessage(userInput, image, imageFile, {
+      resumeMessageId: lastModelMessage.id,
+      existingWork: resolvedSession.work,
+    });
   };
 
   const stopGeneration = () => {
@@ -86,17 +108,15 @@ export function useSwarmOrchestration({
     // where the ID could be cleared by abort handlers before we use it
     const store = useAgentStore.getState();
     const currentMsgId = store.activeSessionMessageId;
-    const workBeforeStop = currentMsgId ? store.sessionsByMessageId[currentMsgId]?.work : undefined;
+    const sessionWorkBeforeStop = currentMsgId ? store.sessionsByMessageId[currentMsgId]?.work : undefined;
     
     // Centralized abort - stops ALL active processes (main + regenerations)
     store.abortAll();
     
     // Mark the current message as stopped in the history so UI can hide regenerate buttons
     if (currentMsgId) {
-      if (workBeforeStop) {
-        const stoppedWork = { ...workBeforeStop, isStopped: true };
-        store.replaceSessionWork(currentMsgId, stoppedWork);
-      }
+      const stoppedWork: Work = { ...(sessionWorkBeforeStop ?? {}), isStopped: true };
+      store.replaceSessionWork(currentMsgId, stoppedWork);
       store.updateSessionRuntime(currentMsgId, {
         status: 'stopped',
         isLoading: false,
@@ -104,28 +124,9 @@ export function useSwarmOrchestration({
         loadingStatus: 'Stopped',
         error: null,
       });
-      const stoppedSnapshot = store.snapshotSessionWork(currentMsgId);
-      const hasMeaningfulStoppedSnapshot = !!stoppedSnapshot && (
-        (stoppedSnapshot.results ? Object.keys(stoppedSnapshot.results).length > 0 : false)
-        || (stoppedSnapshot.agentStates?.length ?? 0) > 0
-        || (stoppedSnapshot.stepMetadata?.length ?? 0) > 0
-        || (stoppedSnapshot.agentNames?.length ?? 0) > 0
-        || (stoppedSnapshot.criticNames?.length ?? 0) > 0
-      );
-
-      // 2. Update the message in history
-      setMessages(prev => prev.map(m => 
-        m.id === currentMsgId 
-          ? {
-              ...m,
-              work: hasMeaningfulStoppedSnapshot && stoppedSnapshot
-                ? { ...stoppedSnapshot, isStopped: true }
-                : m.work
-                  ? { ...m.work, isStopped: true }
-                  : { isStopped: true }
-            }
-          : m
-      ));
+      flushSync(() => {
+        setMessages(prev => commitSessionSnapshotToMessage(prev, currentMsgId, { reason: 'stopped' }));
+      });
     }
 
     store.setActiveSession(undefined);
@@ -135,18 +136,20 @@ export function useSwarmOrchestration({
     userInput: string,
     image: string | null,
     imageFile: File | null,
-    isRetry: boolean = false,
-    resumeMessageId?: string,
-    existingWork?: Work
+    options: SendMessageOptions = {},
   ) => {
     if (!userInput.trim() && !image) return;
     const orchestrator = orchestratorRef.current;
     if (!orchestrator) {
       throw new Error('SwarmOrchestrator not initialized');
     }
+
+    const isRetry = options.isRetry ?? false;
+    const resumeMessageId = options.resumeMessageId;
+    const existingWork = options.existingWork;
     
     // Use existing ID for resume, or generate new one
-    const modelMessageId = resumeMessageId || generateUUID();
+    const modelMessageId = resumeMessageId || options.forcedMessageId || generateUUID();
     if (!isRetry && !resumeMessageId) {
       setLastInput({ text: userInput, image, imageFile });
     }
@@ -275,27 +278,15 @@ export function useSwarmOrchestration({
       if (paused) {
         useAgentStore.getState().setSessionStatus(modelMessageId, 'paused');
 
-        setMessages(prev => {
-          const workSnapshot = useAgentStore.getState().snapshotSessionWork(modelMessageId) ?? work;
-          const updated = updateTargetMessage(prev, prev.length - 1, STEPS.SYNTHESIS, {
-            work: workSnapshot,
-          });
-
-          return updated ?? prev;
-        });
+        setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId, { reason: 'paused' }));
 
         return;
       }
 
       useAgentStore.getState().setSessionStatus(modelMessageId, 'done');
 
-      setMessages(prev => {
-        const workSnapshot = useAgentStore.getState().snapshotSessionWork(modelMessageId) ?? work;
-        const updated = updateTargetMessage(prev, prev.length - 1, STEPS.SYNTHESIS, {
-          work: workSnapshot,
-        });
-        
-        return updated ?? prev;
+      flushSync(() => {
+        setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId, { reason: 'done' }));
       });
 
       logger.debug('Clearing loading state after success');
@@ -313,28 +304,9 @@ export function useSwarmOrchestration({
       });
       useAgentStore.getState().replaceSessionAgents(modelMessageId, errorStates);
 
-      // CRITICAL: Save agent states to message.work even on error
-      // This ensures regeneration can find and update existing agents instead of creating duplicates
-      const workAtTimeOfError = useAgentStore.getState().snapshotSessionWork(modelMessageId)
-        ?? useAgentStore.getState().sessionsByMessageId[modelMessageId]?.work;
-      
-      setMessages(prev => {
-        const currentWork = workAtTimeOfError;
-        const agentsForThisMessage = errorStates;
-        
-        logger.debug('Saving error state agents to message.work', {
-          messageId: modelMessageId,
-          agentsCount: agentsForThisMessage.length,
-          agents: agentsForThisMessage.map(a => ({ id: a.id, stepId: a.stepId, agentIndex: a.agentIndex, status: a.status }))
-        });
-        
-        const updated = updateTargetMessage(prev, prev.length - 1, STEPS.SYNTHESIS, {
-          work: currentWork ?? { agentStates: agentsForThisMessage },
-        });
-        
-        return updated ?? prev;
-      });
-
+      // Preserve real failure state (agent errors, retry counters, empty-step metadata)
+      // so global retry/debug flows can resume from the failed attempt instead of resetting.
+      const failureSnapshot = useAgentStore.getState().snapshotSessionWork(modelMessageId);
       const latestLiveWork = useAgentStore.getState().sessionsByMessageId[modelMessageId]?.work;
       const hasPartialWork = hasPartialWorkResults(latestLiveWork);
       const wasAborted = handleSendMessageError(
@@ -374,7 +346,13 @@ export function useSwarmOrchestration({
         return;
       }
 
-      if (!hasPartialWork) {
+      if (hasPartialWork) {
+        setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId, { reason: 'partial-error' }));
+      } else {
+        setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId, {
+          reason: 'partial-error',
+          fallbackWork: failureSnapshot,
+        }));
         useAgentStore.getState().setActiveSession(undefined);
       }
     } finally {
@@ -391,12 +369,16 @@ export function useSwarmOrchestration({
       // The step execution logic checks exiting work to decide if it's a retry
       const messages = messagesRef.current || [];
       const lastMsg = messages[messages.length - 1];
-      const store = useAgentStore.getState();
-      const failedWork = lastMsg?.role === 'model'
-        ? store.snapshotSessionWork(lastMsg.id) ?? lastMsg.work
+      const retryMessageId = generateUUID();
+      const failedSession = lastMsg?.role === 'model'
+        ? resolveOperationalSessionWork(lastMsg, 'retry', { targetMessageId: retryMessageId })
         : undefined;
 
-      sendMessage(lastInput.text, lastInput.image, lastInput.imageFile, true, undefined, failedWork).catch((error: unknown) => {
+      sendMessage(lastInput.text, lastInput.image, lastInput.imageFile, {
+        isRetry: true,
+        existingWork: failedSession?.work,
+        forcedMessageId: retryMessageId,
+      }).catch((error: unknown) => {
         logger.error('Unhandled retry failure:', error);
       });
     }

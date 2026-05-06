@@ -244,7 +244,7 @@ describe('MessageList', () => {
     expect(screen.queryByTitle('Copied!')).not.toBeInTheDocument();
   });
 
-  it('hides the last empty model message on global error unless it already has completed drafts', () => {
+  it('hides the last model message on global error unless it already has completed drafts', () => {
     const messagesWithoutDrafts: Message[] = [
       {
         id: 'user-1',
@@ -255,9 +255,6 @@ describe('MessageList', () => {
         id: 'model-1',
         role: 'model',
         parts: [{ text: '' }],
-        work: {
-          agentStates: [createAgentState()],
-        },
       },
     ];
 
@@ -272,6 +269,27 @@ describe('MessageList', () => {
 
     expect(screen.queryByTestId('show-work')).not.toBeInTheDocument();
     expect(screen.getAllByTestId('agent-avatar')).toHaveLength(1);
+
+    const messagesWithFailureWork: Message[] = [
+      messagesWithoutDrafts[0],
+      {
+        ...messagesWithoutDrafts[1],
+        work: {
+          agentStates: [createAgentState({ status: 'error', label: 'Failed' })],
+        },
+      },
+    ];
+
+    rerender(
+      <MessageList
+        {...createMessageListProps({
+          messages: messagesWithFailureWork,
+          error: 'Synthesis failed',
+        })}
+      />
+    );
+
+    expect(screen.queryByTestId('show-work')).not.toBeInTheDocument();
 
     const messagesWithDrafts: Message[] = [
       messagesWithoutDrafts[0],
@@ -337,7 +355,7 @@ describe('MessageList', () => {
     expect(screen.getByTestId('show-work')).toHaveTextContent('show-work:model-1:live:regen');
   });
 
-  it('renders inline live progress for the active model message and disables regeneration for stopped work', () => {
+  it('uses the active live work alone when deciding whether regeneration is stopped', () => {
     const messages: Message[] = [
       {
         id: 'model-1',
@@ -367,7 +385,7 @@ describe('MessageList', () => {
     );
 
     expect(screen.getByTestId('loading-indicator')).toHaveTextContent('loading:model-1:regen:inner');
-    expect(screen.getByTestId('show-work')).toHaveTextContent('show-work:model-1:live:noregen');
+    expect(screen.getByTestId('show-work')).toHaveTextContent('show-work:model-1:live:regen');
   });
 
   it('passes live session work to active rows and snapshot work to historical rows', () => {
@@ -436,6 +454,50 @@ describe('MessageList', () => {
     expect(showWorkPropsByMessageId['model-1'].work).toBe(historicalWork);
     expect(showWorkPropsByMessageId['model-2'].work).toBe(liveActiveWork);
     expect(mocks.loadingIndicator.mock.calls[0]?.[0].work).toBe(liveActiveWork);
+  });
+
+  it('keeps the current session row on live work after synthesis jump turns isLoading off', () => {
+    const staleSnapshotWork: Work = {
+      results: {
+        [STEPS.SYNTHESIS]: [''],
+      },
+    };
+    const liveSessionWork: Work = {
+      results: {
+        [STEPS.SYNTHESIS]: ['Live streaming answer'],
+      },
+      agentStates: [createAgentState({ messageId: 'model-1', stepId: STEPS.SYNTHESIS, status: 'working', label: 'Synthesizing...' })],
+    };
+    const messages: Message[] = [
+      {
+        id: 'model-1',
+        role: 'model',
+        parts: [{ text: '' }],
+        work: staleSnapshotWork,
+      },
+    ];
+
+    mocks.store.activeSessionMessageId = 'model-1';
+    mocks.store.sessionsByMessageId = {
+      'model-1': {
+        work: liveSessionWork,
+        agentStates: [createAgentState({ messageId: 'model-1', stepId: STEPS.SYNTHESIS, status: 'working', label: 'Synthesizing...' })],
+      },
+    };
+
+    render(
+      <MessageList
+        {...createMessageListProps({
+          messages,
+          isLoading: false,
+        })}
+      />
+    );
+
+    expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('Live streaming answer');
+    expect(screen.getByTestId('show-work')).toHaveTextContent('show-work:model-1:live:regen');
+    expect(mocks.showWork.mock.calls.at(-1)?.[0].work).toBe(liveSessionWork);
   });
 
   it('hides regeneration actions for older assistant turns once a later user prompt exists', () => {

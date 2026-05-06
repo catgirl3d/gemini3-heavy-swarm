@@ -156,6 +156,19 @@ const createMessagesState = (initialMessages: Message[]) => {
   };
 };
 
+const spyOnActiveSessionClear = (assertSnapshotCommitted: () => void) => {
+  const store = useAgentStore.getState();
+  const originalSetActiveSession = store.setActiveSession;
+
+  return vi.spyOn(store, 'setActiveSession').mockImplementation((messageId) => {
+    if (messageId === undefined) {
+      assertSnapshotCommitted();
+    }
+
+    return originalSetActiveSession(messageId);
+  });
+};
+
 const renderRegeneration = ({
   initialMessages = createConversation(),
   regenerateResponse = vi.fn(async () => ({
@@ -318,7 +331,7 @@ describe('useSwarmRegeneration', () => {
     expect(getRegenerateResponseCall(regenerateResponse).history).toEqual([createConversation()[0]]);
   });
 
-  it('recovers work from a live session before falling back to message snapshots', async () => {
+  it('uses live session work when a session already exists', async () => {
     const fallbackWork = createBaseWork({
       results: {
         [STEPS.INITIAL]: ['fallback agent 0', 'fallback agent 1'],
@@ -389,7 +402,7 @@ describe('useSwarmRegeneration', () => {
     expect(getRegenerateResponseCall(mismatched.regenerateResponse).imageFile).toBeNull();
   });
 
-  it('hydrates missing agents from message work before delegating to the orchestrator', async () => {
+  it('hydrates and re-scopes snapshot agents before delegating to the orchestrator', async () => {
     const matchingAgent = createAgent({ id: 'saved-agent', messageId: 'model-1', agentIndex: 1 });
     const otherMessageAgent = createAgent({ id: 'other-agent', messageId: 'other-model', agentIndex: 1 });
     const work = createBaseWork({ agentStates: [matchingAgent, otherMessageAgent] });
@@ -406,8 +419,12 @@ describe('useSwarmRegeneration', () => {
       await result.current.regenerateAgentResponse('model-1', STEPS.INITIAL, 1);
     });
 
-    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.agentStates).toEqual([matchingAgent]);
-    expect(getRegenerateResponseCall(regenerateResponse).agentStates).toEqual([matchingAgent]);
+    const expectedAgents = [
+      matchingAgent,
+      { ...otherMessageAgent, messageId: 'model-1' },
+    ];
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.agentStates).toEqual(expectedAgents);
+    expect(getRegenerateResponseCall(regenerateResponse).agentStates).toEqual(expectedAgents);
   });
 
   it('skips hydration when no matching agents can be recovered from workContext', async () => {
@@ -507,6 +524,11 @@ describe('useSwarmRegeneration', () => {
       createAgent({ id: 'snapshot-agent-1', agentIndex: 1, messageId: 'model-1', name: 'Updated Agent' }),
       createAgent({ id: 'other-message-agent', agentIndex: 1, messageId: 'other-model' }),
     ];
+    useAgentStore.getState().startSession('model-1', createBaseWork(), {
+      status: 'paused',
+      isLoading: true,
+      isPaused: true,
+    });
     useAgentStore.getState().replaceSessionAgents('model-1', snapshotAgents);
     const regenerateResponse = vi.fn(async (...args: any[]) => {
       const { onUpdate } = toRegenerateResponseCall(args);
@@ -778,6 +800,57 @@ describe('useSwarmRegeneration', () => {
     });
   });
 
+  it('commits the regenerated snapshot before clearing the active session for completed messages', async () => {
+    const liveSessionWork = createBaseWork({
+      results: {
+        [STEPS.INITIAL]: ['live agent 0', 'live agent 1'],
+        [`${STEPS.INITIAL}_thoughts`]: ['live thought 0', 'live thought 1'],
+        [`${STEPS.INITIAL}_usage`]: [createUsage(201), createUsage(202)],
+        [STEPS.REFINEMENT]: ['live critic 0', 'live critic 1'],
+        [`${STEPS.REFINEMENT}_thoughts`]: ['live critic thought 0', 'live critic thought 1'],
+        [`${STEPS.REFINEMENT}_usage`]: [createUsage(203), createUsage(204)],
+        [STEPS.SYNTHESIS]: ['live final answer'],
+      },
+    });
+    const staleMessageWork = createBaseWork();
+    useAgentStore.getState().startSession('model-1', liveSessionWork, {
+      status: 'paused',
+      isLoading: true,
+      isPaused: true,
+      loadingStatus: 'Paused. Waiting for user confirmation...',
+    });
+    const regenerateResponse = vi.fn(async () => ({
+      text: 'new critic 1',
+      sources: [],
+      work: createRegeneratedWork({
+        stepId: STEPS.REFINEMENT,
+        agentIndex: 1,
+        text: 'new critic 1',
+        thought: 'new critic thought 1',
+        usage: createUsage(255),
+      }),
+    }));
+    const { result, messagesState } = renderRegeneration({
+      initialMessages: createConversation(staleMessageWork),
+      regenerateResponse,
+    });
+    const setActiveSessionSpy = spyOnActiveSessionClear(() => {
+      expect(messagesState.messages[1].work?.results?.[STEPS.INITIAL]).toEqual(['live agent 0', 'live agent 1']);
+      expect(messagesState.messages[1].work?.results?.[STEPS.REFINEMENT]).toEqual(['live critic 0', 'new critic 1']);
+      expect(messagesState.messages[1].work?.results?.[STEPS.SYNTHESIS]).toEqual(['live final answer']);
+      expect(messagesState.messages[1].work?.stepMetadata?.find(m => m.id === STEPS.SYNTHESIS)).toMatchObject({
+        status: 'stale',
+        staleFromStepId: STEPS.REFINEMENT,
+      });
+    });
+
+    await act(async () => {
+      await result.current.regenerateAgentResponse('model-1', STEPS.REFINEMENT, 1);
+    });
+
+    expect(setActiveSessionSpy).toHaveBeenCalledWith(undefined);
+  });
+
   it('refuses regeneration for historical assistant turns once a later user turn exists', async () => {
     const historicalConversation: Message[] = [
       ...createConversation(),
@@ -911,7 +984,7 @@ describe('useSwarmRegeneration', () => {
     });
   });
 
-  it('restores the original synthesis snapshot after an aborted synthesis regeneration', async () => {
+  it('restores session work without mutating the message snapshot after an aborted synthesis regeneration', async () => {
     const originalConversation = createConversation();
     const regenerateResponse = vi.fn(async (...args: any[]) => {
       const { onUpdate, workContext } = toRegenerateResponseCall(args);
@@ -962,6 +1035,11 @@ describe('useSwarmRegeneration', () => {
 
   it('keeps retry UI mounted and snapshots work when regeneration fails with a real error', async () => {
     const savedAgent = createAgent({ id: 'failed-agent', messageId: 'model-1', agentIndex: 1 });
+    useAgentStore.getState().startSession('model-1', createBaseWork(), {
+      status: 'paused',
+      isLoading: true,
+      isPaused: true,
+    });
     useAgentStore.getState().replaceSessionAgents('model-1', [savedAgent]);
     const failure = new Error('network failed');
     const regenerateResponse = vi.fn(async () => {

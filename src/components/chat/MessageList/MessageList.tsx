@@ -115,11 +115,13 @@ const MessageListComponent: FC<MessageListProps> = ({
         />
       ) : (
         messages.map((msg, index) => {
-          // Determine if this message is actively being generated/regenerated
-          const isActiveGeneration = isLoading && msg.id === activeSessionMessageId;
-          // Only the active model row is allowed to read from the live session store.
+          const isCurrentSessionMessage = msg.id === activeSessionMessageId;
+          // LoadingIndicator still follows the loading flag, but the current session row must
+          // keep reading live work after synthesis jump turns isLoading off on first text.
+          const isActiveGeneration = isLoading && isCurrentSessionMessage;
+          // Only the current session row is allowed to read from the live session store.
           // Historical rows must stay pinned to their message snapshot.
-          const liveWork = isActiveGeneration ? activeWork : undefined;
+          const liveWork = isCurrentSessionMessage ? activeWork : undefined;
           // This is the single render-time work source for the row: visibility checks,
           // markdown text, sources, loading UI, and ShowWork all read from the same object.
           const effectiveWork = getMessageDisplayWork(msg, liveWork);
@@ -142,9 +144,9 @@ const MessageListComponent: FC<MessageListProps> = ({
             ? getStepResults(effectiveWork, STEPS.INITIAL).some(draft => !!draft && draft.length > 0)
             : false;
 
-          // CRITICAL: If a global error occurred, hide the last model message if it has no final text AND no completed drafts.
-          // This prevents showing an empty/broken "Show Work" card alongside the main error banner,
-          // while still preserving visibility of drafts if the error occurred later (e.g. during synthesis).
+          // If a global error occurred, hide the last model message if it has no final text AND no completed drafts.
+          // Total failures still persist a hidden snapshot for retry/debug state, but the early-step error UI should
+          // stay on the global banner instead of rendering empty failure cards inline.
           if (error && isLast && msg.role === 'model' && !hasText && !hasCompletedDrafts) {
              return null;
           }
@@ -208,7 +210,7 @@ const MessageListComponent: FC<MessageListProps> = ({
                       if (!effectiveWork) return null;
                           
                       // Allow regeneration only for the latest assistant turn that was not manually stopped.
-                      const isStopped = !!(effectiveWork.isStopped || msg.work?.isStopped);
+                      const isStopped = !!effectiveWork.isStopped;
                       const canRegenerate = isLatestRegenerableMessage(messages, msg.id) && !isStopped;
                       const handleRegenerate = canRegenerate 
                         ? (phase: string, agentIndex: number) => onRegenerate(msg.id, phase as StepId, agentIndex)
@@ -218,7 +220,7 @@ const MessageListComponent: FC<MessageListProps> = ({
                         <ShowWork
                           work={effectiveWork ?? EMPTY_WORK}
                           messageId={msg.id}
-                          isLive={isActiveGeneration}
+                          isLive={isCurrentSessionMessage}
                           isPaused={isPaused}
                           onContinue={onContinue}
                           onRegenerate={handleRegenerate}

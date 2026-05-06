@@ -59,6 +59,19 @@ const createMessagesState = (initialMessages: Message[] = []) => {
   };
 };
 
+const spyOnActiveSessionClear = (assertSnapshotCommitted: () => void) => {
+  const store = useAgentStore.getState();
+  const originalSetActiveSession = store.setActiveSession;
+
+  return vi.spyOn(store, 'setActiveSession').mockImplementation((messageId) => {
+    if (messageId === undefined) {
+      assertSnapshotCommitted();
+    }
+
+    return originalSetActiveSession(messageId);
+  });
+};
+
 const createAbortHook = (): AbortControllerHook => {
   const hook: AbortControllerHook = {
     ref: { current: null },
@@ -289,7 +302,44 @@ describe('useSwarmOrchestration', () => {
     expect(mainAbort.ref.current).toBeNull();
   });
 
-  it('persists a paused partial run and continues by starting a fresh run from the latest snapshot', async () => {
+  it('commits the final message snapshot before clearing the active session on success', async () => {
+    mocks.generateUUID.mockReturnValueOnce('model-1').mockReturnValueOnce('user-1');
+    const finalWork = createWork({
+      results: {
+        [STEPS.INITIAL]: ['final draft 1', 'final draft 2'],
+        [STEPS.REFINEMENT]: ['final refined 1', 'final refined 2'],
+        [STEPS.SYNTHESIS]: ['snapshot handoff answer'],
+      },
+    });
+    const finalAgents = [
+      createAgent({ id: 'final-agent-1', messageId: 'model-1', status: 'done', label: 'Done' }),
+      createAgent({ id: 'final-agent-2', messageId: 'model-1', agentIndex: 1, name: 'Agent 2', status: 'done', label: 'Done' }),
+    ];
+    const runSwarm = vi.fn(async (...args: any[]) => {
+      const { messageId } = toRunSwarmCall(args);
+      useAgentStore.getState().replaceSessionAgents(messageId, finalAgents);
+
+      return { text: 'snapshot handoff answer', sources: [], work: finalWork };
+    });
+    const { result, messagesState } = renderOrchestration({ runSwarm });
+    const setActiveSessionSpy = spyOnActiveSessionClear(() => {
+      expect(messagesState.messages[1]).toMatchObject({
+        id: 'model-1',
+        work: {
+          results: finalWork.results,
+          agentStates: finalAgents,
+        },
+      });
+    });
+
+    await act(async () => {
+      await result.current.sendMessage('hello', null, null);
+    });
+
+    expect(setActiveSessionSpy).toHaveBeenCalledWith(undefined);
+  });
+
+  it('persists a paused partial run and continues through an explicit session snapshot', async () => {
     mocks.generateUUID.mockReturnValueOnce('model-1').mockReturnValueOnce('user-1');
     const pausedAgents = [
       createAgent({ id: 'model-1-initial-0', agentIndex: 0, status: 'done', label: 'Drafted' }),
@@ -396,6 +446,7 @@ describe('useSwarmOrchestration', () => {
     });
 
     expect(completed.runSwarm).not.toHaveBeenCalled();
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']).toBeUndefined();
 
     const orphanedModelMessages: Message[] = [{
       id: 'orphan-model',
@@ -412,9 +463,10 @@ describe('useSwarmOrchestration', () => {
     });
 
     expect(missingUser.runSwarm).not.toHaveBeenCalled();
+    expect(useAgentStore.getState().sessionsByMessageId['orphan-model']).toBeUndefined();
   });
 
-  it('retries with the last input, replaces the trailing model message, and reuses the last work snapshot', async () => {
+  it('retries with the last input, replaces the trailing model message, and reuses the resolved session snapshot', async () => {
     mocks.generateUUID
       .mockReturnValueOnce('model-1')
       .mockReturnValueOnce('user-1')
@@ -425,6 +477,10 @@ describe('useSwarmOrchestration', () => {
         [STEPS.REFINEMENT]: ['failed refined 1', 'failed refined 2'],
         [STEPS.SYNTHESIS]: ['failed answer'],
       },
+      agentStates: [
+        createAgent({ id: 'failed-agent-1', messageId: 'model-1', status: 'error', label: 'Failed' }),
+        createAgent({ id: 'failed-agent-2', messageId: 'model-1', agentIndex: 1, status: 'error', label: 'Failed', name: 'Agent 2' }),
+      ],
     });
     const secondWork = createWork({
       results: {
@@ -434,8 +490,12 @@ describe('useSwarmOrchestration', () => {
       },
     });
     const runSwarm = vi.fn(async (...args: any[]) => {
-      const { onMessageUpdate } = toRunSwarmCall(args);
+      const { messageId, onMessageUpdate } = toRunSwarmCall(args);
       onMessageUpdate(`stream-${runSwarm.mock.calls.length}`, true);
+
+      if (runSwarm.mock.calls.length === 1) {
+        useAgentStore.getState().replaceSessionAgents(messageId, firstWork.agentStates ?? []);
+      }
 
       return {
         text: `final-${runSwarm.mock.calls.length}`,
@@ -448,6 +508,8 @@ describe('useSwarmOrchestration', () => {
     await act(async () => {
       await result.current.sendMessage('hello', null, null);
     });
+
+    useAgentStore.getState().clearSession('model-1');
 
     expect(messagesState.messages).toHaveLength(2);
     expect(messagesState.messages[1]).toMatchObject({ id: 'model-1', role: 'model' });
@@ -467,7 +529,15 @@ describe('useSwarmOrchestration', () => {
     expect(retryCall.imageFile).toBeNull();
     expect(retryCall.history).toEqual([messagesState.messages[0]]);
     expect(retryCall.messageId).toBe('model-2');
-    expect(retryCall.existingWork).toMatchObject({ results: firstWork.results });
+    expect(retryCall.existingWork).toMatchObject({
+      results: firstWork.results,
+      agentStates: [
+        expect.objectContaining({ id: 'failed-agent-1', messageId: 'model-2' }),
+        expect.objectContaining({ id: 'failed-agent-2', messageId: 'model-2' }),
+      ],
+    });
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']).toBeUndefined();
+    expect(useAgentStore.getState().sessionsByMessageId['model-2']).toBeDefined();
     expect(messagesState.messages).toHaveLength(2);
     expect(messagesState.messages[0]).toMatchObject({ id: 'user-1', role: 'user', parts: [{ text: 'hello' }] });
     expect(messagesState.messages[1]).toMatchObject({ id: 'model-2', role: 'model' });
@@ -511,7 +581,11 @@ describe('useSwarmOrchestration', () => {
     expect(runSwarmCall.imageFile).toBeNull();
     expect(runSwarmCall.history).toEqual(initialMessages.slice(0, 3));
     expect(runSwarmCall.messageId).toBe('resume-model');
-    expect(runSwarmCall.existingWork).toMatchObject(existingWork);
+    expect(runSwarmCall.existingWork).toMatchObject({
+      results: existingWork.results,
+      stepMetadata: existingWork.stepMetadata,
+      agentStates: [expect.objectContaining({ id: 'old-agent', messageId: 'resume-model' })],
+    });
     expect(messagesState.messages[3]).toMatchObject({
       id: 'resume-model',
       parts: [{ text: '' }],
@@ -723,7 +797,7 @@ describe('useSwarmOrchestration', () => {
     }));
   });
 
-  it('marks a history message as stopped even when the session has no meaningful work snapshot', () => {
+  it('commits a stopped session snapshot even when the session has no completed work', () => {
     const controller = new AbortController();
     const abortSpy = vi.spyOn(controller, 'abort');
     const initialMessages: Message[] = [
@@ -745,8 +819,31 @@ describe('useSwarmOrchestration', () => {
     });
 
     expect(abortSpy).toHaveBeenCalledTimes(1);
-    expect(messagesState.messages[1].work).toEqual({ isStopped: true });
+    expect(messagesState.messages[1].work).toEqual({ results: {}, isStopped: true, agentStates: [] });
     expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+  });
+
+  it('commits the stopped snapshot before clearing the active session', () => {
+    const initialMessages: Message[] = [
+      { id: 'user-1', role: 'user', parts: [{ text: 'hello' }] },
+      { id: 'model-1', role: 'model', parts: [{ text: 'partial' }] },
+    ];
+    const { result, messagesState } = renderOrchestration({ initialMessages });
+    const setActiveSessionSpy = spyOnActiveSessionClear(() => {
+      expect(messagesState.messages[1].work).toEqual({ results: {}, isStopped: true, agentStates: [] });
+    });
+
+    useAgentStore.getState().startSession('model-1', { results: {} }, {
+      status: 'paused',
+      isLoading: true,
+      isPaused: true,
+    });
+
+    act(() => {
+      result.current.stopGeneration();
+    });
+
+    expect(setActiveSessionSpy).toHaveBeenCalledWith(undefined);
   });
 
   it('adds a placeholder model message when resuming a message id that is not in history', async () => {
@@ -765,7 +862,10 @@ describe('useSwarmOrchestration', () => {
     const { result, messagesState } = renderOrchestration({ initialMessages, runSwarm });
 
     await act(async () => {
-      await result.current.sendMessage('hello again', null, null, false, 'missing-resume-id', existingWork);
+      await result.current.sendMessage('hello again', null, null, {
+        resumeMessageId: 'missing-resume-id',
+        existingWork,
+      });
     });
 
     const resumeCall = getRunSwarmCall(runSwarm);
@@ -928,7 +1028,10 @@ describe('useSwarmOrchestration', () => {
     const { result, messagesState } = renderOrchestration({ initialMessages, runSwarm });
 
     await act(async () => {
-      await result.current.sendMessage('hello', null, null, false, 'model-1', existingWork);
+      await result.current.sendMessage('hello', null, null, {
+        resumeMessageId: 'model-1',
+        existingWork,
+      });
     });
 
     expect(messagesState.messages[1]).not.toHaveProperty('sources');
@@ -939,10 +1042,22 @@ describe('useSwarmOrchestration', () => {
     });
   });
 
-  it('surfaces a total failure when no partial work exists', async () => {
+  it('surfaces a total failure while preserving a real failure snapshot for retry/debug flows', async () => {
     mocks.generateUUID.mockReturnValueOnce('model-total-failure').mockReturnValueOnce('user-total-failure');
     const failure = new Error('network failed');
+    const errorAgents = [
+      createAgent({ id: 'failed-agent-1', messageId: 'model-total-failure', status: 'error', label: 'Failed' }),
+      createAgent({ id: 'failed-agent-2', messageId: 'model-total-failure', agentIndex: 1, status: 'error', label: 'Failed', name: 'Agent 2' }),
+    ];
+    const failedWork: Work = {
+      results: {
+        [STEPS.INITIAL]: ['', ''],
+        [`${STEPS.INITIAL}_error_counts`]: [1, 1],
+      },
+    };
     const runSwarm = vi.fn(async () => {
+      useAgentStore.getState().replaceSessionWork('model-total-failure', failedWork);
+      useAgentStore.getState().replaceSessionAgents('model-total-failure', errorAgents);
       throw failure;
     });
     const { result, messagesState, mainAbort } = renderOrchestration({ runSwarm });
@@ -961,14 +1076,76 @@ describe('useSwarmOrchestration', () => {
     expect(messagesState.messages[1]).toMatchObject({
       id: 'model-total-failure',
       role: 'model',
-      work: {
-        agentStates: [
-          expect.objectContaining({ messageId: 'model-total-failure', status: 'error', label: 'Failed' }),
-          expect.objectContaining({ messageId: 'model-total-failure', status: 'error', label: 'Failed' }),
-        ],
-      },
+    });
+    expect(messagesState.messages[1].work).toMatchObject({
+      results: failedWork.results,
+      agentStates: errorAgents,
     });
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
     expect(mainAbort.ref.current).toBeNull();
+  });
+
+  it('retries a total failure from the committed failure snapshot so persistent error counts do not reset', async () => {
+    mocks.generateUUID
+      .mockReturnValueOnce('model-total-failure')
+      .mockReturnValueOnce('user-total-failure')
+      .mockReturnValueOnce('model-total-retry');
+    const failure = new Error('network failed');
+    const failedAgents = [
+      createAgent({ id: 'failed-agent-1', messageId: 'model-total-failure', status: 'error', label: 'Failed' }),
+      createAgent({ id: 'failed-agent-2', messageId: 'model-total-failure', agentIndex: 1, status: 'error', label: 'Failed', name: 'Agent 2' }),
+    ];
+    const failedWork: Work = {
+      results: {
+        [STEPS.INITIAL]: ['', ''],
+        [`${STEPS.INITIAL}_error_counts`]: [1, 1],
+      },
+      agentStates: failedAgents,
+    };
+    const recoveredWork = createWork({
+      results: {
+        [STEPS.INITIAL]: ['retry draft 1', 'retry draft 2'],
+        [STEPS.REFINEMENT]: ['retry refined 1', 'retry refined 2'],
+        [STEPS.SYNTHESIS]: ['retried answer'],
+      },
+    });
+    const runSwarm = vi.fn(async (...args: any[]) => {
+      const { messageId } = toRunSwarmCall(args);
+
+      if (runSwarm.mock.calls.length === 1) {
+        useAgentStore.getState().replaceSessionWork(messageId, failedWork);
+        useAgentStore.getState().replaceSessionAgents(messageId, failedAgents);
+        throw failure;
+      }
+
+      return {
+        text: 'retried answer',
+        sources: [],
+        work: recoveredWork,
+      };
+    });
+    const { result } = renderOrchestration({ runSwarm });
+
+    await act(async () => {
+      await result.current.sendMessage('hello', null, null);
+    });
+
+    act(() => {
+      result.current.retry();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const retryCall = toRunSwarmCall(runSwarm.mock.calls[1]);
+    expect(retryCall.messageId).toBe('model-total-retry');
+    expect(retryCall.existingWork).toMatchObject({
+      results: failedWork.results,
+      agentStates: [
+        expect.objectContaining({ id: 'failed-agent-1', messageId: 'model-total-retry' }),
+        expect.objectContaining({ id: 'failed-agent-2', messageId: 'model-total-retry' }),
+      ],
+    });
   });
 });

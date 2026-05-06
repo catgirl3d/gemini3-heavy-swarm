@@ -18,15 +18,11 @@ export function useResolvedAgentState(
   
   return useMemo(() => {
     if (preferLiveSession) {
-      const liveSessionAgent = sessionAgents?.find(agent =>
+      return sessionAgents?.find(agent =>
         agent.stepId === stepId
         && agent.agentIndex === agentIndex
         && agent.messageId === messageId
       );
-
-      if (liveSessionAgent) {
-        return liveSessionAgent;
-      }
     }
 
     if (work.agentStates) {
@@ -52,18 +48,15 @@ export function useResolvedSwarmState(
   
   const synthesizerState = useMemo(() => {
     if (preferLiveSession) {
-      const liveSession = sessionAgents?.find(agent => agent.stepId === STEPS.SYNTHESIS);
-      if (liveSession) {
-        return liveSession;
-      }
+      return sessionAgents?.find(agent => agent.stepId === STEPS.SYNTHESIS);
     }
 
     return work.agentStates?.find(a => a.stepId === STEPS.SYNTHESIS);
   }, [preferLiveSession, sessionAgents, work.agentStates]);
 
   const refinementStarted = useMemo(() => {
-    if (preferLiveSession && sessionAgents?.some(agent => agent.stepId === STEPS.REFINEMENT)) {
-      return true;
+    if (preferLiveSession) {
+      return sessionAgents?.some(agent => agent.stepId === STEPS.REFINEMENT) || false;
     }
 
     return work.agentStates?.some(a => a.stepId === STEPS.REFINEMENT) || false;

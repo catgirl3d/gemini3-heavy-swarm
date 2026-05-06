@@ -30,6 +30,7 @@ type SessionSeedOptions = {
   isPaused?: boolean;
   loadingStatus?: string;
   error?: string | null;
+  activate?: boolean;
 };
 
 type SessionRuntimeUpdate = Partial<Pick<SwarmSession, 'status' | 'isLoading' | 'isPaused' | 'loadingStatus' | 'error'>>;
@@ -462,6 +463,12 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
         ...state.sessionsByMessageId,
         [messageId]: nextSession,
       };
+
+      if (options?.activate === false) {
+        return {
+          sessionsByMessageId: nextSessions,
+        };
+      }
 
       return {
         sessionsByMessageId: nextSessions,

@@ -56,7 +56,7 @@ describe('useResolvedSwarmState', () => {
     });
   });
 
-  it('falls back to work.agentStates when live state is missing or belongs to another message', () => {
+  it('does not fall back to work.agentStates when live state is missing or belongs to another message', () => {
     useAgentStore.getState().replaceSessionAgents('other-message', [
       createAgent({ messageId: 'other-message', status: 'working', label: 'Other working' }),
     ]);
@@ -70,14 +70,10 @@ describe('useResolvedSwarmState', () => {
       true,
     ));
 
-    expect(result.current).toMatchObject({
-      status: 'done',
-      label: 'Snapshot done',
-      messageId: 'snapshot-message',
-    });
+    expect(result.current).toBeUndefined();
   });
 
-  it('resolves synthesizer state from live store, while refinementStarted can still fall back to snapshot', () => {
+  it('resolves synthesizer and refinement state from live store only in live mode', () => {
     const liveSynth = createAgent({
       id: 'synth-live',
       name: 'Synthesizer',
@@ -116,7 +112,7 @@ describe('useResolvedSwarmState', () => {
       messageId: 'message-1',
       status: 'working',
     });
-    expect(result.current.refinementStarted).toBe(true);
+    expect(result.current.refinementStarted).toBe(false);
     expect(result.current.isEarlyStageWorking).toBe(false);
   });
 
@@ -150,6 +146,20 @@ describe('useResolvedSwarmState', () => {
   it('keeps historical reads snapshot-only even if a matching session still exists', () => {
     const liveAgent = createAgent({ status: 'working', label: 'Live working' });
     const snapshotAgent = createAgent({ status: 'done', label: 'Snapshot done' });
+    const snapshotSynth = createAgent({
+      id: 'snapshot-synth',
+      stepId: STEPS.SYNTHESIS,
+      agentIndex: 0,
+      status: 'done',
+      label: 'Snapshot synth done',
+    });
+    const snapshotRefine = createAgent({
+      id: 'snapshot-refine',
+      stepId: STEPS.REFINEMENT,
+      agentIndex: 1,
+      status: 'done',
+      label: 'Snapshot refine done',
+    });
     useAgentStore.getState().startSession('message-1', { results: {} }, {
       agentStates: [liveAgent],
       status: 'paused',
@@ -173,10 +183,15 @@ describe('useResolvedSwarmState', () => {
 
     const { result: swarmResult } = renderHook(() => useResolvedSwarmState(
       'message-1',
-      createWork({ agentStates: [snapshotAgent] }),
+      createWork({ agentStates: [snapshotAgent, snapshotSynth, snapshotRefine] }),
       false,
     ));
 
+    expect(swarmResult.current.synthesizerState).toMatchObject({
+      id: 'snapshot-synth',
+      status: 'done',
+    });
+    expect(swarmResult.current.refinementStarted).toBe(true);
     expect(swarmResult.current.isEarlyStageWorking).toBe(false);
   });
 });
