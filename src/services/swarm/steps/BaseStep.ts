@@ -612,24 +612,17 @@ export abstract class BaseStep implements StepDescriptor {
       if (targetWork) {
         this.ensureResults(targetWork);
         const errorKey = this.getErrorCountKey();
-        
-        let currentCount: number;
-        if (agentIndex === undefined) {
-          currentCount = (targetWork.results[errorKey] as number) || 0;
-        } else {
-          if (!Array.isArray(targetWork.results[errorKey])) {
-            targetWork.results[errorKey] = Array(this.getStepSlotCount(this.id, settings.numAgents, agentIndex)).fill(0);
-          }
-          currentCount = (targetWork.results[errorKey] as number[])[agentIndex] || 0;
+        const errorCountIndex = agentIndex ?? 0;
+
+        if (!Array.isArray(targetWork.results[errorKey])) {
+          targetWork.results[errorKey] = Array(this.getStepSlotCount(this.id, settings.numAgents, errorCountIndex)).fill(0);
         }
+
+        const currentCount = (targetWork.results[errorKey] as number[])[errorCountIndex] || 0;
 
         if (currentCount < maxErrorAttempts) {
           // Increment and save count
-          if (agentIndex === undefined) {
-            targetWork.results[errorKey] = currentCount + 1;
-          } else {
-            (targetWork.results[errorKey] as number[])[agentIndex] = currentCount + 1;
-          }
+          (targetWork.results[errorKey] as number[])[errorCountIndex] = currentCount + 1;
           
           // Update store to persist count
           if (messageId) {

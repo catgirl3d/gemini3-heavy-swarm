@@ -1174,6 +1174,7 @@ describe('BaseStep', () => {
         model: 'unused-model',
         contents: [],
         signal: new AbortController().signal,
+        agentIndex: 0,
         simulateError,
         simulateErrorAttempts: 1,
         work
@@ -1188,7 +1189,7 @@ describe('BaseStep', () => {
         await expectation.toThrow('custom Simulated error');
       }
 
-      expect(work.results?.[`${STEPS.INITIAL}_error_counts`]).toBe(1);
+      expect(work.results?.[`${STEPS.INITIAL}_error_counts`]).toEqual([1]);
     });
 
     it('should abort active stream during processing', async () => {
