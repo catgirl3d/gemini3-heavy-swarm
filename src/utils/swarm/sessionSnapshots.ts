@@ -45,7 +45,7 @@ const createOperationalResolution = (
   };
 };
 
-export const getSessionSnapshot = (messageId: string): Work | undefined => {
+const getSessionSnapshot = (messageId: string): Work | undefined => {
   return useAgentStore.getState().snapshotSessionWork(messageId);
 };
 
@@ -57,7 +57,7 @@ const getOperationalSessionSnapshot = (
   return work ? createOperationalResolution(work, messageId, source) : undefined;
 };
 
-export const hydrateSessionFromMessageSnapshot = (
+const hydrateSessionFromMessageSnapshot = (
   message: Message,
   runtimeOptions?: SessionRuntimeOptions,
 ): OperationalSessionResolution | undefined => {
@@ -83,7 +83,7 @@ export const hydrateSessionFromMessageSnapshot = (
   return getOperationalSessionSnapshot(targetMessageId, 'hydrated-snapshot');
 };
 
-export const resolveOperationalSessionWork = (
+export const resolveOperationalSession = (
   message: Message,
   runtimeOptions?: SessionRuntimeOptions,
 ): OperationalSessionResolution | undefined => {

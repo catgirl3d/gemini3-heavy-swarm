@@ -10,7 +10,7 @@ import { getStepMeta } from '@/utils/swarm/workHelpers';
 import { type AbortControllerHook } from '@/hooks/network/useAbortController';
 import { Logger } from '@shared/utils/logger';
 import { useAgentStore } from '@/stores/agentStore';
-import { commitSessionSnapshotToMessage, resolveOperationalSessionWork } from '@/utils/swarm/sessionSnapshots';
+import { commitSessionSnapshotToMessage, resolveOperationalSession } from '@/utils/swarm/sessionSnapshots';
 
 const logger = new Logger('Orchestration');
 
@@ -47,7 +47,7 @@ export function useSwarmOrchestration({
     const currentMessages = messagesRef.current || [];
     const lastModelMessage = [...currentMessages].reverse().find(m => m.role === 'model');
     const resolvedSession = lastModelMessage
-      ? resolveOperationalSessionWork(lastModelMessage, {
+      ? resolveOperationalSession(lastModelMessage, {
           status: 'paused',
           isLoading: true,
           isPaused: true,
@@ -370,7 +370,7 @@ export function useSwarmOrchestration({
       const lastMsg = messages[messages.length - 1];
       const retryMessageId = generateUUID();
       const failedSession = lastMsg?.role === 'model'
-        ? resolveOperationalSessionWork(lastMsg, { targetMessageId: retryMessageId })
+        ? resolveOperationalSession(lastMsg, { targetMessageId: retryMessageId })
         : undefined;
 
       sendMessage(lastInput.text, lastInput.image, lastInput.imageFile, {

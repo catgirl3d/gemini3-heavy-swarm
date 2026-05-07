@@ -19,7 +19,7 @@ import { getFriendlyErrorMessage } from '@/services/swarm/steps/utils/errorUtils
 import { type SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
 import { useAgentStore } from '@/stores/agentStore';
 import { isLatestRegenerableMessage } from '@/utils/swarm/sessionHelpers';
-import { commitSessionSnapshotToMessage, resolveOperationalSessionWork } from '@/utils/swarm/sessionSnapshots';
+import { commitSessionSnapshotToMessage, resolveOperationalSession } from '@/utils/swarm/sessionSnapshots';
 
 const regenLogger = new Logger('Regeneration');
 
@@ -173,7 +173,7 @@ export function useSwarmRegeneration({
     const previousActiveSessionId = store.activeSessionMessageId;
     const stepConfig = getStepConfig(stepId);
 
-    const resolvedSession = resolveOperationalSessionWork(targetMessage, { status: 'paused' });
+    const resolvedSession = resolveOperationalSession(targetMessage, { status: 'paused' });
     const sessionBeforeRun = useAgentStore.getState().sessionsByMessageId[messageId];
     const workContext = resolvedSession?.work ? cloneWork(resolvedSession.work) : undefined;
     const wasCompletedMessage = getStepMeta(workContext, STEPS.SYNTHESIS)?.status === 'done';
