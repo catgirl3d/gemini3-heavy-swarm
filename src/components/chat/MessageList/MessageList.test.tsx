@@ -100,10 +100,15 @@ const createAgentState = (overrides: Partial<AgentState> = {}): AgentState => ({
 
 const createMessageListProps = (overrides: Partial<MessageListProps> = {}): MessageListProps => ({
   messages: [],
-  isLoading: false,
-  isPaused: false,
-  error: null,
+  activePhase: null,
+  shouldShowLoadingIndicator: false,
+  shouldReadLiveWork: false,
+  isPausedForAction: false,
+  isTimerActive: false,
+  inlineErrorMessage: null,
+  globalErrorMessage: null,
   loadingStatus: 'Working...',
+  progressStatusText: 'Working...',
   modelDisplayName: 'Gemini 2.5 Flash',
   provider: ProviderType.Gemini,
   model: 'gemini-2.5-flash',
@@ -262,7 +267,7 @@ describe('MessageList', () => {
       <MessageList
         {...createMessageListProps({
           messages: messagesWithoutDrafts,
-          error: 'Synthesis failed',
+          globalErrorMessage: 'Synthesis failed',
         })}
       />
     );
@@ -284,7 +289,7 @@ describe('MessageList', () => {
       <MessageList
         {...createMessageListProps({
           messages: messagesWithFailureWork,
-          error: 'Synthesis failed',
+          globalErrorMessage: 'Synthesis failed',
         })}
       />
     );
@@ -308,7 +313,7 @@ describe('MessageList', () => {
       <MessageList
         {...createMessageListProps({
           messages: messagesWithDrafts,
-          error: 'Synthesis failed',
+          globalErrorMessage: 'Synthesis failed',
         })}
       />
     );
@@ -346,8 +351,11 @@ describe('MessageList', () => {
       <MessageList
         {...createMessageListProps({
           messages,
-          isLoading: true,
-          error: 'Synthesis failed',
+          activePhase: 'running',
+          shouldShowLoadingIndicator: true,
+          shouldReadLiveWork: true,
+          isTimerActive: true,
+          globalErrorMessage: 'Synthesis failed',
         })}
       />
     );
@@ -379,7 +387,10 @@ describe('MessageList', () => {
       <MessageList
         {...createMessageListProps({
           messages,
-          isLoading: true,
+          activePhase: 'running',
+          shouldShowLoadingIndicator: true,
+          shouldReadLiveWork: true,
+          isTimerActive: true,
         })}
       />
     );
@@ -442,7 +453,10 @@ describe('MessageList', () => {
       <MessageList
         {...createMessageListProps({
           messages,
-          isLoading: true,
+          activePhase: 'running',
+          shouldShowLoadingIndicator: true,
+          shouldReadLiveWork: true,
+          isTimerActive: true,
         })}
       />
     );
@@ -456,7 +470,7 @@ describe('MessageList', () => {
     expect(mocks.loadingIndicator.mock.calls[0]?.[0].work).toBe(liveActiveWork);
   });
 
-  it('keeps the current session row on live work after synthesis jump turns isLoading off', () => {
+  it('keeps the current session row on live work during streaming-final phase', () => {
     const staleSnapshotWork: Work = {
       results: {
         [STEPS.SYNTHESIS]: [''],
@@ -489,7 +503,10 @@ describe('MessageList', () => {
       <MessageList
         {...createMessageListProps({
           messages,
-          isLoading: false,
+          activePhase: 'streaming-final',
+          shouldShowLoadingIndicator: false,
+          shouldReadLiveWork: true,
+          isTimerActive: true,
         })}
       />
     );
@@ -558,9 +575,12 @@ describe('MessageList', () => {
               parts: [{ text: 'Question' }],
             },
           ],
-          isLoading: true,
-          isPaused: true,
-          error: 'Network failed',
+          activePhase: 'recoverable-error',
+          shouldShowLoadingIndicator: true,
+          shouldReadLiveWork: true,
+          isPausedForAction: true,
+          inlineErrorMessage: 'Network failed',
+          globalErrorMessage: 'Network failed',
           onRetry,
         })}
       />

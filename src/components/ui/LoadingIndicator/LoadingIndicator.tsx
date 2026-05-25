@@ -1,12 +1,11 @@
 import React, { type FC, useEffect, useMemo, useRef } from 'react';
-import { type AgentState, type Work, type ProviderType } from '@/types';
+import { type AgentState, type Work, type ProviderType, type SwarmSessionPhase } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
 import { AgentAvatar } from '@/components/chat';
 import { TimerDisplay } from '@/components/ui/TimerDisplay';
 import { Logger } from '@shared/utils/logger';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
-import { getErroredAgents, isAnyAgentWorking, isErrorState, getContinueButtonText, handleContinueClick } from '@/utils/swarm/continueHelpers';
-import { isSynthesisComplete } from '@/utils/swarm/workHelpers';
+import { getContinueButtonState, getErroredAgents, isAnyAgentWorking, handleContinueClick } from '@/utils/swarm/continueHelpers';
 import './LoadingIndicator.css';
 
 const logger = new Logger('LoadingIndicator');
@@ -23,8 +22,9 @@ type LoadingIndicatorAgentDetail = {
 
 type LoadingIndicatorLogSnapshot = {
   status: string;
+  phase?: SwarmSessionPhase | null;
   messageId?: string;
-  isPaused?: boolean;
+  isPausedForAction?: boolean;
   agentDetails: LoadingIndicatorAgentDetail[];
 };
 
@@ -68,15 +68,20 @@ const areLogSnapshotsEqual = (
   next: LoadingIndicatorLogSnapshot
 ): boolean => {
   return previous.status === next.status
+    && previous.phase === next.phase
     && previous.messageId === next.messageId
-    && previous.isPaused === next.isPaused
+    && previous.isPausedForAction === next.isPausedForAction
     && areAgentDetailsEqual(previous.agentDetails, next.agentDetails);
 };
 
 export const LoadingIndicator: FC<{
     status: string;
+    phase?: SwarmSessionPhase | null;
+    progressStatusText?: string;
     agentStates: AgentState[];
-    isPaused?: boolean;
+    isPausedForAction?: boolean;
+    isTimerActive?: boolean;
+    inlineErrorMessage?: string | null;
     messageId?: string;
     onContinue?: () => void;
     onRegenerate?: (stepId: StepId, agentIndex: number) => void;
@@ -84,51 +89,60 @@ export const LoadingIndicator: FC<{
   work?: Work;
   provider?: ProviderType;
   model?: string;
-}> = ({ status, agentStates, isPaused, messageId, onContinue, onRegenerate, noWrapper, work, provider, model }) => {
+}> = ({ status, phase, progressStatusText, agentStates, isPausedForAction, isTimerActive, inlineErrorMessage, messageId, onContinue, onRegenerate, noWrapper, work, provider, model }) => {
   const latestLogStateRef = useRef<LoadingIndicatorLogSnapshot | null>(null);
 
-  // Check for errors in any step to determine button state
-  const erroredAgents = getErroredAgents(agentStates, messageId);
-  const isWorking = isAnyAgentWorking(agentStates, messageId);
-  const isError = isErrorState(agentStates, messageId);
-  const continueButtonText = getContinueButtonText(isError);
-  
-  const handleClick = () => {
-    handleContinueClick(agentStates, messageId, onContinue, onRegenerate);
-  };
-
-  // DYNAMIC STATUS DERIVATION:
-  // If the global 'status' prop is generic/empty, OR if it's an error message but agents are working,
-  // we derive a more useful status from the active agent states to tell the user what's actually happening.
-  let displayStatus = status || 'Initializing...';
-  
-  const isStatusError = typeof status === 'string' && status.startsWith('Error');
-  const shouldDeriveStatus = !status || status === 'Working...' || (isStatusError && isWorking);
-
-  if (shouldDeriveStatus) {
-      const activeState = agentStates.find(a => a.status === 'working' || (a.status === 'error' && !isWorking));
-      if (activeState) {
-          displayStatus = getStepConfig(activeState.stepId).progressMsg;
-      } else if (agentStates.some(a => a.stepId === STEPS.INITIAL && a.status === 'waiting')) {
-          displayStatus = 'Starting Swarm...';
-       }
-   }
-
-  // Filter agents to show only those belonging to the current generation/regeneration.
-  // This also keeps debug output stable when other messages update in the same store.
   const filteredAgents = useMemo(() => {
     return messageId
       ? agentStates.filter(agent => agent.messageId === messageId)
       : agentStates;
   }, [agentStates, messageId]);
 
+  const isWorking = isAnyAgentWorking(agentStates, messageId);
+  const hasAgentError = !isWorking && getErroredAgents(agentStates, messageId).length > 0;
+  const effectivePhase = phase ?? (isPausedForAction ? (hasAgentError ? 'recoverable-error' : 'awaiting-user') : 'running');
+  const isError = effectivePhase === 'recoverable-error' || !!inlineErrorMessage;
+  const continueButtonState = getContinueButtonState({
+    phase: effectivePhase,
+    agentStates,
+    messageId,
+    work,
+    hasContinueCallback: !!onContinue,
+    hasRegenerateCallback: !!onRegenerate,
+  });
+  
+  const handleClick = () => {
+    handleContinueClick(agentStates, messageId, onContinue, onRegenerate);
+  };
+
+  // DYNAMIC STATUS DERIVATION:
+  // If the status text is generic/empty, or an inline error is being retried while agents are working,
+  // we derive a more useful status from the active agent states to tell the user what's actually happening.
+  let displayStatus = progressStatusText || status;
+  
+  const shouldDeriveStatus = !displayStatus || displayStatus === 'Working...' || (isError && isWorking);
+
+  if (shouldDeriveStatus) {
+      const activeState = filteredAgents.find(a => a.status === 'working' || (a.status === 'error' && !isWorking));
+      if (activeState?.stepId) {
+          displayStatus = getStepConfig(activeState.stepId).progressMsg;
+      } else if (filteredAgents.some(a => a.stepId === STEPS.INITIAL && a.status === 'waiting')) {
+          displayStatus = 'Starting Swarm...';
+       }
+    }
+
+  if (!displayStatus) {
+    displayStatus = 'Initializing...';
+  }
+
   const agentDetails = useMemo(() => filteredAgents.map(toAgentDetail), [filteredAgents]);
 
   useEffect(() => {
     const nextLogSnapshot: LoadingIndicatorLogSnapshot = {
       status,
+      phase: effectivePhase,
       messageId,
-      isPaused,
+      isPausedForAction,
       agentDetails
     };
 
@@ -141,12 +155,13 @@ export const LoadingIndicator: FC<{
 
     logger.debug('LoadingIndicator RENDER', { 
       status, 
+      phase: effectivePhase,
       currentMessageId: messageId,
       agentStatesCount: agentDetails.length,
       agents: agentDetails,
       agentsByMessage: getAgentsByMessage(agentDetails)
     });
-  }, [status, messageId, isPaused, agentDetails]);
+  }, [status, effectivePhase, messageId, isPausedForAction, agentDetails]);
 
   useEffect(() => {
     return () => {
@@ -158,8 +173,9 @@ export const LoadingIndicator: FC<{
 
       logger.debug('LoadingIndicator UNMOUNTED', { 
         lastStatus: lastSnapshot.status,
+        lastPhase: lastSnapshot.phase,
         messageId: lastSnapshot.messageId,
-        isPaused: lastSnapshot.isPaused,
+        isPausedForAction: lastSnapshot.isPausedForAction,
         agents: lastSnapshot.agentDetails
       });
     };
@@ -176,7 +192,7 @@ export const LoadingIndicator: FC<{
                 </svg>
                 <div className="error-content">
                     <span className="error-title">Process Interrupted</span>
-                    <span className="error-message">{displayStatus.replace(/^Error:\s*/i, '')}</span>
+                    <span className="error-message">{inlineErrorMessage ?? displayStatus}</span>
                 </div>
             </div>
         )}
@@ -184,13 +200,13 @@ export const LoadingIndicator: FC<{
         <div className={`loading-header ${isError ? 'controls-only' : ''}`}>
             {!isError && <span className="loading-status">{displayStatus}</span>}
             <div className="loading-header-content">
-                {/* Only show Continue/Retry if paused, not working, synthesis incomplete, and actions available */}
-                {isPaused && !isWorking && (onContinue || (erroredAgents.length > 0 && onRegenerate)) && !isSynthesisComplete(work, agentStates) && (
+                {/* Continue/Retry visibility is derived from session phase and agent state. */}
+                {continueButtonState.visible && (
                     <button className="continue-button" onClick={handleClick}>
-                        {continueButtonText}
+                        {continueButtonState.label}
                     </button>
                 )}
-                <TimerDisplay isActive={!isPaused || isWorking} />
+                <TimerDisplay isActive={isTimerActive ?? (effectivePhase === 'running' || effectivePhase === 'streaming-final')} />
             </div>
         </div>
         <div className="agent-progress-list">

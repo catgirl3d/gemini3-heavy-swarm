@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useAgentStore } from '@/stores/agentStore';
+import { selectActiveSessionUi, useAgentStore } from '@/stores/agentStore';
 import { type AgentState, type Message, type Work } from '@/types';
 import { STEPS } from '@/types/steps';
 import { commitSessionSnapshotToMessage, resolveOperationalSession } from '@/utils/swarm/sessionSnapshots';
@@ -52,9 +52,7 @@ describe('sessionSnapshots', () => {
 
     useAgentStore.getState().startSession('model-1', liveWork, {
       agentStates: liveAgents,
-      status: 'running',
-      isLoading: true,
-      isPaused: false,
+      phase: 'running',
     });
 
     const resolved = resolveOperationalSession(message);
@@ -101,9 +99,7 @@ describe('sessionSnapshots', () => {
     };
 
     useAgentStore.getState().startSession('active-model', activeWork, {
-      status: 'paused',
-      isLoading: true,
-      isPaused: true,
+      phase: 'awaiting-user',
       loadingStatus: 'Paused. Waiting for user confirmation...',
     });
     useAgentStore.getState().setGlobalError('existing global error');
@@ -119,13 +115,15 @@ describe('sessionSnapshots', () => {
     expect(useAgentStore.getState()).toMatchObject({
       activeSessionMessageId: 'active-model',
       globalError: 'existing global error',
-      isLoading: true,
-      isPaused: true,
+    });
+    expect(selectActiveSessionUi(useAgentStore.getState())).toMatchObject({
+      isInputLocked: true,
+      isPausedForAction: true,
       loadingStatus: 'Paused. Waiting for user confirmation...',
     });
   });
 
-  it('hydrates with an explicit status when the caller provides one', () => {
+  it('hydrates with an explicit phase when the caller provides one', () => {
     const message: Message = {
       id: 'model-1',
       role: 'model',
@@ -134,7 +132,7 @@ describe('sessionSnapshots', () => {
     };
 
     const resolved = resolveOperationalSession(message, {
-      status: 'paused',
+      phase: 'awaiting-user',
       targetMessageId: 'paused-model',
     });
 
@@ -143,9 +141,7 @@ describe('sessionSnapshots', () => {
       sessionMessageId: 'paused-model',
     });
     expect(useAgentStore.getState().sessionsByMessageId['paused-model']).toMatchObject({
-      status: 'paused',
-      isLoading: true,
-      isPaused: true,
+      phase: 'awaiting-user',
     });
   });
 

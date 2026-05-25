@@ -173,7 +173,7 @@ export function useSwarmRegeneration({
     const previousActiveSessionId = store.activeSessionMessageId;
     const stepConfig = getStepConfig(stepId);
 
-    const resolvedSession = resolveOperationalSession(targetMessage, { status: 'paused' });
+    const resolvedSession = resolveOperationalSession(targetMessage, { phase: 'awaiting-user' });
     const sessionBeforeRun = useAgentStore.getState().sessionsByMessageId[messageId];
     const workContext = resolvedSession?.work ? cloneWork(resolvedSession.work) : undefined;
     const wasCompletedMessage = getStepMeta(workContext, STEPS.SYNTHESIS)?.status === 'done';
@@ -187,18 +187,14 @@ export function useSwarmRegeneration({
         : undefined;
     const previousSessionRuntime = resolvedSession?.source === 'existing-session' && sessionBeforeRun
       ? {
-          status: sessionBeforeRun.status,
-          isLoading: sessionBeforeRun.isLoading,
-          isPaused: sessionBeforeRun.isPaused,
+          phase: sessionBeforeRun.phase,
           loadingStatus: sessionBeforeRun.loadingStatus,
-          error: sessionBeforeRun.error,
+          errorMessage: sessionBeforeRun.errorMessage,
         }
       : {
-          status: wasCompletedMessage ? 'done' as const : 'paused' as const,
-          isLoading: !wasCompletedMessage,
-          isPaused: !wasCompletedMessage,
+          phase: wasCompletedMessage ? 'done' as const : 'awaiting-user' as const,
           loadingStatus: wasCompletedMessage ? '' : 'Paused. Waiting for user confirmation...',
-          error: null,
+          errorMessage: null,
         };
     
     if (!workContext) {
@@ -213,11 +209,9 @@ export function useSwarmRegeneration({
 
     store.startSession(messageId, workContext, {
       agentStates: seededAgentStates,
-      status: 'running',
-      isLoading: true,
-      isPaused: false,
+      phase: 'running',
       loadingStatus: stepConfig.progressMsg || '',
-      error: null,
+      errorMessage: null,
     });
 
     // Create AbortController for this regeneration and register it centrally
@@ -262,11 +256,10 @@ export function useSwarmRegeneration({
         () => undefined,
         controller.signal,
         () => {
-          // Pass synthesis jump callback - invoked by SynthesisStep when it starts streaming
-          useAgentStore.getState().updateSessionRuntime(messageId, {
-            isLoading: false,
-            isPaused: false,
-          });
+          useAgentStore.getState().setSessionPhase(messageId, 'streaming-final');
+        },
+        () => {
+          useAgentStore.getState().setSessionPhase(messageId, 'running');
         }
       );
 
@@ -288,20 +281,23 @@ export function useSwarmRegeneration({
       let shouldClearActiveSession = false;
       if (stepId !== STEPS.SYNTHESIS) {
           if (wasCompletedMessage) {
-              store.setSessionStatus(messageId, 'done');
+              store.setSessionPhase(messageId, 'done', {
+                loadingStatus: '',
+                errorMessage: null,
+              });
               shouldClearActiveSession = true;
           } else {
-              store.updateSessionRuntime(messageId, {
-                status: 'paused',
-                isLoading: true,
-                isPaused: true,
+              store.setSessionPhase(messageId, 'awaiting-user', {
                 loadingStatus: 'Paused. Waiting for user confirmation...',
-                error: null,
+                errorMessage: null,
               });
           }
       } else {
           // If synthesis completed successfully, we can finish the global loading state
-          store.setSessionStatus(messageId, 'done');
+          store.setSessionPhase(messageId, 'done', {
+            loadingStatus: '',
+            errorMessage: null,
+          });
           shouldClearActiveSession = true;
       }
 
@@ -309,7 +305,9 @@ export function useSwarmRegeneration({
         flushSync(() => {
           setMessages(prev => commitSessionSnapshotToMessage(prev, messageId));
         });
-        store.setActiveSession(undefined);
+        if (useAgentStore.getState().activeSessionMessageId === messageId) {
+          store.setActiveSession(undefined);
+        }
       } else {
         setMessages(prev => commitSessionSnapshotToMessage(prev, messageId));
       }
@@ -324,8 +322,13 @@ export function useSwarmRegeneration({
 
         store.replaceSessionWork(messageId, originalWorkSnapshot ?? workContext);
         store.replaceSessionAgents(messageId, previousAgentStates);
-        store.updateSessionRuntime(messageId, previousSessionRuntime);
-        store.setActiveSession(previousActiveSessionId);
+        store.setSessionPhase(messageId, previousSessionRuntime.phase, {
+          loadingStatus: previousSessionRuntime.loadingStatus,
+          errorMessage: previousSessionRuntime.errorMessage,
+        });
+        if (useAgentStore.getState().activeSessionMessageId === messageId) {
+          store.setActiveSession(previousActiveSessionId);
+        }
         
         activeRegenerationsRef.current.delete(regenerationKey);
         store.unregisterAbortController(controllerKey);
@@ -337,17 +340,10 @@ export function useSwarmRegeneration({
       
       store.replaceSessionWork(messageId, workContext);
 
-      // Update store state to show error in LoadingIndicator.
-      // NOTE: We set both isLoading: true AND isPaused: true.
-      // CRITICAL: isLoading must remain true so that MessageList keeps the LoadingIndicator mounted.
-      // In our state machine, this specific combination signals to the UI
-      // (LoadingIndicator) that the process has errored and needs a Retry button.
-      store.updateSessionRuntime(messageId, {
-        status: 'error',
-        isLoading: true,
-        isPaused: true,
+      // Keep the active session selected so the phase-aware inline retry UI remains visible.
+      store.setSessionPhase(messageId, 'recoverable-error', {
         loadingStatus: `Error: ${errorMessage}`,
-        error: errorMessage,
+        errorMessage,
       });
 
       setMessages(prev => commitSessionSnapshotToMessage(prev, messageId));

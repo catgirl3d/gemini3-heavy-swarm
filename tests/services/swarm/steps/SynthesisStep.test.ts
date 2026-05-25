@@ -84,6 +84,7 @@ describe('SynthesisStep', () => {
     work: TestWork;
     onMessageUpdate: ReturnType<typeof vi.fn>;
     onSynthesisJump: ReturnType<typeof vi.fn>;
+    onRetryProgress: ReturnType<typeof vi.fn>;
   };
 
   let mockContext: TestContext;
@@ -176,6 +177,7 @@ let updateSessionRuntimeMock: any;
       messageId: 'msg-123',
       onMessageUpdate: vi.fn(),
       onSynthesisJump: vi.fn(),
+      onRetryProgress: vi.fn(),
       signal: new AbortController().signal,
       ...restOverrides,
       settings,
@@ -687,7 +689,7 @@ let updateSessionRuntimeMock: any;
     expect(context.onSynthesisJump).toHaveBeenCalledTimes(1);
 
     capturedCallbacks.onRetry(2);
-    expect(updateSessionRuntimeMock).toHaveBeenCalledWith('msg-123', { isLoading: true });
+    expect(context.onRetryProgress).toHaveBeenCalledTimes(1);
     expect(updateAgentMock).toHaveBeenCalledWith(
       STEPS.SYNTHESIS,
       0,

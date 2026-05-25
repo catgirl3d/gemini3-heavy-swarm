@@ -53,9 +53,8 @@ export function handleSendMessageError(
   const errorMessage = getFriendlyErrorMessage(error);
 
   if (hasPartialWorkResults(latestWork)) {
-    // Keep results visible and mark as paused so user can retry or see what failed.
-    // NOTE: We keep isLoading: true (from sendMessage start) and set isPaused: true.
-    // This specific combination signals to the UI to show the Retry button in the error state.
+    // Keep results visible. The orchestration layer marks this as recoverable-error
+    // so phase-aware UI can show inline retry without using flag combinations.
     logger.info('Partial results detected, pausing instead of unmounting', { 
         status: `Error: ${errorMessage}` 
     });

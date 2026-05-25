@@ -6,13 +6,15 @@ import { DebugModal } from '@/components/chat/ShowWork/components/DebugModal';
 import { StatusAwareWorkCard } from '@/components/chat/ShowWork/components/StatusAwareWorkCard';
 import { type CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
 import { ArrowDownIcon, TokenIcon } from '@/components/chat/ShowWork/icons';
-import { getStepResults, getStepThoughts, getStepUsage, isSynthesisComplete } from '@/utils/swarm/workHelpers';
+import { getStepResults, getStepThoughts, getStepUsage } from '@/utils/swarm/workHelpers';
 import { useResolvedSwarmState } from '@/hooks/swarm/useResolvedSwarmState';
-import { getErroredAgents, isAnyAgentWorking, isErrorState, getContinueButtonText, handleContinueClick as handleContinueClickHelper } from '@/utils/swarm/continueHelpers';
+import { getContinueButtonState, handleContinueClick as handleContinueClickHelper } from '@/utils/swarm/continueHelpers';
 import { createSessionAgentsSelector, selectActiveSessionMessageId, useAgentStore } from '@/stores/agentStore';
-import { type StepDebugInfo, type TokenUsage } from '@/types/app-types';
+import { type AgentState, type StepDebugInfo, type TokenUsage } from '@/types/app-types';
 import { useAutoCollapse } from '@/hooks/ui/useAutoCollapse';
 import './ShowWork.css';
+
+const EMPTY_AGENT_STATES: AgentState[] = [];
 
 interface WorkCardViewModel {
   cardId: string;
@@ -30,7 +32,7 @@ interface WorkCardViewModel {
   className?: string;
 }
 
-export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, isPaused, onContinue, onRegenerate }) => {
+export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, phase, isPausedForAction, onContinue, onRegenerate }) => {
   const [contentModalData, setContentModalData] = useState<WorkModalData | null>(null);
   const [debugModalData, setDebugModalData] = useState<DebugModalData | null>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
@@ -40,7 +42,9 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
   const sessionAgentStates = useAgentStore(createSessionAgentsSelector(messageId));
   const activeSessionMessageId = useAgentStore(selectActiveSessionMessageId);
   const isCurrentMessage = activeSessionMessageId === messageId;
-  const effectiveAgentStates = isCurrentMessage ? (sessionAgentStates ?? []) : (work.agentStates ?? []);
+  const effectiveAgentStates = useMemo(() => {
+    return isCurrentMessage ? (sessionAgentStates ?? EMPTY_AGENT_STATES) : (work.agentStates ?? EMPTY_AGENT_STATES);
+  }, [isCurrentMessage, sessionAgentStates, work.agentStates]);
   
   const {
     synthesizerState,
@@ -59,8 +63,6 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
   const refinementThoughts = useMemo(() => getStepThoughts(work, STEPS.REFINEMENT), [work]);
   const synthesisUsages = useMemo(() => getStepUsage(work, STEPS.SYNTHESIS), [work]);
   const synthesisThoughts = useMemo(() => getStepThoughts(work, STEPS.SYNTHESIS), [work]);
-  const isSynthesisDone = useMemo(() => isSynthesisComplete(work, effectiveAgentStates), [effectiveAgentStates, work]);
-
   const synthesisText: string | null = synthesisResults[0] ?? null;
 
   // Manage automatic collapsing of agent work details via custom hook
@@ -174,31 +176,19 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
     return allCards.reduce((total, card) => total + (card.tokenUsage?.totalTokens || 0), 0);
   }, [allCards]);
 
-  // Continue/Retry button logic using shared helpers
-  const erroredAgents = useMemo(() => getErroredAgents(effectiveAgentStates, messageId), [effectiveAgentStates, messageId]);
-  const isWorking = useMemo(() => isAnyAgentWorking(effectiveAgentStates, messageId), [effectiveAgentStates, messageId]);
-  const isError = useMemo(() => isErrorState(effectiveAgentStates, messageId), [effectiveAgentStates, messageId]);
-  const continueButtonText = getContinueButtonText(isError);
+  const effectivePhase = phase ?? (isPausedForAction ? 'awaiting-user' : null);
+  const continueButtonState = useMemo(() => getContinueButtonState({
+    phase: isLive ? effectivePhase : null,
+    agentStates: effectiveAgentStates,
+    messageId,
+    work,
+    hasContinueCallback: !!onContinue,
+    hasRegenerateCallback: !!onRegenerate,
+  }), [effectiveAgentStates, effectivePhase, isLive, messageId, onContinue, onRegenerate, work]);
   
   const handleClick = useCallback(() => {
     handleContinueClickHelper(effectiveAgentStates, messageId, onContinue, onRegenerate);
   }, [effectiveAgentStates, messageId, onContinue, onRegenerate]);
-
-  // Determine if the continue/retry button should be visible
-  const showContinueButton = useMemo(() => {
-    // 1. Don't show if agents are actively working
-    if (isWorking) return false;
-    
-    // 2. Only show for live, paused messages
-    if (!isLive || !isPaused) return false;
-
-    // 3. CRITICAL: Don't show if synthesis is already done.
-    // This prevents the "ghost" Continue button after full completion.
-    if (isSynthesisDone) return false;
-    
-    // 4. Show if we can continue OR if there are errors and we can regenerate
-    return onContinue !== undefined || (erroredAgents.length > 0 && onRegenerate !== undefined);
-  }, [isPaused, isLive, isWorking, isSynthesisDone, onContinue, erroredAgents.length, onRegenerate]);
 
   return (
     <>
@@ -285,10 +275,10 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, i
             </div>
           )}
 
-          {showContinueButton && (
+          {continueButtonState.visible && (
             <div className="show-work-continue-container">
               <button className="continue-button" onClick={handleClick}>
-                {continueButtonText}
+                {continueButtonState.label}
               </button>
             </div>
           )}

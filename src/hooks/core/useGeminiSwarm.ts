@@ -8,7 +8,8 @@ import { type StepId } from '@/types/steps';
 
 import { useSwarmOrchestration } from '@/hooks/swarm/useSwarmOrchestration';
 import { useSwarmRegeneration } from '@/hooks/swarm/useSwarmRegeneration';
-import { useAgentStore } from '@/stores/agentStore';
+import { selectActiveSessionUi, useAgentStore } from '@/stores/agentStore';
+import { useShallow } from 'zustand/shallow';
 
 /**
  * useGeminiSwarm - Composite hook that provides the main API for the agentic workflow.
@@ -19,11 +20,12 @@ export const useGeminiSwarm = () => {
   const { settings, settingsLoaded, setSettings, resetSettings, loadError, clearLoadError } = useAppSettings();
   const { messages, setMessages, messagesRef } = useMessages();
   
-  // Zustand Store - read live UI state from the active session view.
-  const isLoading = useAgentStore(state => state.isLoading);
-  const isPaused = useAgentStore(state => state.isPaused);
-  const loadingStatus = useAgentStore(state => state.loadingStatus);
-  const error = useAgentStore(state => state.error);
+  // Zustand Store - derive UI state from the active session phase.
+  const sessionUi = useAgentStore(useShallow(selectActiveSessionUi));
+  const isLoading = sessionUi.isInputLocked;
+  const isPaused = sessionUi.isPausedForAction;
+  const loadingStatus = sessionUi.loadingStatus;
+  const error = sessionUi.globalErrorMessage;
   
   // 2. Shared Infrastructure
   const mainAbort = useAbortController();
@@ -73,6 +75,20 @@ export const useGeminiSwarm = () => {
     isLoading,
     isPaused,
     loadingStatus,
+    sessionUi,
+    activePhase: sessionUi.activePhase,
+    isInputLocked: sessionUi.isInputLocked,
+    canStartNewPrompt: sessionUi.canStartNewPrompt,
+    canStop: sessionUi.canStop,
+    canAbortRequest: sessionUi.canAbortRequest,
+    shouldShowLoadingIndicator: sessionUi.shouldShowLoadingIndicator,
+    shouldReadLiveWork: sessionUi.shouldReadLiveWork,
+    shouldAutoScrollOnSessionChange: sessionUi.shouldAutoScrollOnSessionChange,
+    isPausedForAction: sessionUi.isPausedForAction,
+    isTimerActive: sessionUi.isTimerActive,
+    progressStatusText: sessionUi.progressStatusText,
+    inlineErrorMessage: sessionUi.inlineErrorMessage,
+    globalErrorMessage: sessionUi.globalErrorMessage,
     settings,
     settingsLoaded,
     error,

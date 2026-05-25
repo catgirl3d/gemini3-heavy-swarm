@@ -6,7 +6,7 @@ import { ShowWork } from '@/components/chat/ShowWork';
 import { DownloadIcon, CopyIcon, CheckIcon } from '@/components/chat/ShowWork/icons';
 import { downloadContent } from '@/components/chat/ShowWork/utils';
 import { Sources } from '@/components/chat/Sources';
-import { type Message, type Work, type ProviderType } from '@/types';
+import { type Message, type Work, type ProviderType, type SwarmSessionPhase } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
 import { selectActiveSession, selectActiveSessionMessageId, useAgentStore } from '@/stores/agentStore';
 import { getStepResults } from '@/utils/swarm/workHelpers';
@@ -70,10 +70,15 @@ const ActionButton: FC<ActionButtonProps> = ({ onClick, icon, successIcon, title
 
 interface MessageListProps {
   messages: Message[];
-  isLoading: boolean;
-  isPaused: boolean;
-  error: string | null;
+  activePhase: SwarmSessionPhase | null;
+  shouldShowLoadingIndicator: boolean;
+  shouldReadLiveWork: boolean;
+  isPausedForAction: boolean;
+  isTimerActive: boolean;
+  inlineErrorMessage: string | null;
+  globalErrorMessage: string | null;
   loadingStatus: string;
+  progressStatusText: string;
   modelDisplayName: string;
   provider: ProviderType;
   model: string;
@@ -86,10 +91,15 @@ interface MessageListProps {
 
 const MessageListComponent: FC<MessageListProps> = ({
   messages,
-  isLoading,
-  isPaused,
-  error,
+  activePhase,
+  shouldShowLoadingIndicator,
+  shouldReadLiveWork,
+  isPausedForAction,
+  isTimerActive,
+  inlineErrorMessage,
+  globalErrorMessage,
   loadingStatus,
+  progressStatusText,
   modelDisplayName,
   provider,
   model,
@@ -106,7 +116,7 @@ const MessageListComponent: FC<MessageListProps> = ({
 
   return (
     <div className="message-list" ref={messageListRef}>
-      {messages.length === 0 && !isLoading ? (
+      {messages.length === 0 && !shouldShowLoadingIndicator ? (
         <EmptyState 
           onPromptClick={onPromptClick} 
           modelDisplayName={modelDisplayName} 
@@ -116,12 +126,10 @@ const MessageListComponent: FC<MessageListProps> = ({
       ) : (
         messages.map((msg, index) => {
           const isCurrentSessionMessage = msg.id === activeSessionMessageId;
-          // LoadingIndicator still follows the loading flag, but the current session row must
-          // keep reading live work after synthesis jump turns isLoading off on first text.
-          const isActiveGeneration = isLoading && isCurrentSessionMessage;
+          const isActiveGeneration = shouldShowLoadingIndicator && isCurrentSessionMessage;
           // Only the current session row is allowed to read from the live session store.
           // Historical rows must stay pinned to their message snapshot.
-          const liveWork = isCurrentSessionMessage ? activeWork : undefined;
+          const liveWork = shouldReadLiveWork && isCurrentSessionMessage ? activeWork : undefined;
           // This is the single render-time work source for the row: visibility checks,
           // markdown text, sources, loading UI, and ShowWork all read from the same object.
           const effectiveWork = getMessageDisplayWork(msg, liveWork);
@@ -147,7 +155,7 @@ const MessageListComponent: FC<MessageListProps> = ({
           // If a global error occurred, hide the last model message if it has no final text AND no completed drafts.
           // Total failures still persist a hidden snapshot for retry/debug state, but the early-step error UI should
           // stay on the global banner instead of rendering empty failure cards inline.
-          if (error && isLast && msg.role === 'model' && !hasText && !hasCompletedDrafts) {
+          if (globalErrorMessage && isLast && msg.role === 'model' && !hasText && !hasCompletedDrafts) {
              return null;
           }
           
@@ -194,8 +202,12 @@ const MessageListComponent: FC<MessageListProps> = ({
                       <LoadingIndicator
                         noWrapper
                         status={loadingStatus}
+                        phase={activePhase}
+                        progressStatusText={progressStatusText}
                         agentStates={activeAgentStates}
-                        isPaused={isPaused}
+                        isPausedForAction={isPausedForAction}
+                        isTimerActive={isTimerActive}
+                        inlineErrorMessage={inlineErrorMessage}
                         messageId={activeSessionMessageId}
                         onContinue={onContinue}
                         onRegenerate={(phase, agentIndex) => onRegenerate(msg.id, phase as StepId, agentIndex)}
@@ -221,7 +233,8 @@ const MessageListComponent: FC<MessageListProps> = ({
                           work={effectiveWork ?? EMPTY_WORK}
                           messageId={msg.id}
                           isLive={isCurrentSessionMessage}
-                          isPaused={isPaused}
+                          phase={activePhase}
+                          isPausedForAction={isPausedForAction}
                           onContinue={onContinue}
                           onRegenerate={handleRegenerate}
                         />
@@ -238,15 +251,19 @@ const MessageListComponent: FC<MessageListProps> = ({
       )}
       
       {/* Show loading indicator at bottom only if generating a NEW message not yet in the list */}
-      {isLoading && activeSessionMessageId && !messages.some(m => m.id === activeSessionMessageId) && (
+      {shouldShowLoadingIndicator && activeSessionMessageId && !messages.some(m => m.id === activeSessionMessageId) && (
         <div className="message-wrapper model loading-state">
           <AgentAvatar type="model" provider={provider} model={model} />
           <div className="loading-container-wrapper">
             <LoadingIndicator
               noWrapper
               status={loadingStatus}
+              phase={activePhase}
+              progressStatusText={progressStatusText}
               agentStates={activeAgentStates}
-              isPaused={isPaused}
+              isPausedForAction={isPausedForAction}
+              isTimerActive={isTimerActive}
+              inlineErrorMessage={inlineErrorMessage}
               messageId={activeSessionMessageId}
               onContinue={onContinue}
               onRegenerate={(phase, agentIndex) => onRegenerate(activeSessionMessageId, phase as StepId, agentIndex)}
@@ -260,9 +277,10 @@ const MessageListComponent: FC<MessageListProps> = ({
                   work={activeWork}
                   isLive={true}
                   messageId={activeSessionMessageId}
-                  isPaused={isPaused}
+                  phase={activePhase}
+                  isPausedForAction={isPausedForAction}
                   onContinue={onContinue}
-                  onRegenerate={isPaused ? (phase, agentIndex) => onRegenerate(activeSessionMessageId, phase as StepId, agentIndex) : undefined}
+                  onRegenerate={isPausedForAction ? (phase, agentIndex) => onRegenerate(activeSessionMessageId, phase as StepId, agentIndex) : undefined}
                 />
               </div>
             )}
@@ -270,13 +288,13 @@ const MessageListComponent: FC<MessageListProps> = ({
         </div>
       )}
       
-      {error && (
+      {globalErrorMessage && (
         <div className="error-container">
           <div className="error-message">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="error-icon">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
             </svg>
-            <span>{error}</span>
+            <span>{globalErrorMessage}</span>
           </div>
           <button className="retry-button" onClick={onRetry}>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">

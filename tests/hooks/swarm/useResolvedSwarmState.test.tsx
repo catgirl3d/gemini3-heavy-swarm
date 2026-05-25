@@ -162,9 +162,7 @@ describe('useResolvedSwarmState', () => {
     });
     useAgentStore.getState().startSession('message-1', { results: {} }, {
       agentStates: [liveAgent],
-      status: 'paused',
-      isLoading: true,
-      isPaused: true,
+      phase: 'awaiting-user',
     });
     useAgentStore.getState().setActiveSession(undefined);
 

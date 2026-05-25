@@ -35,7 +35,6 @@ vi.mock('@/stores/agentStore', () => ({
   useAgentStore: {
     getState: vi.fn(() => ({
       replaceSessionWork: vi.fn(),
-      setSessionStatus: vi.fn(),
       sessionsByMessageId: {},
     }))
   }
@@ -123,10 +122,8 @@ describe('StepRunner', () => {
     };
     
     const replaceSessionWorkMock = vi.fn();
-    const setSessionStatusMock = vi.fn();
     (useAgentStore.getState as any).mockReturnValue({
       replaceSessionWork: replaceSessionWorkMock,
-      setSessionStatus: setSessionStatusMock,
       sessionsByMessageId: {},
     });
 
@@ -141,7 +138,6 @@ describe('StepRunner', () => {
     await runner.run(context);
 
     expect(replaceSessionWorkMock).toHaveBeenCalled();
-    expect(setSessionStatusMock).toHaveBeenCalledWith('msg-1', 'running');
     const lastCallWork = replaceSessionWorkMock.mock.calls.at(-1)?.[1];
     expect(lastCallWork.results.step1).toBe('done');
   });
@@ -324,7 +320,6 @@ describe('StepRunner', () => {
     mockSettings.pauseAfterInitial = true;
     const liveStoreState = {
       replaceSessionWork: vi.fn(),
-      setSessionStatus: vi.fn(),
       sessionsByMessageId: {},
     };
     (useAgentStore.getState as any).mockImplementation(() => liveStoreState);

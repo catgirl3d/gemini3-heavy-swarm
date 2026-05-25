@@ -1,5 +1,23 @@
-import { type AgentState } from '@/types';
+import { type AgentState, type SwarmSessionPhase, type Work } from '@/types';
 import { type StepId } from '@/types/steps';
+import { isSynthesisComplete } from '@/utils/swarm/workHelpers';
+
+export interface ContinueButtonStateOptions {
+  phase: SwarmSessionPhase | null;
+  agentStates: AgentState[];
+  messageId?: string;
+  work?: Work;
+  hasContinueCallback: boolean;
+  hasRegenerateCallback: boolean;
+}
+
+export interface ContinueButtonState {
+  visible: boolean;
+  label: 'Continue' | 'Retry';
+  isRetry: boolean;
+  isWorking: boolean;
+  erroredAgents: AgentState[];
+}
 
 /**
  * Determines if there are errored agents for a given message
@@ -43,6 +61,30 @@ export function isErrorState(
  */
 export function getContinueButtonText(isError: boolean): string {
   return isError ? 'Retry' : 'Continue';
+}
+
+export function getContinueButtonState({
+  phase,
+  agentStates,
+  messageId,
+  work,
+  hasContinueCallback,
+  hasRegenerateCallback,
+}: ContinueButtonStateOptions): ContinueButtonState {
+  const erroredAgents = getErroredAgents(agentStates, messageId);
+  const isWorking = isAnyAgentWorking(agentStates, messageId);
+  const isRetry = phase === 'recoverable-error' || erroredAgents.length > 0;
+  const isActionPhase = phase === 'awaiting-user' || phase === 'recoverable-error';
+  const isComplete = work ? isSynthesisComplete(work, agentStates) : false;
+  const hasAction = hasContinueCallback || (erroredAgents.length > 0 && hasRegenerateCallback);
+
+  return {
+    visible: isActionPhase && !isWorking && !isComplete && hasAction,
+    label: isRetry ? 'Retry' : 'Continue',
+    isRetry,
+    isWorking,
+    erroredAgents,
+  };
 }
 
 /**

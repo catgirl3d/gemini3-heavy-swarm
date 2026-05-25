@@ -324,10 +324,7 @@ export abstract class BaseStep implements StepDescriptor {
 
     const updated = this.updateAgentStatus(states, index, nextStatus, label);
     
-    // CRITICAL: Restore loading indicator when any retry starts
-    if (context.messageId) {
-      useAgentStore.getState().updateSessionRuntime(context.messageId, { isLoading: true });
-    }
+    context.onRetryProgress?.();
 
     updateAgentStatus(
       this.id,

@@ -7,8 +7,8 @@ type AutoScrollResult = ReturnType<typeof useAutoScroll>;
 
 const createDeps = (overrides: Partial<AutoScrollDeps> = {}): AutoScrollDeps => ({
   messagesLength: 0,
-  isLoading: false,
-  error: null,
+  shouldAutoScrollOnSessionChange: false,
+  globalErrorMessage: null,
   ...overrides,
 });
 
@@ -91,7 +91,7 @@ describe('useAutoScroll', () => {
       act(() => {
         result.current.scrollToBottom();
       });
-      rerender({ deps: createDeps({ messagesLength: 1, isLoading: true, error: 'boom' }) });
+      rerender({ deps: createDeps({ messagesLength: 1, shouldAutoScrollOnSessionChange: true, globalErrorMessage: 'boom' }) });
     }).not.toThrow();
   });
 
@@ -166,7 +166,7 @@ describe('useAutoScroll', () => {
     setScrollMetrics(view.element, { scrollHeight: 1500 });
 
     act(() => {
-      view.rerenderWith(createDeps({ messagesLength: 2, isLoading: true, error: 'boom' }));
+      view.rerenderWith(createDeps({ messagesLength: 2, shouldAutoScrollOnSessionChange: true, globalErrorMessage: 'boom' }));
     });
 
     expect(view.element.scrollTop).toBe(100);

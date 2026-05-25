@@ -39,6 +39,7 @@ export class SwarmOrchestrator {
     onPause?: () => void,
     onStatusUpdate?: (status: string) => void,
     onSynthesisJump?: () => void,
+    onRetryProgress?: () => void,
     existingWork?: Work
   ): Promise<{ work: Work; paused: boolean }> {
     
@@ -78,6 +79,7 @@ export class SwarmOrchestrator {
       work: liveWork,
       onMessageUpdate,
       onSynthesisJump,
+      onRetryProgress,
       signal,
       messageId
     };
@@ -107,7 +109,8 @@ export class SwarmOrchestrator {
     agentStates: AgentState[],
     onUpdate: (text: string, isFirstChunk: boolean, thought?: string, usage?: TokenUsage | null) => void,
     signal: AbortSignal,
-    onSynthesisJump?: () => void
+    onSynthesisJump?: () => void,
+    onRetryProgress?: () => void
   ): Promise<{ work: Work }> {
     
     // Provider handles its own settings adjustments
@@ -135,6 +138,7 @@ export class SwarmOrchestrator {
         work: workContext,
         onMessageUpdate: (text, isFirstChunk, thought, usage) => onUpdate(text, isFirstChunk, thought, usage),
         onSynthesisJump,
+        onRetryProgress,
         signal,
         messageId,
       };

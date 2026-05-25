@@ -91,8 +91,9 @@ describe('LoadingIndicator', () => {
     render(
       <LoadingIndicator
         status=""
+        phase="awaiting-user"
         agentStates={[createAgentState({ messageId: 'message-1' })]}
-        isPaused
+        isPausedForAction
         messageId="message-1"
         onContinue={onContinue}
         noWrapper
@@ -113,7 +114,9 @@ describe('LoadingIndicator', () => {
 
     render(
       <LoadingIndicator
-        status="Error: upstream failed"
+        status="Retry needed"
+        phase="recoverable-error"
+        inlineErrorMessage="upstream failed"
         agentStates={[
           createAgentState({
             id: 'error-1',
@@ -139,7 +142,7 @@ describe('LoadingIndicator', () => {
             agentIndex: 2,
           }),
         ]}
-        isPaused
+        isPausedForAction
         messageId="message-1"
         onRegenerate={onRegenerate}
         noWrapper
@@ -162,8 +165,9 @@ describe('LoadingIndicator', () => {
     render(
       <LoadingIndicator
         status="Paused"
+        phase="awaiting-user"
         agentStates={[createAgentState({ messageId: 'message-1', status: 'done', label: 'Drafted' })]}
-        isPaused
+        isPausedForAction
         messageId="message-1"
         onContinue={onContinue}
         work={createWork({
@@ -235,6 +239,7 @@ describe('LoadingIndicator', () => {
     rerender(
       <LoadingIndicator
         status="Paused"
+        phase="awaiting-user"
         agentStates={[
           { ...baseAgent, status: 'done', label: 'Drafted' },
           createAgentState({
@@ -246,7 +251,7 @@ describe('LoadingIndicator', () => {
             agentIndex: 1,
           }),
         ]}
-        isPaused
+        isPausedForAction
         messageId="message-1"
         noWrapper
       />

@@ -19,12 +19,21 @@ const InfoModal = lazy(() => import('@/components/modals/InfoModal').then(m => (
 export const App: FC = () => {
   const {
     messages,
-    isLoading,
-    isPaused,
     loadingStatus,
+    activePhase,
+    isInputLocked,
+    canStartNewPrompt,
+    canStop,
+    shouldShowLoadingIndicator,
+    shouldReadLiveWork,
+    shouldAutoScrollOnSessionChange,
+    isPausedForAction,
+    isTimerActive,
+    progressStatusText,
+    inlineErrorMessage,
+    globalErrorMessage,
     settings,
     settingsLoaded,
-    error,
     setSettings,
     resetSettings,
     sendMessage,
@@ -53,8 +62,8 @@ export const App: FC = () => {
     scrollToBottom
   } = useAutoScroll({
     messagesLength: messages.length,
-    isLoading,
-    error
+    shouldAutoScrollOnSessionChange,
+    globalErrorMessage
   });
 
   const [userInput, setUserInput] = useState('');
@@ -204,10 +213,15 @@ export const App: FC = () => {
 
       <MessageList
         messages={messages}
-        isLoading={isLoading}
-        isPaused={isPaused}
-        error={error}
+        activePhase={activePhase}
+        shouldShowLoadingIndicator={shouldShowLoadingIndicator}
+        shouldReadLiveWork={shouldReadLiveWork}
+        isPausedForAction={isPausedForAction}
+        isTimerActive={isTimerActive}
+        inlineErrorMessage={inlineErrorMessage}
+        globalErrorMessage={globalErrorMessage}
         loadingStatus={loadingStatus}
+        progressStatusText={progressStatusText}
         modelDisplayName={modelDisplayName}
         provider={settings.provider}
         model={providerInfo.currentModelId}
@@ -219,7 +233,9 @@ export const App: FC = () => {
       />
 
       <InputArea
-        isLoading={isLoading}
+        isInputLocked={isInputLocked}
+        canStartNewPrompt={canStartNewPrompt}
+        canStop={canStop}
         image={image}
         userInput={userInput}
         onUserInputChange={setUserInput}

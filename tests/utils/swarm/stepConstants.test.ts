@@ -142,22 +142,22 @@ describe('stepConstants', () => {
   });
 
   describe('handleSynthesisJump', () => {
-    it('hides loading, logs, and calls onJump once', () => {
-      const hideLoadingIndicator = vi.fn();
+    it('signals first visible synthesis text, logs, and calls onJump once', () => {
+      const onFinalTextVisible = vi.fn();
       const onJump = vi.fn();
 
-      handleSynthesisJump(hideLoadingIndicator, onJump);
+      handleSynthesisJump(onFinalTextVisible, onJump);
 
-      expect(loggerInfo).toHaveBeenCalledWith('SYNTHESIS JUMP - First chunk received, hiding LoadingIndicator');
-      expect(hideLoadingIndicator).toHaveBeenCalledTimes(1);
+      expect(loggerInfo).toHaveBeenCalledWith('SYNTHESIS JUMP - First visible synthesis text received');
+      expect(onFinalTextVisible).toHaveBeenCalledTimes(1);
       expect(onJump).toHaveBeenCalledTimes(1);
     });
 
     it('works without an optional onJump callback', () => {
-      const hideLoadingIndicator = vi.fn();
+      const onFinalTextVisible = vi.fn();
 
-      expect(() => handleSynthesisJump(hideLoadingIndicator)).not.toThrow();
-      expect(hideLoadingIndicator).toHaveBeenCalledTimes(1);
+      expect(() => handleSynthesisJump(onFinalTextVisible)).not.toThrow();
+      expect(onFinalTextVisible).toHaveBeenCalledTimes(1);
     });
   });
 });

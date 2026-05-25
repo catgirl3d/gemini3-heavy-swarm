@@ -60,11 +60,13 @@ export interface StepContext {
   
   /**
    * Optional: Called when synthesis step receives its first text chunk.
-   * Triggers UI updates like hiding loading indicators and unpausing.
-   * Note: Card collapse is handled automatically by ShowWork components 
-   * reacting to the synthesizer agent status change.
+   * Signals that final text is visible. Card collapse is handled by ShowWork
+   * after the work update has reached the live session store.
    */
   onSynthesisJump?: () => void;
+
+  /** Optional: Called when a retry attempt starts inside a step. */
+  onRetryProgress?: () => void;
   
   // Signal to abort execution
   signal: AbortSignal;

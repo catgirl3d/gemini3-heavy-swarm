@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   useSwarmOrchestration: vi.fn(),
   useSwarmRegeneration: vi.fn(),
   orchestratorCtor: vi.fn(),
+  useShallow: vi.fn((selector) => selector),
 }));
 
 vi.mock('@/hooks/state/useAppSettings', () => ({
@@ -38,8 +39,39 @@ vi.mock('@/hooks/swarm/useSwarmRegeneration', () => ({
   useSwarmRegeneration: mocks.useSwarmRegeneration,
 }));
 
+vi.mock('zustand/shallow', () => ({
+  useShallow: mocks.useShallow,
+}));
+
 vi.mock('@/stores/agentStore', () => ({
   useAgentStore: (selector: (state: any) => unknown) => selector(mocks.storeState),
+  selectActiveSessionUi: (state: any) => {
+    const activeSession = state.activeSessionMessageId
+      ? state.sessionsByMessageId[state.activeSessionMessageId]
+      : undefined;
+    const activePhase = activeSession?.phase ?? null;
+    const isInputLocked = ['running', 'streaming-final', 'awaiting-user', 'recoverable-error'].includes(activePhase);
+    const shouldShowLoadingIndicator = ['running', 'awaiting-user', 'recoverable-error'].includes(activePhase);
+    const isPausedForAction = ['awaiting-user', 'recoverable-error'].includes(activePhase);
+
+    return {
+      activePhase,
+      hasActiveSession: !!activeSession,
+      isInputLocked,
+      canStartNewPrompt: !isInputLocked,
+      canStop: isInputLocked,
+      canAbortRequest: activePhase === 'running' || activePhase === 'streaming-final',
+      shouldShowLoadingIndicator,
+      shouldReadLiveWork: isInputLocked,
+      shouldAutoScrollOnSessionChange: isInputLocked || !!state.globalError,
+      isPausedForAction,
+      isTimerActive: activePhase === 'running' || activePhase === 'streaming-final',
+      progressStatusText: activeSession?.errorMessage ?? activeSession?.loadingStatus ?? '',
+      loadingStatus: activeSession?.loadingStatus ?? '',
+      inlineErrorMessage: activePhase === 'recoverable-error' ? activeSession?.errorMessage ?? null : null,
+      globalErrorMessage: state.globalError ?? null,
+    };
+  },
   selectActiveSessionMessageId: (state: any) => state.activeSessionMessageId,
   selectActiveSession: (state: any) => state.activeSessionMessageId ? state.sessionsByMessageId[state.activeSessionMessageId] : undefined,
 }));
@@ -99,19 +131,16 @@ describe('useGeminiSwarm', () => {
       regenerateAgentResponse: vi.fn(),
     };
     mocks.storeState = {
-      isLoading: true,
-      isPaused: false,
-      loadingStatus: 'Loading...',
-      error: 'boom',
+      globalError: 'boom',
       activeSessionMessageId: 'message-1',
       sessionsByMessageId: {
         'message-1': {
           messageId: 'message-1',
           work: currentWork,
           agentStates: [{ id: 'agent-1', name: 'Agent 1', status: 'working', label: 'Working' }],
-          status: 'running',
+          phase: 'running',
           loadingStatus: 'Loading...',
-          error: 'boom',
+          errorMessage: null,
           updatedAt: 1,
         },
       },
@@ -149,6 +178,7 @@ describe('useGeminiSwarm', () => {
     expect(result.current.stopGeneration).toBe(mocks.orchestrationReturn.stopGeneration);
     expect(result.current.retry).toBe(mocks.orchestrationReturn.retry);
     expect(result.current.continueGeneration).toBe(mocks.orchestrationReturn.continueGeneration);
+    expect(mocks.useShallow).toHaveBeenCalledTimes(1);
 
     const orchestrationArgs = mocks.useSwarmOrchestration.mock.calls[0][0];
     result.current.regenerateAgentResponse('msg-7', STEPS.REFINEMENT, 2);

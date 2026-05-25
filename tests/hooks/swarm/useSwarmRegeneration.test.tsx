@@ -4,7 +4,7 @@ import type { SetStateAction } from 'react';
 import type { AgentState, AppSettings, Message, Source, StepId, TokenUsage, Work } from '@/types';
 import { createMockSettings } from '@/test/utils/settingsMocks';
 import { STEPS } from '@/types/steps';
-import { useAgentStore } from '@/stores/agentStore';
+import { selectActiveSessionUi, useAgentStore } from '@/stores/agentStore';
 
 const mocks = vi.hoisted(() => ({
   getFriendlyErrorMessage: vi.fn(() => 'Friendly failure'),
@@ -224,6 +224,7 @@ const toRegenerateResponseCall = (args: any[]) => {
     onUpdate,
     signal,
     onSynthesisJump,
+    onRetryProgress,
   ] = args;
 
   return {
@@ -240,6 +241,7 @@ const toRegenerateResponseCall = (args: any[]) => {
     onUpdate: onUpdate as (text: string, isFirstChunk: boolean, thought?: string, usage?: TokenUsage) => void,
     signal,
     onSynthesisJump,
+    onRetryProgress,
   };
 };
 
@@ -338,9 +340,7 @@ describe('useSwarmRegeneration', () => {
       },
     });
     useAgentStore.getState().startSession('model-1', fallbackWork, {
-      status: 'paused',
-      isLoading: true,
-      isPaused: true,
+      phase: 'awaiting-user',
     });
     const { result, regenerateResponse, messagesState } = renderRegeneration({
       initialMessages: createConversationWithoutWork(),
@@ -366,7 +366,7 @@ describe('useSwarmRegeneration', () => {
     });
 
     expect(regenerateResponse).not.toHaveBeenCalled();
-    expect(useAgentStore.getState().error).toBe('Cannot regenerate this message. Please try again.');
+    expect(useAgentStore.getState().globalError).toBe('Cannot regenerate this message. Please try again.');
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
   });
 
@@ -458,11 +458,13 @@ describe('useSwarmRegeneration', () => {
 
     expect(regenerateResponse).not.toHaveBeenCalled();
     expect(mocks.getFriendlyErrorMessage).toHaveBeenCalledWith(expect.any(Error));
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: true,
-      isPaused: true,
-      loadingStatus: 'Error: Friendly failure',
-      activeSessionMessageId: 'model-1',
+    expect(useAgentStore.getState().activeSessionMessageId).toBe('model-1');
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.phase).toBe('recoverable-error');
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.loadingStatus).toBe('Error: Friendly failure');
+    expect(selectActiveSessionUi(useAgentStore.getState())).toMatchObject({
+      isInputLocked: true,
+      isPausedForAction: true,
+      inlineErrorMessage: 'Friendly failure',
     });
     expect(messagesState.messages[0].work?.agentStates).toEqual([
       expect.objectContaining({ id: 'model-1-initial-agent-0', messageId: 'model-1' }),
@@ -495,9 +497,11 @@ describe('useSwarmRegeneration', () => {
     act(() => {
       captured?.onSynthesisJump();
     });
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      isPaused: false,
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.phase).toBe('streaming-final');
+    expect(selectActiveSessionUi(useAgentStore.getState())).toMatchObject({
+      isInputLocked: true,
+      shouldShowLoadingIndicator: false,
+      shouldReadLiveWork: true,
     });
 
     await act(async () => {
@@ -509,11 +513,8 @@ describe('useSwarmRegeneration', () => {
       await regenerationPromise;
     });
 
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      isPaused: false,
-      activeSessionMessageId: undefined,
-    });
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(selectActiveSessionUi(useAgentStore.getState()).isInputLocked).toBe(false);
   });
 
   it('syncs the final regenerated work, metadata, work-owned sources, and agent snapshot back to the target message', async () => {
@@ -525,9 +526,7 @@ describe('useSwarmRegeneration', () => {
       createAgent({ id: 'other-message-agent', agentIndex: 1, messageId: 'other-model' }),
     ];
     useAgentStore.getState().startSession('model-1', createBaseWork(), {
-      status: 'paused',
-      isLoading: true,
-      isPaused: true,
+      phase: 'awaiting-user',
     });
     useAgentStore.getState().replaceSessionAgents('model-1', snapshotAgents);
     const regenerateResponse = vi.fn(async (...args: any[]) => {
@@ -573,11 +572,8 @@ describe('useSwarmRegeneration', () => {
     expect(updatedWork.results?.[`${STEPS.SYNTHESIS}_sources`]).toEqual([{ uri: 'https://old-source.test', title: 'Old Source' }]);
     expect(updatedWork.agentStates).toEqual(snapshotAgents.slice(0, 2));
     expect(updatedMessage).not.toHaveProperty('sources');
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      isPaused: false,
-      activeSessionMessageId: undefined,
-    });
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(selectActiveSessionUi(useAgentStore.getState()).isInputLocked).toBe(false);
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
   });
 
@@ -639,11 +635,8 @@ describe('useSwarmRegeneration', () => {
       status: 'stale',
       staleFromStepId: STEPS.REFINEMENT,
     });
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      isPaused: false,
-      activeSessionMessageId: undefined,
-    });
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(selectActiveSessionUi(useAgentStore.getState()).isInputLocked).toBe(false);
   });
 
   it('keeps a paused live workflow resumable after upstream regeneration when synthesis was not yet complete', async () => {
@@ -671,9 +664,7 @@ describe('useSwarmRegeneration', () => {
       }),
     }));
     useAgentStore.getState().startSession('model-1', pausedWork, {
-      status: 'paused',
-      isLoading: true,
-      isPaused: true,
+      phase: 'awaiting-user',
       loadingStatus: 'Paused. Waiting for user confirmation...',
     });
     const { result, messagesState } = renderRegeneration({
@@ -688,10 +679,11 @@ describe('useSwarmRegeneration', () => {
     expect(messagesState.messages[1].work?.stepMetadata?.find(m => m.id === STEPS.SYNTHESIS)).toMatchObject({
       status: 'pending',
     });
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: true,
-      isPaused: true,
-      activeSessionMessageId: 'model-1',
+    expect(useAgentStore.getState().activeSessionMessageId).toBe('model-1');
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.phase).toBe('awaiting-user');
+    expect(selectActiveSessionUi(useAgentStore.getState())).toMatchObject({
+      isInputLocked: true,
+      isPausedForAction: true,
     });
   });
 
@@ -766,9 +758,7 @@ describe('useSwarmRegeneration', () => {
     });
     const staleMessageWork = createBaseWork();
     useAgentStore.getState().startSession('model-1', liveSessionWork, {
-      status: 'paused',
-      isLoading: true,
-      isPaused: true,
+      phase: 'awaiting-user',
       loadingStatus: 'Paused. Waiting for user confirmation...',
     });
     const regenerateResponse = vi.fn(async () => ({
@@ -814,9 +804,7 @@ describe('useSwarmRegeneration', () => {
     });
     const staleMessageWork = createBaseWork();
     useAgentStore.getState().startSession('model-1', liveSessionWork, {
-      status: 'paused',
-      isLoading: true,
-      isPaused: true,
+      phase: 'awaiting-user',
       loadingStatus: 'Paused. Waiting for user confirmation...',
     });
     const regenerateResponse = vi.fn(async () => ({
@@ -921,11 +909,13 @@ describe('useSwarmRegeneration', () => {
     });
 
     expect(mocks.getFriendlyErrorMessage).toHaveBeenCalledWith(expect.any(Error));
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: true,
-      isPaused: true,
-      loadingStatus: 'Error: Friendly failure',
-      activeSessionMessageId: 'model-1',
+    expect(useAgentStore.getState().activeSessionMessageId).toBe('model-1');
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.phase).toBe('recoverable-error');
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.loadingStatus).toBe('Error: Friendly failure');
+    expect(selectActiveSessionUi(useAgentStore.getState())).toMatchObject({
+      isInputLocked: true,
+      isPausedForAction: true,
+      inlineErrorMessage: 'Friendly failure',
     });
     expect(messagesState.messages[1].work?.agentStates).toEqual([
       expect.objectContaining({ id: 'model-1-initial-agent-0', messageId: 'model-1' }),
@@ -944,13 +934,9 @@ describe('useSwarmRegeneration', () => {
       await result.current.regenerateAgentResponse('model-1', STEPS.INITIAL, 1);
     });
 
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      isPaused: false,
-      error: null,
-      loadingStatus: '',
-      activeSessionMessageId: undefined,
-    });
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(useAgentStore.getState().globalError).toBeNull();
+    expect(selectActiveSessionUi(useAgentStore.getState()).isInputLocked).toBe(false);
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
   });
 
@@ -975,13 +961,9 @@ describe('useSwarmRegeneration', () => {
     });
 
     expect(useAgentStore.getState().sessionsByMessageId['model-1']?.agentStates).toEqual(originalAgents);
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      isPaused: false,
-      error: null,
-      loadingStatus: '',
-      activeSessionMessageId: undefined,
-    });
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(useAgentStore.getState().globalError).toBeNull();
+    expect(selectActiveSessionUi(useAgentStore.getState()).isInputLocked).toBe(false);
   });
 
   it('restores session work without mutating the message snapshot after an aborted synthesis regeneration', async () => {
@@ -1006,11 +988,8 @@ describe('useSwarmRegeneration', () => {
     expect(useAgentStore.getState().sessionsByMessageId['model-1']?.work.results?.[STEPS.SYNTHESIS]).toEqual([
       'old final answer',
     ]);
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      isPaused: false,
-      activeSessionMessageId: undefined,
-    });
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(selectActiveSessionUi(useAgentStore.getState()).isInputLocked).toBe(false);
   });
 
   it('cleans up abort state for plain Error("Aborted") cancellations too', async () => {
@@ -1023,22 +1002,16 @@ describe('useSwarmRegeneration', () => {
       await result.current.regenerateAgentResponse('model-1', STEPS.INITIAL, 1);
     });
 
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      isPaused: false,
-      error: null,
-      loadingStatus: '',
-      activeSessionMessageId: undefined,
-    });
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(useAgentStore.getState().globalError).toBeNull();
+    expect(selectActiveSessionUi(useAgentStore.getState()).isInputLocked).toBe(false);
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
   });
 
   it('keeps retry UI mounted and snapshots work when regeneration fails with a real error', async () => {
     const savedAgent = createAgent({ id: 'failed-agent', messageId: 'model-1', agentIndex: 1 });
     useAgentStore.getState().startSession('model-1', createBaseWork(), {
-      status: 'paused',
-      isLoading: true,
-      isPaused: true,
+      phase: 'awaiting-user',
     });
     useAgentStore.getState().replaceSessionAgents('model-1', [savedAgent]);
     const failure = new Error('network failed');
@@ -1052,11 +1025,13 @@ describe('useSwarmRegeneration', () => {
     });
 
     expect(mocks.getFriendlyErrorMessage).toHaveBeenCalledWith(failure);
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: true,
-      isPaused: true,
-      loadingStatus: 'Error: Friendly failure',
-      activeSessionMessageId: 'model-1',
+    expect(useAgentStore.getState().activeSessionMessageId).toBe('model-1');
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.phase).toBe('recoverable-error');
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.loadingStatus).toBe('Error: Friendly failure');
+    expect(selectActiveSessionUi(useAgentStore.getState())).toMatchObject({
+      isInputLocked: true,
+      isPausedForAction: true,
+      inlineErrorMessage: 'Friendly failure',
     });
     expect(messagesState.messages[1].work?.agentStates).toEqual([savedAgent]);
     expect(useAgentStore.getState().abortControllers.size).toBe(0);

@@ -1,4 +1,4 @@
-import { type AgentState, type Message, type SwarmSessionStatus, type Work } from '@/types';
+import { type AgentState, type Message, type SwarmSessionPhase, type Work } from '@/types';
 import { useAgentStore } from '@/stores/agentStore';
 import { cloneWork } from '@/utils/swarm/workHelpers';
 
@@ -12,11 +12,9 @@ export interface OperationalSessionResolution {
 }
 
 type SessionRuntimeOptions = {
-  status?: SwarmSessionStatus;
-  isLoading?: boolean;
-  isPaused?: boolean;
+  phase?: SwarmSessionPhase;
   loadingStatus?: string;
-  error?: string | null;
+  errorMessage?: string | null;
   activate?: boolean;
   targetMessageId?: string;
 };
@@ -72,11 +70,9 @@ const hydrateSessionFromMessageSnapshot = (
 
   useAgentStore.getState().startSession(targetMessageId, seedWork, {
     agentStates,
-    status: runtimeOptions?.status,
-    isLoading: runtimeOptions?.isLoading,
-    isPaused: runtimeOptions?.isPaused,
+    phase: runtimeOptions?.phase,
     loadingStatus: runtimeOptions?.loadingStatus,
-    error: runtimeOptions?.error,
+    errorMessage: runtimeOptions?.errorMessage,
     activate: runtimeOptions?.activate ?? false,
   });
 

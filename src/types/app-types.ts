@@ -224,7 +224,15 @@ export interface WorkStepMetadata {
   staleFromStepId?: StepId;
 }
 
-export type SwarmSessionStatus = 'running' | 'paused' | 'done' | 'error' | 'stopped';
+export type SwarmSessionPhase =
+  | 'running'
+  | 'streaming-final'
+  | 'awaiting-user'
+  | 'recoverable-error'
+  | 'done'
+  | 'stopped';
+
+export type SwarmSessionStatus = SwarmSessionPhase;
 
 /**
  * Debug information stored per step.
@@ -321,11 +329,9 @@ export interface SwarmSession {
   messageId: string;
   work: Work;
   agentStates: AgentState[];
-  status: SwarmSessionStatus;
-  isLoading: boolean;
-  isPaused: boolean;
+  phase: SwarmSessionPhase;
   loadingStatus: string;
-  error: string | null;
+  errorMessage: string | null;
   updatedAt: number;
 }
 

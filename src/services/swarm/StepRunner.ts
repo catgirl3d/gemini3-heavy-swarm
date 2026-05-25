@@ -39,10 +39,9 @@ export class StepRunner {
       if (!hasSessionWork) {
         store.replaceSessionWork(context.messageId, context.work);
       }
-      useAgentStore.getState().setSessionStatus(context.messageId, 'running');
     }
 
-    for (const [stepIndex, step] of this.steps.entries()) {
+    for (const step of this.steps) {
       this.syncContextWorkFromStore(context);
 
       // Skip steps that are already completed (Resume logic)
@@ -80,22 +79,15 @@ export class StepRunner {
         // Persist step completion into the owning session.
         if (context.messageId) {
           useAgentStore.getState().replaceSessionWork(context.messageId, context.work);
-          useAgentStore.getState().setSessionStatus(context.messageId, 'running');
         }
       } catch (error) {
         getLogger(settings).debug(`Error in step ${step.id}:`, error);
-        if (context.messageId) {
-          useAgentStore.getState().setSessionStatus(context.messageId, 'error');
-        }
         throw error;
       }
 
       // 4. Handle Pause Logic
       if (this.shouldPauseAfter(step, settings)) {
         getLogger(settings).debug(`Pausing after step: ${step.id}`);
-        if (context.messageId) {
-          useAgentStore.getState().setSessionStatus(context.messageId, 'paused');
-        }
         
         // Notify UI that we are entering pause state
         if (onPause) onPause();
@@ -105,10 +97,6 @@ export class StepRunner {
           paused: true,
         };
       }
-    }
-
-    if (context.messageId) {
-      useAgentStore.getState().setSessionStatus(context.messageId, 'done');
     }
 
     return {

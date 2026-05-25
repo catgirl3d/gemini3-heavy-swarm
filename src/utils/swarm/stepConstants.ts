@@ -126,18 +126,18 @@ export const setWorkName = (work: Work, stepId: StepId, index: number, name: str
 
 /**
  * Shared logic for the "Synthesis Jump" behavior.
- * This hides loading indicators and unpauses the UI when the first chunk of synthesis arrives.
- * Consolidated from synthesisHelpers.ts.
+ * This signals that the first user-visible final text has reached live work.
+ * The orchestration layer owns the resulting session phase transition.
  *
- * @param hideLoadingIndicator - Callback that hides the live loading indicator
+ * @param onFinalTextVisible - Callback that handles the first-text lifecycle transition
  * @param onJump - Optional callback for additional jump logic (e.g., updating agent status)
  */
 export const handleSynthesisJump = (
-  hideLoadingIndicator: () => void,
+  onFinalTextVisible: () => void,
   onJump?: () => void
 ) => {
-  logger.info('SYNTHESIS JUMP - First chunk received, hiding LoadingIndicator');
-  hideLoadingIndicator();
+  logger.info('SYNTHESIS JUMP - First visible synthesis text received');
+  onFinalTextVisible();
   onJump?.();
 }
 

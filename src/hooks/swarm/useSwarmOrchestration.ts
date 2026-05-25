@@ -39,6 +39,13 @@ export function useSwarmOrchestration({
 }: OrchestrationDependencies) {
   const [lastInput, setLastInput] = useState<{ text: string, image: string | null, imageFile: File | null } | null>(null);
 
+  const clearActiveSessionIfCurrent = (messageId: string) => {
+    const store = useAgentStore.getState();
+    if (store.activeSessionMessageId === messageId) {
+      store.setActiveSession(undefined);
+    }
+  };
+
   const continueGeneration = async () => {
     logger.debug('continueGeneration called');
 
@@ -48,11 +55,9 @@ export function useSwarmOrchestration({
     const lastModelMessage = [...currentMessages].reverse().find(m => m.role === 'model');
     const resolvedSession = lastModelMessage
       ? resolveOperationalSession(lastModelMessage, {
-          status: 'paused',
-          isLoading: true,
-          isPaused: true,
+          phase: 'awaiting-user',
           loadingStatus: 'Paused. Waiting for user confirmation...',
-          error: null,
+          errorMessage: null,
         })
       : undefined;
     
@@ -117,19 +122,18 @@ export function useSwarmOrchestration({
     if (currentMsgId) {
       const stoppedWork: Work = { ...(sessionWorkBeforeStop ?? {}), isStopped: true };
       store.replaceSessionWork(currentMsgId, stoppedWork);
-      store.updateSessionRuntime(currentMsgId, {
-        status: 'stopped',
-        isLoading: false,
-        isPaused: false,
+      store.setSessionPhase(currentMsgId, 'stopped', {
         loadingStatus: 'Stopped',
-        error: null,
+        errorMessage: null,
       });
       flushSync(() => {
         setMessages(prev => commitSessionSnapshotToMessage(prev, currentMsgId));
       });
     }
 
-    store.setActiveSession(undefined);
+    if (currentMsgId) {
+      clearActiveSessionIfCurrent(currentMsgId);
+    }
   };
 
   const sendMessage = async (
@@ -192,7 +196,7 @@ export function useSwarmOrchestration({
       setMessages([...historyForSwarm, modelMessage]);
     }
 
-    logger.debug('Setting initial loading state', { isLoading: true, isPaused: false });
+    logger.debug('Starting session runtime phase', { phase: 'running' });
 
     const seedWork = existingWork || {
       results: {
@@ -219,11 +223,9 @@ export function useSwarmOrchestration({
 
     useAgentStore.getState().startSession(modelMessageId, seedWork, {
       agentStates: initialAgents,
-      status: 'running',
-      isLoading: true,
-      isPaused: false,
+      phase: 'running',
       loadingStatus: '',
-      error: null,
+      errorMessage: null,
     });
 
     const controller = mainAbort.create();
@@ -244,23 +246,20 @@ export function useSwarmOrchestration({
         () => undefined,
         signal,
         () => {
-             useAgentStore.getState().updateSessionRuntime(modelMessageId, {
-               status: 'paused',
-               isLoading: true,
-               isPaused: true,
-               loadingStatus: 'Paused. Waiting for user confirmation...',
-               error: null,
-             });
+          useAgentStore.getState().setSessionPhase(modelMessageId, 'awaiting-user', {
+            loadingStatus: 'Paused. Waiting for user confirmation...',
+            errorMessage: null,
+          });
         },
         (status) => useAgentStore.getState().updateSessionRuntime(modelMessageId, { loadingStatus: status }),
         () => {
-          // onSynthesisJump: Called when synthesis step starts streaming
+          // onSynthesisJump: final text became visible after live work was updated.
           handleSynthesisJump(() => {
-            useAgentStore.getState().updateSessionRuntime(modelMessageId, {
-              isLoading: false,
-              isPaused: false,
-            });
+            useAgentStore.getState().setSessionPhase(modelMessageId, 'streaming-final');
           });
+        },
+        () => {
+          useAgentStore.getState().setSessionPhase(modelMessageId, 'running');
         },
         existingWork
       );
@@ -276,21 +275,27 @@ export function useSwarmOrchestration({
       useAgentStore.getState().replaceSessionWork(modelMessageId, work);
 
       if (paused) {
-        useAgentStore.getState().setSessionStatus(modelMessageId, 'paused');
+        useAgentStore.getState().setSessionPhase(modelMessageId, 'awaiting-user', {
+          loadingStatus: 'Paused. Waiting for user confirmation...',
+          errorMessage: null,
+        });
 
         setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId));
 
         return;
       }
 
-      useAgentStore.getState().setSessionStatus(modelMessageId, 'done');
+      useAgentStore.getState().setSessionPhase(modelMessageId, 'done', {
+        loadingStatus: '',
+        errorMessage: null,
+      });
 
       flushSync(() => {
         setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId));
       });
 
       logger.debug('Clearing loading state after success');
-      useAgentStore.getState().setActiveSession(undefined);
+      clearActiveSessionIfCurrent(modelMessageId);
     } catch (error) {
       logger.error('sendMessage CATCH - handling error', { error });
 
@@ -314,28 +319,24 @@ export function useSwarmOrchestration({
         latestLiveWork,
         {
           onAborted: () => {
-            useAgentStore.getState().updateSessionRuntime(modelMessageId, {
-              status: 'stopped',
-              isLoading: false,
-              isPaused: false,
+            useAgentStore.getState().setSessionPhase(modelMessageId, 'stopped', {
               loadingStatus: 'Stopped by user',
-              error: null,
+              errorMessage: null,
             });
-            useAgentStore.getState().setActiveSession(undefined);
+            clearActiveSessionIfCurrent(modelMessageId);
           },
           onPartialFailure: (errorMessage) => {
-            useAgentStore.getState().updateSessionRuntime(modelMessageId, {
-              status: 'error',
-              isLoading: true,
-              isPaused: true,
+            useAgentStore.getState().setSessionPhase(modelMessageId, 'recoverable-error', {
               loadingStatus: `Error: ${errorMessage}`,
-              error: errorMessage,
+              errorMessage,
             });
           },
           onTotalFailure: (errorMessage) => {
+            const wasCurrentActiveSession = useAgentStore.getState().activeSessionMessageId === modelMessageId;
             useAgentStore.getState().clearSession(modelMessageId);
-            useAgentStore.getState().setActiveSession(undefined);
-            useAgentStore.getState().setGlobalError(errorMessage);
+            if (wasCurrentActiveSession) {
+              useAgentStore.getState().setGlobalError(errorMessage);
+            }
           },
         },
         settings
@@ -352,7 +353,7 @@ export function useSwarmOrchestration({
         setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId, {
           fallbackWork: failureSnapshot,
         }));
-        useAgentStore.getState().setActiveSession(undefined);
+        clearActiveSessionIfCurrent(modelMessageId);
       }
     } finally {
       logger.debug('sendMessage FINALLY - cleanup');

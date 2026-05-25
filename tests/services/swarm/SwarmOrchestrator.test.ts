@@ -110,6 +110,7 @@ describe('SwarmOrchestrator Integrated', () => {
             undefined,
             undefined,
             undefined,
+            undefined,
             existingWork
         );
 
@@ -201,6 +202,7 @@ describe('SwarmOrchestrator Integrated', () => {
             'id',
             vi.fn(),
             new AbortController().signal,
+            undefined,
             undefined,
             undefined,
             undefined,

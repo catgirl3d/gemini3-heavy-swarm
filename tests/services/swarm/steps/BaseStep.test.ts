@@ -862,7 +862,8 @@ describe('BaseStep', () => {
 
   describe('handleRetryProgress', () => {
     it('should keep synthesis status stable while marking non-synthesis agents as working during retry', () => {
-      const context = { messageId: 'msg-1' } as StepContext;
+      const onRetryProgress = vi.fn();
+      const context = { messageId: 'msg-1', onRetryProgress } as unknown as StepContext;
       const states: AgentState[] = [
         { id: '1', name: 'Agent 1', stepId: STEPS.INITIAL, status: 'error', label: 'Failed', messageId: 'msg-1' }
       ];
@@ -874,7 +875,7 @@ describe('BaseStep', () => {
         label: 'Retrying (Attempt 2)...',
         messageId: 'msg-1'
       });
-      expect(useAgentStore.getState().updateSessionRuntime).toHaveBeenCalledWith('msg-1', { isLoading: true });
+      expect(onRetryProgress).toHaveBeenCalledTimes(1);
 
       step.id = STEPS.SYNTHESIS;
       const synthesisStates: AgentState[] = [
@@ -887,6 +888,7 @@ describe('BaseStep', () => {
         status: 'done',
         label: 'Retrying (Attempt 3)...'
       });
+      expect(onRetryProgress).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -1427,6 +1429,7 @@ describe('BaseStep', () => {
     it('should route retry callbacks through retry progress during regeneration', async () => {
       const retryStep = new RetryCallbackStep();
       const work: Work = { results: { [STEPS.INITIAL]: ['old'] } };
+      const onRetryProgress = vi.fn();
 
       const result = await retryStep.testRunAgentRegeneration(
         {
@@ -1435,7 +1438,8 @@ describe('BaseStep', () => {
           work,
           signal: new AbortController().signal,
           messageId: 'msg-1',
-          onMessageUpdate: vi.fn()
+          onMessageUpdate: vi.fn(),
+          onRetryProgress,
         } as any,
         0,
         createInstruction(),
@@ -1443,7 +1447,7 @@ describe('BaseStep', () => {
       );
 
       expect(result.text).toBe('retried text');
-      expect(useAgentStore.getState().updateSessionRuntime).toHaveBeenCalledWith('msg-1', { isLoading: true });
+      expect(onRetryProgress).toHaveBeenCalledTimes(1);
     });
   });
 

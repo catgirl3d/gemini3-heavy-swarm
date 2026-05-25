@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 
 export function useAutoScroll(deps: {
   messagesLength: number;
-  isLoading: boolean;
-  error: string | null;
+  shouldAutoScrollOnSessionChange: boolean;
+  globalErrorMessage: string | null;
 }) {
   const messageListRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -27,7 +27,7 @@ export function useAutoScroll(deps: {
     return () => element.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Handle auto-scroll for new messages or errors
+  // Handle auto-scroll for new messages, active session phase changes, or global errors.
   useEffect(() => {
     const element = messageListRef.current;
     if (!element) return;
@@ -35,7 +35,7 @@ export function useAutoScroll(deps: {
     if (shouldAutoScroll) {
       element.scrollTop = element.scrollHeight;
     }
-  }, [deps.messagesLength, deps.isLoading, shouldAutoScroll, deps.error]);
+  }, [deps.messagesLength, deps.shouldAutoScrollOnSessionChange, shouldAutoScroll, deps.globalErrorMessage]);
 
   // MutationObserver to handle streaming content updates without re-running the effect on every chunk
   useEffect(() => {

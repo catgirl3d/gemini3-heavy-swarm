@@ -122,7 +122,8 @@ const createProps = (overrides: Partial<ShowWorkProps> = {}): ShowWorkProps => (
   work: createWork(),
   isLive: false,
   messageId: 'message-1',
-  isPaused: false,
+  phase: null,
+  isPausedForAction: false,
   onContinue: vi.fn(),
   onRegenerate: vi.fn(),
   ...overrides,
@@ -352,7 +353,8 @@ describe('ShowWork', () => {
         {...createProps({
           work,
           isLive: true,
-          isPaused: true,
+          phase: 'awaiting-user',
+          isPausedForAction: true,
           onContinue,
         })}
       />
@@ -376,7 +378,8 @@ describe('ShowWork', () => {
         {...createProps({
           work,
           isLive: true,
-          isPaused: true,
+          phase: 'awaiting-user',
+          isPausedForAction: true,
           onContinue,
         })}
       />
@@ -400,7 +403,8 @@ describe('ShowWork', () => {
             stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'done' }],
           }),
           isLive: true,
-          isPaused: true,
+          phase: 'awaiting-user',
+          isPausedForAction: true,
           onContinue,
         })}
       />
@@ -424,7 +428,8 @@ describe('ShowWork', () => {
             stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'done' }],
           }),
           isLive: true,
-          isPaused: true,
+          phase: 'awaiting-user',
+          isPausedForAction: true,
         })}
       />
     );
@@ -461,7 +466,8 @@ describe('ShowWork', () => {
       <ShowWork
         {...createProps({
           isLive: true,
-          isPaused: true,
+          phase: 'recoverable-error',
+          isPausedForAction: true,
           onContinue: undefined,
           onRegenerate,
         })}
@@ -555,7 +561,8 @@ describe('ShowWork', () => {
             },
           }),
           isLive: true,
-          isPaused: true,
+          phase: 'awaiting-user',
+          isPausedForAction: true,
           onContinue: undefined,
           onRegenerate: undefined,
         })}

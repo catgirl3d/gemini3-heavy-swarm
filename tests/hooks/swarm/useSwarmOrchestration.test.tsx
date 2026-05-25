@@ -5,7 +5,7 @@ import type { AbortControllerHook } from '@/hooks/network/useAbortController';
 import type { AgentState, Message, Source, TokenUsage, Work } from '@/types';
 import { createMockSettings } from '@/test/utils/settingsMocks';
 import { STEPS } from '@/types/steps';
-import { useAgentStore } from '@/stores/agentStore';
+import { selectActiveSessionUi, useAgentStore } from '@/stores/agentStore';
 
 const mocks = vi.hoisted(() => ({
   generateUUID: vi.fn(),
@@ -160,6 +160,7 @@ const toRunSwarmCall = (args: any[]) => {
     onPause,
     onStatusUpdate,
     onSynthesisJump,
+    onRetryProgress,
     existingWork,
   ] = args;
 
@@ -175,6 +176,7 @@ const toRunSwarmCall = (args: any[]) => {
     onPause,
     onStatusUpdate,
     onSynthesisJump,
+    onRetryProgress,
     existingWork,
   };
 };
@@ -223,8 +225,8 @@ describe('useSwarmOrchestration', () => {
     expect(messagesState.setMessages).not.toHaveBeenCalled();
     expect(useAgentStore.getState()).toMatchObject({
       activeSessionMessageId: undefined,
-      isLoading: false,
     });
+    expect(selectActiveSessionUi(useAgentStore.getState()).isInputLocked).toBe(false);
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
     expect(mainAbort.ref.current).toBeNull();
   });
@@ -294,9 +296,11 @@ describe('useSwarmOrchestration', () => {
       imageFile,
     });
     expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      isPaused: false,
       activeSessionMessageId: undefined,
+    });
+    expect(selectActiveSessionUi(useAgentStore.getState())).toMatchObject({
+      isInputLocked: false,
+      isPausedForAction: false,
     });
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
     expect(mainAbort.ref.current).toBeNull();
@@ -375,10 +379,12 @@ describe('useSwarmOrchestration', () => {
       await result.current.sendMessage('hello', null, null);
     });
 
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: true,
-      isPaused: true,
-      activeSessionMessageId: 'model-1',
+    expect(useAgentStore.getState().activeSessionMessageId).toBe('model-1');
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.phase).toBe('awaiting-user');
+    expect(selectActiveSessionUi(useAgentStore.getState())).toMatchObject({
+      isInputLocked: true,
+      isPausedForAction: true,
+      shouldShowLoadingIndicator: true,
     });
     expect(useAgentStore.getState().sessionsByMessageId['model-1']?.work).toEqual(pausedWork);
     expect(messagesState.messages[1]).toMatchObject({
@@ -395,10 +401,10 @@ describe('useSwarmOrchestration', () => {
     expect(resumeCall.messageId).toBe('model-1');
     expect(resumeCall.existingWork).toMatchObject(pausedWork);
     expect(resumeCall.existingWork?.agentStates).toEqual(pausedAgents);
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      isPaused: false,
-      activeSessionMessageId: undefined,
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(selectActiveSessionUi(useAgentStore.getState())).toMatchObject({
+      isInputLocked: false,
+      isPausedForAction: false,
     });
   });
 
@@ -771,9 +777,7 @@ describe('useSwarmOrchestration', () => {
     const store = useAgentStore.getState();
 
     store.startSession('model-1', currentWork, {
-      status: 'paused',
-      isLoading: true,
-      isPaused: true,
+      phase: 'awaiting-user',
     });
     store.registerAbortController('main-model-1', controller);
 
@@ -783,12 +787,9 @@ describe('useSwarmOrchestration', () => {
 
     expect(abortSpy).toHaveBeenCalledTimes(1);
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      isPaused: false,
-      activeSessionMessageId: undefined,
-      loadingStatus: '',
-    });
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.phase).toBe('stopped');
+    expect(selectActiveSessionUi(useAgentStore.getState()).isInputLocked).toBe(false);
     expect(useAgentStore.getState().sessionsByMessageId['model-1']?.work).toEqual(expect.objectContaining({ isStopped: true }));
     expect(messagesState.messages[1].work).toEqual(expect.objectContaining({
       isStopped: true,
@@ -808,9 +809,7 @@ describe('useSwarmOrchestration', () => {
     const store = useAgentStore.getState();
 
     store.startSession('model-1', { results: {} }, {
-      status: 'paused',
-      isLoading: true,
-      isPaused: true,
+      phase: 'awaiting-user',
     });
     store.registerAbortController('main-model-1', controller);
 
@@ -834,9 +833,7 @@ describe('useSwarmOrchestration', () => {
     });
 
     useAgentStore.getState().startSession('model-1', { results: {} }, {
-      status: 'paused',
-      isLoading: true,
-      isPaused: true,
+      phase: 'awaiting-user',
     });
 
     act(() => {
@@ -919,10 +916,9 @@ describe('useSwarmOrchestration', () => {
       await result.current.sendMessage('hello', null, null);
     });
 
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      loadingStatus: '',
-    });
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(useAgentStore.getState().sessionsByMessageId['model-aborted']?.phase).toBe('stopped');
+    expect(selectActiveSessionUi(useAgentStore.getState()).isInputLocked).toBe(false);
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
     expect(mainAbort.ref.current).toBeNull();
   });
@@ -946,11 +942,10 @@ describe('useSwarmOrchestration', () => {
 
     expect(abortSpy).toHaveBeenCalledTimes(1);
     expect(messagesState.messages[1].work).toBe(currentWork);
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      isPaused: false,
-      activeSessionMessageId: undefined,
-      loadingStatus: '',
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(selectActiveSessionUi(useAgentStore.getState())).toMatchObject({
+      isInputLocked: false,
+      isPausedForAction: false,
     });
   });
 
@@ -986,11 +981,13 @@ describe('useSwarmOrchestration', () => {
         ],
       }),
     });
-    expect(useAgentStore.getState()).toMatchObject({
-      isLoading: true,
-      isPaused: true,
-      loadingStatus: 'Error: Friendly failure',
-      error: 'Friendly failure',
+    expect(useAgentStore.getState().sessionsByMessageId['model-error']?.phase).toBe('recoverable-error');
+    expect(useAgentStore.getState().sessionsByMessageId['model-error']?.loadingStatus).toBe('Error: Friendly failure');
+    expect(useAgentStore.getState().sessionsByMessageId['model-error']?.errorMessage).toBe('Friendly failure');
+    expect(selectActiveSessionUi(useAgentStore.getState())).toMatchObject({
+      isInputLocked: true,
+      isPausedForAction: true,
+      inlineErrorMessage: 'Friendly failure',
     });
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
     expect(mainAbort.ref.current).toBeNull();
@@ -1068,10 +1065,12 @@ describe('useSwarmOrchestration', () => {
 
     expect(mocks.getFriendlyErrorMessage).toHaveBeenCalledWith(failure);
     expect(useAgentStore.getState()).toMatchObject({
-      isLoading: false,
-      isPaused: false,
       activeSessionMessageId: undefined,
-      error: 'Friendly failure',
+      globalError: 'Friendly failure',
+    });
+    expect(selectActiveSessionUi(useAgentStore.getState())).toMatchObject({
+      isInputLocked: false,
+      globalErrorMessage: 'Friendly failure',
     });
     expect(messagesState.messages[1]).toMatchObject({
       id: 'model-total-failure',

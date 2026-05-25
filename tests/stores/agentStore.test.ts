@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useAgentStore } from '@/stores/agentStore';
+import { selectActiveSessionUi, useAgentStore } from '@/stores/agentStore';
 import { STEPS } from '@/types/steps';
 import type { AgentState, TokenUsage, Work } from '@/types';
 
@@ -48,11 +48,13 @@ describe('agentStore', () => {
 
   it('starts with the expected initial state', () => {
     const state = useAgentStore.getState();
+    const ui = selectActiveSessionUi(state);
 
-    expect(state.isLoading).toBe(false);
-    expect(state.isPaused).toBe(false);
-    expect(state.loadingStatus).toBe('');
-    expect(state.error).toBeNull();
+    expect(ui.isInputLocked).toBe(false);
+    expect(ui.isPausedForAction).toBe(false);
+    expect(ui.loadingStatus).toBe('');
+    expect(ui.inlineErrorMessage).toBeNull();
+    expect(ui.globalErrorMessage).toBeNull();
     expect(state.activeSessionMessageId).toBeUndefined();
     expect(state.sessionsByMessageId).toEqual({});
     expect(state.abortControllers).toBeInstanceOf(Map);
@@ -64,20 +66,48 @@ describe('agentStore', () => {
     const store = useAgentStore.getState();
 
     store.startSession('msg-123', work);
-    store.updateSessionRuntime('msg-123', {
-      isLoading: true,
-      isPaused: true,
+    store.setSessionPhase('msg-123', 'recoverable-error', {
       loadingStatus: 'Loading drafts',
-      error: 'Something failed',
+      errorMessage: 'Something failed',
     });
 
     const state = useAgentStore.getState();
+    const ui = selectActiveSessionUi(state);
     expect(state.activeSessionMessageId).toBe('msg-123');
     expect(state.sessionsByMessageId['msg-123']?.work).toEqual(work);
-    expect(state.isLoading).toBe(true);
-    expect(state.isPaused).toBe(true);
-    expect(state.loadingStatus).toBe('Loading drafts');
-    expect(state.error).toBe('Something failed');
+    expect(state.sessionsByMessageId['msg-123']?.phase).toBe('recoverable-error');
+    expect(ui.isInputLocked).toBe(true);
+    expect(ui.isPausedForAction).toBe(true);
+    expect(ui.loadingStatus).toBe('Loading drafts');
+    expect(ui.inlineErrorMessage).toBe('Something failed');
+  });
+
+  it('derives streaming-final UI as locked without progress indicator', () => {
+    const store = useAgentStore.getState();
+
+    store.startSession('msg-streaming', { results: { [STEPS.SYNTHESIS]: ['visible text'] } }, {
+      phase: 'streaming-final',
+      loadingStatus: 'Synthesizing final response...',
+    });
+
+    const ui = selectActiveSessionUi(useAgentStore.getState());
+    expect(ui.activePhase).toBe('streaming-final');
+    expect(ui.isInputLocked).toBe(true);
+    expect(ui.canStop).toBe(true);
+    expect(ui.canAbortRequest).toBe(true);
+    expect(ui.shouldShowLoadingIndicator).toBe(false);
+    expect(ui.shouldReadLiveWork).toBe(true);
+  });
+
+  it('uses explicit fallback phases when creating missing sessions through updates', () => {
+    const store = useAgentStore.getState();
+
+    store.setActiveSession('active-msg');
+    store.updateSessionAgent(STEPS.INITIAL, 0, 'working', 'Working', 'active-msg');
+    store.updateSessionAgent(STEPS.INITIAL, 0, 'done', 'Done', 'history-msg');
+
+    expect(useAgentStore.getState().sessionsByMessageId['active-msg']?.phase).toBe('running');
+    expect(useAgentStore.getState().sessionsByMessageId['history-msg']?.phase).toBe('done');
   });
 
   it('adds and updates agents by step, index, and message id', () => {
@@ -144,22 +174,21 @@ describe('agentStore', () => {
     expect(useAgentStore.getState().sessionsByMessageId['msg-1']?.agentStates).toEqual(hydratedAgents);
 
     store.startSession('msg-1', { results: { [STEPS.INITIAL]: ['draft'] } });
-    store.updateSessionRuntime('msg-1', {
-      isLoading: true,
-      isPaused: true,
+    store.setSessionPhase('msg-1', 'recoverable-error', {
       loadingStatus: 'Loading',
-      error: 'Failed',
+      errorMessage: 'Failed',
     });
     store.registerAbortController('request-1', controller);
 
     useAgentStore.getState().clear();
 
     const state = useAgentStore.getState();
+    const ui = selectActiveSessionUi(state);
     expect(state.sessionsByMessageId).toEqual({});
-    expect(state.isLoading).toBe(false);
-    expect(state.isPaused).toBe(false);
-    expect(state.loadingStatus).toBe('');
-    expect(state.error).toBeNull();
+    expect(ui.isInputLocked).toBe(false);
+    expect(ui.isPausedForAction).toBe(false);
+    expect(ui.loadingStatus).toBe('');
+    expect(ui.inlineErrorMessage).toBeNull();
     expect(state.activeSessionMessageId).toBeUndefined();
     expect(state.abortControllers.get('request-1')).toBe(controller);
     expect(abortSpy).not.toHaveBeenCalled();
@@ -210,22 +239,22 @@ describe('agentStore', () => {
     const work: Work = { results: { [STEPS.INITIAL]: ['draft'] } };
 
     store.startSession('msg-keep', work);
-    store.updateSessionRuntime('msg-keep', {
-      isLoading: true,
-      isPaused: true,
+    store.setSessionPhase('msg-keep', 'recoverable-error', {
       loadingStatus: 'Paused for retry',
-      error: 'Previous error',
+      errorMessage: 'Previous error',
     });
     store.registerAbortController('request-1', new AbortController());
 
     store.abortAll();
 
     const state = useAgentStore.getState();
+    const ui = selectActiveSessionUi(state);
     expect(state.sessionsByMessageId['msg-keep']?.work).toEqual(work);
-    expect(state.isLoading).toBe(true);
-    expect(state.isPaused).toBe(true);
-    expect(state.loadingStatus).toBe('Paused for retry');
-    expect(state.error).toBe('Previous error');
+    expect(state.sessionsByMessageId['msg-keep']?.phase).toBe('recoverable-error');
+    expect(ui.isInputLocked).toBe(true);
+    expect(ui.isPausedForAction).toBe(true);
+    expect(ui.loadingStatus).toBe('Paused for retry');
+    expect(ui.inlineErrorMessage).toBe('Previous error');
     expect(state.activeSessionMessageId).toBe('msg-keep');
     expect(state.abortControllers.size).toBe(0);
   });

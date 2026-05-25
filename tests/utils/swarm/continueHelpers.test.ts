@@ -6,6 +6,7 @@ import {
   isAnyAgentWorking, 
   isErrorState, 
   getContinueButtonText,
+  getContinueButtonState,
   handleContinueClick 
 } from '@/utils/swarm/continueHelpers';
 
@@ -103,6 +104,57 @@ describe('continueHelpers', () => {
 
     it('should return "Continue" when isError is false', () => {
       expect(getContinueButtonText(false)).toBe('Continue');
+    });
+  });
+
+  describe('getContinueButtonState', () => {
+    it('shows Continue for awaiting-user phase with no active workers', () => {
+      const agents = mockAgents.filter(agent => agent.messageId === 'msg-1' && agent.status !== 'error');
+
+      expect(getContinueButtonState({
+        phase: 'awaiting-user',
+        agentStates: agents,
+        messageId: 'msg-1',
+        work: { results: { [STEPS.SYNTHESIS]: [''] } },
+        hasContinueCallback: true,
+        hasRegenerateCallback: false,
+      })).toMatchObject({
+        visible: true,
+        label: 'Continue',
+      });
+    });
+
+    it('shows Retry for recoverable-error phase and hides terminal phases', () => {
+      const retryState = getContinueButtonState({
+        phase: 'recoverable-error',
+        agentStates: mockAgents,
+        messageId: 'msg-1',
+        work: { results: { [STEPS.SYNTHESIS]: [''] } },
+        hasContinueCallback: false,
+        hasRegenerateCallback: true,
+      });
+      const streamingState = getContinueButtonState({
+        phase: 'streaming-final',
+        agentStates: mockAgents,
+        messageId: 'msg-1',
+        work: { results: { [STEPS.SYNTHESIS]: [''] } },
+        hasContinueCallback: true,
+        hasRegenerateCallback: true,
+      });
+
+      expect(retryState).toMatchObject({ visible: true, label: 'Retry' });
+      expect(streamingState.visible).toBe(false);
+    });
+
+    it('hides action when synthesis is complete', () => {
+      expect(getContinueButtonState({
+        phase: 'awaiting-user',
+        agentStates: [{ ...mockAgents[0], stepId: STEPS.SYNTHESIS, status: 'done' }],
+        messageId: 'msg-1',
+        work: { results: { [STEPS.SYNTHESIS]: ['final'] } },
+        hasContinueCallback: true,
+        hasRegenerateCallback: false,
+      }).visible).toBe(false);
     });
   });
 
