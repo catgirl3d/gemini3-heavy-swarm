@@ -1,6 +1,6 @@
 import { useRef, useEffect, type RefObject, type Dispatch, type SetStateAction } from 'react';
 import { flushSync } from 'react-dom';
-import { type AppSettings, type Message, type Work } from '@/types';
+import { type AgentState, type AppSettings, type Message, type Work } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
 import { Logger } from '@shared/utils/logger';
 import { getStepConfig } from '@/utils/swarm/stepConstants';
@@ -22,6 +22,43 @@ import { isLatestRegenerableMessage } from '@/utils/swarm/sessionHelpers';
 import { commitSessionSnapshotToMessage, resolveOperationalSession } from '@/utils/swarm/sessionSnapshots';
 
 const regenLogger = new Logger('Regeneration');
+
+const isTargetAgentState = (
+  agent: AgentState,
+  messageId: string,
+  stepId: StepId,
+  agentIndex: number,
+): boolean => {
+  return agent.messageId === messageId
+    && agent.stepId === stepId
+    && agent.agentIndex === agentIndex;
+};
+
+const restoreTargetAgentState = (
+  currentAgents: AgentState[],
+  previousAgents: AgentState[],
+  messageId: string,
+  stepId: StepId,
+  agentIndex: number,
+): AgentState[] => {
+  const previousAgent = previousAgents.find(agent => isTargetAgentState(agent, messageId, stepId, agentIndex));
+  let sawTargetAgent = false;
+
+  const restoredAgents = currentAgents.flatMap(agent => {
+    if (!isTargetAgentState(agent, messageId, stepId, agentIndex)) {
+      return [{ ...agent }];
+    }
+
+    sawTargetAgent = true;
+    return previousAgent ? [{ ...previousAgent }] : [];
+  });
+
+  if (previousAgent && !sawTargetAgent) {
+    restoredAgents.push({ ...previousAgent });
+  }
+
+  return restoredAgents;
+};
 
 const mergeRegeneratedStepWork = (
   baseWork: Work,
@@ -263,8 +300,10 @@ export function useSwarmRegeneration({
         }
       );
 
-      // Handle final result
-      const mergedWork = mergeRegeneratedStepWork(workContext, regeneratedWork, stepId, agentIndex);
+      // Handle final result against the latest live session snapshot so parallel
+      // regenerations keep each other's completed slots.
+      const latestSessionWork = useAgentStore.getState().sessionsByMessageId[messageId]?.work ?? workContext;
+      const mergedWork = mergeRegeneratedStepWork(latestSessionWork, regeneratedWork, stepId, agentIndex);
       store.replaceSessionWork(messageId, mergedWork);
       if (stepId !== STEPS.SYNTHESIS) {
         store.markDownstreamStale(messageId, stepId);
@@ -320,12 +359,20 @@ export function useSwarmRegeneration({
       ) {
         regenLogger.info('Regeneration aborted by user - cleanup', { stepId, agentIndex });
 
-        store.replaceSessionWork(messageId, originalWorkSnapshot ?? workContext);
-        store.replaceSessionAgents(messageId, previousAgentStates);
-        store.setSessionPhase(messageId, previousSessionRuntime.phase, {
-          loadingStatus: previousSessionRuntime.loadingStatus,
-          errorMessage: previousSessionRuntime.errorMessage,
-        });
+        const restoreSourceWork = originalWorkSnapshot ?? workContext;
+        const latestSession = useAgentStore.getState().sessionsByMessageId[messageId];
+        const restoredWork = mergeRegeneratedStepWork(latestSession?.work ?? restoreSourceWork, restoreSourceWork, stepId, agentIndex);
+        store.replaceSessionWork(messageId, restoredWork);
+        store.replaceSessionAgents(
+          messageId,
+          restoreTargetAgentState(latestSession?.agentStates ?? [], previousAgentStates, messageId, stepId, agentIndex),
+        );
+        if (useAgentStore.getState().sessionsByMessageId[messageId]?.phase === 'running') {
+          store.setSessionPhase(messageId, previousSessionRuntime.phase, {
+            loadingStatus: previousSessionRuntime.loadingStatus,
+            errorMessage: previousSessionRuntime.errorMessage,
+          });
+        }
         if (useAgentStore.getState().activeSessionMessageId === messageId) {
           store.setActiveSession(previousActiveSessionId);
         }
@@ -338,7 +385,9 @@ export function useSwarmRegeneration({
       regenLogger.error(`Regeneration failed for step ${stepId}, agent ${agentIndex}:`, error);
       const errorMessage = getFriendlyErrorMessage(error);
       
-      store.replaceSessionWork(messageId, workContext);
+      const latestSessionWork = useAgentStore.getState().sessionsByMessageId[messageId]?.work ?? workContext;
+      const failedWork = mergeRegeneratedStepWork(latestSessionWork, workContext, stepId, agentIndex);
+      store.replaceSessionWork(messageId, failedWork);
 
       // Keep the active session selected so the phase-aware inline retry UI remains visible.
       store.setSessionPhase(messageId, 'recoverable-error', {

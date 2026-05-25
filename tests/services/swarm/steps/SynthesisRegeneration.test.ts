@@ -165,7 +165,7 @@ describe('Synthesis Regeneration - Integration Tests', () => {
       'msg-integration-test',
       STEPS.SYNTHESIS, 
       0,
-      { usage: null, text: '' }
+      { usage: null, thought: '', text: '' }
     );
 
     // Now simulate streaming chunks

@@ -790,6 +790,265 @@ describe('useSwarmRegeneration', () => {
     });
   });
 
+  it('merges concurrent critic regenerations against the latest session work', async () => {
+    const pausedWork = createBaseWork({
+      stepMetadata: [
+        { id: STEPS.INITIAL, status: 'done', label: 'Initial Step' },
+        { id: STEPS.REFINEMENT, status: 'done', label: 'Refinement Step' },
+        { id: STEPS.SYNTHESIS, status: 'pending', label: 'Synthesis Step' },
+      ],
+      results: {
+        [STEPS.INITIAL]: ['old agent 0', 'old agent 1'],
+        [`${STEPS.INITIAL}_thoughts`]: ['old thought 0', 'old thought 1'],
+        [`${STEPS.INITIAL}_usage`]: [createUsage(10), createUsage(20)],
+        [STEPS.REFINEMENT]: ['old critic 0', 'old critic 1'],
+        [`${STEPS.REFINEMENT}_thoughts`]: ['old critic thought 0', 'old critic thought 1'],
+        [`${STEPS.REFINEMENT}_usage`]: [createUsage(30), createUsage(40)],
+        [STEPS.SYNTHESIS]: [''],
+      },
+    });
+    useAgentStore.getState().startSession('model-1', pausedWork, {
+      phase: 'awaiting-user',
+      loadingStatus: 'Paused. Waiting for user confirmation...',
+    });
+
+    let resolveAgent0: ((value: { work: Work }) => void) | undefined;
+    let resolveAgent1: ((value: { work: Work }) => void) | undefined;
+    const regenerateResponse = vi.fn((...args: any[]) => {
+      const { agentIndex, stepId } = toRegenerateResponseCall(args);
+
+      return new Promise<{ work: Work }>(resolve => {
+        if (agentIndex === 0) {
+          resolveAgent0 = resolve;
+          return;
+        }
+
+        resolveAgent1 = resolve;
+      }).then(() => ({
+        work: createRegeneratedWork({
+          stepId,
+          agentIndex,
+          text: agentIndex === 0 ? 'new critic 0' : 'new critic 1',
+          thought: agentIndex === 0 ? 'new critic thought 0' : 'new critic thought 1',
+          usage: createUsage(agentIndex === 0 ? 61 : 62),
+        }),
+      }));
+    });
+    const { result, messagesState } = renderRegeneration({
+      initialMessages: createConversation(pausedWork),
+      regenerateResponse,
+    });
+
+    let firstPromise: Promise<void>;
+    let secondPromise: Promise<void>;
+
+    act(() => {
+      firstPromise = result.current.regenerateAgentResponse('model-1', STEPS.REFINEMENT, 0);
+      secondPromise = result.current.regenerateAgentResponse('model-1', STEPS.REFINEMENT, 1);
+    });
+
+    await act(async () => {
+      resolveAgent0?.({
+        work: createRegeneratedWork({
+          stepId: STEPS.REFINEMENT,
+          agentIndex: 0,
+          text: 'new critic 0',
+          thought: 'new critic thought 0',
+          usage: createUsage(61),
+        }),
+      });
+      await Promise.resolve();
+    });
+
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.work.results?.[STEPS.REFINEMENT]).toEqual([
+      'new critic 0',
+      'old critic 1',
+    ]);
+
+    await act(async () => {
+      resolveAgent1?.({
+        work: createRegeneratedWork({
+          stepId: STEPS.REFINEMENT,
+          agentIndex: 1,
+          text: 'new critic 1',
+          thought: 'new critic thought 1',
+          usage: createUsage(62),
+        }),
+      });
+      await Promise.all([firstPromise, secondPromise]);
+    });
+
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.work.results?.[STEPS.REFINEMENT]).toEqual([
+      'new critic 0',
+      'new critic 1',
+    ]);
+    expect(messagesState.messages[1].work?.results?.[STEPS.REFINEMENT]).toEqual([
+      'new critic 0',
+      'new critic 1',
+    ]);
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.phase).toBe('awaiting-user');
+  });
+
+  it('preserves a completed parallel critic regeneration when another critic regeneration fails', async () => {
+    const pausedWork = createBaseWork({
+      stepMetadata: [
+        { id: STEPS.INITIAL, status: 'done', label: 'Initial Step' },
+        { id: STEPS.REFINEMENT, status: 'done', label: 'Refinement Step' },
+        { id: STEPS.SYNTHESIS, status: 'pending', label: 'Synthesis Step' },
+      ],
+      results: {
+        [STEPS.INITIAL]: ['old agent 0', 'old agent 1'],
+        [STEPS.REFINEMENT]: ['old critic 0', 'old critic 1'],
+        [`${STEPS.REFINEMENT}_thoughts`]: ['old critic thought 0', 'old critic thought 1'],
+        [`${STEPS.REFINEMENT}_usage`]: [createUsage(30), createUsage(40)],
+        [STEPS.SYNTHESIS]: [''],
+      },
+    });
+    useAgentStore.getState().startSession('model-1', pausedWork, {
+      phase: 'awaiting-user',
+      loadingStatus: 'Paused. Waiting for user confirmation...',
+    });
+
+    let resolveAgent0: (() => void) | undefined;
+    let rejectAgent1: ((reason: unknown) => void) | undefined;
+    const regenerateResponse = vi.fn((...args: any[]) => {
+      const { agentIndex, stepId } = toRegenerateResponseCall(args);
+
+      if (agentIndex === 0) {
+        return new Promise<{ work: Work }>(resolve => {
+          resolveAgent0 = () => resolve({
+            work: createRegeneratedWork({
+              stepId,
+              agentIndex,
+              text: 'new critic 0',
+              thought: 'new critic thought 0',
+              usage: createUsage(61),
+            }),
+          });
+        });
+      }
+
+      return new Promise<{ work: Work }>((_resolve, reject) => {
+        rejectAgent1 = reject;
+      });
+    });
+    const { result, messagesState } = renderRegeneration({
+      initialMessages: createConversation(pausedWork),
+      regenerateResponse,
+    });
+
+    let firstPromise: Promise<void>;
+    let secondPromise: Promise<void>;
+
+    act(() => {
+      firstPromise = result.current.regenerateAgentResponse('model-1', STEPS.REFINEMENT, 0);
+      secondPromise = result.current.regenerateAgentResponse('model-1', STEPS.REFINEMENT, 1);
+    });
+
+    await act(async () => {
+      resolveAgent0?.();
+      await firstPromise;
+    });
+
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.work.results?.[STEPS.REFINEMENT]).toEqual([
+      'new critic 0',
+      'old critic 1',
+    ]);
+
+    await act(async () => {
+      rejectAgent1?.(new Error('network failed'));
+      await secondPromise;
+    });
+
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.work.results?.[STEPS.REFINEMENT]).toEqual([
+      'new critic 0',
+      'old critic 1',
+    ]);
+    expect(messagesState.messages[1].work?.results?.[STEPS.REFINEMENT]).toEqual([
+      'new critic 0',
+      'old critic 1',
+    ]);
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.phase).toBe('recoverable-error');
+  });
+
+  it('preserves a completed parallel critic regeneration when another critic regeneration is aborted', async () => {
+    const pausedWork = createBaseWork({
+      stepMetadata: [
+        { id: STEPS.INITIAL, status: 'done', label: 'Initial Step' },
+        { id: STEPS.REFINEMENT, status: 'done', label: 'Refinement Step' },
+        { id: STEPS.SYNTHESIS, status: 'pending', label: 'Synthesis Step' },
+      ],
+      results: {
+        [STEPS.INITIAL]: ['old agent 0', 'old agent 1'],
+        [STEPS.REFINEMENT]: ['old critic 0', 'old critic 1'],
+        [`${STEPS.REFINEMENT}_thoughts`]: ['old critic thought 0', 'old critic thought 1'],
+        [`${STEPS.REFINEMENT}_usage`]: [createUsage(30), createUsage(40)],
+        [STEPS.SYNTHESIS]: [''],
+      },
+    });
+    useAgentStore.getState().startSession('model-1', pausedWork, {
+      phase: 'awaiting-user',
+      loadingStatus: 'Paused. Waiting for user confirmation...',
+    });
+
+    let resolveAgent0: (() => void) | undefined;
+    let abortAgent1: ((reason: unknown) => void) | undefined;
+    const regenerateResponse = vi.fn((...args: any[]) => {
+      const { agentIndex, stepId } = toRegenerateResponseCall(args);
+
+      if (agentIndex === 0) {
+        return new Promise<{ work: Work }>(resolve => {
+          resolveAgent0 = () => resolve({
+            work: createRegeneratedWork({
+              stepId,
+              agentIndex,
+              text: 'new critic 0',
+              thought: 'new critic thought 0',
+              usage: createUsage(61),
+            }),
+          });
+        });
+      }
+
+      return new Promise<{ work: Work }>((_resolve, reject) => {
+        abortAgent1 = reject;
+      });
+    });
+    const { result, messagesState } = renderRegeneration({
+      initialMessages: createConversation(pausedWork),
+      regenerateResponse,
+    });
+
+    let firstPromise: Promise<void>;
+    let secondPromise: Promise<void>;
+
+    act(() => {
+      firstPromise = result.current.regenerateAgentResponse('model-1', STEPS.REFINEMENT, 0);
+      secondPromise = result.current.regenerateAgentResponse('model-1', STEPS.REFINEMENT, 1);
+    });
+
+    await act(async () => {
+      resolveAgent0?.();
+      await firstPromise;
+    });
+
+    await act(async () => {
+      abortAgent1?.(new DOMException('The operation was aborted.', 'AbortError'));
+      await secondPromise;
+    });
+
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.work.results?.[STEPS.REFINEMENT]).toEqual([
+      'new critic 0',
+      'old critic 1',
+    ]);
+    expect(messagesState.messages[1].work?.results?.[STEPS.REFINEMENT]).toEqual([
+      'new critic 0',
+      'old critic 1',
+    ]);
+    expect(useAgentStore.getState().activeSessionMessageId).toBe('model-1');
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.phase).toBe('awaiting-user');
+  });
+
   it('commits the regenerated snapshot before clearing the active session for completed messages', async () => {
     const liveSessionWork = createBaseWork({
       results: {

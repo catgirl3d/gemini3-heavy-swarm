@@ -30,6 +30,7 @@ vi.mock('@/stores/agentStore', () => {
     updateSessionRuntime: vi.fn(),
     updateSessionWorkResult: vi.fn(),
     replaceSessionWork: vi.fn(),
+    sessionsByMessageId: {},
   };
   const useAgentStore = vi.fn(() => mockState);
   (useAgentStore as any).getState = vi.fn(() => mockState);
@@ -210,6 +211,7 @@ describe('BaseStep', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useAgentStore.getState().sessionsByMessageId = {};
     step = new TestStep();
   });
 
@@ -1114,6 +1116,55 @@ describe('BaseStep', () => {
       }));
     });
 
+    it('should persist simulated error counts without overwriting latest session work', async () => {
+      const latestWork: Work = {
+        results: {
+          [STEPS.INITIAL]: ['latest agent 0', 'latest agent 1'],
+          [STEPS.REFINEMENT]: ['latest critic 0', 'latest critic 1'],
+        },
+      };
+      useAgentStore.getState().sessionsByMessageId = {
+        'msg-1': {
+          messageId: 'msg-1',
+          work: latestWork,
+          agentStates: [],
+          phase: 'running',
+          loadingStatus: '',
+          errorMessage: null,
+          updatedAt: 1,
+        },
+      };
+      const work: Work = {
+        results: {
+          [STEPS.INITIAL]: ['stale agent 0', 'stale agent 1'],
+        },
+      };
+
+      await expect(step.testRunModelStream({
+        ai: null,
+        settings: { debugMode: false, numAgents: 2 } as AppSettings,
+        model: 'unused-model',
+        contents: [],
+        signal: new AbortController().signal,
+        agentIndex: 1,
+        simulateError: '503',
+        simulateErrorAttempts: 1,
+        messageId: 'msg-1',
+        work
+      } as any, { onChunk: vi.fn() })).rejects.toMatchObject({
+        code: ErrorCode.SERVICE_OVERLOADED,
+        status: 503
+      } satisfies Partial<AppError>);
+
+      expect(useAgentStore.getState().replaceSessionWork).toHaveBeenCalledWith('msg-1', expect.objectContaining({
+        results: expect.objectContaining({
+          [STEPS.INITIAL]: ['latest agent 0', 'latest agent 1'],
+          [STEPS.REFINEMENT]: ['latest critic 0', 'latest critic 1'],
+          [`${STEPS.INITIAL}_error_counts`]: [0, 1],
+        }),
+      }));
+    });
+
     it('should stream normally after simulated error attempts are already exhausted', async () => {
       const work: Work = {
         results: {
@@ -1371,7 +1422,7 @@ describe('BaseStep', () => {
         'msg-1',
         STEPS.INITIAL,
         1,
-        { usage: null, text: '' }
+        { usage: null, thought: '', text: '' }
       );
       expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
         'msg-1',
@@ -1379,6 +1430,64 @@ describe('BaseStep', () => {
         1,
         { text: 'new agent text', thought: 'new thought', usage: finalUsage }
       );
+      expect(useAgentStore.getState().replaceSessionWork).not.toHaveBeenCalled();
+    });
+
+    it('should force-flush the final regenerated slot without replacing the whole session work', async () => {
+      vi.useFakeTimers();
+
+      const firstUsage = { totalTokens: 10, promptTokens: 4, candidatesTokens: 6 };
+      const finalUsage = { totalTokens: 24, promptTokens: 9, candidatesTokens: 15 };
+      const provider = createProvider((async function* () {
+        yield { text: 'first chunk', thought: '', usage: firstUsage };
+        yield { text: ' and final chunk', thought: '', usage: finalUsage };
+      })());
+      const work: Work = {
+        results: {
+          [STEPS.INITIAL]: ['old agent 0', 'old agent 1'],
+          [`${STEPS.INITIAL}_usage`]: [null, null]
+        },
+        stepMetadata: [{ id: STEPS.INITIAL, status: 'error', label: 'Initial Step' }]
+      };
+
+      await step.testRunAgentRegeneration(
+        {
+          ai: provider,
+          settings: { debugMode: false, numAgents: 2, model: 'global-model' } as AppSettings,
+          work,
+          signal: new AbortController().signal,
+          messageId: 'msg-1',
+          onMessageUpdate: vi.fn()
+        } as any,
+        1,
+        createInstruction(),
+        [
+          { id: 'a0', name: 'Agent 1', status: 'done', label: 'Done', messageId: 'msg-1' },
+          { id: 'a1', name: 'Agent 2', status: 'error', label: 'Failed', messageId: 'msg-1' }
+        ]
+      );
+
+      expect(work.results?.[STEPS.INITIAL]).toEqual(['old agent 0', 'first chunk and final chunk']);
+      expect(work.results?.[`${STEPS.INITIAL}_usage`]).toEqual([null, finalUsage]);
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
+        'msg-1',
+        STEPS.INITIAL,
+        1,
+        { usage: null, thought: '', text: '' }
+      );
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
+        'msg-1',
+        STEPS.INITIAL,
+        1,
+        { text: 'first chunk', usage: firstUsage }
+      );
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
+        'msg-1',
+        STEPS.INITIAL,
+        1,
+        { text: 'first chunk and final chunk', thought: '', usage: finalUsage }
+      );
+      expect(useAgentStore.getState().replaceSessionWork).not.toHaveBeenCalled();
     });
 
     it('should reject regeneration before mutating work when AI provider is missing', async () => {
@@ -1423,7 +1532,13 @@ describe('BaseStep', () => {
       )).rejects.toThrow('regeneration stream failed');
 
       expect(work.results?.[STEPS.INITIAL]).toEqual(['old agent 0', 'partial']);
-      expect(useAgentStore.getState().replaceSessionWork).toHaveBeenCalledWith('msg-1', { ...work });
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
+        'msg-1',
+        STEPS.INITIAL,
+        1,
+        { text: 'partial', thought: '', usage: null }
+      );
+      expect(useAgentStore.getState().replaceSessionWork).not.toHaveBeenCalled();
     });
 
     it('should route retry callbacks through retry progress during regeneration', async () => {

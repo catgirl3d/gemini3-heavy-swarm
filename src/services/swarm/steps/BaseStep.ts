@@ -402,7 +402,7 @@ export abstract class BaseStep implements StepDescriptor {
           messageId: updatedStates[i]?.messageId
         });
 
-        // Update Store
+        // Mirror the failed agent state into the live session store.
         updateAgentStatus(
           this.id,
           i,
@@ -599,11 +599,11 @@ export abstract class BaseStep implements StepDescriptor {
     const { ai, settings, model, contents, systemInstruction, tools, signal, agentIndex, devModeDuration, simulateError, simulateErrorAttempts, work: configWork, messageId } = config;
     const logger = new Logger(`${this.id}${agentIndex !== undefined ? `:Agent${agentIndex + 1}` : ''}`, settings.debugMode);
 
-    // Persistent error simulation logic (works across manual regenerations)
+    // Persistent per-agent simulated error logic shared by normal execution and regeneration.
     if (simulateError && simulateError !== 'none') {
       const maxErrorAttempts = simulateErrorAttempts ?? 1;
 
-      // Use work from config (passed from context) or fallback to store
+      // Persist simulated error counts on the current work snapshot passed into the stream.
       const targetWork = configWork;
       
       if (targetWork) {
@@ -621,9 +621,22 @@ export abstract class BaseStep implements StepDescriptor {
           // Increment and save count
           (targetWork.results[errorKey] as number[])[errorCountIndex] = currentCount + 1;
           
-          // Update store to persist count
+          // Persist the updated counter without replacing unrelated live results.
           if (messageId) {
-            useAgentStore.getState().replaceSessionWork(messageId, targetWork);
+            const store = useAgentStore.getState();
+            const latestSessionWork = store.sessionsByMessageId[messageId]?.work;
+            const errorCounts = [...targetWork.results[errorKey] as number[]];
+            const workToPersist: Work = latestSessionWork
+              ? {
+                  ...latestSessionWork,
+                  results: {
+                    ...(latestSessionWork.results ?? {}),
+                    [errorKey]: errorCounts,
+                  },
+                }
+              : targetWork;
+
+            store.replaceSessionWork(messageId, workToPersist);
           }
 
           logger.debug(`SIMULATION: Throwing simulated ${simulateError} error (Persistent Attempt ${currentCount + 1}/${maxErrorAttempts})`);
@@ -698,7 +711,7 @@ export abstract class BaseStep implements StepDescriptor {
       
       try {
         await withRetry(async () => {
-          // Reset accumulators for each attempt to ensure clean regeneration if retried
+          // Reset accumulators for each retry attempt so each stream attempt starts clean.
           fullText = '';
           fullThought = '';
           allGroundingChunks.length = 0;
@@ -817,8 +830,10 @@ export abstract class BaseStep implements StepDescriptor {
   }
 
   /**
-   * Shared regeneration logic for multi-agent steps (Initial, Refinement).
-   * Handles complete lifecycle: status initialization, streaming, final status updates, and error handling.
+   * Shared regeneration logic for one agent slot within a step.
+   * Used by multi-agent steps directly and by synthesis via its single slot.
+   * Handles complete lifecycle: status initialization, streaming, slot-scoped live sync,
+   * final status updates, and error handling.
    * This method is fully self-contained - callers don't need to manage statuses externally.
    */
   protected async runAgentRegeneration(
@@ -857,18 +872,17 @@ export abstract class BaseStep implements StepDescriptor {
     const slotCount = this.getStepSlotCount(this.id, settings.numAgents, agentIndex);
     this.ensureResults(work);
 
-    // Clear previous usage to avoid displaying stale data during regeneration
+    // Clear the usage slot immediately so stale token counters disappear before streaming restarts.
     this.ensureStepUsage(work, this.id, slotCount)[agentIndex] = null;
     
     /**
      * STATE CLEARING FOR REGENERATION
-     * When regenerating, we MUST clear BOTH text and usage.
+     * Clear the target slot's text, thought, and usage before the new stream starts.
      * 
      * CRITICAL for Synthesis:
-     * If synthesis text is NOT cleared, ShowWork will see 'isWorking=true' AND 
-     * 'hasContent=true' (from the old text) and collapse the cards IMMEDIATELY
-     * before the new first chunk arrives. Clearing text ensures cards stay open
-     * until the new synthesis actually starts producing text.
+     * If the old synthesis text remains visible, ShowWork will see `isWorking=true`
+     * and `hasContent=true` and may collapse the cards before the new first chunk arrives.
+     * The reset is slot-scoped so parallel regenerations do not wipe sibling agent results.
      */
     const arr = Array.isArray(work.results[this.id]) 
       ? [...work.results[this.id] as string[]] 
@@ -878,9 +892,19 @@ export abstract class BaseStep implements StepDescriptor {
     }
     arr[agentIndex] = '';
     work.results[this.id] = arr;
+
+    const thoughtsKey = `${this.id}_thoughts`;
+    const thoughtArr: (string | null)[] = Array.isArray(work.results[thoughtsKey])
+      ? [...work.results[thoughtsKey] as (string | null)[]]
+      : Array<string | null>(slotCount).fill('');
+    if (thoughtArr.length <= agentIndex) {
+      thoughtArr.push(...Array<string | null>(agentIndex + 1 - thoughtArr.length).fill(''));
+    }
+    thoughtArr[agentIndex] = '';
+    work.results[thoughtsKey] = thoughtArr;
     
-    // Clear store as well (usage AND text)
-    this.syncLiveWorkResult(context, this.id, agentIndex, { usage: null, text: '' }, { forceImmediate: true });
+    // Clear store as well (usage, thought, and text)
+    this.syncLiveWorkResult(context, this.id, agentIndex, { usage: null, thought: '', text: '' }, { forceImmediate: true });
     
     // Determine model
     const model = roleType 
@@ -888,7 +912,7 @@ export abstract class BaseStep implements StepDescriptor {
         : this.getStepModel(context);
 
     try {
-      const { text: fullText, usage: finalUsage, groundingChunks } = await this.runModelStream(
+      const { text: fullText, thought: fullThought, usage: finalUsage, groundingChunks } = await this.runModelStream(
         {
           ai, settings, model,
           contents: [...mainChatHistory, userTurn],
@@ -931,28 +955,34 @@ export abstract class BaseStep implements StepDescriptor {
       // This ensures token usage displays correctly for regenerated agents
       if (finalUsage) {
         this.ensureStepUsage(work, this.id, slotCount)[agentIndex] = finalUsage;
-        
-        // Also update the store atomically for immediate UI update
-        this.syncLiveWorkResult(context, this.id, agentIndex, { usage: finalUsage });
       }
+
+      const finalLiveWorkUpdates: WorkResultUpdates = {
+        text: fullText,
+        thought: fullThought,
+        ...(finalUsage ? { usage: finalUsage } : {}),
+      };
+
+      // Flush the final per-agent result before marking the card done so parallel
+      // regenerations do not overwrite each other with a stale full-work snapshot.
+      this.syncLiveWorkResult(context, this.id, agentIndex, finalLiveWorkUpdates, { forceImmediate: true });
       
       // Set final 'done' status after successful completion
       updateAgentStatus(this.id, agentIndex, 'done', messageId);
 
-      // META UPDATE: Ensure step is marked as done for StepRunner
+      // Keep the local work metadata aligned with the regenerated step state.
       this.updateStepMetadata(work, 'done');
       
-      // Update store with final snapshot
-       this.discardLiveWorkResultBuffer(context, this.id, agentIndex);
-      this.syncLiveWork(context, work);
+      // Final result is already synced atomically; only clear the throttle buffer entry.
+      this.discardLiveWorkResultBuffer(context, this.id, agentIndex);
       
       return { text: fullText, work, groundingChunks };
     } catch (error) {
-      // Step fully owns error handling - set status AND update work.results
+      // Mark this agent slot as failed and keep the local work snapshot aligned with streamed state.
       const errorLabel = this.getErrorLabel(error, config.labels.error);
       updateAgentStatus(this.id, agentIndex, 'error', messageId, errorLabel);
       
-      // Update work.results with error information
+      // Preserve the current lane contents locally and attach synthesis-specific error sidecars when needed.
       this.ensureResults(work);
       const currentResults = Array.isArray(work.results[this.id]) 
         ? [...(work.results[this.id] as string[])]
@@ -969,9 +999,27 @@ export abstract class BaseStep implements StepDescriptor {
         };
       }
       
-      // Update store with error state
+      // Flush the current slot back into the live store without replacing sibling slots.
+      const currentText = Array.isArray(work.results[this.id])
+        ? (work.results[this.id] as (string | null)[])[agentIndex]
+        : undefined;
+      const currentThought = Array.isArray(work.results[`${this.id}_thoughts`])
+        ? (work.results[`${this.id}_thoughts`] as (string | null)[])[agentIndex]
+        : undefined;
+      const currentUsage = Array.isArray(work.results[`${this.id}_usage`])
+        ? (work.results[`${this.id}_usage`] as (TokenUsage | null)[])[agentIndex]
+        : undefined;
+      const partialLiveWorkUpdates: WorkResultUpdates = {
+        ...(typeof currentText === 'string' ? { text: currentText } : {}),
+        ...(typeof currentThought === 'string' ? { thought: currentThought } : {}),
+        ...(currentUsage !== undefined ? { usage: currentUsage } : {}),
+      };
+
+      if (Object.keys(partialLiveWorkUpdates).length > 0) {
+        this.syncLiveWorkResult(context, this.id, agentIndex, partialLiveWorkUpdates, { forceImmediate: true });
+      }
+
       this.discardLiveWorkResultBuffer(context, this.id, agentIndex);
-      this.syncLiveWork(context, work);
       
       // Re-throw to let caller handle additional UI updates (e.g., message parts)
       throw error;
@@ -979,8 +1027,8 @@ export abstract class BaseStep implements StepDescriptor {
   }
 
   /**
-   * Helper to update step metadata (status) in the Work object.
-   * critical for ensuring StepRunner skips completed steps during Resume.
+   * Updates this step's metadata status inside the provided work snapshot.
+   * Used by both full-step execution and per-agent regeneration flows.
    */
   protected updateStepMetadata(work: Work, status: 'done' | 'error' = 'done'): void {
     const config = getStepConfig(this.id);
