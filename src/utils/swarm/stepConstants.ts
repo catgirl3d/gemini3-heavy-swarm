@@ -22,6 +22,7 @@ export interface StepConfig {
     done: string;
     error: string;
     waiting: string;
+    stale: string;
   };
   /** Error message prefix for system messages */
   errorPrefix: string;
@@ -48,7 +49,8 @@ const STEP_CONFIGS: Record<StepId, StepConfig> = {
       working: 'Drafting...',
       done: 'Drafted',
       error: 'Draft Failed',
-      waiting: 'Waiting...'
+      waiting: 'Waiting...',
+      stale: 'Stale',
     },
     errorPrefix: 'Agent failed to complete',
     progressMsg: 'Drafting initial responses...',
@@ -65,7 +67,8 @@ const STEP_CONFIGS: Record<StepId, StepConfig> = {
       working: 'Refining...',
       done: 'Refined',
       error: 'Refinement Failed',
-      waiting: 'Waiting...'
+      waiting: 'Waiting...',
+      stale: 'Stale',
     },
     errorPrefix: 'Critic failed to refine',
     progressMsg: 'Refining and critiquing answers...',
@@ -82,7 +85,8 @@ const STEP_CONFIGS: Record<StepId, StepConfig> = {
       working: 'Synthesizing...',
       done: 'Synthesized',
       error: 'Synthesis Failed',
-      waiting: 'Waiting...'
+      waiting: 'Waiting...',
+      stale: 'Stale',
     },
     errorPrefix: 'Synthesis failed',
     progressMsg: 'Synthesizing final response...',

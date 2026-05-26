@@ -338,32 +338,132 @@ export abstract class BaseStep implements StepDescriptor {
   }
 
   /**
-   * Standardized initialization of agent states and first progress update.
+   * Hydrates per-step agent states from work.agentStates when available.
+   * Missing indices fall back to waiting placeholders for this step.
    */
-  protected initializeAgentStates(context: StepContext): AgentState[] {
-    const { settings, messageId } = context;
+  protected hydrateAgentStates(context: StepContext): AgentState[] {
+    const { settings, messageId, work } = context;
     const config = getStepConfig(this.id);
-    
+
     const states = this.createAgentStates(settings.numAgents, settings, {
       stepId: this.id,
-      status: 'working',
-      statusLabel: config.labels.working,
+      status: 'waiting',
+      statusLabel: config.labels.waiting,
       messageId
     });
-    
-    // Initialize ALL agents in the store
-    states.forEach((s, i) => {
+
+    (work.agentStates ?? []).forEach(agent => {
+      if (agent.stepId !== this.id || typeof agent.agentIndex !== 'number' || agent.agentIndex < 0 || agent.agentIndex >= states.length) {
+        return;
+      }
+
+      states[agent.agentIndex] = {
+        ...states[agent.agentIndex],
+        ...agent,
+        stepId: this.id,
+        agentIndex: agent.agentIndex,
+        messageId: messageId ?? agent.messageId,
+      };
+    });
+
+    return states;
+  }
+
+  /**
+   * Standardized initialization of the agent states that will run now.
+   * Already-completed sibling agents keep their existing state for partial stale reruns.
+   */
+  protected initializeAgentStates(context: StepContext, agentIndicesToRun?: number[]): AgentState[] {
+    const { messageId } = context;
+    const config = getStepConfig(this.id);
+    const states = this.hydrateAgentStates(context);
+    const indicesToRun = new Set(agentIndicesToRun ?? states.map((_, index) => index));
+
+    states.forEach((state, i) => {
+      if (!indicesToRun.has(i)) {
+        return;
+      }
+
+      states[i] = {
+        ...state,
+        status: 'working',
+        label: config.labels.working,
+        stepId: this.id,
+        agentIndex: i,
+        messageId,
+      };
+
       updateAgentStatus(
         this.id,
         i,
         'working',
         messageId,
         config.labels.working,
-        s.name
+        states[i].name
       );
     });
 
     return states;
+  }
+
+  /**
+   * Resets one agent slot before a fresh stream starts so stale text/thought/usage
+   * do not remain visible while the agent is already marked as working.
+   */
+  protected resetAgentSlotForFreshStream(
+    context: StepContext,
+    agentIndex: number,
+    slotCount: number,
+    options?: { localResults?: string[] }
+  ): void {
+    const { work } = context;
+    this.ensureResults(work);
+
+    const currentResults = Array.isArray(work.results[this.id])
+      ? [...work.results[this.id] as (string | null)[]]
+      : Array(slotCount).fill('');
+    if (currentResults.length <= agentIndex) {
+      currentResults.push(...Array(agentIndex + 1 - currentResults.length).fill(''));
+    }
+    const hadText = currentResults[agentIndex] !== '';
+    currentResults[agentIndex] = '';
+    work.results[this.id] = currentResults;
+    if (options?.localResults) {
+      options.localResults[agentIndex] = '';
+    }
+
+    const thoughtsKey = `${this.id}_thoughts`;
+    const currentThoughts = Array.isArray(work.results[thoughtsKey])
+      ? [...work.results[thoughtsKey] as (string | null)[]]
+      : Array<string | null>(slotCount).fill('');
+    if (currentThoughts.length <= agentIndex) {
+      currentThoughts.push(...Array<string | null>(agentIndex + 1 - currentThoughts.length).fill(''));
+    }
+    const hadThought = currentThoughts[agentIndex] !== '';
+    currentThoughts[agentIndex] = '';
+    work.results[thoughtsKey] = currentThoughts;
+
+    const stepUsage = this.ensureStepUsage(work, this.id, slotCount);
+    const hadUsage = stepUsage[agentIndex] !== null;
+    stepUsage[agentIndex] = null;
+
+    if (hadText || hadThought || hadUsage) {
+      this.syncLiveWorkResult(context, this.id, agentIndex, { text: '', thought: '', usage: null }, { forceImmediate: true });
+    }
+  }
+
+  protected getAgentIndicesToRun(work: Work, agentStates: AgentState[], slotCount: number): number[] {
+    const stepStatus = work.stepMetadata?.find(meta => meta.id === this.id)?.status;
+    if (stepStatus !== 'stale') {
+      return Array.from({ length: slotCount }, (_, index) => index);
+    }
+
+    const incompleteIndices = agentStates
+      .filter(agent => agent.status !== 'done')
+      .map(agent => agent.agentIndex)
+      .filter((index): index is number => typeof index === 'number');
+
+    return incompleteIndices;
   }
 
   /**
@@ -373,39 +473,41 @@ export abstract class BaseStep implements StepDescriptor {
     context: StepContext,
     outcomes: PromiseSettledResult<string>[],
     results: string[],
-    agentStates: AgentState[]
+    agentStates: AgentState[],
+    executionIndices?: number[]
   ): { updatedStates: AgentState[]; failures: unknown[] } {
     const { settings } = context;
     const failures: unknown[] = [];
     let updatedStates = [...agentStates];
 
     outcomes.forEach((outcome, i) => {
+      const agentIndex = executionIndices?.[i] ?? i;
       const logger = new Logger(this.id, settings.debugMode);
       if (outcome.status === 'rejected') {
         const reason = outcome.reason;
         failures.push(reason);
-        logger.error(`Agent ${i + 1} failed:`, reason);
+        logger.error(`Agent ${agentIndex + 1} failed:`, reason);
         
-        logger.debug(`[Agent ${i + 1}] FAILURE DETAILS:`, {
+        logger.debug(`[Agent ${agentIndex + 1}] FAILURE DETAILS:`, {
           error: reason instanceof Error ? reason.message : String(reason),
-          textLength: results[i]?.length || 0,
-          hasContent: (results[i]?.length || 0) > 0
+          textLength: results[agentIndex]?.length || 0,
+          hasContent: (results[agentIndex]?.length || 0) > 0
         });
         
 
         
         const errorLabel = this.getErrorLabel(reason, getStepConfig(this.id).labels.error);
-        updatedStates = this.updateAgentState(updatedStates, i, { 
+        updatedStates = this.updateAgentState(updatedStates, agentIndex, { 
           status: 'error',
           label: errorLabel,
           stepId: this.id,
-          messageId: updatedStates[i]?.messageId
+          messageId: updatedStates[agentIndex]?.messageId
         });
 
         // Mirror the failed agent state into the live session store.
         updateAgentStatus(
           this.id,
-          i,
+          agentIndex,
           'error',
           context.messageId,
           errorLabel
@@ -423,22 +525,25 @@ export abstract class BaseStep implements StepDescriptor {
     context: StepContext,
     results: string[],
     agentStates: AgentState[],
-    failures: unknown[]
+    failures: unknown[],
+    options?: {
+      executedAgentCount?: number;
+      failOnAnyFailure?: boolean;
+    }
   ): string[] {
     const { work, settings } = context;
-    
-    if (this.checkGlobalRateLimitFailure(failures, settings.numAgents)) {
+
+    const executedAgentCount = options?.executedAgentCount ?? settings.numAgents;
+    const shouldAbort = options?.failOnAnyFailure
+      ? failures.length > 0
+      : this.checkGlobalRateLimitFailure(failures, executedAgentCount)
+        || this.checkGlobalStepFailure(failures, executedAgentCount);
+
+    if (shouldAbort) {
         work.results[this.id] = [...results];
         this.discardStepLiveWorkBuffers(context, this.id);
         this.syncLiveWork(context, work);
         throw failures[0];
-    }
-
-    if (this.checkGlobalStepFailure(failures, settings.numAgents)) {
-      work.results[this.id] = [...results];
-      this.discardStepLiveWorkBuffers(context, this.id);
-      this.syncLiveWork(context, work);
-      throw failures[0];
     }
 
     work.results[this.id] = [...results];
@@ -518,9 +623,12 @@ export abstract class BaseStep implements StepDescriptor {
     const { ai, settings, work, signal } = context;
     const stepId = this.id;
 
-    // Initialize results array
-    const results: string[] = Array(settings.numAgents).fill('');
     this.ensureResults(work);
+    const existingResults = Array.isArray(work.results[stepId])
+      ? work.results[stepId] as (string | null)[]
+      : [];
+    const results: string[] = Array.from({ length: settings.numAgents }, (_, index) => existingResults[index] ?? '');
+    const stepWasStale = work.stepMetadata?.find(meta => meta.id === stepId)?.status === 'stale';
 
     // Initialize persistent error counts if simulating errors
     if (config.simulateError && config.simulateError !== 'none') {
@@ -530,12 +638,16 @@ export abstract class BaseStep implements StepDescriptor {
       }
     }
 
-    // Standardized initialization of agent states
-    let currentAgentStates = this.initializeAgentStates(context);
+    const hydratedAgentStates = this.hydrateAgentStates(context);
+    const agentIndicesToRun = this.getAgentIndicesToRun(work, hydratedAgentStates, settings.numAgents);
+    agentIndicesToRun.forEach((index) => {
+      this.resetAgentSlotForFreshStream(context, index, this.getStepSlotCount(stepId, settings.numAgents, index), { localResults: results });
+    });
+    let currentAgentStates = this.initializeAgentStates(context, agentIndicesToRun);
     const stepConfig = getStepConfig(stepId);
 
     // Execute agents in parallel
-    const agentPromises = Array(settings.numAgents).fill(0).map(async (_, i) => {
+    const agentPromises = agentIndicesToRun.map(async (i) => {
       const { systemInstruction, userTurn, mainChatHistory } = config.prepareAgent(i);
 
       // Capture debug info
@@ -587,9 +699,12 @@ export abstract class BaseStep implements StepDescriptor {
     const outcomes = await Promise.allSettled(agentPromises);
     
     // Standardized failure processing
-    const { updatedStates, failures } = this.processSettledOutcomes(context, outcomes, results, currentAgentStates);
+    const { updatedStates, failures } = this.processSettledOutcomes(context, outcomes, results, currentAgentStates, agentIndicesToRun);
     
-    return this.finalizeStep(context, results, updatedStates, failures);
+    return this.finalizeStep(context, results, updatedStates, failures, {
+      executedAgentCount: agentIndicesToRun.length,
+      failOnAnyFailure: stepWasStale,
+    });
   }
 
   protected async runModelStream(
@@ -852,6 +967,7 @@ export abstract class BaseStep implements StepDescriptor {
 
     const { systemInstruction, userTurn, mainChatHistory } = instruction;
     let currentAgentStates = agentStates;
+    const stepWasStale = work.stepMetadata?.find(meta => meta.id === this.id)?.status === 'stale';
 
     // Capture debug info for regeneration
     this.ensureDebugInfo(work, this.id);
@@ -866,45 +982,12 @@ export abstract class BaseStep implements StepDescriptor {
     // Create jump tracker if callback is provided (used for synthesis regeneration)
     const jumpTracker = createFirstTextJumpTracker(onFirstTextChunk);
     
-    // Set initial 'working' status - Step manages its own lifecycle
-    updateAgentStatus(this.id, agentIndex, 'working', messageId);
+    // Set the live card to the step-specific in-progress label immediately on click,
+    // before the first streamed chunk arrives.
+    updateAgentStatus(this.id, agentIndex, 'working', messageId, config.progressMsg);
 
     const slotCount = this.getStepSlotCount(this.id, settings.numAgents, agentIndex);
-    this.ensureResults(work);
-
-    // Clear the usage slot immediately so stale token counters disappear before streaming restarts.
-    this.ensureStepUsage(work, this.id, slotCount)[agentIndex] = null;
-    
-    /**
-     * STATE CLEARING FOR REGENERATION
-     * Clear the target slot's text, thought, and usage before the new stream starts.
-     * 
-     * CRITICAL for Synthesis:
-     * If the old synthesis text remains visible, ShowWork will see `isWorking=true`
-     * and `hasContent=true` and may collapse the cards before the new first chunk arrives.
-     * The reset is slot-scoped so parallel regenerations do not wipe sibling agent results.
-     */
-    const arr = Array.isArray(work.results[this.id]) 
-      ? [...work.results[this.id] as string[]] 
-      : Array(slotCount).fill('');
-    if (arr.length <= agentIndex) {
-      arr.push(...Array(agentIndex + 1 - arr.length).fill(''));
-    }
-    arr[agentIndex] = '';
-    work.results[this.id] = arr;
-
-    const thoughtsKey = `${this.id}_thoughts`;
-    const thoughtArr: (string | null)[] = Array.isArray(work.results[thoughtsKey])
-      ? [...work.results[thoughtsKey] as (string | null)[]]
-      : Array<string | null>(slotCount).fill('');
-    if (thoughtArr.length <= agentIndex) {
-      thoughtArr.push(...Array<string | null>(agentIndex + 1 - thoughtArr.length).fill(''));
-    }
-    thoughtArr[agentIndex] = '';
-    work.results[thoughtsKey] = thoughtArr;
-    
-    // Clear store as well (usage, thought, and text)
-    this.syncLiveWorkResult(context, this.id, agentIndex, { usage: null, thought: '', text: '' }, { forceImmediate: true });
+    this.resetAgentSlotForFreshStream(context, agentIndex, slotCount);
     
     // Determine model
     const model = roleType 
@@ -968,10 +1051,25 @@ export abstract class BaseStep implements StepDescriptor {
       this.syncLiveWorkResult(context, this.id, agentIndex, finalLiveWorkUpdates, { forceImmediate: true });
       
       // Set final 'done' status after successful completion
+      currentAgentStates = this.updateAgentStatus(currentAgentStates, agentIndex, 'done');
       updateAgentStatus(this.id, agentIndex, 'done', messageId);
 
-      // Keep the local work metadata aligned with the regenerated step state.
-      this.updateStepMetadata(work, 'done');
+      const liveSessionAgents = messageId
+        ? (useAgentStore.getState().sessionsByMessageId?.[messageId]?.agentStates ?? [])
+        : [];
+      const liveStepAgentStates = messageId
+        ? liveSessionAgents.filter(agent => agent.stepId === this.id)
+        : currentAgentStates;
+      const stepAgentStates = liveStepAgentStates.length >= slotCount
+        ? liveStepAgentStates
+        : currentAgentStates;
+      const allStepAgentsDone = stepAgentStates.length >= slotCount
+        && stepAgentStates.every(agent => agent.status === 'done');
+
+      // Keep stale multi-agent steps stale until every slot has been refreshed.
+      if (!stepWasStale || this.id === STEPS.SYNTHESIS || allStepAgentsDone) {
+        this.updateStepMetadata(work, 'done');
+      }
       
       // Final result is already synced atomically; only clear the throttle buffer entry.
       this.discardLiveWorkResultBuffer(context, this.id, agentIndex);

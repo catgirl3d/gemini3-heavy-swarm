@@ -1,5 +1,6 @@
 import { type Work, type TokenUsage, type AgentState, type WorkStepMetadata, type WorkStepStatus, type DebugInfo, type StepDebugInfo, type Source, type SynthesisErrorState } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
+import { getStepConfig } from '@/utils/swarm/stepConstants';
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -26,6 +27,27 @@ const cloneResultEntry = (value: unknown): unknown => {
 
 const hasVisibleStepContent = (work: Work, stepId: StepId): boolean => {
   return getStepResults(work, stepId).some(result => typeof result === 'string' && result.length > 0);
+};
+
+export const markAgentStatesForSteps = (
+  agentStates: AgentState[] | undefined,
+  stepIds: Set<StepId>,
+): AgentState[] | undefined => {
+  if (!agentStates || stepIds.size === 0) {
+    return agentStates ? agentStates.map(agent => ({ ...agent })) : undefined;
+  }
+
+  return agentStates.map(agent => {
+    if (!agent.stepId || !stepIds.has(agent.stepId)) {
+      return { ...agent };
+    }
+
+    return {
+      ...agent,
+      status: 'stale',
+      label: getStepConfig(agent.stepId).labels.stale,
+    };
+  });
 };
 
 /**
@@ -171,22 +193,29 @@ export function getDownstreamSteps(stepId: StepId): StepId[] {
 }
 
 export function markDownstreamStale(work: Work, changedStepId: StepId): Work {
-  return getDownstreamSteps(changedStepId).reduce((nextWork, downstreamStepId) => {
-    const meta = getStepMeta(nextWork, downstreamStepId);
-    const shouldMarkStale = hasVisibleStepContent(nextWork, downstreamStepId)
+  const staleStepIds = new Set<StepId>();
+  const nextWork = getDownstreamSteps(changedStepId).reduce((currentWork, downstreamStepId) => {
+    const meta = getStepMeta(currentWork, downstreamStepId);
+    const shouldMarkStale = hasVisibleStepContent(currentWork, downstreamStepId)
       || meta?.status === 'done'
       || meta?.status === 'error'
       || meta?.status === 'stale';
 
     if (!shouldMarkStale) {
-      return nextWork;
+      return currentWork;
     }
 
-    return setStepMetaStatus(nextWork, downstreamStepId, 'stale', {
+    staleStepIds.add(downstreamStepId);
+    return setStepMetaStatus(currentWork, downstreamStepId, 'stale', {
       label: meta?.label,
       staleFromStepId: changedStepId,
     });
   }, cloneWork(work));
+
+  return {
+    ...nextWork,
+    ...(nextWork.agentStates ? { agentStates: markAgentStatesForSteps(nextWork.agentStates, staleStepIds) } : {}),
+  };
 }
 
 export function snapshotWorkWithAgents(work: Work, agentStates: AgentState[]): Work {

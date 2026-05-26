@@ -35,6 +35,7 @@ vi.mock('@/stores/agentStore', () => ({
   useAgentStore: {
     getState: vi.fn(() => ({
       replaceSessionWork: vi.fn(),
+      snapshotSessionWork: vi.fn(),
       sessionsByMessageId: {},
     }))
   }
@@ -124,6 +125,7 @@ describe('StepRunner', () => {
     const replaceSessionWorkMock = vi.fn();
     (useAgentStore.getState as any).mockReturnValue({
       replaceSessionWork: replaceSessionWorkMock,
+      snapshotSessionWork: vi.fn(),
       sessionsByMessageId: {},
     });
 
@@ -320,6 +322,7 @@ describe('StepRunner', () => {
     mockSettings.pauseAfterInitial = true;
     const liveStoreState = {
       replaceSessionWork: vi.fn(),
+      snapshotSessionWork: vi.fn(),
       sessionsByMessageId: {},
     };
     (useAgentStore.getState as any).mockImplementation(() => liveStoreState);
@@ -361,5 +364,54 @@ describe('StepRunner', () => {
       regenerated: 'latest refinement',
       step2: 'latest refinement',
     }));
+  });
+
+  it('hydrates context.work from the live session snapshot so steps see current agent states', async () => {
+    const liveAgents = [
+      { id: 'agent-1', name: 'Agent 1', status: 'done', label: 'Done', stepId: 'step1', agentIndex: 0, messageId: 'msg-1' },
+      { id: 'agent-2', name: 'Agent 2', status: 'stale', label: 'Stale', stepId: 'step1', agentIndex: 1, messageId: 'msg-1' },
+    ] as any;
+    const sessionWork = {
+      ...mockWork,
+      stepMetadata: [{ id: 'step1' as any, status: 'stale', label: 'Step 1' }],
+      agentStates: [],
+    };
+    const snapshotWork = {
+      ...sessionWork,
+      agentStates: liveAgents,
+    };
+    const snapshotSessionWork = vi.fn().mockReturnValue(snapshotWork);
+    const liveStoreState = {
+      replaceSessionWork: vi.fn(),
+      snapshotSessionWork,
+      sessionsByMessageId: {
+        'msg-1': {
+          work: sessionWork,
+        },
+      },
+    };
+    (useAgentStore.getState as any).mockImplementation(() => liveStoreState);
+
+    const step: StepDescriptor = {
+      id: 'step1' as any,
+      name: 'Step 1',
+      execute: vi.fn().mockImplementation(async (context: StepContext) => {
+        expect(context.work.agentStates).toEqual(liveAgents);
+        return 'done';
+      })
+    };
+
+    const runner = new StepRunner([step]);
+    const context: StepContext = {
+      work: mockWork,
+      settings: mockSettings,
+      messageId: 'msg-1',
+      signal: new AbortController().signal,
+    } as any;
+
+    await runner.run(context);
+
+    expect(snapshotSessionWork).toHaveBeenCalledWith('msg-1');
+    expect(step.execute).toHaveBeenCalled();
   });
 });

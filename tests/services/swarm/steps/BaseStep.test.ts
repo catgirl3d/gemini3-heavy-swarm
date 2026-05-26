@@ -48,7 +48,9 @@ vi.mock('@/utils/swarm/stepConstants', () => ({
     labels: {
       working: 'Working...',
       done: 'Done',
-      error: 'Error'
+      error: 'Error',
+      waiting: 'Waiting...',
+      stale: 'Stale'
     },
     progressMsg: 'In progress...'
   })),
@@ -66,6 +68,7 @@ vi.mock('@/services/swarm/steps/utils/agentStateUtils', () => ({
     status: config.status,
     label: config.statusLabel,
     stepId: config.stepId,
+    agentIndex: i,
     messageId: config.messageId
   }))),
   updateAgentState: vi.fn((states, index, updates) => {
@@ -939,6 +942,111 @@ describe('BaseStep', () => {
 
       expect(work.results?.[`${STEPS.INITIAL}_error_counts`]).toEqual([1, 1]);
     });
+
+    it('should rerun only stale agents when resuming a stale multi-agent step', async () => {
+      step.id = STEPS.REFINEMENT;
+      const keptUsage = { totalTokens: 30, promptTokens: 15, candidatesTokens: 15 };
+      const staleUsage = { totalTokens: 40, promptTokens: 20, candidatesTokens: 20 };
+      const generateContentStream = vi.fn().mockResolvedValue({
+        stream: (async function* () {
+          yield { text: 'updated critic 1', thought: '', usage: null };
+        })()
+      });
+      const context = {
+        ai: {
+          name: 'mock',
+          isProxy: false,
+          getDefaultModel: vi.fn(() => 'mock-model'),
+          models: { generateContentStream }
+        },
+        settings: { debugMode: false, numAgents: 2, model: 'model' } as AppSettings,
+        work: {
+          results: {
+            [STEPS.REFINEMENT]: ['kept critic 0', 'stale critic 1'],
+            [`${STEPS.REFINEMENT}_thoughts`]: ['kept thought 0', 'stale thought 1'],
+            [`${STEPS.REFINEMENT}_usage`]: [keptUsage, staleUsage],
+          },
+          stepMetadata: [{ id: STEPS.REFINEMENT, status: 'stale', label: 'Refinement Step', staleFromStepId: STEPS.INITIAL }],
+          agentStates: [
+            { id: 'c0', name: 'Critic 1', status: 'done', label: 'Refined', stepId: STEPS.REFINEMENT, agentIndex: 0, messageId: 'msg-1' },
+            { id: 'c1', name: 'Critic 2', status: 'stale', label: 'Stale', stepId: STEPS.REFINEMENT, agentIndex: 1, messageId: 'msg-1' },
+          ]
+        },
+        signal: new AbortController().signal,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn(),
+      } as unknown as StepContext;
+
+      const result = await step.testExecuteMultiAgent(context, {
+        prepareAgent: (index: number) => ({
+          systemInstruction: `system-${index}`,
+          userTurn: { role: 'user', parts: [{ text: `prompt-${index}` }] },
+          mainChatHistory: []
+        }),
+        tools: undefined,
+      });
+
+      expect(result).toEqual(['kept critic 0', 'updated critic 1']);
+      expect(context.work.results?.[STEPS.REFINEMENT]).toEqual(['kept critic 0', 'updated critic 1']);
+      expect(context.work.results?.[`${STEPS.REFINEMENT}_thoughts`]).toEqual(['kept thought 0', '']);
+      expect(context.work.results?.[`${STEPS.REFINEMENT}_usage`]).toEqual([keptUsage, null]);
+      expect(useAgentStore.getState().updateSessionWorkResult).toHaveBeenCalledWith(
+        'msg-1',
+        STEPS.REFINEMENT,
+        1,
+        { text: '', thought: '', usage: null }
+      );
+      expect(generateContentStream).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throw when a stale partial rerun fails to refresh any targeted slot', async () => {
+      step.id = STEPS.REFINEMENT;
+      const refreshFailure = new Error('critic refresh failed');
+      const generateContentStream = vi.fn().mockResolvedValue({
+        stream: (async function* () {
+          throw refreshFailure;
+        })()
+      });
+      const context = {
+        ai: {
+          name: 'mock',
+          isProxy: false,
+          getDefaultModel: vi.fn(() => 'mock-model'),
+          models: { generateContentStream }
+        },
+        settings: { debugMode: false, numAgents: 2, model: 'model' } as AppSettings,
+        work: {
+          results: {
+            [STEPS.REFINEMENT]: ['kept critic 0', 'stale critic 1'],
+          },
+          stepMetadata: [{ id: STEPS.REFINEMENT, status: 'stale', label: 'Refinement Step', staleFromStepId: STEPS.INITIAL }],
+          agentStates: [
+            { id: 'c0', name: 'Critic 1', status: 'done', label: 'Refined', stepId: STEPS.REFINEMENT, agentIndex: 0, messageId: 'msg-1' },
+            { id: 'c1', name: 'Critic 2', status: 'stale', label: 'Stale', stepId: STEPS.REFINEMENT, agentIndex: 1, messageId: 'msg-1' },
+          ]
+        },
+        signal: new AbortController().signal,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn(),
+      } as unknown as StepContext;
+
+      await expect(step.testExecuteMultiAgent(context, {
+        prepareAgent: (index: number) => ({
+          systemInstruction: `system-${index}`,
+          userTurn: { role: 'user', parts: [{ text: `prompt-${index}` }] },
+          mainChatHistory: []
+        }),
+        tools: undefined,
+      })).rejects.toMatchObject({
+        message: 'critic refresh failed',
+        code: ErrorCode.NETWORK_ERROR,
+      });
+
+      expect(context.work.stepMetadata?.find((meta: any) => meta.id === STEPS.REFINEMENT)).toMatchObject({
+        status: 'stale',
+        staleFromStepId: STEPS.INITIAL,
+      });
+    });
   });
 
   describe('runModelStream', () => {
@@ -1488,6 +1596,89 @@ describe('BaseStep', () => {
         { text: 'first chunk and final chunk', thought: '', usage: finalUsage }
       );
       expect(useAgentStore.getState().replaceSessionWork).not.toHaveBeenCalled();
+    });
+
+    it('should keep a stale multi-agent step stale after regenerating only one slot', async () => {
+      const provider = createProvider((async function* () {
+        yield { text: 'new critic text', thought: '', usage: null };
+      })());
+      const work: Work = {
+        results: {
+          [STEPS.INITIAL]: ['old agent 0', 'old agent 1', 'old agent 2'],
+          [STEPS.REFINEMENT]: ['old critic 0', 'old critic 1', 'old critic 2'],
+        },
+        stepMetadata: [{ id: STEPS.INITIAL, status: 'stale', label: 'Initial Step', staleFromStepId: STEPS.INITIAL }]
+      };
+      const refinementStep = new TestStep();
+      refinementStep.id = STEPS.REFINEMENT;
+      const context = {
+        ai: provider,
+        settings: { debugMode: false, numAgents: 3, model: 'global-model' } as AppSettings,
+        work: {
+          ...work,
+          stepMetadata: [{ id: STEPS.REFINEMENT, status: 'stale', label: 'Refinement Step', staleFromStepId: STEPS.INITIAL }]
+        },
+        signal: new AbortController().signal,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn()
+      } as any;
+
+      const result = await refinementStep.testRunAgentRegeneration(
+        context,
+        1,
+        createInstruction(),
+        [
+          { id: 'a0', name: 'Critic 1', status: 'done', label: 'Refined', stepId: STEPS.REFINEMENT, agentIndex: 0, messageId: 'msg-1' },
+          { id: 'a1', name: 'Critic 2', status: 'stale', label: 'Stale', stepId: STEPS.REFINEMENT, agentIndex: 1, messageId: 'msg-1' },
+          { id: 'a2', name: 'Critic 3', status: 'stale', label: 'Stale', stepId: STEPS.REFINEMENT, agentIndex: 2, messageId: 'msg-1' }
+        ],
+        'criticRoles',
+        []
+      );
+
+      expect(result.text).toBe('new critic text');
+      expect(context.work.stepMetadata?.find((meta: any) => meta.id === STEPS.REFINEMENT)).toMatchObject({
+        status: 'stale',
+        staleFromStepId: STEPS.INITIAL,
+      });
+    });
+
+    it('should mark a stale multi-agent step done after the last stale slot is regenerated', async () => {
+      const provider = createProvider((async function* () {
+        yield { text: 'new critic text', thought: '', usage: null };
+      })());
+      const refinementStep = new TestStep();
+      refinementStep.id = STEPS.REFINEMENT;
+      const context = {
+        ai: provider,
+        settings: { debugMode: false, numAgents: 2, model: 'global-model' } as AppSettings,
+        work: {
+          results: {
+            [STEPS.REFINEMENT]: ['old critic 0', 'old critic 1'],
+          },
+          stepMetadata: [{ id: STEPS.REFINEMENT, status: 'stale', label: 'Refinement Step', staleFromStepId: STEPS.INITIAL }]
+        },
+        signal: new AbortController().signal,
+        messageId: 'msg-1',
+        onMessageUpdate: vi.fn()
+      } as any;
+
+      const result = await refinementStep.testRunAgentRegeneration(
+        context,
+        1,
+        createInstruction(),
+        [
+          { id: 'a0', name: 'Critic 1', status: 'done', label: 'Refined', stepId: STEPS.REFINEMENT, agentIndex: 0, messageId: 'msg-1' },
+          { id: 'a1', name: 'Critic 2', status: 'stale', label: 'Stale', stepId: STEPS.REFINEMENT, agentIndex: 1, messageId: 'msg-1' }
+        ],
+        'criticRoles',
+        []
+      );
+
+      expect(result.text).toBe('new critic text');
+      expect(context.work.stepMetadata?.find((meta: any) => meta.id === STEPS.REFINEMENT)).toMatchObject({
+        status: 'done',
+      });
     });
 
     it('should reject regeneration before mutating work when AI provider is missing', async () => {

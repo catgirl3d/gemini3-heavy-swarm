@@ -318,7 +318,7 @@ export interface Message {
 export interface AgentState {
   id: string;
   name: string;
-  status: 'waiting' | 'working' | 'done' | 'error';
+  status: 'waiting' | 'working' | 'done' | 'error' | 'stale';
   label: string;
   stepId?: StepId; // Track which step this status belongs to
   agentIndex?: number; // Track agent index within the step

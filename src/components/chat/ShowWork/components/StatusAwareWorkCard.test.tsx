@@ -127,10 +127,10 @@ describe('StatusAwareWorkCard', () => {
     expect(screen.getByTestId('work-card-content')).toHaveTextContent('<null>');
   });
 
-  it('prefers stale step metadata over done agent snapshots while keeping old content visible', () => {
+  it('shows stale when the agent snapshot itself is stale', () => {
     mocks.useResolvedAgentState.mockReturnValue(createAgentState({
-      status: 'done',
-      label: 'Refined',
+      status: 'stale',
+      label: 'Stale',
       stepId: STEPS.REFINEMENT,
     }));
 
@@ -154,6 +154,67 @@ describe('StatusAwareWorkCard', () => {
     expect(screen.getByTestId('work-card')).toHaveAttribute('data-status', 'stale');
     expect(screen.getByTestId('work-card')).toHaveAttribute('data-label', 'Stale');
     expect(screen.getByTestId('work-card-content')).toHaveTextContent('Old refined answer');
+  });
+
+  it('prefers a live working agent state over stale step metadata during regeneration', () => {
+    mocks.useResolvedAgentState.mockReturnValue(createAgentState({
+      status: 'working',
+      label: 'Refining and critiquing answers...',
+      stepId: STEPS.REFINEMENT,
+    }));
+
+    render(
+      <StatusAwareWorkCard
+        cardId="refined-0"
+        work={createWork({
+          stepMetadata: [{ id: STEPS.REFINEMENT, status: 'stale', label: 'Refinement Step', staleFromStepId: STEPS.INITIAL }],
+        })}
+        step={STEPS.REFINEMENT}
+        index={0}
+        messageId="message-1"
+        preferLiveSession
+        title="Critic 1"
+        content="Old refined answer"
+        downloadFilename="Critic-1.md"
+        onCardAction={vi.fn()}
+        allowRegenerate
+      />
+    );
+
+    expect(screen.getByTestId('work-card')).toHaveAttribute('data-status', 'working');
+    expect(screen.getByTestId('work-card')).toHaveAttribute('data-label', 'Refining and critiquing answers...');
+    expect(screen.getByTestId('work-card-content')).toHaveTextContent('Old refined answer');
+  });
+
+  it('shows done for the regenerated stale card when the live agent state is done', () => {
+    mocks.useResolvedAgentState.mockReturnValue(createAgentState({
+      status: 'done',
+      label: 'Refined',
+      stepId: STEPS.REFINEMENT,
+    }));
+
+    render(
+      <StatusAwareWorkCard
+        cardId="refined-0"
+        work={createWork({
+          results: { [STEPS.REFINEMENT]: ['Updated refined answer'] },
+          stepMetadata: [{ id: STEPS.REFINEMENT, status: 'stale', label: 'Refinement Step', staleFromStepId: STEPS.INITIAL }],
+        })}
+        step={STEPS.REFINEMENT}
+        index={0}
+        messageId="message-1"
+        preferLiveSession
+        title="Critic 1"
+        content="Updated refined answer"
+        downloadFilename="Critic-1.md"
+        onCardAction={vi.fn()}
+        allowRegenerate
+      />
+    );
+
+    expect(screen.getByTestId('work-card')).toHaveAttribute('data-status', 'done');
+    expect(screen.getByTestId('work-card')).toHaveAttribute('data-label', 'Refined');
+    expect(screen.getByTestId('work-card-content')).toHaveTextContent('Updated refined answer');
   });
 
   it('diagnoses empty done multi-agent cards using the content length from work results', async () => {

@@ -19,7 +19,7 @@ export class StepRunner {
     if (!messageId) return;
 
     const store = useAgentStore.getState();
-    const sessionWork = store.sessionsByMessageId[messageId]?.work;
+    const sessionWork = store.snapshotSessionWork?.(messageId) ?? store.sessionsByMessageId[messageId]?.work;
     if (!sessionWork) return;
 
     context.work = sessionWork;

@@ -10,9 +10,12 @@ import {
 import { type StepId } from '@/types/steps';
 import {
   cloneWork,
+  getDownstreamSteps,
+  getStepMeta,
   getStepResults,
   getStepThoughts,
   getStepUsage,
+  markAgentStatesForSteps,
   markDownstreamStale as markWorkDownstreamStale,
   snapshotWorkWithAgents,
   updateAgentWork,
@@ -536,9 +539,14 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
       }
 
       const nextWork = markWorkDownstreamStale(existingSession.work, changedStepId);
+      const staleStepIds = new Set(
+        getDownstreamSteps(changedStepId).filter(stepId => getStepMeta(nextWork, stepId)?.status === 'stale')
+      );
+      const nextAgentStates = markAgentStatesForSteps(existingSession.agentStates, staleStepIds) ?? [];
       const nextSession: SwarmSession = {
         ...cloneSession(existingSession),
         work: nextWork,
+        agentStates: nextAgentStates,
         updatedAt: Date.now(),
       };
       const nextSessions = {

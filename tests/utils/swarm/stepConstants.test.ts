@@ -43,6 +43,7 @@ describe('stepConstants', () => {
         done: 'Drafted',
         error: 'Draft Failed',
         waiting: 'Waiting...',
+        stale: 'Stale',
       });
     });
 
@@ -64,6 +65,7 @@ describe('stepConstants', () => {
         done: 'Refined',
         error: 'Refinement Failed',
         waiting: 'Waiting...',
+        stale: 'Stale',
       });
     });
 

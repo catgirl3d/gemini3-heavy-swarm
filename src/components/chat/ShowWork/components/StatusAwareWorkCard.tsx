@@ -69,10 +69,10 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
   const agent = useResolvedAgentState(messageId, step, index, work, preferLiveSession);
   const metaStatus = getStepMeta(work, step)?.status;
   const status: DisplayStatus = (() => {
+    if (agent) return agent.status;
     if (metaStatus === 'stale') return 'stale';
     if (metaStatus === 'error') return 'error';
     if (metaStatus === 'working') return 'working';
-    if (agent) return agent.status;
     if (metaStatus === 'done' || content) return 'done';
     return 'waiting';
   })();
