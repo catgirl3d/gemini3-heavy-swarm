@@ -84,12 +84,13 @@ export const LoadingIndicator: FC<{
     inlineErrorMessage?: string | null;
     messageId?: string;
     onContinue?: () => void;
+    onSkip?: () => void;
     onRegenerate?: (stepId: StepId, agentIndex: number) => void;
     noWrapper?: boolean;
   work?: Work;
   provider?: ProviderType;
   model?: string;
-}> = ({ status, phase, progressStatusText, agentStates, isPausedForAction, isTimerActive, inlineErrorMessage, messageId, onContinue, onRegenerate, noWrapper, work, provider, model }) => {
+}> = ({ status, phase, progressStatusText, agentStates, isPausedForAction, isTimerActive, inlineErrorMessage, messageId, onContinue, onSkip, onRegenerate, noWrapper, work, provider, model }) => {
   const latestLogStateRef = useRef<LoadingIndicatorLogSnapshot | null>(null);
 
   const filteredAgents = useMemo(() => {
@@ -204,6 +205,11 @@ export const LoadingIndicator: FC<{
                 {continueButtonState.visible && (
                     <button className="continue-button" onClick={handleClick}>
                         {continueButtonState.label}
+                    </button>
+                )}
+                {continueButtonState.visible && continueButtonState.isRetry && onSkip && !filteredAgents.some(a => a.status === 'error' && a.stepId === STEPS.SYNTHESIS) && (
+                    <button className="skip-button" onClick={onSkip}>
+                        Skip Step
                     </button>
                 )}
                 <TimerDisplay isActive={isTimerActive ?? (effectivePhase === 'running' || effectivePhase === 'streaming-final')} />

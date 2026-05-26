@@ -384,11 +384,92 @@ export function useSwarmOrchestration({
     }
   };
 
+  const skipStep = async () => {
+    logger.debug('skipStep called');
+    
+    const store = useAgentStore.getState();
+    const activeMsgId = store.activeSessionMessageId;
+    if (!activeMsgId) {
+      logger.warn('Cannot skip step: No active session message active');
+      return;
+    }
+
+    const session = store.sessionsByMessageId[activeMsgId];
+    if (!session) {
+      logger.warn('Cannot skip step: No active session found');
+      return;
+    }
+
+    // Find the step ID that currently has errored agents
+    const erroredAgent = session.agentStates.find(a => a.status === 'error');
+    if (!erroredAgent || !erroredAgent.stepId) {
+      logger.warn('Cannot skip step: No errored agent/step found in active session');
+      return;
+    }
+
+    const failedStepId = erroredAgent.stepId;
+    if (failedStepId === STEPS.SYNTHESIS) {
+      logger.warn('Cannot skip synthesis step');
+      return;
+    }
+    logger.info(`Skipping failed step: ${failedStepId}`);
+
+    // Clear failed slots first so downstream steps do not consume partial text
+    // that was streamed before the agent errored.
+    const { getStepConfig } = await import('@/utils/swarm/stepConstants');
+    const { setStepMetaStatus, updateAgentWork } = await import('@/utils/swarm/workHelpers');
+
+    const failedAgentIndices = session.agentStates.flatMap((agent) => {
+      if (
+        agent.stepId !== failedStepId
+        || agent.status !== 'error'
+        || typeof agent.agentIndex !== 'number'
+      ) {
+        return [];
+      }
+
+      return [agent.agentIndex];
+    });
+
+    let sanitizedWork = session.work;
+    failedAgentIndices.forEach((agentIndex) => {
+      sanitizedWork = updateAgentWork(sanitizedWork, failedStepId, agentIndex, {
+        text: '',
+        thought: '',
+        usage: null,
+      });
+    });
+
+    const updatedWork = setStepMetaStatus(sanitizedWork, failedStepId, 'done', {
+      label: getStepConfig(failedStepId).name
+    });
+
+    // Mark all error-status agent states for this step as done, labeled 'Skipped'
+    const updatedAgentStates = session.agentStates.map(agent => {
+      if (agent.stepId === failedStepId && agent.status === 'error') {
+        return {
+          ...agent,
+          status: 'done' as const,
+          label: 'Skipped'
+        };
+      }
+      return agent;
+    });
+
+    // Save updated states to store
+    store.replaceSessionWork(activeMsgId, updatedWork);
+    store.replaceSessionAgents(activeMsgId, updatedAgentStates);
+
+    // Call continueGeneration to resume execution!
+    await continueGeneration();
+  };
+
   return { 
     sendMessage, 
     stopGeneration, 
     retry, 
     continueGeneration,
+    skipStep,
     lastInput 
   };
 }

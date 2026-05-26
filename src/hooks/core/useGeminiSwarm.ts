@@ -102,6 +102,7 @@ export const useGeminiSwarm = () => {
     stopGeneration: orchestration.stopGeneration,
     retry: orchestration.retry,
     continueGeneration: orchestration.continueGeneration,
+    skipStep: orchestration.skipStep,
     regenerateAgentResponse: (messageId: string, stepId: StepId, agentIndex: number) =>
       regeneration.regenerateAgentResponse(messageId, stepId, agentIndex)
   };

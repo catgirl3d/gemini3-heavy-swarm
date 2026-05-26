@@ -85,6 +85,7 @@ interface MessageListProps {
   messageListRef: RefObject<HTMLDivElement>;
   onPromptClick: (prompt: string) => void;
   onContinue: () => void;
+  onSkip?: () => void;
   onRetry: () => void;
   onRegenerate: (messageId: string, phase: StepId, agentIndex: number) => void;
 }
@@ -106,6 +107,7 @@ const MessageListComponent: FC<MessageListProps> = ({
   messageListRef,
   onPromptClick,
   onContinue,
+  onSkip,
   onRetry,
   onRegenerate
 }) => {
@@ -210,6 +212,7 @@ const MessageListComponent: FC<MessageListProps> = ({
                         inlineErrorMessage={inlineErrorMessage}
                         messageId={activeSessionMessageId}
                         onContinue={onContinue}
+                        onSkip={onSkip}
                         onRegenerate={(phase, agentIndex) => onRegenerate(msg.id, phase as StepId, agentIndex)}
                         work={effectiveWork}
                         provider={provider}
@@ -236,6 +239,7 @@ const MessageListComponent: FC<MessageListProps> = ({
                           phase={activePhase}
                           isPausedForAction={isPausedForAction}
                           onContinue={onContinue}
+                           onSkip={onSkip}
                           onRegenerate={handleRegenerate}
                         />
                       );
@@ -266,6 +270,7 @@ const MessageListComponent: FC<MessageListProps> = ({
               inlineErrorMessage={inlineErrorMessage}
               messageId={activeSessionMessageId}
               onContinue={onContinue}
+              onSkip={onSkip}
               onRegenerate={(phase, agentIndex) => onRegenerate(activeSessionMessageId, phase as StepId, agentIndex)}
               work={activeWork}
               provider={provider}
@@ -280,6 +285,7 @@ const MessageListComponent: FC<MessageListProps> = ({
                   phase={activePhase}
                   isPausedForAction={isPausedForAction}
                   onContinue={onContinue}
+                  onSkip={onSkip}
                   onRegenerate={isPausedForAction ? (phase, agentIndex) => onRegenerate(activeSessionMessageId, phase as StepId, agentIndex) : undefined}
                 />
               </div>

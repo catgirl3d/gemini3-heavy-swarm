@@ -86,7 +86,7 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
   const displayTitle = agent?.name || title;
 
   useEffect(() => {
-    if (status !== 'done' || content !== '') {
+    if (status !== 'done' || content !== '' || label === 'Skipped') {
       lastEmptyDoneLogRef.current = null;
       return;
     }

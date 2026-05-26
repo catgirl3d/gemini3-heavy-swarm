@@ -7,7 +7,7 @@ import { type AgentState, type Source, type TokenUsage, type Work, type StepDebu
 import { createAgentStates, updateAgentState, updateAgentStateById } from './utils/agentStateUtils';
 import { simulateStreaming, getDevModeText, DEV_MODE_DURATIONS } from './utils/devModeUtils';
 import { extractTextFromParts, extractTokenUsage } from './utils/streamUtils';
-import { getErrorLabel, checkGlobalRateLimitFailure, checkGlobalStepFailure, getFriendlyErrorMessage } from './utils/errorUtils';
+import { getErrorLabel, getFriendlyErrorMessage } from './utils/errorUtils';
 import { getGenerationConfig } from '@/services/proxy/geminiConfig';
 import { Logger } from '@shared/utils/logger';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
@@ -72,9 +72,6 @@ export abstract class BaseStep implements StepDescriptor {
   protected extractTokenUsage = extractTokenUsage;
   protected getErrorLabel = getErrorLabel;
   protected getFriendlyErrorMessage = getFriendlyErrorMessage;
-  protected checkGlobalRateLimitFailure = checkGlobalRateLimitFailure;
-  protected checkGlobalStepFailure = checkGlobalStepFailure;
-
   /**
    * Returns the storage key used for persistent error simulation counts.
    */
@@ -524,20 +521,12 @@ export abstract class BaseStep implements StepDescriptor {
   protected finalizeStep(
     context: StepContext,
     results: string[],
-    agentStates: AgentState[],
     failures: unknown[],
-    options?: {
-      executedAgentCount?: number;
-      failOnAnyFailure?: boolean;
-    }
   ): string[] {
-    const { work, settings } = context;
+    const { work } = context;
 
-    const executedAgentCount = options?.executedAgentCount ?? settings.numAgents;
-    const shouldAbort = options?.failOnAnyFailure
-      ? failures.length > 0
-      : this.checkGlobalRateLimitFailure(failures, executedAgentCount)
-        || this.checkGlobalStepFailure(failures, executedAgentCount);
+    // Fail-fast on any agent's failure during the step execution
+    const shouldAbort = failures.length > 0;
 
     if (shouldAbort) {
         work.results[this.id] = [...results];
@@ -628,7 +617,6 @@ export abstract class BaseStep implements StepDescriptor {
       ? work.results[stepId] as (string | null)[]
       : [];
     const results: string[] = Array.from({ length: settings.numAgents }, (_, index) => existingResults[index] ?? '');
-    const stepWasStale = work.stepMetadata?.find(meta => meta.id === stepId)?.status === 'stale';
 
     // Initialize persistent error counts if simulating errors
     if (config.simulateError && config.simulateError !== 'none') {
@@ -701,10 +689,7 @@ export abstract class BaseStep implements StepDescriptor {
     // Standardized failure processing
     const { updatedStates, failures } = this.processSettledOutcomes(context, outcomes, results, currentAgentStates, agentIndicesToRun);
     
-    return this.finalizeStep(context, results, updatedStates, failures, {
-      executedAgentCount: agentIndicesToRun.length,
-      failOnAnyFailure: stepWasStale,
-    });
+    return this.finalizeStep(context, results, failures);
   }
 
   protected async runModelStream(

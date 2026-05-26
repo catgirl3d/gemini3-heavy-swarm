@@ -115,6 +115,11 @@ const createWork = (overrides: Partial<Work> = {}): Work => ({
   ...overrides,
 });
 
+const createResumeMessages = (messageId: string, work: Work): Message[] => ([
+  { id: `user-${messageId}`, role: 'user', parts: [{ text: 'hello' }] },
+  { id: messageId, role: 'model', parts: [{ text: '' }], work },
+]);
+
 const renderOrchestration = ({
   initialMessages = [],
   runSwarm = vi.fn(),
@@ -1146,5 +1151,289 @@ describe('useSwarmOrchestration', () => {
         expect.objectContaining({ id: 'failed-agent-2', messageId: 'model-total-retry' }),
       ],
     });
+  });
+
+  it('skipStep clears failed initial slots before resuming', async () => {
+    const failedAgents = [
+      createAgent({ id: 'failed-agent-1', messageId: 'model-skip-initial', status: 'error', label: 'Failed' }),
+      createAgent({ id: 'success-agent-2', messageId: 'model-skip-initial', agentIndex: 1, name: 'Agent 2', status: 'done', label: 'Done' }),
+    ];
+    const failedWork: Work = {
+      results: {
+        [STEPS.INITIAL]: ['partial draft 1', 'successful draft 2'],
+        [`${STEPS.INITIAL}_thoughts`]: ['partial thought 1', 'successful thought 2'],
+        [`${STEPS.INITIAL}_usage`]: [
+          { totalTokens: 10, promptTokens: 5, candidatesTokens: 5 },
+          { totalTokens: 15, promptTokens: 7, candidatesTokens: 8 },
+        ],
+      },
+      agentStates: failedAgents,
+      stepMetadata: [{ id: STEPS.INITIAL, status: 'error', label: 'Initial Step' }],
+    };
+
+    const runSwarm = vi.fn(async () => ({ work: createWork(), paused: false }));
+    
+    const { result } = renderOrchestration({
+      runSwarm,
+      initialMessages: createResumeMessages('model-skip-initial', failedWork),
+    });
+
+    // Put hook session in a recoverable-error / pause state simulating initial failure
+    const store = useAgentStore.getState();
+    store.startSession('model-skip-initial', failedWork, {
+      phase: 'recoverable-error',
+    });
+    store.replaceSessionAgents('model-skip-initial', failedAgents);
+
+    // Call skipStep
+    await act(async () => {
+      await result.current.skipStep();
+    });
+
+    // Verify runSwarm was called (due to continueGeneration calling it inside)
+    expect(runSwarm).toHaveBeenCalledTimes(1);
+
+    // Verify sanitized values inside store/resumed Work
+    const resumeCall = toRunSwarmCall(runSwarm.mock.calls[0]);
+    expect(resumeCall.existingWork?.results?.[STEPS.INITIAL]?.[0]).toBe('');
+    expect(resumeCall.existingWork?.results?.[`${STEPS.INITIAL}_thoughts`]?.[0]).toBe('');
+    expect(resumeCall.existingWork?.results?.[`${STEPS.INITIAL}_usage`]?.[0]).toBeNull();
+
+    // Verify successful sibling agent at index 1 is untouched
+    expect(resumeCall.existingWork?.results?.[STEPS.INITIAL]?.[1]).toBe('successful draft 2');
+    expect(resumeCall.existingWork?.results?.[`${STEPS.INITIAL}_thoughts`]?.[1]).toBe('successful thought 2');
+    expect(resumeCall.existingWork?.results?.[`${STEPS.INITIAL}_usage`]?.[1]).toEqual({ totalTokens: 15, promptTokens: 7, candidatesTokens: 8 });
+
+    // Verify stepMetadata status is done
+    const initialMeta = resumeCall.existingWork?.stepMetadata?.find(m => m.id === STEPS.INITIAL);
+    expect(initialMeta?.status).toBe('done');
+
+    // Verify agent states are marked Done with label 'Skipped'
+    const skippedAgent = useAgentStore.getState().sessionsByMessageId['model-skip-initial']?.agentStates.find(a => a.agentIndex === 0);
+    expect(skippedAgent?.status).toBe('done');
+    expect(skippedAgent?.label).toBe('Skipped');
+  });
+
+  it('skipStep clears failed refinement slots before resuming', async () => {
+    const failedAgents = [
+      createAgent({ id: 'failed-critic-1', stepId: STEPS.REFINEMENT, messageId: 'model-skip-refinements', status: 'error', label: 'Failed' }),
+      createAgent({ id: 'success-critic-2', stepId: STEPS.REFINEMENT, messageId: 'model-skip-refinements', agentIndex: 1, name: 'Critic 2', status: 'done', label: 'Done' }),
+    ];
+    const failedWork: Work = {
+      results: {
+        [STEPS.INITIAL]: ['draft 1', 'draft 2'],
+        [STEPS.REFINEMENT]: ['partial refined 1', 'successful refined 2'],
+        [`${STEPS.REFINEMENT}_thoughts`]: ['partial ref thought 1', 'successful ref thought 2'],
+        [`${STEPS.REFINEMENT}_usage`]: [
+          { totalTokens: 20, promptTokens: 10, candidatesTokens: 10 },
+          { totalTokens: 25, promptTokens: 12, candidatesTokens: 13 },
+        ],
+      },
+      agentStates: failedAgents,
+      stepMetadata: [
+        { id: STEPS.INITIAL, status: 'done', label: 'Initial Step' },
+        { id: STEPS.REFINEMENT, status: 'error', label: 'Refinement Step' },
+      ],
+    };
+
+    const runSwarm = vi.fn(async () => ({ work: createWork(), paused: false }));
+    
+    const { result } = renderOrchestration({
+      runSwarm,
+      initialMessages: createResumeMessages('model-skip-refinements', failedWork),
+    });
+
+    const store = useAgentStore.getState();
+    store.startSession('model-skip-refinements', failedWork, {
+      phase: 'recoverable-error',
+    });
+    store.replaceSessionAgents('model-skip-refinements', failedAgents);
+
+    await act(async () => {
+      await result.current.skipStep();
+    });
+
+    expect(runSwarm).toHaveBeenCalledTimes(1);
+
+    const resumeCall = toRunSwarmCall(runSwarm.mock.calls[0]);
+    expect(resumeCall.existingWork?.results?.[STEPS.REFINEMENT]?.[0]).toBe('');
+    expect(resumeCall.existingWork?.results?.[`${STEPS.REFINEMENT}_thoughts`]?.[0]).toBe('');
+    expect(resumeCall.existingWork?.results?.[`${STEPS.REFINEMENT}_usage`]?.[0]).toBeNull();
+
+    expect(resumeCall.existingWork?.results?.[STEPS.REFINEMENT]?.[1]).toBe('successful refined 2');
+    
+    const refMeta = resumeCall.existingWork?.stepMetadata?.find(m => m.id === STEPS.REFINEMENT);
+    expect(refMeta?.status).toBe('done');
+
+    const skippedAgent = useAgentStore.getState().sessionsByMessageId['model-skip-refinements']?.agentStates.find(a => a.agentIndex === 0 && a.stepId === STEPS.REFINEMENT);
+    expect(skippedAgent?.status).toBe('done');
+    expect(skippedAgent?.label).toBe('Skipped');
+  });
+
+  it('skipStep clears every failed slot in the step before resuming', async () => {
+    const failedAgents = [
+      createAgent({ id: 'failed-agent-1', messageId: 'model-skip-multi', status: 'error', label: 'Failed', agentIndex: 0 }),
+      createAgent({ id: 'failed-agent-2', messageId: 'model-skip-multi', status: 'error', label: 'Failed', agentIndex: 1, name: 'Agent 2' }),
+      createAgent({ id: 'success-agent-3', messageId: 'model-skip-multi', agentIndex: 2, name: 'Agent 3', status: 'done', label: 'Done' }),
+    ];
+    const failedWork: Work = {
+      results: {
+        [STEPS.INITIAL]: ['partial draft 1', 'partial draft 2', 'successful draft 3'],
+        [`${STEPS.INITIAL}_thoughts`]: ['partial thought 1', 'partial thought 2', 'successful thought 3'],
+        [`${STEPS.INITIAL}_usage`]: [
+          { totalTokens: 10, promptTokens: 5, candidatesTokens: 5 },
+          { totalTokens: 12, promptTokens: 6, candidatesTokens: 6 },
+          { totalTokens: 14, promptTokens: 7, candidatesTokens: 7 },
+        ],
+      },
+      agentStates: failedAgents,
+      stepMetadata: [{ id: STEPS.INITIAL, status: 'error', label: 'Initial Step' }],
+    };
+
+    const runSwarm = vi.fn(async () => ({ work: createWork(), paused: false }));
+
+    const { result } = renderOrchestration({
+      runSwarm,
+      initialMessages: createResumeMessages('model-skip-multi', failedWork),
+      settings: createMockSettings({ numAgents: 3 }),
+    });
+
+    const store = useAgentStore.getState();
+    store.startSession('model-skip-multi', failedWork, {
+      phase: 'recoverable-error',
+    });
+    store.replaceSessionAgents('model-skip-multi', failedAgents);
+
+    await act(async () => {
+      await result.current.skipStep();
+    });
+
+    expect(runSwarm).toHaveBeenCalledTimes(1);
+
+    const resumeCall = toRunSwarmCall(runSwarm.mock.calls[0]);
+    expect(resumeCall.existingWork?.results?.[STEPS.INITIAL]).toEqual(['', '', 'successful draft 3']);
+    expect(resumeCall.existingWork?.results?.[`${STEPS.INITIAL}_thoughts`]).toEqual(['', '', 'successful thought 3']);
+    expect(resumeCall.existingWork?.results?.[`${STEPS.INITIAL}_usage`]).toEqual([
+      null,
+      null,
+      { totalTokens: 14, promptTokens: 7, candidatesTokens: 7 },
+    ]);
+
+    const updatedAgents = useAgentStore.getState().sessionsByMessageId['model-skip-multi']?.agentStates ?? [];
+    expect(updatedAgents.filter(agent => agent.status === 'done' && agent.label === 'Skipped')).toHaveLength(2);
+    expect(updatedAgents.find(agent => agent.agentIndex === 2)?.label).toBe('Done');
+  });
+
+  it('skipStep refuses synthesis failures', async () => {
+    const failedAgents = [
+      createAgent({ id: 'failed-synth', stepId: STEPS.SYNTHESIS, messageId: 'model-skip-synthesis', status: 'error', label: 'Failed' }),
+    ];
+    const failedWork: Work = {
+      results: {
+        [STEPS.INITIAL]: ['draft 1', 'draft 2'],
+        [STEPS.REFINEMENT]: ['refined 1', 'refined 2'],
+        [STEPS.SYNTHESIS]: ['partial synthesized answer'],
+      },
+      agentStates: failedAgents,
+      stepMetadata: [
+        { id: STEPS.INITIAL, status: 'done', label: 'Initial Step' },
+        { id: STEPS.REFINEMENT, status: 'done', label: 'Refinement Step' },
+        { id: STEPS.SYNTHESIS, status: 'error', label: 'Synthesis Step' },
+      ],
+    };
+
+    const runSwarm = vi.fn(async () => ({ work: createWork(), paused: false }));
+    
+    const { result } = renderOrchestration({
+      runSwarm,
+      initialMessages: createResumeMessages('model-skip-synthesis', failedWork),
+    });
+
+    const store = useAgentStore.getState();
+    store.startSession('model-skip-synthesis', failedWork, {
+      phase: 'recoverable-error',
+    });
+    store.replaceSessionAgents('model-skip-synthesis', failedAgents);
+
+    await act(async () => {
+      await result.current.skipStep();
+    });
+
+    // Verify runSwarm was NOT called
+    expect(runSwarm).not.toHaveBeenCalled();
+
+    // Verify work is completely unchanged
+    expect(useAgentStore.getState().sessionsByMessageId['model-skip-synthesis']?.work).toEqual(failedWork);
+
+    // Verify agent states are completely unchanged (not converted to done/Skipped)
+    const synthAgent = useAgentStore.getState().sessionsByMessageId['model-skip-synthesis']?.agentStates.find(a => a.stepId === STEPS.SYNTHESIS);
+    expect(synthAgent?.status).toBe('error');
+    expect(synthAgent?.label).toBe('Failed');
+  });
+
+  it('skipStep is a no-op when there is no active session', async () => {
+    const runSwarm = vi.fn(async () => ({ work: createWork(), paused: false }));
+    const { result } = renderOrchestration({ runSwarm });
+
+    await act(async () => {
+      await result.current.skipStep();
+    });
+
+    expect(runSwarm).not.toHaveBeenCalled();
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(useAgentStore.getState().sessionsByMessageId).toEqual({});
+  });
+
+  it('skipStep is a no-op when the active session id has no session data', async () => {
+    const runSwarm = vi.fn(async () => ({ work: createWork(), paused: false }));
+    const { result } = renderOrchestration({
+      runSwarm,
+      initialMessages: createResumeMessages('model-missing-session', createWork()),
+    });
+
+    useAgentStore.setState((state) => ({
+      ...state,
+      activeSessionMessageId: 'model-missing-session',
+    }));
+
+    await act(async () => {
+      await result.current.skipStep();
+    });
+
+    expect(runSwarm).not.toHaveBeenCalled();
+    expect(useAgentStore.getState().sessionsByMessageId).toEqual({});
+  });
+
+  it('skipStep is a no-op when the active session has no errored agent', async () => {
+    const cleanAgents = [
+      createAgent({ id: 'done-agent-1', messageId: 'model-no-error', status: 'done', label: 'Done' }),
+      createAgent({ id: 'done-agent-2', messageId: 'model-no-error', agentIndex: 1, name: 'Agent 2', status: 'done', label: 'Done' }),
+    ];
+    const cleanWork: Work = {
+      results: {
+        [STEPS.INITIAL]: ['draft 1', 'draft 2'],
+      },
+      agentStates: cleanAgents,
+      stepMetadata: [{ id: STEPS.INITIAL, status: 'done', label: 'Initial Step' }],
+    };
+    const runSwarm = vi.fn(async () => ({ work: createWork(), paused: false }));
+    const { result } = renderOrchestration({
+      runSwarm,
+      initialMessages: createResumeMessages('model-no-error', cleanWork),
+    });
+
+    const store = useAgentStore.getState();
+    store.startSession('model-no-error', cleanWork, {
+      phase: 'recoverable-error',
+    });
+    store.replaceSessionAgents('model-no-error', cleanAgents);
+
+    await act(async () => {
+      await result.current.skipStep();
+    });
+
+    expect(runSwarm).not.toHaveBeenCalled();
+    expect(useAgentStore.getState().sessionsByMessageId['model-no-error']?.work).toEqual(cleanWork);
+    expect(useAgentStore.getState().sessionsByMessageId['model-no-error']?.agentStates).toEqual(cleanAgents);
   });
 });

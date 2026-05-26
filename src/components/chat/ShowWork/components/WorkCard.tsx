@@ -190,6 +190,19 @@ const WorkCardComponent: FC<WorkCardProps> = ({
 
     if (content === null) return <div className="pending-work">Waiting for agent output...</div>;
     
+    // Check if the agent was skipped due to workflow error/bypass
+    const isSkipped = statusLabel === 'Skipped' || statusLabel.includes('Skipped');
+    if (content === '' && status === 'done' && isSkipped) {
+      return (
+        <div className="agent-error-display">
+          <div className="agent-error-type" style={{ backgroundColor: 'var(--model-message-border)', color: 'var(--text-secondary)' }}>Skipped</div>
+          <div className="agent-error-message">
+            This agent was skipped during execution. No response was generated.
+          </div>
+        </div>
+      );
+    }
+
     // CRITICAL: If model finished (status='done') but returned no text, show warning
     // This happens with models like gemini-3-pro-preview that sometimes only return thoughts
     if (content === '' && status === 'done') {

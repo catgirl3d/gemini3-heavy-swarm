@@ -216,6 +216,8 @@
 .show-work-continue-container {
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 1.25rem;
   margin-top: 1.5rem;
   margin-bottom: 0.5rem;
 }
@@ -231,7 +233,7 @@
   cursor: pointer;
   transition: var(--transition-standard);
   white-space: nowrap;
-  width: 35%;
+  width: 25%;
   margin-top: -10px;
 }
 
@@ -241,6 +243,31 @@
 }
 
 .show-work-continue-container .continue-button:active {
+  transform: var(--active-scale);
+}
+
+.show-work-continue-container .skip-button {
+  padding: 0.5rem 1.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--model-message-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-standard);
+  white-space: nowrap;
+  width: 25%;
+  margin-top: -10px;
+}
+
+.show-work-continue-container .skip-button:hover {
+  background-color: var(--model-message-border);
+  color: var(--text-primary);
+  transform: var(--hover-scale);
+}
+
+.show-work-continue-container .skip-button:active {
   transform: var(--active-scale);
 }
 

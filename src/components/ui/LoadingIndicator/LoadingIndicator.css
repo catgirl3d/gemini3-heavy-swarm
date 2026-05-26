@@ -252,3 +252,24 @@
   line-height: 1.4;
   word-break: break-word;
 }
+
+.skip-button {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--model-message-border);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: var(--transition-standard);
+}
+
+.skip-button:hover {
+  background-color: var(--model-message-border);
+  color: var(--text-primary);
+  transform: var(--hover-scale);
+}
+
+.skip-button:active {
+  transform: var(--active-scale);
+}

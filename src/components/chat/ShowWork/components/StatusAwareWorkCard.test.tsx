@@ -315,4 +315,30 @@ describe('StatusAwareWorkCard', () => {
       );
     });
   });
+
+  it('does not log a warning for skipped done cards with empty content', async () => {
+    mocks.useResolvedAgentState.mockReturnValue(createAgentState({
+      status: 'done',
+      label: 'Skipped',
+      stepId: STEPS.INITIAL,
+      agentIndex: 0,
+    }));
+
+    render(
+      <StatusAwareWorkCard
+        cardId="initial-0"
+        work={createWork({ results: { [STEPS.INITIAL]: [''] } })}
+        step={STEPS.INITIAL}
+        index={0}
+        title="Agent 1"
+        content=""
+        downloadFilename="Agent-1.md"
+        onCardAction={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(mocks.loggerWarn).not.toHaveBeenCalled();
+    });
+  });
 });

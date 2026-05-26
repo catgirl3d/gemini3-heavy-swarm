@@ -32,7 +32,7 @@ interface WorkCardViewModel {
   className?: string;
 }
 
-export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, phase, isPausedForAction, onContinue, onRegenerate }) => {
+export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, phase, isPausedForAction, onContinue, onSkip, onRegenerate }) => {
   const [contentModalData, setContentModalData] = useState<WorkModalData | null>(null);
   const [debugModalData, setDebugModalData] = useState<DebugModalData | null>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
@@ -280,6 +280,11 @@ export const ShowWork: FC<ShowWorkProps> = ({ work, isLive = false, messageId, p
               <button className="continue-button" onClick={handleClick}>
                 {continueButtonState.label}
               </button>
+              {continueButtonState.isRetry && onSkip && !effectiveAgentStates.some(a => a.status === 'error' && a.stepId === STEPS.SYNTHESIS) && (
+                <button className="skip-button" onClick={onSkip}>
+                  Skip Step
+                </button>
+              )}
             </div>
           )}
 

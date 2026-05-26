@@ -166,8 +166,8 @@ class TestStep extends BaseStep {
     return this.handleRetryProgress(context, index, attempt, states);
   }
 
-  public testFinalizeStep(context: StepContext, results: string[], agentStates: AgentState[], failures: unknown[]): string[] {
-    return this.finalizeStep(context, results, agentStates, failures);
+  public testFinalizeStep(context: StepContext, results: string[], failures: unknown[]): string[] {
+    return this.finalizeStep(context, results, failures);
   }
 
   public testExecuteMultiAgent(context: StepContext, config: any): Promise<string[]> {
@@ -910,12 +910,30 @@ describe('BaseStep', () => {
       expect(() => step.testFinalizeStep(
         context,
         ['partial 1', 'partial 2'],
-        [],
         [rateLimitError, rateLimitError]
       )).toThrow(rateLimitError);
 
       expect(work.results?.[STEPS.INITIAL]).toEqual(['partial 1', 'partial 2']);
       expect(useAgentStore.getState().replaceSessionWork).toHaveBeenCalledWith('msg-1', { ...work });
+    });
+
+    it('should throw and persist partial results when only one agent fails (fail-fast)', () => {
+      const randomError = new Error('some agent failure');
+      const work: Work = { results: {} };
+      const context = {
+        work,
+        settings: { numAgents: 3 } as AppSettings,
+        messageId: 'msg-2',
+      } as StepContext;
+
+      expect(() => step.testFinalizeStep(
+        context,
+        ['partial 1', 'partial 2', ''],
+        [randomError]
+      )).toThrow(randomError);
+
+      expect(work.results?.[STEPS.INITIAL]).toEqual(['partial 1', 'partial 2', '']);
+      expect(useAgentStore.getState().replaceSessionWork).toHaveBeenCalledWith('msg-2', { ...work });
     });
   });
 

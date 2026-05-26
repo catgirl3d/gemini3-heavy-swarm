@@ -40,6 +40,7 @@ export const App: FC = () => {
     stopGeneration,
     retry,
     continueGeneration,
+    skipStep,
     regenerateAgentResponse,
     loadError,
     clearLoadError
@@ -161,6 +162,13 @@ export const App: FC = () => {
     );
   }, [continueGeneration]);
 
+  const handleSkip = useCallback(() => {
+    runAsyncAction(
+      skipStep,
+      (error) => loggerRef.current.error('Unhandled skipStep failure:', error)
+    );
+  }, [skipStep]);
+
   // Memoized handler for regeneration to prevent MessageList re-renders
   const handleRegenerate = useCallback((messageId: string, phase: StepId, agentIndex: number) => {
     runAsyncAction(
@@ -228,6 +236,7 @@ export const App: FC = () => {
         messageListRef={messageListRef}
         onPromptClick={handlePromptClick}
         onContinue={handleContinue}
+        onSkip={handleSkip}
         onRetry={retry}
         onRegenerate={handleRegenerate}
       />
