@@ -29,4 +29,7 @@ export const MODEL_DISPLAY_NAMES: Record<string, string> = {
   'gemini-2.5-pro': 'Gemini 2.5 Pro',
   'gemini-3-flash-preview': 'Gemini 3 Flash',
   'gemini-3-pro-preview': 'Gemini 3 Pro',
+  'gemini-3.1-flash-lite': 'Gemini 3.1 Flash-Lite',
+  'gemini-3.5-flash': 'Gemini 3.5 Flash',
+  'gemini-3.1-pro-preview': 'Gemini 3.1 Pro',
 };

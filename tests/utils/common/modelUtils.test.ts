@@ -59,6 +59,9 @@ describe('modelUtils', () => {
 
     it('should return display name from MODEL_DISPLAY_NAMES if exists', () => {
       expect(getModelDisplayName('gemini-3-flash-preview')).toBe('Gemini 3 Flash');
+      expect(getModelDisplayName('gemini-3.1-flash-lite')).toBe('Gemini 3.1 Flash-Lite');
+      expect(getModelDisplayName('gemini-3.5-flash')).toBe('Gemini 3.5 Flash');
+      expect(getModelDisplayName('gemini-3.1-pro-preview')).toBe('Gemini 3.1 Pro');
     });
 
     it('should handle provider/model format with beautification', () => {
