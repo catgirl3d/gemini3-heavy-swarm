@@ -16,9 +16,12 @@ export interface OpenRouterRequest {
   max_tokens?: number;
 }
 
-export interface KVNamespaceSubset {
-  get(key: string): Promise<string | null>;
-  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+export interface DurableObjectStubSubset {
+  fetch(request: Request): Promise<Response>;
+}
+
+export interface DurableObjectNamespaceSubset {
+  getByName(name: string): DurableObjectStubSubset;
 }
 
 /**

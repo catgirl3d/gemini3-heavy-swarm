@@ -49,7 +49,7 @@ export const onRequestPost = (async (context) => {
 
   // Check Rate Limit
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
-  const rateLimit = await checkRateLimit(ip, env.RATE_LIMIT_KV);
+  const rateLimit = await checkRateLimit(ip, env.RATE_LIMITER_DO);
   if (!rateLimit.allowed) {
     return new Response(JSON.stringify({ error: "Too many requests" }), { status: 429, headers });
   }

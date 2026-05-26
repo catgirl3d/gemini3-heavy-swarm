@@ -212,8 +212,10 @@ PORT=8080
 - `ALLOWED_ORIGINS` – Comma-separated list of allowed domains (optional)
 - `PROXY_MODE` – `demo` or `private`
 
-**Cloudflare KV binding (Dashboard → Settings → Functions → KV namespace bindings):**
-- `RATE_LIMIT_KV` – Create a KV namespace for rate limiting and bind it with this name
+**Cloudflare Durable Object rate limiter:**
+- Deploy the worker once with `npm run deploy:do`
+- In Pages, add a Durable Object binding named `RATE_LIMITER_DO`
+- Select the namespace created by the `gemini3-heavy-swarm-rate-limiter` worker
 
 **Build environment (for frontend):**
 

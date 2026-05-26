@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RATE_LIMIT_PER_MINUTE } from '@shared/security/security';
-import type { KVNamespaceSubset } from '@shared/api/types';
+import type { DurableObjectNamespaceSubset } from '@shared/api/types';
 import {
   buildUnifiedHeaders,
   checkRateLimit,
@@ -18,16 +18,14 @@ vi.mock('../../../../shared/utils/logger', () => ({
   },
 }));
 
-const createKv = (initialValues: Record<string, string | null> = {}) => {
-  const values = new Map(Object.entries(initialValues));
-  const kv: KVNamespaceSubset = {
-    get: vi.fn(async (key: string) => values.get(key) ?? null),
-    put: vi.fn(async (key: string, value: string) => {
-      values.set(key, value);
-    }),
+const createRateLimiter = (responseFactory: (request: Request) => Promise<Response>) => {
+  const fetch = vi.fn(responseFactory);
+  const getByName = vi.fn(() => ({ fetch }));
+  const rateLimiter: DurableObjectNamespaceSubset = {
+    getByName,
   };
 
-  return { kv, values };
+  return { rateLimiter, getByName, fetch };
 };
 
 describe('cloudflare.adapter', () => {
@@ -41,44 +39,65 @@ describe('cloudflare.adapter', () => {
   });
 
   describe('checkRateLimit', () => {
-    it('rejects when KV is not configured', async () => {
+    it('rejects when the Durable Object binding is not configured', async () => {
       await expect(checkRateLimit('1.1.1.1', undefined)).resolves.toEqual({
         allowed: false,
         remaining: 0,
       });
     });
 
-    it('increments the current minute key and returns remaining quota', async () => {
-      const { kv, values } = createKv();
-      const minute = Math.floor(Date.now() / 60000);
+    it('calls the Durable Object with the configured limit and returns remaining quota', async () => {
+      const { rateLimiter, getByName, fetch } = createRateLimiter(async () => {
+        return Response.json({
+          allowed: true,
+          remaining: RATE_LIMIT_PER_MINUTE - 1,
+          retryAfterSeconds: 60,
+        });
+      });
 
-      await expect(checkRateLimit('1.1.1.1', kv)).resolves.toEqual({
+      await expect(checkRateLimit('1.1.1.1', rateLimiter)).resolves.toEqual({
         allowed: true,
         remaining: RATE_LIMIT_PER_MINUTE - 1,
       });
 
-      expect(kv.get).toHaveBeenCalledWith(`rl:1.1.1.1:${minute}`);
-      expect(kv.put).toHaveBeenCalledWith(`rl:1.1.1.1:${minute}`, '1', { expirationTtl: 60 });
-      expect(values.get(`rl:1.1.1.1:${minute}`)).toBe('1');
+      expect(getByName).toHaveBeenCalledWith('1.1.1.1');
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      const request = fetch.mock.calls[0]?.[0];
+      expect(request).toBeInstanceOf(Request);
+      expect(request.url).toBe(`https://rate-limiter.internal/check?limit=${RATE_LIMIT_PER_MINUTE}&window=60`);
     });
 
-    it('continues from an existing count and blocks once the limit is reached', async () => {
-      const minute = Math.floor(Date.now() / 60000);
-      const key = `rl:2.2.2.2:${minute}`;
-      const { kv } = createKv({ [key]: String(RATE_LIMIT_PER_MINUTE - 1) });
-
-      await expect(checkRateLimit('2.2.2.2', kv)).resolves.toEqual({
-        allowed: true,
-        remaining: 0,
+    it('passes through blocked responses from the Durable Object', async () => {
+      const { rateLimiter } = createRateLimiter(async () => {
+        return new Response(
+          JSON.stringify({
+            allowed: false,
+            remaining: 0,
+            retryAfterSeconds: 10,
+          }),
+          {
+            status: 429,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
       });
-      expect(kv.put).toHaveBeenCalledWith(key, String(RATE_LIMIT_PER_MINUTE), { expirationTtl: 60 });
 
-      vi.mocked(kv.get).mockResolvedValueOnce(String(RATE_LIMIT_PER_MINUTE));
-      await expect(checkRateLimit('2.2.2.2', kv)).resolves.toEqual({
+      await expect(checkRateLimit('2.2.2.2', rateLimiter)).resolves.toEqual({
         allowed: false,
         remaining: 0,
       });
-      expect(kv.put).toHaveBeenCalledTimes(1);
+    });
+
+    it('fails closed when the Durable Object returns an invalid payload', async () => {
+      const { rateLimiter } = createRateLimiter(async () => {
+        return Response.json({ remaining: 1 });
+      });
+
+      await expect(checkRateLimit('3.3.3.3', rateLimiter)).resolves.toEqual({
+        allowed: false,
+        remaining: 0,
+      });
     });
   });
 

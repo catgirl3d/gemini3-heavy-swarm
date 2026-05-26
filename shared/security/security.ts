@@ -26,7 +26,7 @@ export function isProductionByNodeEnv(): boolean {
   return getNodeEnv() === 'production';
 }
 
-export const RATE_LIMIT_PER_MINUTE = 6; // Values Rate Limit system
+export const RATE_LIMIT_PER_MINUTE = 1; // Values Rate Limit system
 export const MAX_REQUEST_SIZE = 100 * 1024; // 100KB limit for the entire request
 export const MAX_CONTENT_CHARS = 100000; // Character limit for the 'contents' field
 

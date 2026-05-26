@@ -165,7 +165,7 @@ app.get('/api/status', (req: Request, res: Response) => {
 	res.json({
 		hasServerKey: !!process.env.GEMINI_API_KEY,
 		hasOpenRouterKey: !!process.env.OPENROUTER_API_KEY,
-		hasKV: true, // Local server uses in-memory rate limiting
+		hasRateLimiter: true, // Local server uses an in-memory rate limiter
 		proxyMode: getProxyMode(process.env.PROXY_MODE)
 	});
 });

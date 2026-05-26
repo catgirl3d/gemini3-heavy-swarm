@@ -2,37 +2,64 @@
 // because aliases are not natively supported by Cloudflare Pages Functions/Wrangler.
 import { RATE_LIMIT_PER_MINUTE, isProductionEnvironment } from '../../security/security';
 import { buildAllHeaders, checkPreflightAllowed } from '../cors.core';
-import { type RateLimitResult, type KVNamespaceSubset, type GenericRequest } from '../types';
+import { type DurableObjectNamespaceSubset, type GenericRequest, type RateLimitResult } from '../types';
 import { Logger } from '../../utils/logger';
 
 const logger = new Logger('CloudflareAdapter');
+const RATE_LIMIT_WINDOW_SECONDS = 60;
+const RATE_LIMITER_URL = 'https://rate-limiter.internal/check';
+
+const getErrorMessage = (error: unknown): string => {
+  return error instanceof Error ? error.message : String(error);
+};
+
+const isObjectRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null;
+};
+
+const parseRateLimitResult = (value: unknown): RateLimitResult | null => {
+  if (!isObjectRecord(value)) return null;
+  if (typeof value.allowed !== 'boolean') return null;
+  if (typeof value.remaining !== 'number') return null;
+
+  return {
+    allowed: value.allowed,
+    remaining: value.remaining,
+  };
+};
 
 /**
- * Check rate limit using Cloudflare KV
+ * Check rate limit using a Durable Object counter
  * @param ip - Client IP
- * @param kv - The KVNamespace instance
+ * @param rateLimiter - The Durable Object namespace binding
  * @returns Rate limit status
  */
-export async function checkRateLimit(ip: string, kv: KVNamespaceSubset | undefined): Promise<RateLimitResult> {
-  if (!kv) {
-    logger.error('RATE_LIMIT_KV is not configured!');
+export async function checkRateLimit(ip: string, rateLimiter: DurableObjectNamespaceSubset | undefined): Promise<RateLimitResult> {
+  if (!rateLimiter) {
+    logger.error('RATE_LIMITER_DO is not configured!');
     return { allowed: false, remaining: 0 };
   }
 
-  const minute = Math.floor(Date.now() / 60000);
-  const key = `rl:${ip}:${minute}`;
+  try {
+    const stub = rateLimiter.getByName(ip);
+    const url = new URL(RATE_LIMITER_URL);
+    url.searchParams.set('limit', RATE_LIMIT_PER_MINUTE.toString());
+    url.searchParams.set('window', RATE_LIMIT_WINDOW_SECONDS.toString());
 
-  const current = await kv.get(key);
-  const count = current ? parseInt(current) : 0;
+    const response = await stub.fetch(new Request(url.toString()));
+    const payload: unknown = await response.json();
+    const result = parseRateLimitResult(payload);
 
-  if (count >= RATE_LIMIT_PER_MINUTE) {
+    if (result === null) {
+      logger.error('Rate limiter returned an invalid payload');
+      return { allowed: false, remaining: 0 };
+    }
+
+    return result;
+  } catch (error: unknown) {
+    logger.error(`Rate limiter request failed: ${getErrorMessage(error)}`);
     return { allowed: false, remaining: 0 };
   }
-
-  // Increment count
-  await kv.put(key, (count + 1).toString(), { expirationTtl: 60 });
-
-  return { allowed: true, remaining: RATE_LIMIT_PER_MINUTE - count - 1 };
 }
 
 /**

@@ -9,16 +9,19 @@
   "scripts": {
     "dev": "vite",
     "dev:proxy": "tsx server/server.ts",
+    "dev:do": "wrangler dev --config workers/rate-limiter/wrangler.jsonc",
     "dev:all": "concurrently \"npm run dev:proxy\" \"npm run dev\" --names \"SERVER,CLIENT\" --prefix-colors \"blue,green\"",
     "build": "vite build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p workers/rate-limiter/tsconfig.json --noEmit",
+    "typecheck:do": "tsc -p workers/rate-limiter/tsconfig.json --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "build:server": "esbuild server/server.ts --bundle --platform=node --format=esm --outfile=server-build/server.js --packages=external",
     "start:server": "node server-build/server.js",
     "preview": "vite preview",
     "test": "vitest run",
-    "deploy": "npm run build && wrangler pages deploy dist"
+    "deploy": "npm run build && wrangler pages deploy dist",
+    "deploy:do": "wrangler deploy --config workers/rate-limiter/wrangler.jsonc"
   },
   "dependencies": {
     "@google/genai": "^1.16.0",

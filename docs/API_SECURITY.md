@@ -70,6 +70,8 @@ The backend (both `server/server.ts` and Cloudflare Functions) implements a rate
 ### 🛡️ Implementation Details
 
 - **Targeted Protection:** Rate limiting is **only applied** to the model generation endpoints (`POST /api/gemini` and `POST /api/openrouter`).
+- **Cloudflare production path:** Pages Functions use a Durable Object binding (`RATE_LIMITER_DO`) for per-IP rate limiting.
+- **Local/Express path:** The local Express server uses a simple in-memory rate limiter.
 - **Excluded Requests:** Static files (HTML/JS/CSS), CORS preflight (`OPTIONS`), and health checks (`/api/status`) are **not** rate-limited to ensure smooth application loading.
 - **Limit:** Defined by `RATE_LIMIT_PER_MINUTE` in `shared/security/security.ts`.
 - **Behavior:** If the limit is exceeded, the server returns a `429 Too Many Requests` error.
