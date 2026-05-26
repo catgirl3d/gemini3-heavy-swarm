@@ -78,7 +78,7 @@ export const StatusAwareWorkCard: FC<StatusAwareWorkCardProps> = ({
   })();
   
   const label = status === 'stale'
-    ? 'Stale'
+    ? config.labels.stale
     : agent?.label || config.labels[status];
   
   // Use live agent name from state when available, otherwise fallback to passed title
