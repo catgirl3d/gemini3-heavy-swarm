@@ -55,6 +55,20 @@ vi.mock('@/components/modals/SettingsModal/tabs/GeneralSettingsTab', () => ({
         <button type="button" onClick={() => props.handleChange({ target: { name: 'temperature', value: '1.7', type: 'range' } })}>
           Change Temperature
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            props.handleChange({ target: { name: 'pauseAfterInitial', type: 'checkbox', checked: true } });
+            props.handleChange({ target: { name: 'numAgents', type: 'number', value: '0' } });
+            props.handleChange({ target: { name: 'apiKey', type: 'text', value: 'legacy-key' } });
+          }}
+        >
+          Change Legacy Fields
+        </button>
+        <button type="button" onClick={() => props.setOpenDropdownId('provider')}>
+          Open Provider Dropdown
+        </button>
+        {props.openDropdownId === 'provider' && <div>Provider dropdown open</div>}
       </div>
     );
   },
@@ -65,8 +79,15 @@ vi.mock('@/components/modals/SettingsModal/tabs/PromptsTab', () => ({
     mocks.promptsTab(props);
     return (
       <div data-testid="prompts-tab">
+        <div>Active profile: {props.activeProfile.id}</div>
         <button type="button" onClick={() => props.setEditingInstruction(PROMPT_TYPES.INITIAL)}>
           Open Instruction Editor
+        </button>
+        <button type="button" onClick={() => props.setEditingInstruction(PROMPT_TYPES.REFINEMENT)}>
+          Open Refinement Instruction Editor
+        </button>
+        <button type="button" onClick={() => props.setEditingInstruction(PROMPT_TYPES.SYNTHESIS)}>
+          Open Synthesis Instruction Editor
         </button>
         <button type="button" onClick={props.handleCreateProfile}>
           Open Create Profile Confirm
@@ -146,7 +167,16 @@ vi.mock('@/components/modals', () => {
       <div data-testid="role-prompt-config-modal">
         <div>{props.title}</div>
         <div>{props.fields.map((field: any) => field.label).join(', ')}</div>
+        {props.fields.map((field: any) => (
+          <input
+            key={field.label}
+            aria-label={field.label}
+            value={field.value}
+            onChange={(event) => field.onChange(event.target.value)}
+          />
+        ))}
         <button type="button" onClick={() => props.onModelChange?.('updated-model')}>Change Editor Model</button>
+        <button type="button" onClick={() => props.onModelChange?.('')}>Clear Editor Model</button>
         <button type="button" onClick={() => props.onApplyPreset?.({ id: 'preset-1', name: 'Preset', instruction: 'Preset instruction', isCustom: true, model: 'preset-model' })}>Apply Editor Preset</button>
         <button type="button" onClick={() => props.onDeletePreset?.('preset-1')}>Delete Editor Preset</button>
         <button type="button" onClick={() => props.onSavePreset?.('Saved Preset')}>Save Editor Preset</button>
@@ -320,6 +350,63 @@ describe('SettingsModal', () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ temperature: 1.7 }));
   });
 
+  it('supports checkbox, numeric, and plain-text legacy changes and falls back to the first profile when the active id is missing', () => {
+    const onSave = vi.fn();
+
+    render(
+      <SettingsModal
+        isOpen
+        onClose={vi.fn()}
+        settings={createSettings({
+          activeProfileId: 'missing-profile',
+          profiles: [
+            { id: 'first-profile', name: 'First Profile', initialInstruction: 'First initial', refinementInstruction: 'First refinement', synthesizerInstruction: 'First synthesis' },
+            { id: 'second-profile', name: 'Second Profile', initialInstruction: 'Second initial', refinementInstruction: 'Second refinement', synthesizerInstruction: 'Second synthesis' },
+          ],
+        })}
+        onSave={onSave}
+        onReset={vi.fn()}
+        serverStatus={createServerStatus()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Change Legacy Fields' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Prompts' }));
+
+    expect(screen.getByText('Active profile: first-profile')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      pauseAfterInitial: true,
+      numAgents: 1,
+      apiKey: 'legacy-key',
+    }));
+  });
+
+  it('normalizes a missing provider to Gemini before saving legacy settings', () => {
+    const onSave = vi.fn();
+
+    render(
+      <SettingsModal
+        isOpen
+        onClose={vi.fn()}
+        settings={createSettings({
+          provider: undefined,
+          apiKey: 'legacy-key',
+        })}
+        onSave={onSave}
+        onReset={vi.fn()}
+        serverStatus={createServerStatus()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ provider: ProviderType.Gemini }));
+  });
+
   it('prompts for unsaved changes and supports discard without saving', () => {
     const onClose = vi.fn();
     const onSave = vi.fn();
@@ -364,6 +451,33 @@ describe('SettingsModal', () => {
 
     expect(screen.queryByText('Unsaved Changes')).not.toBeInTheDocument();
     expect(screen.getByTestId('base-modal')).toBeInTheDocument();
+  });
+
+  it('closes active dropdowns first on escape and only closes the modal on the next escape', () => {
+    const onClose = vi.fn();
+
+    render(
+      <SettingsModal
+        isOpen
+        onClose={onClose}
+        settings={createSettings()}
+        onSave={vi.fn()}
+        onReset={vi.fn()}
+        serverStatus={createServerStatus()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Provider Dropdown' }));
+    expect(screen.getByText('Provider dropdown open')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Base escape' }));
+
+    expect(screen.queryByText('Provider dropdown open')).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Base escape' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('blocks saving Gemini settings when no usable API key exists', () => {
@@ -454,6 +568,62 @@ describe('SettingsModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves free OpenRouter demo models and resets step-specific overrides before saving', () => {
+    const onSave = vi.fn();
+    mocks.getProviderInfo.mockReturnValue(createProviderInfo({
+      isGemini: false,
+      isOpenRouter: true,
+      isUnlocked: true,
+      isDemoMode: true,
+    }));
+
+    render(
+      <SettingsModal
+        isOpen
+        onClose={vi.fn()}
+        settings={createSettings({
+          provider: ProviderType.OpenRouter,
+          openRouterModel: 'openrouter/free-model:free',
+        })}
+        onSave={onSave}
+        onReset={vi.fn()}
+        serverStatus={createServerStatus({ proxyMode: 'server' })}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      openRouterModel: 'openrouter/free-model:free',
+      initialModel: undefined,
+      refinementModel: undefined,
+      synthesisModel: undefined,
+    }));
+  });
+
+  it('clamps max output tokens to at least one before saving', () => {
+    const onSave = vi.fn();
+
+    render(
+      <SettingsModal
+        isOpen
+        onClose={vi.fn()}
+        settings={createSettings({
+          provider: ProviderType.Gemini,
+          apiKey: 'personal-key',
+          maxOutputTokens: 0,
+        })}
+        onSave={onSave}
+        onReset={vi.fn()}
+        serverStatus={createServerStatus({ proxyMode: 'private' })}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ maxOutputTokens: 1 }));
+  });
+
   it('clears paid OpenRouter models in demo mode before saving', () => {
     const onSave = vi.fn();
     mocks.getProviderInfo.mockReturnValue(createProviderInfo({
@@ -482,6 +652,42 @@ describe('SettingsModal', () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ openRouterModel: '' }));
   });
 
+  it('leaves missing OpenRouter demo models untouched while still resetting step-specific overrides', () => {
+    const onSave = vi.fn();
+    mocks.getProviderInfo.mockReturnValue(createProviderInfo({
+      isGemini: false,
+      isOpenRouter: true,
+      isUnlocked: true,
+      isDemoMode: true,
+    }));
+
+    render(
+      <SettingsModal
+        isOpen
+        onClose={vi.fn()}
+        settings={createSettings({
+          provider: ProviderType.OpenRouter,
+          openRouterModel: undefined,
+          initialModel: 'initial-model',
+          refinementModel: 'refinement-model',
+          synthesisModel: 'synthesis-model',
+        })}
+        onSave={onSave}
+        onReset={vi.fn()}
+        serverStatus={createServerStatus({ proxyMode: 'server' })}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      openRouterModel: undefined,
+      initialModel: undefined,
+      refinementModel: undefined,
+      synthesisModel: undefined,
+    }));
+  });
+
   it('wires role and instruction editors, including updateStepModel failure handling', () => {
     const onShowError = vi.fn();
     mocks.updateStepModel.mockReturnValue({ success: false, error: 'Failed to update step model.' });
@@ -503,8 +709,7 @@ describe('SettingsModal', () => {
 
     expect(screen.getByTestId('role-prompt-config-modal')).toHaveTextContent('Configure Initial Instruction');
 
-    const instructionEditorProps = mocks.rolePromptModal.mock.calls.at(-1)?.[0];
-    instructionEditorProps.fields[0].onChange('Updated instruction body');
+    fireEvent.change(screen.getByLabelText('Instruction'), { target: { value: 'Updated instruction body' } });
 
     fireEvent.click(screen.getByRole('button', { name: 'Change Editor Model' }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply Editor Preset' }));
@@ -522,9 +727,8 @@ describe('SettingsModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Role Editor' }));
     expect(screen.getAllByTestId('role-prompt-config-modal').at(-1)).toHaveTextContent('Configure Role #1');
 
-    const roleEditorProps = mocks.rolePromptModal.mock.calls.at(-1)?.[0];
-    roleEditorProps.fields[0].onChange('Updated role name');
-    roleEditorProps.fields[1].onChange('Updated role instruction');
+    fireEvent.change(screen.getByLabelText('Role Name'), { target: { value: 'Updated role name' } });
+    fireEvent.change(screen.getByLabelText('Role Instruction'), { target: { value: 'Updated role instruction' } });
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Apply Editor Preset' }).at(-1) as HTMLButtonElement);
     fireEvent.click(screen.getAllByRole('button', { name: 'Delete Editor Preset' }).at(-1) as HTMLButtonElement);
@@ -561,6 +765,67 @@ describe('SettingsModal', () => {
 
     expect(mocks.updateStepModel).toHaveBeenCalled();
     expect(screen.getByTestId('role-prompt-config-modal')).toBeInTheDocument();
+  });
+
+  it('closes the role editor when the modal onClose callback fires', () => {
+    render(
+      <SettingsModal
+        isOpen
+        onClose={vi.fn()}
+        settings={createSettings()}
+        onSave={vi.fn()}
+        onReset={vi.fn()}
+        serverStatus={createServerStatus()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Roles' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Role Editor' }));
+
+    expect(screen.getByTestId('role-prompt-config-modal')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Editor' }));
+
+    expect(screen.queryByTestId('role-prompt-config-modal')).not.toBeInTheDocument();
+  });
+
+  it('opens refinement and synthesis editors and uses the fallback error when step model updates fail without details', () => {
+    const onShowError = vi.fn();
+    mocks.updateStepModel
+      .mockReturnValueOnce({ success: true, settings: createSettings({ refinementModel: undefined, synthesisModel: undefined }) })
+      .mockReturnValueOnce({ success: false });
+
+    render(
+      <SettingsModal
+        isOpen
+        onClose={vi.fn()}
+        settings={createSettings({ refinementModel: 'ref-model', synthesisModel: undefined })}
+        onSave={vi.fn()}
+        onReset={vi.fn()}
+        serverStatus={createServerStatus()}
+        onShowError={onShowError}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Prompts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Refinement Instruction Editor' }));
+
+    expect(screen.getByTestId('role-prompt-config-modal')).toHaveTextContent('Configure Refinement Instruction');
+    expect(screen.getByLabelText('Instruction')).toHaveValue('Refinement prompt');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Editor Model' }));
+
+    expect(mocks.updateStepModel).toHaveBeenCalledWith(expect.anything(), 'refinementModel', undefined);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Synthesis Instruction Editor' }));
+
+    expect(screen.getByTestId('role-prompt-config-modal')).toHaveTextContent('Configure Synthesis Instruction');
+    expect(screen.getByLabelText('Instruction')).toHaveValue('Synthesis prompt');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Editor Model' }));
+
+    expect(mocks.updateStepModel).toHaveBeenCalledWith(expect.anything(), 'synthesisModel', undefined);
+    expect(onShowError).toHaveBeenCalledWith('Failed to update step model. Please try again.');
   });
 
   it('supports reset and create-profile confirmations', () => {

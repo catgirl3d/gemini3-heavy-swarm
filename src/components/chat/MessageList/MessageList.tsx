@@ -16,8 +16,6 @@ import { Logger } from '@shared/utils/logger';
 import { copyTextToClipboard } from '@/utils/common/clipboard';
 
 const logger = new Logger('MessageList');
-const EMPTY_WORK: Work = { results: {} };
-
 type ActionButtonClickResult = boolean | void | Promise<boolean | void>;
 
 const copyResponseText = (text: string): Promise<boolean> => copyTextToClipboard(text)
@@ -233,7 +231,7 @@ const MessageListComponent: FC<MessageListProps> = ({
                       
                       return (
                         <ShowWork
-                          work={effectiveWork ?? EMPTY_WORK}
+                          work={effectiveWork}
                           messageId={msg.id}
                           isLive={isCurrentSessionMessage}
                           phase={activePhase}

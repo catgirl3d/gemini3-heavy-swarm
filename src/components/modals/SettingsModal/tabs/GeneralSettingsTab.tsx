@@ -35,8 +35,11 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
     setOpenDropdownId,
     serverStatus
 }) => {
-    const model = localSettings.model ?? 'gemini-3-flash-preview';
-    const isGeminiDemo = !localSettings.apiKey && isModelUnlocked && serverStatus?.proxyMode !== 'private';
+    const normalizedProvider = localSettings.provider ?? ProviderType.Gemini;
+    const model = normalizedProvider === ProviderType.OpenRouter
+        ? (localSettings.openRouterModel || '')
+        : (localSettings.model ?? 'gemini-3-flash-preview');
+    const isGeminiDemo = normalizedProvider === ProviderType.Gemini && !localSettings.apiKey && isModelUnlocked && serverStatus?.proxyMode !== 'private';
 
     const updateSetting = <K extends keyof AppSettings>(name: K, value: AppSettings[K]) => {
         setLocalSettings(prev => ({
@@ -50,13 +53,13 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
     };
 
     const isThinkingModel = useMemo(() => {
-        const openRouterModels = localSettings.provider === ProviderType.OpenRouter ? getCachedModels() || undefined : undefined;
+        const openRouterModels = normalizedProvider === ProviderType.OpenRouter ? getCachedModels() || undefined : undefined;
         return checkIsThinkingModel(
-            localSettings.provider || ProviderType.Gemini,
-            localSettings.provider === ProviderType.OpenRouter ? (localSettings.openRouterModel || '') : model,
+            normalizedProvider,
+            model,
             openRouterModels
         );
-    }, [localSettings.provider, model, localSettings.openRouterModel]);
+    }, [normalizedProvider, model]);
 
     // Auto-enforce minimum tokens for thinking models when model changes
     useEffect(() => {
@@ -78,14 +81,14 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                     <div className="modal-form-group">
                         <label className="modal-label">Provider</label>
                         <ProviderSelector
-                            value={localSettings.provider || ProviderType.Gemini}
+                            value={normalizedProvider}
                             onChange={updateProvider}
                             isOpen={openDropdownId === 'provider'}
                             onOpenChange={(open) => setOpenDropdownId(open ? 'provider' : null)}
                         />
                     </div>
 
-                    {localSettings.provider === ProviderType.Gemini ? (
+                    {normalizedProvider === ProviderType.Gemini ? (
                         <>
                             <div className="modal-form-group">
                                 <label className="modal-label">Gemini API Key</label>
@@ -168,7 +171,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                                 </label>
                                 <ModelSelector
                                     provider={ProviderType.OpenRouter}
-                                    value={localSettings.openRouterModel || ''}
+                                    value={model}
                                     onChange={(val) => updateSetting('openRouterModel', val)}
                                     placeholder="Select model..."
                                     disabled={!isModelUnlocked}
@@ -232,7 +235,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                         </div>
                     </div>
                     
-                    {localSettings.provider === ProviderType.Gemini && model.includes('gemini-3') && (
+                    {normalizedProvider === ProviderType.Gemini && model.includes('gemini-3') && (
                         <TemperatureBanner
                             isActive={!!localSettings.unsafeTemperature}
                             onToggle={() => setLocalSettings(prev => ({ ...prev, unsafeTemperature: !prev.unsafeTemperature }))}
@@ -350,7 +353,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                 </div>
             </div>
 
-            {localSettings.provider === ProviderType.Gemini && (
+            {normalizedProvider === ProviderType.Gemini && (
                 <div className="modal-card-container">
                     <div className="modal-card-header">
                         <span className="modal-card-title">Search Tools</span>

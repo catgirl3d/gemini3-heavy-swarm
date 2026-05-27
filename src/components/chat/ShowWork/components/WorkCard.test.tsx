@@ -191,11 +191,21 @@ describe('WorkCard', () => {
 
     expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('First chunk');
 
+    rerender(
+      <WorkCard
+        title="Streaming Agent"
+        statusLabel="Drafting"
+        status="working"
+        content="Third chunk"
+        downloadFilename="stream.md"
+      />
+    );
+
     act(() => {
       vi.advanceTimersByTime(300);
     });
 
-    expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('Second chunk');
+    expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('Third chunk');
 
     rerender(
       <WorkCard
@@ -257,11 +267,78 @@ describe('WorkCard', () => {
     expect(onCardAction).toHaveBeenCalledWith('stale-card', 'regenerate');
   });
 
-  it('clears pending throttle timers when the first chunk arrives and again on unmount', () => {
-    vi.useFakeTimers();
-    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+  it('renders skipped agents explicitly and omits the thought suffix when none exists', () => {
+    const { rerender } = render(
+      <WorkCard
+        title="Agent 4"
+        statusLabel="Skipped by orchestrator"
+        status="done"
+        content=""
+        downloadFilename="Agent-4.md"
+      />
+    );
 
-    const { rerender, unmount } = render(
+    expect(screen.getByText('Skipped')).toBeInTheDocument();
+    expect(screen.getByText('This agent was skipped during execution. No response was generated.')).toBeInTheDocument();
+
+    rerender(
+      <WorkCard
+        title="Agent 4"
+        statusLabel="Complete"
+        status="done"
+        content=""
+        downloadFilename="Agent-4.md"
+      />
+    );
+
+    expect(screen.getByText('No Text Response')).toBeInTheDocument();
+    expect(screen.getByText(/The model completed successfully but did not return any text content\./i)).toBeInTheDocument();
+    expect(screen.queryByText(/Thought process was captured/i)).not.toBeInTheDocument();
+  });
+
+  it('safely no-ops action handlers and renders waiting content without a custom icon', () => {
+    const { rerender } = render(
+      <WorkCard
+        title="Waiting Agent"
+        statusLabel="Waiting"
+        status="waiting"
+        icon={<span data-testid="custom-icon">custom</span>}
+        content="Visible content"
+        thought="Trace"
+        debugInfo={{ trace: true }}
+        downloadFilename="waiting.md"
+      />
+    );
+
+    expect(screen.getByTestId('custom-icon')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Response' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show Thought Process' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Debug Info' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Download Response' }));
+
+    expect(mocks.downloadContent).toHaveBeenCalledWith('waiting.md', 'Visible content');
+
+    rerender(
+      <WorkCard
+        title="Waiting Agent"
+        statusLabel="Waiting"
+        status="waiting"
+        content="Visible content"
+        downloadFilename="waiting.md"
+      />
+    );
+
+    expect(screen.queryByTestId('custom-icon')).not.toBeInTheDocument();
+    expect(screen.getByText('Waiting Agent')).toBeInTheDocument();
+    expect(screen.getByText('Waiting')).toBeInTheDocument();
+    expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('Visible content');
+  });
+
+  it('does not let a delayed streaming chunk overwrite completed content', () => {
+    vi.useFakeTimers();
+
+    const { rerender } = render(
       <WorkCard
         title="Streaming Agent"
         statusLabel="Drafting"
@@ -276,24 +353,10 @@ describe('WorkCard', () => {
         title="Streaming Agent"
         statusLabel="Drafting"
         status="working"
-        content=""
-        downloadFilename="stream.md"
-      />
-    );
-
-    rerender(
-      <WorkCard
-        title="Streaming Agent"
-        statusLabel="Drafting"
-        status="working"
         content="First chunk"
         downloadFilename="stream.md"
       />
     );
-
-    expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('First chunk');
-    const clearCallsAfterFirstChunk = clearTimeoutSpy.mock.calls.length;
-    expect(clearCallsAfterFirstChunk).toBeGreaterThan(0);
 
     rerender(
       <WorkCard
@@ -305,10 +368,12 @@ describe('WorkCard', () => {
       />
     );
 
+    expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('First chunk');
+
     rerender(
       <WorkCard
         title="Streaming Agent"
-        statusLabel="Done"
+        statusLabel="Complete"
         status="done"
         content="Final answer"
         downloadFilename="stream.md"
@@ -316,11 +381,11 @@ describe('WorkCard', () => {
     );
 
     expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('Final answer');
-    const clearCallsAfterStatusChange = clearTimeoutSpy.mock.calls.length;
-    expect(clearCallsAfterStatusChange).toBeGreaterThan(clearCallsAfterFirstChunk);
 
-    unmount();
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
 
-    expect(clearTimeoutSpy.mock.calls.length).toBeGreaterThanOrEqual(clearCallsAfterStatusChange);
+    expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('Final answer');
   });
 });

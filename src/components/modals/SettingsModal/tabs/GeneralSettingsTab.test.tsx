@@ -60,6 +60,7 @@ vi.mock('@/components/ui', () => ({
         data-disabled={String(!!props.disabled)}
         data-value={props.value}
         data-demo={String(!!props.isDemoMode)}
+        data-open={String(!!props.isOpen)}
       >
         <button type="button" onClick={() => props.onOpenChange?.(!props.isOpen)}>Toggle Model</button>
         <button
@@ -145,7 +146,7 @@ const GeneralSettingsHarness = ({
         setOpenDropdownId={setOpenDropdownId}
         serverStatus={serverStatus}
       />
-      <pre data-testid="settings-state">{JSON.stringify({ localSettings, openDropdownId })}</pre>
+      <pre data-testid="settings-state">{JSON.stringify(localSettings)}</pre>
     </>
   );
 };
@@ -316,6 +317,186 @@ describe('GeneralSettingsTab', () => {
     expect(screen.getByText(/Demo Mode: Using server-side key. Only free models are available./i)).toBeInTheDocument();
   });
 
+  it('routes provider changes through persistProviderModels and tracks the provider dropdown state', () => {
+    render(
+      <GeneralSettingsHarness
+        initialSettings={createSettings({
+          provider: ProviderType.Gemini,
+          model: 'gemini-2.5-flash-lite',
+        })}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Provider' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose OpenRouter' }));
+
+    expect(screen.getByTestId('provider-selector')).toHaveAttribute('data-open', 'true');
+    expect(screen.getByTestId('settings-state')).toHaveTextContent('"provider":"openrouter"');
+  });
+
+  it('uses Gemini fallback values for missing legacy fields and closes provider/model selectors cleanly', () => {
+    render(
+      <GeneralSettingsHarness
+        initialSettings={createSettings({
+          provider: ProviderType.Gemini,
+          model: undefined,
+          apiKey: undefined,
+          temperature: undefined,
+          unsafeTemperature: true,
+        })}
+        isModelUnlocked
+        serverStatus={createServerStatus({ proxyMode: 'private' })}
+      />
+    );
+
+    expect(screen.getByTestId('model-selector-gemini')).toHaveAttribute('data-value', 'gemini-3-flash-preview');
+    expect(screen.getByText('Temperature (0.7)')).toBeInTheDocument();
+    expect(screen.getAllByRole('slider')[0]).toHaveValue('0.7');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Provider' }));
+    expect(screen.getByTestId('provider-selector')).toHaveAttribute('data-open', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Provider' }));
+    expect(screen.getByTestId('provider-selector')).toHaveAttribute('data-open', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Model' }));
+    expect(screen.getByTestId('model-selector-gemini')).toHaveAttribute('data-open', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Model' }));
+    expect(screen.getByTestId('model-selector-gemini')).toHaveAttribute('data-open', 'false');
+  });
+
+  it('uses OpenRouter fallback values when cached models and saved model ids are missing', () => {
+    mocks.getCachedModels.mockReturnValue(undefined);
+
+    render(
+      <GeneralSettingsHarness
+        initialSettings={createSettings({
+          provider: ProviderType.OpenRouter,
+          openRouterApiKey: undefined,
+          openRouterModel: undefined,
+          model: undefined,
+        })}
+        isModelUnlocked
+        serverStatus={createServerStatus({ proxyMode: 'server' })}
+      />
+    );
+
+    expect(screen.getByTestId('model-selector-openrouter')).toHaveAttribute('data-value', '');
+    expect(screen.getByTestId('model-selector-openrouter')).toHaveAttribute('data-demo', 'true');
+    expect(mocks.getCachedModels).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Model' }));
+    expect(screen.getByTestId('model-selector-openrouter')).toHaveAttribute('data-open', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Model' }));
+    expect(screen.getByTestId('model-selector-openrouter')).toHaveAttribute('data-open', 'false');
+  });
+
+  it('defaults missing provider state to locked Gemini and keeps search toggles unchecked for legacy settings', () => {
+    render(
+      <GeneralSettingsHarness
+        initialSettings={createSettings({
+          provider: undefined,
+          model: undefined,
+          apiKey: undefined,
+          useSearchInRefinement: undefined,
+          useSearchInSynthesis: undefined,
+        })}
+        isModelUnlocked={false}
+        serverStatus={createServerStatus({ hasServerKey: false, proxyMode: 'server' })}
+      />
+    );
+
+    expect(screen.getByTestId('provider-selector')).toHaveTextContent('gemini');
+    expect(screen.getByTestId('model-selector-gemini')).toHaveAttribute('data-value', 'gemini-2.5-flash-lite');
+    expect(screen.getByText('No API key available. Service is unavailable.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Use Google Search in Critics (Refinement)')).not.toBeChecked();
+    expect(screen.getByLabelText('Use Google Search in Final Synthesis')).not.toBeChecked();
+  });
+
+  it('keeps custom token values unchanged when the prompt is cancelled and covers initial/refinement debug branches', () => {
+    Object.defineProperty(window, 'prompt', {
+      value: vi.fn().mockReturnValue(''),
+      configurable: true,
+    });
+
+    render(
+      <GeneralSettingsHarness
+        initialSettings={createSettings({
+          provider: ProviderType.Gemini,
+          simulateInitialError: '429',
+          simulateInitialErrorAttempts: 2,
+          simulateRefinementError: '500',
+          simulateRefinementErrorAttempts: 2,
+          maxOutputTokens: 2048,
+        })}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Custom/i }));
+    expect(screen.getByTestId('settings-state')).toHaveTextContent('"maxOutputTokens":2048');
+
+    const initialAttemptsStepper = screen.getAllByTestId('stepper-control')[1];
+    fireEvent.click(within(initialAttemptsStepper).getByRole('button', { name: 'Set Five' }));
+
+    const refinementSelect = screen.getAllByTestId('custom-select')[1];
+    fireEvent.click(within(refinementSelect).getByRole('button', { name: 'Toggle Select' }));
+    fireEvent.click(within(refinementSelect).getByRole('button', { name: 'Select 429' }));
+
+    const refinementAttemptsStepper = screen.getAllByTestId('stepper-control')[2];
+    fireEvent.click(within(refinementAttemptsStepper).getByRole('button', { name: 'Set Zero' }));
+
+    expect(screen.getByTestId('settings-state')).toHaveTextContent('"simulateInitialErrorAttempts":5');
+    expect(refinementSelect).toHaveAttribute('data-open', 'true');
+    expect(screen.getByTestId('settings-state')).toHaveTextContent('"simulateRefinementError":"none"');
+    expect(screen.getByTestId('settings-state')).toHaveTextContent('"simulateRefinementErrorAttempts":1');
+  });
+
+  it('uses none fallbacks for missing debug selectors and closes each dropdown back to null', () => {
+    render(
+      <GeneralSettingsHarness
+        initialSettings={createSettings({
+          simulateInitialError: undefined,
+          simulateRefinementError: undefined,
+          simulateSynthesisError: undefined,
+        })}
+      />
+    );
+
+    for (const select of screen.getAllByTestId('custom-select')) {
+      expect(select).toHaveAttribute('data-value', 'none');
+
+      const toggle = within(select).getByRole('button', { name: 'Toggle Select' });
+      fireEvent.click(toggle);
+      fireEvent.click(toggle);
+    }
+
+    for (const select of screen.getAllByTestId('custom-select')) {
+      expect(select).toHaveAttribute('data-open', 'false');
+    }
+  });
+
+  it('uses one-attempt fallbacks when debug attempt counts are missing', () => {
+    render(
+      <GeneralSettingsHarness
+        initialSettings={createSettings({
+          simulateInitialError: '429',
+          simulateInitialErrorAttempts: undefined,
+          simulateRefinementError: '500',
+          simulateRefinementErrorAttempts: undefined,
+          simulateSynthesisError: 'timeout',
+          simulateSynthesisErrorAttempts: undefined,
+        })}
+      />
+    );
+
+    const attemptSteppers = screen.getAllByTestId('stepper-control').slice(1);
+
+    for (const stepper of attemptSteppers) {
+      expect(stepper).toHaveAttribute('data-value', '1');
+    }
+
+    expect(screen.getAllByText('Will fail 1 time(s), then succeed on attempt 2.')).toHaveLength(3);
+  });
+
   it('updates workflow, search, system, and refinement or synthesis debug branches', () => {
     render(
       <GeneralSettingsHarness
@@ -350,7 +531,7 @@ describe('GeneralSettingsTab', () => {
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"devMode":true');
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"debugMode":true');
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"simulateInitialError":"429"');
-    expect(screen.getByTestId('settings-state')).toHaveTextContent('"openDropdownId":"initial-error"');
+    expect(screen.getAllByTestId('custom-select')[0]).toHaveAttribute('data-open', 'true');
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"simulateRefinementErrorAttempts":5');
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"simulateSynthesisError":"none"');
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"simulateSynthesisErrorAttempts":1');
@@ -382,7 +563,7 @@ describe('GeneralSettingsTab', () => {
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"model":"gemini-2.5-pro"');
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"temperature":0.5');
     expect(screen.getByTestId('settings-state')).toHaveTextContent(`"maxOutputTokens":${MAX_OUTPUT_TOKENS_LIMIT}`);
-    expect(screen.getByTestId('settings-state')).toHaveTextContent('"openDropdownId":"gemini-model"');
+    expect(screen.getByTestId('model-selector-gemini')).toHaveAttribute('data-open', 'true');
   });
 
   it('handles direct OpenRouter input and synthesis simulation updates', () => {
@@ -410,7 +591,7 @@ describe('GeneralSettingsTab', () => {
 
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"openRouterApiKey":"openrouter-key"');
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"openRouterModel":"openrouter/free-model:free"');
-    expect(screen.getByTestId('settings-state')).toHaveTextContent('"openDropdownId":"synthesis-error"');
+    expect(screen.getAllByTestId('custom-select')[2]).toHaveAttribute('data-open', 'true');
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"simulateSynthesisError":"429"');
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"simulateSynthesisErrorAttempts":5');
   });

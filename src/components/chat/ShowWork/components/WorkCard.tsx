@@ -53,10 +53,6 @@ function useThrottledContent(content: string | null, status: string, throttleMs:
   useEffect(() => {
     // If status is not 'working', update immediately
     if (status !== 'working') {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
       setThrottledContent(content);
       lastUpdateRef.current = Date.now();
       return;
@@ -157,9 +153,10 @@ const WorkCardComponent: FC<WorkCardProps> = ({
   const handleRegenerate = useCallback(() => {
     if (cardId && onCardAction) {
       onCardAction(cardId, 'regenerate');
-    } else if (onRegenerate) {
-      onRegenerate();
+      return;
     }
+
+    onRegenerate?.();
   }, [cardId, onCardAction, onRegenerate]);
   const renderContent = (content: string | null) => {
     // Check for error status

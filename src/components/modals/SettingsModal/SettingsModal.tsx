@@ -98,7 +98,10 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
     };
 
     const handleSave = () => {
-        const finalSettings = { ...localSettings };
+        const finalSettings = {
+            ...localSettings,
+            provider: localSettings.provider ?? ProviderType.Gemini,
+        };
         
         // Calculate unlocked and demo state for the selected provider
         const finalProviderInfo = getProviderInfo(finalSettings, serverStatus);
@@ -115,7 +118,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
                 showError(errorMsg);
                 return; // Block saving - this is a critical error
             }
-        } else if (finalSettings.provider === ProviderType.Gemini) {
+        } else {
             // Check if ANY API key is available (user's, server's, or environment variable in dev mode)
             // Note: isUnlockedFinal is the single source of truth - it returns true if:
             // 1. User has apiKey
@@ -129,15 +132,19 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
         }
         
         if (!isUnlockedFinal || isDemoFinal) {
+            const currentOpenRouterModel = finalSettings.openRouterModel ?? '';
+            const shouldClearPaidOpenRouterModel = finalSettings.provider === ProviderType.OpenRouter
+                && isDemoFinal
+                && currentOpenRouterModel !== ''
+                && !currentOpenRouterModel.endsWith(':free');
+
             // Force default model in demo or no-key mode
             if (finalSettings.provider === ProviderType.Gemini) {
                 finalSettings.model = 'gemini-2.5-flash-lite';
-            } else if (finalSettings.provider === ProviderType.OpenRouter && isDemoFinal) {
-                // In demo mode, clear OpenRouter model if it's not a free model
-                const currentModel = finalSettings.openRouterModel || '';
-                if (currentModel && !currentModel.endsWith(':free')) {
-                    finalSettings.openRouterModel = '';
-                }
+            }
+
+            if (shouldClearPaidOpenRouterModel) {
+                finalSettings.openRouterModel = '';
             }
             
             // Reset step-specific models to fallback to global
