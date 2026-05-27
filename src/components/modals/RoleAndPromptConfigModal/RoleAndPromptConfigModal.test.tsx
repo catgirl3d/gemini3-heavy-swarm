@@ -55,7 +55,7 @@ vi.mock('@/components/ui', () => ({
       data-demo={String(!!isDemoMode)}
       data-provider={provider}
     >
-      <button type="button" onClick={() => onOpenChange?.(!isOpen)}>Toggle model selector</button>
+      <button type="button" disabled={disabled} onClick={() => onOpenChange?.(!isOpen)}>Toggle model selector</button>
       {isOpen && <button type="button" onClick={() => onChange('selected-model')}>Choose model</button>}
     </div>
   ),
@@ -148,7 +148,7 @@ describe('RoleAndPromptConfigModal', () => {
     expect(screen.getByTestId('model-selector')).toHaveAttribute('data-disabled', 'false');
   });
 
-  it('trims saved preset names, cancels inline save on Escape, and resets local state after close', () => {
+  it('trims saved preset names, closes dropdowns externally, cancels inline save on Escape, and resets local state after close', () => {
     const onSavePreset = vi.fn();
     const nameFieldChange = vi.fn();
     const instructionFieldChange = vi.fn();
@@ -209,6 +209,13 @@ describe('RoleAndPromptConfigModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle model selector' }));
     expect(screen.getByRole('button', { name: 'Choose model' })).toBeInTheDocument();
+    expect(screen.getByTestId('preset-selector')).toHaveAttribute('data-open', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Base outside close dropdowns' }));
+    expect(screen.queryByRole('button', { name: 'Choose model' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle model selector' }));
+    expect(screen.getByRole('button', { name: 'Choose model' })).toBeInTheDocument();
 
     rerender(
       <RoleAndPromptConfigModal
@@ -259,5 +266,41 @@ describe('RoleAndPromptConfigModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Base escape' }));
 
     expect(screen.queryByTestId('base-modal')).not.toBeInTheDocument();
+  });
+
+  it('keeps empty preset saves inert, closes preset dropdowns externally, and blocks locked model selection while showing the no-key warning', () => {
+    const onSavePreset = vi.fn();
+
+    render(
+      <RoleAndPromptConfigModal
+        {...baseProps}
+        onSavePreset={onSavePreset}
+        onModelChange={vi.fn()}
+        provider={ProviderType.Gemini}
+        isModelUnlocked={false}
+        isDemoMode={false}
+      />
+    );
+
+    expect(screen.getByText('No API key available.')).toBeInTheDocument();
+    expect(screen.getByTestId('model-selector')).toHaveAttribute('data-disabled', 'true');
+    expect(screen.getByTestId('model-selector')).toHaveAttribute('data-value', 'gemini-2.5-flash-lite');
+    expect(screen.getByRole('button', { name: 'Toggle model selector' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Select a Preset/i }));
+    expect(screen.getByTestId('preset-selector')).toHaveAttribute('data-open', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Base outside close dropdowns' }));
+    expect(screen.getByTestId('preset-selector')).toHaveAttribute('data-open', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle model selector' }));
+    expect(screen.queryByRole('button', { name: 'Choose model' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save as Preset' }));
+    fireEvent.change(screen.getByPlaceholderText('Preset Name'), { target: { value: '   ' } });
+    fireEvent.keyDown(screen.getByPlaceholderText('Preset Name'), { key: 'Enter' });
+
+    expect(onSavePreset).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText('Preset Name')).toBeInTheDocument();
   });
 });
