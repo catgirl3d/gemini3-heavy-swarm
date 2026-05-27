@@ -226,7 +226,7 @@ describe('BaseStep', () => {
     it('should return role model when role has model defined (highest priority)', () => {
       const context = {
         settings: {
-          model: 'global-model',
+          geminiModel: 'global-model',
           initialModel: 'step-model',
           roleProfiles: [{
             id: 'profile-1',
@@ -247,7 +247,7 @@ describe('BaseStep', () => {
     it('should return step model when role has no model defined', () => {
       const context = {
         settings: {
-          model: 'global-model',
+          geminiModel: 'global-model',
           initialModel: 'step-model',
           roleProfiles: [{
             id: 'profile-1',
@@ -268,7 +268,7 @@ describe('BaseStep', () => {
     it('should return global model when no step model and no role model defined', () => {
       const context = {
         settings: {
-          model: 'global-model',
+          geminiModel: 'global-model',
           roleProfiles: [{
             id: 'profile-1',
             roles: [
@@ -278,7 +278,7 @@ describe('BaseStep', () => {
           activeRoleProfileId: 'profile-1'
         } as AppSettings,
         ai: {
-          getDefaultModel: (settings: AppSettings) => settings.model
+          getDefaultModel: (settings: AppSettings) => settings.geminiModel
         } as any
       } as StepContext;
 
@@ -290,7 +290,7 @@ describe('BaseStep', () => {
     it('should return step model when no role profiles exist', () => {
       const context = {
         settings: {
-          model: 'global-model',
+          geminiModel: 'global-model',
           initialModel: 'step-model',
           roleProfiles: []
         } as AppSettings,
@@ -305,7 +305,7 @@ describe('BaseStep', () => {
     it('should use first profile when activeRoleProfileId does not match', () => {
       const context = {
         settings: {
-          model: 'global-model',
+          geminiModel: 'global-model',
           initialModel: 'step-model',
           roleProfiles: [
             {
@@ -326,7 +326,7 @@ describe('BaseStep', () => {
     it('should handle criticRoles correctly', () => {
       const context = {
         settings: {
-          model: 'global-model',
+          geminiModel: 'global-model',
           refinementModel: 'refinement-step-model',
           roleProfiles: [{
             id: 'profile-1',
@@ -349,7 +349,7 @@ describe('BaseStep', () => {
     it('should cycle role models when role index is out of bounds', () => {
       const context = {
         settings: {
-          model: 'global-model',
+          geminiModel: 'global-model',
           initialModel: 'step-model',
           roleProfiles: [{
             id: 'profile-1',
@@ -374,7 +374,7 @@ describe('BaseStep', () => {
       step.id = STEPS.INITIAL;
       const context = {
         settings: {
-          model: 'global-model',
+          geminiModel: 'global-model',
           initialModel: 'initial-model'
         } as AppSettings,
         ai: null
@@ -389,7 +389,7 @@ describe('BaseStep', () => {
       step.id = STEPS.REFINEMENT;
       const context = {
         settings: {
-          model: 'global-model',
+          geminiModel: 'global-model',
           refinementModel: 'refinement-model'
         } as AppSettings,
         ai: null
@@ -404,7 +404,7 @@ describe('BaseStep', () => {
       step.id = STEPS.SYNTHESIS;
       const context = {
         settings: {
-          model: 'global-model',
+          geminiModel: 'global-model',
           synthesisModel: 'synthesis-model'
         } as AppSettings,
         ai: null
@@ -419,10 +419,10 @@ describe('BaseStep', () => {
       step.id = STEPS.INITIAL;
       const context = {
         settings: {
-          model: 'global-model'
+          geminiModel: 'global-model'
         } as AppSettings,
         ai: {
-          getDefaultModel: (settings: AppSettings) => settings.model
+          getDefaultModel: (settings: AppSettings) => settings.geminiModel
         } as any
       } as StepContext;
 
@@ -942,7 +942,7 @@ describe('BaseStep', () => {
       const work: Work = {};
       const context = {
         ai: null,
-        settings: { debugMode: false, numAgents: 2, model: 'model' } as AppSettings,
+        settings: { debugMode: false, numAgents: 2, geminiModel: 'model' } as AppSettings,
         work,
         signal: new AbortController().signal,
         messageId: 'msg-1'
@@ -977,7 +977,7 @@ describe('BaseStep', () => {
           getDefaultModel: vi.fn(() => 'mock-model'),
           models: { generateContentStream }
         },
-        settings: { debugMode: false, numAgents: 2, model: 'model' } as AppSettings,
+        settings: { debugMode: false, numAgents: 2, geminiModel: 'model' } as AppSettings,
         work: {
           results: {
             [STEPS.REFINEMENT]: ['kept critic 0', 'stale critic 1'],
@@ -1032,7 +1032,7 @@ describe('BaseStep', () => {
           getDefaultModel: vi.fn(() => 'mock-model'),
           models: { generateContentStream }
         },
-        settings: { debugMode: false, numAgents: 2, model: 'model' } as AppSettings,
+        settings: { debugMode: false, numAgents: 2, geminiModel: 'model' } as AppSettings,
         work: {
           results: {
             [STEPS.REFINEMENT]: ['kept critic 0', 'stale critic 1'],
@@ -1523,7 +1523,7 @@ describe('BaseStep', () => {
       };
       const context = {
         ai: provider,
-        settings: { debugMode: false, numAgents: 2, model: 'global-model' } as AppSettings,
+        settings: { debugMode: false, numAgents: 2, geminiModel: 'global-model' } as AppSettings,
         work,
         signal: new AbortController().signal,
         messageId: 'msg-1',
@@ -1579,7 +1579,7 @@ describe('BaseStep', () => {
       await step.testRunAgentRegeneration(
         {
           ai: provider,
-          settings: { debugMode: false, numAgents: 2, model: 'global-model' } as AppSettings,
+          settings: { debugMode: false, numAgents: 2, geminiModel: 'global-model' } as AppSettings,
           work,
           signal: new AbortController().signal,
           messageId: 'msg-1',
@@ -1631,7 +1631,7 @@ describe('BaseStep', () => {
       refinementStep.id = STEPS.REFINEMENT;
       const context = {
         ai: provider,
-        settings: { debugMode: false, numAgents: 3, model: 'global-model' } as AppSettings,
+        settings: { debugMode: false, numAgents: 3, geminiModel: 'global-model' } as AppSettings,
         work: {
           ...work,
           stepMetadata: [{ id: STEPS.REFINEMENT, status: 'stale', label: 'Refinement Step', staleFromStepId: STEPS.INITIAL }]
@@ -1669,7 +1669,7 @@ describe('BaseStep', () => {
       refinementStep.id = STEPS.REFINEMENT;
       const context = {
         ai: provider,
-        settings: { debugMode: false, numAgents: 2, model: 'global-model' } as AppSettings,
+        settings: { debugMode: false, numAgents: 2, geminiModel: 'global-model' } as AppSettings,
         work: {
           results: {
             [STEPS.REFINEMENT]: ['old critic 0', 'old critic 1'],
@@ -1705,7 +1705,7 @@ describe('BaseStep', () => {
       await expect(step.testRunAgentRegeneration(
         {
           ai: null,
-          settings: { debugMode: false, numAgents: 1, model: 'global-model' } as AppSettings,
+          settings: { debugMode: false, numAgents: 1, geminiModel: 'global-model' } as AppSettings,
           work,
           signal: new AbortController().signal,
           messageId: 'msg-1'
@@ -1726,7 +1726,7 @@ describe('BaseStep', () => {
       const work: Work = { results: { [STEPS.INITIAL]: ['old agent 0', 'old agent 1'] } };
       const context = {
         ai: provider,
-        settings: { debugMode: false, numAgents: 2, model: 'global-model' } as AppSettings,
+        settings: { debugMode: false, numAgents: 2, geminiModel: 'global-model' } as AppSettings,
         work,
         signal: new AbortController().signal,
         messageId: 'msg-1',
@@ -1758,7 +1758,7 @@ describe('BaseStep', () => {
       const result = await retryStep.testRunAgentRegeneration(
         {
           ai: { name: 'mock', isProxy: false, getDefaultModel: vi.fn(() => 'mock-model'), models: {} },
-          settings: { debugMode: false, numAgents: 1, model: 'global-model' } as AppSettings,
+          settings: { debugMode: false, numAgents: 1, geminiModel: 'global-model' } as AppSettings,
           work,
           signal: new AbortController().signal,
           messageId: 'msg-1',

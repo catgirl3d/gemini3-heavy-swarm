@@ -19,7 +19,7 @@ const createServerStatus = (overrides: Partial<ServerStatus> = {}): ServerStatus
 
 const createSettings = (overrides: Partial<AppSettings> = {}): AppSettings => createMockSettings({
   provider: ProviderType.Gemini,
-  model: 'gemini-2.5-flash',
+  geminiModel: 'gemini-2.5-flash',
   openRouterModel: 'openai/gpt-4o',
   apiKey: undefined,
   openRouterApiKey: undefined,
@@ -119,8 +119,8 @@ describe('getProviderInfo', () => {
 
   it('rejects sends with no content or no selected model', () => {
     vi.mocked(checkProxyUsage).mockReturnValue(false);
-    const withModel = getProviderInfo(createSettings({ apiKey: 'key', model: 'gemini-pro' }));
-    const withoutModel = getProviderInfo(createSettings({ apiKey: 'key', model: '   ' }));
+    const withModel = getProviderInfo(createSettings({ apiKey: 'key', geminiModel: 'gemini-pro' }));
+    const withoutModel = getProviderInfo(createSettings({ apiKey: 'key', geminiModel: '   ' }));
 
     expect(withModel.canSend('   ', false)).toBe(false);
     expect(withModel.canSend('   ', true)).toBe(true);
@@ -130,7 +130,7 @@ describe('getProviderInfo', () => {
   it('uses provider-specific fallback display names when model IDs are empty', () => {
     vi.mocked(checkProxyUsage).mockReturnValue(false);
 
-    const geminiInfo = getProviderInfo(createSettings({ apiKey: 'key', model: '' }));
+    const geminiInfo = getProviderInfo(createSettings({ apiKey: 'key', geminiModel: '' }));
     const openRouterInfo = getProviderInfo(createSettings({
       provider: ProviderType.OpenRouter,
       openRouterApiKey: 'key',
@@ -148,7 +148,7 @@ describe('useProviderInfo', () => {
   });
 
   it('memoizes provider info and recomputes when dependencies change', () => {
-    const initialSettings = createSettings({ apiKey: 'key', model: 'gemini-pro' });
+    const initialSettings = createSettings({ apiKey: 'key', geminiModel: 'gemini-pro' });
     const serverStatus = createServerStatus();
     const { result, rerender } = renderHook(
       ({ settings }) => useProviderInfo(settings, serverStatus),
@@ -159,7 +159,7 @@ describe('useProviderInfo', () => {
     rerender({ settings: initialSettings });
     expect(result.current).toBe(firstResult);
 
-    rerender({ settings: { ...initialSettings, model: 'gemini-3-pro' } });
+    rerender({ settings: { ...initialSettings, geminiModel: 'gemini-3-pro' } });
     expect(result.current).not.toBe(firstResult);
     expect(result.current.currentModelId).toBe('gemini-3-pro');
   });

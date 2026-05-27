@@ -4,6 +4,7 @@ import { RefinementStep } from '@/services/swarm/steps/RefinementStep';
 import { SynthesisStep } from '@/services/swarm/steps/SynthesisStep';
 import { Work, AppSettings, ProviderType } from '@/types';
 import { StepContext, STEPS } from '@/types/steps';
+import { createMockSettings } from '@/test/utils/settingsMocks';
 
 // Helper to create mock stream
 // Returns a properly structured StreamChunk matching the ai-provider type
@@ -34,10 +35,10 @@ describe('Multi-Step Execution Integration', () => {
       getDefaultModel: () => 'test-model'
     };
 
-    settings = {
+    settings = createMockSettings({
       numAgents: 3,
       provider: ProviderType.Gemini,
-      model: 'gemini-1.5-flash',
+      geminiModel: 'gemini-1.5-flash',
       apiKey: 'test-key',
       temperature: 0.7,
       maxOutputTokens: 2048,
@@ -58,19 +59,19 @@ describe('Multi-Step Execution Integration', () => {
           id: '1',
           name: 'Default Roles',
           roles: [
-            { name: 'Role 1', instruction: 'Test role 1' },
-            { name: 'Role 2', instruction: 'Test role 2' },
-            { name: 'Role 3', instruction: 'Test role 3' }
+            { id: 'role-1', name: 'Role 1', instruction: 'Test role 1' },
+            { id: 'role-2', name: 'Role 2', instruction: 'Test role 2' },
+            { id: 'role-3', name: 'Role 3', instruction: 'Test role 3' }
           ],
           criticRoles: [
-            { name: 'Critic 1', instruction: 'Test critic 1' },
-            { name: 'Critic 2', instruction: 'Test critic 2' },
-            { name: 'Critic 3', instruction: 'Test critic 3' }
+            { id: 'critic-1', name: 'Critic 1', instruction: 'Test critic 1' },
+            { id: 'critic-2', name: 'Critic 2', instruction: 'Test critic 2' },
+            { id: 'critic-3', name: 'Critic 3', instruction: 'Test critic 3' }
           ]
         }
       ],
       dynamicAgentRoles: true
-    } as AppSettings;
+    });
 
     baseContext = {
       ai: mockProvider,

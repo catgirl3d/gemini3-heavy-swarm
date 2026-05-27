@@ -97,7 +97,7 @@ let updateSessionRuntimeMock: any;
     provider: ProviderType.Gemini,
     numAgents: 2,
     apiKey: 'test-key',
-    model: 'gemini-pro',
+    geminiModel: 'gemini-pro',
     openRouterModel: 'openrouter/model',
     activeProfileId: 'default',
     profiles: [
@@ -157,7 +157,7 @@ let updateSessionRuntimeMock: any;
     },
     isProxy: false,
     getEffectiveSettings: vi.fn((providerSettings: AppSettings) => providerSettings),
-    getDefaultModel: vi.fn(() => settings.model),
+    getDefaultModel: vi.fn(() => settings.geminiModel),
     models: {
       generateContentStream: vi.fn() as AiProvider['models']['generateContentStream'],
     },

@@ -37,7 +37,7 @@ import { GeminiProvider, ProxyProvider, OpenRouterProvider } from '@/services/ai
 const createMockSettings = (overrides: Partial<AppSettings> = {}): AppSettings => ({
   provider: ProviderType.Gemini,
   numAgents: 3,
-  model: 'gemini-1.5-flash',
+  geminiModel: 'gemini-1.5-flash',
   openRouterModel: 'openai/gpt-3.5-turbo',
   activeProfileId: 'default',
   profiles: [],

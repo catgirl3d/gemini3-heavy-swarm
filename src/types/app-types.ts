@@ -109,7 +109,7 @@ export interface AppSettings {
   provider: ProviderType;
   numAgents: number;
   apiKey?: string;
-  model: string;
+  geminiModel: string;
   openRouterApiKey?: string;
   openRouterModel: string;
   activeProfileId: string;

@@ -1,5 +1,5 @@
 import { type AppSettings, type RoleProfile, type SavedInstruction, type SavedRole, type AgentRole, PROMPT_TYPES, type PromptTypeId, ProviderType, type RoleType } from '@/types';
-import { DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
+import { DEFAULT_PROFILES, DEFAULT_ROLE_PROFILES, DEFAULT_SETTINGS, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 import { generateUUID } from '@/utils/common/uuid';
 import { Logger } from '@shared/utils/logger';
 import { hasValidId } from '@/utils/validation/roleGuards';
@@ -10,6 +10,7 @@ const logger = new Logger('SettingsMigration');
  * Represents settings from older versions of the application for migration purposes.
  */
 export interface LegacyAppSettings extends Partial<AppSettings> {
+  model?: string;
   initialInstruction?: string;
   refinementInstruction?: string;
   synthesizerInstruction?: string;
@@ -256,6 +257,14 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
   if (migrated.provider === undefined) {
     hasChanges = true;
     migrated.provider = ProviderType.Gemini;
+  }
+  if (migrated.geminiModel === undefined) {
+    hasChanges = true;
+    migrated.geminiModel = migrated.model ?? DEFAULT_SETTINGS.geminiModel;
+  }
+  if (migrated.model !== undefined) {
+    hasChanges = true;
+    delete migrated.model;
   }
   if (migrated.openRouterApiKey === undefined) {
     hasChanges = true;

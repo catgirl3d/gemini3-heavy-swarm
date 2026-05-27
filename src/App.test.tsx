@@ -115,7 +115,7 @@ import { App } from './App';
 
 const createSettings = (overrides: Partial<AppSettings> = {}): AppSettings => createMockSettings({
   provider: ProviderType.Gemini,
-  model: 'gemini-3-pro-preview',
+  geminiModel: 'gemini-3-pro-preview',
   debugMode: false,
   ...overrides,
 });
@@ -359,7 +359,7 @@ describe('App', () => {
   });
 
   it('enforces the demo Gemini fallback model when settings and server status are loaded', () => {
-    swarmState.settings = createSettings({ model: 'gemini-3-pro-preview', debugMode: true });
+    swarmState.settings = createSettings({ geminiModel: 'gemini-3-pro-preview', debugMode: true });
     providerInfo = createProviderInfo({
       isGemini: true,
       isDemoMode: true,
@@ -379,11 +379,11 @@ describe('App', () => {
 
     expect(swarmState.setSettings).toHaveBeenCalledTimes(1);
     const updater = swarmState.setSettings.mock.calls[0][0];
-    expect(updater(swarmState.settings)).toMatchObject({ model: 'gemini-2.5-flash-lite' });
+    expect(updater(swarmState.settings)).toMatchObject({ geminiModel: 'gemini-2.5-flash-lite' });
   });
 
   it('skips demo model enforcement until server status and settings are loaded', () => {
-    swarmState.settings = createSettings({ model: 'gemini-3-pro-preview', debugMode: true });
+    swarmState.settings = createSettings({ geminiModel: 'gemini-3-pro-preview', debugMode: true });
     swarmState.settingsLoaded = false;
     providerInfo = createProviderInfo({
       isGemini: true,

@@ -12,7 +12,7 @@ export function getProviderInfo(settings: AppSettings, serverStatus?: ServerStat
   const isOpenRouter = settings.provider === ProviderType.OpenRouter;
 
   // 1. Determine active model ID
-  const currentModelId = isOpenRouter ? settings.openRouterModel : settings.model;
+  const currentModelId = isOpenRouter ? settings.openRouterModel : settings.geminiModel;
 
   // 2. Check if requests are routed through the proxy
   const isUsingProxy = isOpenRouter 
@@ -37,7 +37,7 @@ export function getProviderInfo(settings: AppSettings, serverStatus?: ServerStat
 
   // 5. Get display name for the model
   const modelDisplayName = getModelDisplayName(
-    isOpenRouter ? settings.openRouterModel : settings.model,
+    isOpenRouter ? settings.openRouterModel : settings.geminiModel,
     { withSwarmSuffix: true }
   ) || (isOpenRouter ? 'OpenRouter Swarm' : 'AI Swarm');
 

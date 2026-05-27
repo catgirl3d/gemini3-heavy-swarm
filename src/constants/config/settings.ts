@@ -6,13 +6,13 @@ import { MAX_OUTPUT_TOKENS_LIMIT } from '@/constants/models';
 
 // Determine default model based on environment (Proxy vs Direct)
 // If proxy is forced, we default to flash-lite (demo mode)
-const DEFAULT_MODEL = (process.env.GEMINI_API_KEY && !IS_FORCED_PROXY) ? 'gemini-3-pro-preview' : 'gemini-2.5-flash-lite';
+const DEFAULT_GEMINI_MODEL = (process.env.GEMINI_API_KEY && !IS_FORCED_PROXY) ? 'gemini-3-pro-preview' : 'gemini-2.5-flash-lite';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   provider: ProviderType.Gemini,
   numAgents: 2,
   apiKey: '',
-  model: DEFAULT_MODEL,
+  geminiModel: DEFAULT_GEMINI_MODEL,
   openRouterApiKey: '',
   openRouterModel: '',
   devMode: false,

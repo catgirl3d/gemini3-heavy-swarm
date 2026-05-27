@@ -183,12 +183,12 @@ export const App: FC = () => {
 
     // Enforce Gemini restrictions for demo model if applicable
     if (providerInfo.isGemini && providerInfo.isDemoMode) {
-        if (settings.model !== 'gemini-2.5-flash-lite') {
+        if (settings.geminiModel !== 'gemini-2.5-flash-lite') {
             loggerRef.current.info("Enforcing demo model restriction (gemini-2.5-flash-lite)");
-            setSettings(prev => ({ ...prev, model: 'gemini-2.5-flash-lite' }));
+            setSettings(prev => ({ ...prev, geminiModel: 'gemini-2.5-flash-lite' }));
         }
     }
-  }, [serverStatus.isLoaded, providerInfo.isGemini, providerInfo.isDemoMode, settings.model, settingsLoaded, setSettings]);
+  }, [serverStatus.isLoaded, providerInfo.isGemini, providerInfo.isDemoMode, settings.geminiModel, settingsLoaded, setSettings]);
 
   // Show toast when loadError is present (e.g. from corrupt settings fallback)
   useEffect(() => {

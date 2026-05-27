@@ -97,7 +97,7 @@ export abstract class BaseStep implements StepDescriptor {
     if (stepId === STEPS.INITIAL && settings.initialModel) return settings.initialModel;
     if (stepId === STEPS.REFINEMENT && settings.refinementModel) return settings.refinementModel;
     if (stepId === STEPS.SYNTHESIS && settings.synthesisModel) return settings.synthesisModel;
-    return ai?.getDefaultModel(settings) || settings.model;
+    return ai?.getDefaultModel(settings) || settings.geminiModel;
   }
 
   /**

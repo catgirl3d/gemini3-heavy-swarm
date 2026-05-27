@@ -3,7 +3,7 @@ import { type AppSettings, ProviderType } from '@/types';
 export const createMockSettings = (overrides?: Partial<AppSettings>): AppSettings => ({
   provider: ProviderType.Gemini,
   numAgents: 3,
-  model: 'gemini-pro',
+  geminiModel: 'gemini-pro',
   openRouterModel: '',
   activeProfileId: 'default',
   profiles: [{ id: 'default', name: 'Default', initialInstruction: '', refinementInstruction: '', synthesizerInstruction: '' }],

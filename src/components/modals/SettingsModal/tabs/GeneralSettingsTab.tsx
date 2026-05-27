@@ -36,9 +36,10 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
     serverStatus
 }) => {
     const normalizedProvider = localSettings.provider ?? ProviderType.Gemini;
-    const model = normalizedProvider === ProviderType.OpenRouter
+    const geminiModelId = localSettings.geminiModel ?? 'gemini-3-flash-preview';
+    const selectedProviderModelId = normalizedProvider === ProviderType.OpenRouter
         ? (localSettings.openRouterModel || '')
-        : (localSettings.model ?? 'gemini-3-flash-preview');
+        : geminiModelId;
     const isGeminiDemo = normalizedProvider === ProviderType.Gemini && !localSettings.apiKey && isModelUnlocked && serverStatus?.proxyMode !== 'private';
 
     const updateSetting = <K extends keyof AppSettings>(name: K, value: AppSettings[K]) => {
@@ -56,10 +57,10 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
         const openRouterModels = normalizedProvider === ProviderType.OpenRouter ? getCachedModels() || undefined : undefined;
         return checkIsThinkingModel(
             normalizedProvider,
-            model,
+            selectedProviderModelId,
             openRouterModels
         );
-    }, [normalizedProvider, model]);
+    }, [normalizedProvider, selectedProviderModelId]);
 
     // Auto-enforce minimum tokens for thinking models when model changes
     useEffect(() => {
@@ -109,8 +110,8 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                                 <label className="modal-label">Gemini Model</label>
                                 <ModelSelector
                                     provider={ProviderType.Gemini}
-                                    value={!isModelUnlocked ? 'gemini-2.5-flash-lite' : (localSettings.model || 'gemini-3-flash-preview')}
-                                    onChange={(val) => updateSetting('model', val)}
+                                    value={!isModelUnlocked ? 'gemini-2.5-flash-lite' : geminiModelId}
+                                    onChange={(val) => updateSetting('geminiModel', val)}
                                     disabled={!isModelUnlocked || isGeminiDemo}
                                     isOpen={openDropdownId === 'gemini-model'}
                                     onOpenChange={(open) => setOpenDropdownId(open ? 'gemini-model' : null)}
@@ -171,7 +172,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                                 </label>
                                 <ModelSelector
                                     provider={ProviderType.OpenRouter}
-                                    value={model}
+                                    value={selectedProviderModelId}
                                     onChange={(val) => updateSetting('openRouterModel', val)}
                                     placeholder="Select model..."
                                     disabled={!isModelUnlocked}
@@ -216,7 +217,7 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
 
                         <div className="modal-form-group flex-1">
                             <label className="modal-label">
-                                Temperature ({model.includes('gemini-3') && !localSettings.unsafeTemperature ? '1.0' : (localSettings.temperature ?? 0.7)})
+                                Temperature ({geminiModelId.includes('gemini-3') && !localSettings.unsafeTemperature ? '1.0' : (localSettings.temperature ?? 0.7)})
                             </label>
                             <input
                                 type="range"
@@ -224,18 +225,18 @@ export const GeneralSettingsTab: FC<GeneralSettingsTabProps> = ({
                                 min="0"
                                 max="2"
                                 step="0.1"
-                                value={model.includes('gemini-3') && !localSettings.unsafeTemperature ? 1.0 : (localSettings.temperature ?? 0.7)}
+                                value={geminiModelId.includes('gemini-3') && !localSettings.unsafeTemperature ? 1.0 : (localSettings.temperature ?? 0.7)}
                                 onChange={handleChange}
-                                disabled={model.includes('gemini-3') && !localSettings.unsafeTemperature}
+                                disabled={geminiModelId.includes('gemini-3') && !localSettings.unsafeTemperature}
                                 className="modal-range-slider"
                                 style={{ 
-                                    '--range-progress': `${((model.includes('gemini-3') && !localSettings.unsafeTemperature ? 1.0 : (localSettings.temperature ?? 0.7)) / 2) * 100}%` 
+                                    '--range-progress': `${((geminiModelId.includes('gemini-3') && !localSettings.unsafeTemperature ? 1.0 : (localSettings.temperature ?? 0.7)) / 2) * 100}%` 
                                 } as React.CSSProperties}
                             />
                         </div>
                     </div>
                     
-                    {normalizedProvider === ProviderType.Gemini && model.includes('gemini-3') && (
+                    {normalizedProvider === ProviderType.Gemini && geminiModelId.includes('gemini-3') && (
                         <TemperatureBanner
                             isActive={!!localSettings.unsafeTemperature}
                             onToggle={() => setLocalSettings(prev => ({ ...prev, unsafeTemperature: !prev.unsafeTemperature }))}

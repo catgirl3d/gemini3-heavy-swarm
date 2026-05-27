@@ -206,7 +206,7 @@ const createSettings = (overrides: Partial<AppSettings> = {}): AppSettings => ({
   ...createMockSettings({
     provider: ProviderType.Gemini,
     apiKey: '',
-    model: 'gemini-3-pro-preview',
+    geminiModel: 'gemini-3-pro-preview',
     openRouterApiKey: '',
     openRouterModel: '',
     profiles: [
@@ -537,7 +537,7 @@ describe('SettingsModal', () => {
         onClose={onClose}
         settings={createSettings({
           provider: ProviderType.Gemini,
-          model: 'gemini-3-pro-preview',
+          geminiModel: 'gemini-3-pro-preview',
           maxOutputTokens: MAX_OUTPUT_TOKENS_LIMIT + 1000,
           simulateInitialErrorAttempts: 0,
           simulateRefinementErrorAttempts: 0,
@@ -552,7 +552,7 @@ describe('SettingsModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
-      model: 'gemini-2.5-flash-lite',
+      geminiModel: 'gemini-2.5-flash-lite',
       initialModel: undefined,
       refinementModel: undefined,
       synthesisModel: undefined,

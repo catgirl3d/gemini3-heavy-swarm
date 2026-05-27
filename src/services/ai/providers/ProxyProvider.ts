@@ -46,7 +46,7 @@ export class ProxyProvider extends BaseProvider {
   }
 
   getDefaultModel(settings: AppSettings): string {
-    return settings.model;
+    return settings.geminiModel;
   }
 
   private normalizeChunk(rawChunk: unknown): StreamChunk {

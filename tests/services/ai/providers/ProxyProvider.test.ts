@@ -47,14 +47,14 @@ describe('ProxyProvider', () => {
     });
   });
 
-  it('should return settings.model in getDefaultModel', () => {
-    const settings = { model: 'gemini-1.5-flash' } as AppSettings;
+  it('should return settings.geminiModel in getDefaultModel', () => {
+    const settings = { geminiModel: 'gemini-1.5-flash' } as AppSettings;
     expect(provider.getDefaultModel(settings)).toBe('gemini-1.5-flash');
   });
 
   it('should return settings unchanged in getEffectiveSettings', () => {
     const settings = { 
-      model: 'gemini-1.5-flash',
+      geminiModel: 'gemini-1.5-flash',
       useSearchInInitial: true 
     } as AppSettings;
     const effective = provider.getEffectiveSettings(settings);

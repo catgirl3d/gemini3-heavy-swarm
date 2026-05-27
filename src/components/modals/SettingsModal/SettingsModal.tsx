@@ -140,7 +140,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
 
             // Force default model in demo or no-key mode
             if (finalSettings.provider === ProviderType.Gemini) {
-                finalSettings.model = 'gemini-2.5-flash-lite';
+                finalSettings.geminiModel = 'gemini-2.5-flash-lite';
             }
 
             if (shouldClearPaidOpenRouterModel) {

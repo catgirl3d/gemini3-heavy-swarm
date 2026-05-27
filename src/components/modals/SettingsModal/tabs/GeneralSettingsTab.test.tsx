@@ -89,7 +89,7 @@ import { GeneralSettingsTab } from './GeneralSettingsTab';
 const createSettings = (overrides: Partial<AppSettings> = {}): AppSettings => ({
   ...createMockSettings({
     provider: ProviderType.Gemini,
-    model: 'gemini-3-pro-preview',
+    geminiModel: 'gemini-3-pro-preview',
     apiKey: '',
     openRouterApiKey: '',
     openRouterModel: '',
@@ -169,7 +169,7 @@ describe('GeneralSettingsTab', () => {
       <GeneralSettingsHarness
         initialSettings={createSettings({
           provider: ProviderType.Gemini,
-          model: 'gemini-3-pro-preview',
+          geminiModel: 'gemini-3-pro-preview',
           maxOutputTokens: 1000,
           unsafeTemperature: false,
         })}
@@ -207,7 +207,7 @@ describe('GeneralSettingsTab', () => {
       <GeneralSettingsHarness
         initialSettings={createSettings({
           provider: ProviderType.OpenRouter,
-          model: 'gemini-2.5-flash-lite',
+          geminiModel: 'gemini-2.5-flash-lite',
           openRouterModel: '',
           maxOutputTokens: 1024,
         })}
@@ -256,7 +256,7 @@ describe('GeneralSettingsTab', () => {
         initialSettings={createSettings({
           provider: ProviderType.Gemini,
           apiKey: 'personal-key',
-          model: 'gemini-2.5-pro',
+          geminiModel: 'gemini-2.5-pro',
         })}
         isModelUnlocked
         serverStatus={createServerStatus({ proxyMode: 'private' })}
@@ -273,7 +273,7 @@ describe('GeneralSettingsTab', () => {
         initialSettings={createSettings({
           provider: ProviderType.Gemini,
           apiKey: '',
-          model: 'gemini-2.5-pro',
+          geminiModel: 'gemini-2.5-pro',
         })}
         isModelUnlocked
         serverStatus={createServerStatus({ proxyMode: 'private' })}
@@ -290,7 +290,7 @@ describe('GeneralSettingsTab', () => {
           provider: ProviderType.OpenRouter,
           openRouterApiKey: 'openrouter-key',
           openRouterModel: 'anthropic/claude-sonnet',
-          model: 'gemini-2.5-flash-lite',
+          geminiModel: 'gemini-2.5-flash-lite',
         })}
         isModelUnlocked
         serverStatus={createServerStatus({ proxyMode: 'private' })}
@@ -307,7 +307,7 @@ describe('GeneralSettingsTab', () => {
           provider: ProviderType.OpenRouter,
           openRouterApiKey: '',
           openRouterModel: '',
-          model: 'gemini-2.5-flash-lite',
+          geminiModel: 'gemini-2.5-flash-lite',
         })}
         isModelUnlocked
         serverStatus={createServerStatus({ proxyMode: 'server' })}
@@ -322,7 +322,7 @@ describe('GeneralSettingsTab', () => {
       <GeneralSettingsHarness
         initialSettings={createSettings({
           provider: ProviderType.Gemini,
-          model: 'gemini-2.5-flash-lite',
+          geminiModel: 'gemini-2.5-flash-lite',
         })}
       />
     );
@@ -339,7 +339,7 @@ describe('GeneralSettingsTab', () => {
       <GeneralSettingsHarness
         initialSettings={createSettings({
           provider: ProviderType.Gemini,
-          model: undefined,
+          geminiModel: undefined,
           apiKey: undefined,
           temperature: undefined,
           unsafeTemperature: true,
@@ -373,7 +373,7 @@ describe('GeneralSettingsTab', () => {
           provider: ProviderType.OpenRouter,
           openRouterApiKey: undefined,
           openRouterModel: undefined,
-          model: undefined,
+          geminiModel: undefined,
         })}
         isModelUnlocked
         serverStatus={createServerStatus({ proxyMode: 'server' })}
@@ -395,7 +395,7 @@ describe('GeneralSettingsTab', () => {
       <GeneralSettingsHarness
         initialSettings={createSettings({
           provider: undefined,
-          model: undefined,
+          geminiModel: undefined,
           apiKey: undefined,
           useSearchInRefinement: undefined,
           useSearchInSynthesis: undefined,
@@ -543,7 +543,7 @@ describe('GeneralSettingsTab', () => {
         initialSettings={createSettings({
           provider: ProviderType.Gemini,
           apiKey: '',
-          model: 'gemini-2.5-flash-lite',
+          geminiModel: 'gemini-2.5-flash-lite',
           unsafeTemperature: true,
           maxOutputTokens: 2048,
           temperature: 0.7,
@@ -560,7 +560,7 @@ describe('GeneralSettingsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '64k (Max)' }));
 
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"apiKey":"personal-key"');
-    expect(screen.getByTestId('settings-state')).toHaveTextContent('"model":"gemini-2.5-pro"');
+    expect(screen.getByTestId('settings-state')).toHaveTextContent('"geminiModel":"gemini-2.5-pro"');
     expect(screen.getByTestId('settings-state')).toHaveTextContent('"temperature":0.5');
     expect(screen.getByTestId('settings-state')).toHaveTextContent(`"maxOutputTokens":${MAX_OUTPUT_TOKENS_LIMIT}`);
     expect(screen.getByTestId('model-selector-gemini')).toHaveAttribute('data-open', 'true');
@@ -575,7 +575,7 @@ describe('GeneralSettingsTab', () => {
           openRouterModel: '',
           simulateSynthesisError: 'timeout',
           simulateSynthesisErrorAttempts: 2,
-          model: 'gemini-2.5-flash-lite',
+          geminiModel: 'gemini-2.5-flash-lite',
         })}
         isModelUnlocked
         serverStatus={createServerStatus({ proxyMode: 'private' })}

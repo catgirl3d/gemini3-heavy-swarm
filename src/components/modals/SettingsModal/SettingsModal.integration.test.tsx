@@ -6,7 +6,7 @@ import { SettingsModal } from './SettingsModal';
 
 const createSettings = (overrides: Partial<AppSettings> = {}): AppSettings => createMockSettings({
   provider: ProviderType.Gemini,
-  model: 'gemini-2.5-pro',
+  geminiModel: 'gemini-2.5-pro',
   profiles: [
     {
       id: 'general-purpose',
