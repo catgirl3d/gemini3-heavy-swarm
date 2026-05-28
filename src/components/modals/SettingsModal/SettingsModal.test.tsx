@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 import type { AppSettings, RoleProfile, ServerStatus } from '@/types';
 import { PROMPT_TYPES, ProviderType } from '@/types';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 
 const mocks = vi.hoisted(() => ({
   useProviderInfo: vi.fn(),

@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProviderType, type RoleProfile } from '@/types';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 
 const mocks = vi.hoisted(() => ({
   profileHeader: vi.fn(),

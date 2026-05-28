@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { migrateSettings } from './settingsMigration';
 import { PROMPT_TYPES, type RoleProfile, ProviderType } from '@/types';
 import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 import { DEFAULT_PROFILES, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 
 describe('settingsMigration', () => {

@@ -46,12 +46,13 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, './src'),
           '@shared': path.resolve(__dirname, './shared'),
+          '@test': path.resolve(__dirname, './tests/test-utils'),
         }
       },
       test: {
         globals: true,
         environment: 'happy-dom',
-        setupFiles: ['./src/test/setup.ts'],
+        setupFiles: ['./tests/setup.ts'],
         include: ['src/**/*.{test,spec}.{ts,tsx}', 'tests/**/*.{test,spec}.{ts,tsx}'],
         coverage: {
           provider: 'v8',

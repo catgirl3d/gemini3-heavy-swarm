@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 import { ProviderType, Work } from '@/types';
 import { STEPS } from '@/types/steps';
 

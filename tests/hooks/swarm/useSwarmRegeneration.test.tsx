@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SetStateAction } from 'react';
 import type { AgentState, AppSettings, Message, Source, StepId, TokenUsage, Work } from '@/types';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 import { STEPS } from '@/types/steps';
 import { selectActiveSessionUi, useAgentStore } from '@/stores/agentStore';
 

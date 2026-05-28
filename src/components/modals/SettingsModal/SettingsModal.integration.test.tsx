@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProviderType, type AppSettings, type ServerStatus } from '@/types';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 import { SettingsModal } from './SettingsModal';
 
 const createSettings = (overrides: Partial<AppSettings> = {}): AppSettings => createMockSettings({

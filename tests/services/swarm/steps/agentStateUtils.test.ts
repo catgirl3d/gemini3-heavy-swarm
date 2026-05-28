@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 import { STEPS } from '@/types/steps';
 import { createAgentStates, updateAgentState, updateAgentStateById } from '@/services/swarm/steps/utils/agentStateUtils';
 import type { AgentState } from '@/types';

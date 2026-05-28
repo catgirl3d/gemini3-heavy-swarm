@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ProviderType } from '@/types';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 import { persistProviderModels, updateRoleModel, updateStepModel } from '@/utils/settings/providerPersistence';
 
 const createStepAndRoleSettings = () => createMockSettings({

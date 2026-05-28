@@ -3,7 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useProfileManagement } from '@/components/modals/SettingsModal/hooks/useProfileManagement';
 import { type AppSettings, ProviderType } from '@/types';
 import { useState } from 'react';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 
 describe('useProfileManagement', () => {
   const setupHook = (

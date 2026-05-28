@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Work, AgentState, Message, ServerStatus, AppSettings } from '@/types';
 import { ProviderType } from '@/types';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 
 const mocks = vi.hoisted(() => ({
   useGeminiSwarm: vi.fn(),

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SetStateAction } from 'react';
 import type { AbortControllerHook } from '@/hooks/network/useAbortController';
 import type { AgentState, Message, Source, TokenUsage, Work } from '@/types';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 import { STEPS } from '@/types/steps';
 import { selectActiveSessionUi, useAgentStore } from '@/stores/agentStore';
 

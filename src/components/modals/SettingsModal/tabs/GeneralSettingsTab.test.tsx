@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_OUTPUT_TOKENS_LIMIT, MIN_OUTPUT_TOKENS_FOR_THINKING } from '@/constants';
 import type { AppSettings, ServerStatus } from '@/types';
 import { ProviderType } from '@/types';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 
 const mocks = vi.hoisted(() => ({
   isThinkingModel: vi.fn(),

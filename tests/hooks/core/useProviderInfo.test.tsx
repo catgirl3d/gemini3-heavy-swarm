@@ -3,7 +3,7 @@ import { renderHook } from '@testing-library/react';
 import { getProviderInfo, useProviderInfo } from '@/hooks/core/useProviderInfo';
 import { isUsingProxy as checkProxyUsage } from '@/services/proxy/proxyUtils';
 import { AppSettings, ProviderType, ServerStatus } from '@/types';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 
 vi.mock('@/services/proxy/proxyUtils', () => ({
   isUsingProxy: vi.fn(),

@@ -17,6 +17,9 @@
       "@shared/*": [
         "./shared/*"
       ],
+      "@test/*": [
+        "./tests/test-utils/*"
+      ],
       "@functions/*": [
         "./functions/*"
       ],

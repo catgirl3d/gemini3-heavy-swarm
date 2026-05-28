@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AppSettings, ProviderType } from '@/types';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 import {
   cleanupProfileModels,
   cleanupRoleModels,

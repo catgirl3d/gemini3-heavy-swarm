@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleSendMessageError, hasPartialWorkResults } from '@/utils/swarm/errorHandling';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 import { STEPS, Work } from '@/types';
 
 vi.mock('@shared/utils/logger', () => ({

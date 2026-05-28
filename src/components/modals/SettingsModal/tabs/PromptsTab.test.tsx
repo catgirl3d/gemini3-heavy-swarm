@@ -2,7 +2,7 @@ import type { ChangeEvent } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PROMPT_TYPES, ProviderType, type AppSettings, type PromptProfile } from '@/types';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 
 interface MockProfileHeaderProps {
   label: string;

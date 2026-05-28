@@ -4,7 +4,7 @@ import { useRoleManagement } from '@/components/modals/SettingsModal/hooks/useRo
 import { type AppSettings, ProviderType } from '@/types';
 import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
 import { useState } from 'react';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 import * as providerPersistence from '@/utils/settings/providerPersistence';
 import * as uuidModule from '@/utils/common/uuid';
 import * as roleUtils from '@/utils/chat/roleUtils';

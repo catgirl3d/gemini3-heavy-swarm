@@ -4,7 +4,7 @@ import { RefinementStep } from '@/services/swarm/steps/RefinementStep';
 import { SynthesisStep } from '@/services/swarm/steps/SynthesisStep';
 import { Work, AppSettings, ProviderType } from '@/types';
 import { StepContext, STEPS } from '@/types/steps';
-import { createMockSettings } from '@/test/utils/settingsMocks';
+import { createMockSettings } from '@test/settingsMocks';
 
 // Helper to create mock stream
 // Returns a properly structured StreamChunk matching the ai-provider type
