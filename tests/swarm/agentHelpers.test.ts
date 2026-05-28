@@ -1,8 +1,8 @@
 
 import { describe, it, expect } from 'vitest';
-import { getUpdatedAgentName } from '../../src/utils/swarm/agentHelpers';
-import { STEPS } from '../../src/types/steps';
-import { AppSettings } from '../../src/types';
+import { getUpdatedAgentName } from '@/utils/swarm/agentHelpers';
+import { STEPS } from '@/types/steps';
+import { AppSettings } from '@/types';
 
 describe('agentHelpers', () => {
     describe('getUpdatedAgentName', () => {

@@ -53,7 +53,7 @@ export default defineConfig(({ mode }) => {
         globals: true,
         environment: 'happy-dom',
         setupFiles: ['./tests/setup.ts'],
-        include: ['src/**/*.{test,spec}.{ts,tsx}', 'tests/**/*.{test,spec}.{ts,tsx}'],
+        include: ['tests/**/*.{test,spec}.{ts,tsx}'],
         coverage: {
           provider: 'v8',
           include: ['src/**/*.ts', 'src/**/*.tsx', 'shared/**/*.ts'],

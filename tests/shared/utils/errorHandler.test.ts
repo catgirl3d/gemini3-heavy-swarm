@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createErrorHandler } from '../../../shared/utils/errorHandler';
+import { createErrorHandler } from '@shared/utils/errorHandler';
 
 const loggerWarn = vi.hoisted(() => vi.fn());
 
-vi.mock('../../../shared/utils/logger', () => ({
+vi.mock('@shared/utils/logger', () => ({
   Logger: class {
     debug = vi.fn();
     info = vi.fn();

@@ -8,7 +8,7 @@ vi.mock('stream/promises', () => ({
   pipeline: pipelineMock,
 }));
 
-vi.mock('../../../../shared/utils/logger', () => ({
+vi.mock('@shared/utils/logger', () => ({
   Logger: class {
     debug = vi.fn();
     info = vi.fn();

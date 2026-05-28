@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getSafeGeminiError } from '../../../shared/api/errors';
+import { getSafeGeminiError } from '@shared/api/errors';
 
 describe('getSafeGeminiError', () => {
   afterEach(() => {
