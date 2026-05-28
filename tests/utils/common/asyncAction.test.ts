@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runAsyncAction } from './asyncAction';
+import { runAsyncAction } from '@/utils/common/asyncAction';
 
 describe('runAsyncAction', () => {
   it('passes synchronous failures to the error handler', () => {

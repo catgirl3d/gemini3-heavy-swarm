@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { migrateSettings } from './settingsMigration';
+import { migrateSettings } from '@/services/settings/settingsMigration';
 import { PROMPT_TYPES, type RoleProfile, ProviderType } from '@/types';
 import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
 import { createMockSettings } from '@test/settingsMocks';
