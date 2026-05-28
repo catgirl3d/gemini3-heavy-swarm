@@ -1,7 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentState, Work } from '@/types';
 import { STEPS } from '@/types/steps';
+import { useAgentStore } from '@/stores/agentStore';
+import { StatusAwareWorkCard } from '@/components/chat/ShowWork/components/StatusAwareWorkCard';
 
 const mocks = vi.hoisted(() => ({
   useResolvedAgentState: vi.fn(),
@@ -34,9 +36,6 @@ vi.mock('@/components/chat/ShowWork/components/WorkCard', () => ({
   WorkCard: (props: any) => mocks.workCard(props),
 }));
 
-import { StatusAwareWorkCard } from './StatusAwareWorkCard';
-import { useAgentStore } from '@/stores/agentStore';
-
 const createWork = (overrides: Partial<Work> = {}): Work => ({
   agentStates: [],
   ...overrides,
@@ -53,11 +52,23 @@ const createAgentState = (overrides: Partial<AgentState> = {}): AgentState => ({
   ...overrides,
 });
 
+const resetAgentStore = () => {
+  useAgentStore.getState().abortAll();
+  useAgentStore.setState({
+    ...useAgentStore.getInitialState(),
+    abortControllers: new Map(),
+  }, true);
+};
+
 describe('StatusAwareWorkCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAgentStore.getState().clear();
+    resetAgentStore();
     mocks.useResolvedAgentState.mockReturnValue(undefined);
+  });
+
+  afterEach(() => {
+    resetAgentStore();
   });
 
   it('prefers the live resolved agent state over historical fallback props', () => {
@@ -311,6 +322,59 @@ describe('StatusAwareWorkCard', () => {
         expect.objectContaining({
           step: STEPS.SYNTHESIS,
           snapshotLen: snapshotText.length,
+        })
+      );
+    });
+  });
+
+  it('logs lengths from prop, snapshot, and live work when a done card renders empty', async () => {
+    mocks.useResolvedAgentState.mockReturnValue(createAgentState({
+      id: 'refine-agent-1',
+      name: 'Critic 1',
+      status: 'done',
+      label: 'Done',
+      stepId: STEPS.REFINEMENT,
+      agentIndex: 0,
+    }));
+
+    useAgentStore.getState().startSession('message-1', {
+      results: {
+        [STEPS.REFINEMENT]: ['live refined response'],
+      },
+    });
+
+    render(
+      <StatusAwareWorkCard
+        cardId="refined-0"
+        work={createWork({
+          results: {
+            [STEPS.REFINEMENT]: [''],
+          },
+        })}
+        step={STEPS.REFINEMENT}
+        index={0}
+        messageId="message-1"
+        preferLiveSession
+        title="Critic 1"
+        content=""
+        thought="reasoning"
+        downloadFilename="refined.md"
+        onCardAction={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(mocks.loggerWarn).toHaveBeenCalledWith(
+        'Done card rendered empty',
+        expect.objectContaining({
+          messageId: 'message-1',
+          step: STEPS.REFINEMENT,
+          index: 0,
+          status: 'done',
+          propLen: 0,
+          snapshotLen: 0,
+          liveLen: 'live refined response'.length,
+          hasThought: true,
         })
       );
     });

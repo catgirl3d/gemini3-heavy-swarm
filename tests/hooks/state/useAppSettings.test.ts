@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import { useAppSettings } from './useAppSettings';
+import { act, renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SETTINGS } from '@/constants';
+import { useAppSettings } from '@/hooks/state/useAppSettings';
 import * as migration from '@/services/settings/settingsMigration';
 
 describe('useAppSettings', () => {
@@ -32,38 +32,33 @@ describe('useAppSettings', () => {
       };
 
       localStorage.setItem('gemini3-settings', JSON.stringify(validSettings));
-      
+
       const { result } = renderHook(() => useAppSettings());
 
       expect(result.current.settingsLoaded).toBe(true);
       expect(result.current.settings.numAgents).toBe(4);
-      // Migration might add default profiles, so we check if our profile is present
-      expect(result.current.settings.roleProfiles?.some(p => p.id === 'test-profile')).toBe(true);
+      expect(result.current.settings.roleProfiles?.some(profile => profile.id === 'test-profile')).toBe(true);
     });
   });
 
   describe('Runtime Validation', () => {
     it('should fallback to defaults when migration returns data without IDs', () => {
-      // Since migrateSettings automatically fixes missing IDs, we need to mock it
-      // to return truly broken data that fails our runtime validation.
       const brokenMigratedData = {
         ...DEFAULT_SETTINGS,
         roleProfiles: [{
           id: 'broken-profile',
           name: 'Broken',
-          roles: [{ name: 'Still No ID', instruction: 'Test' }], // No ID here
+          roles: [{ name: 'Still No ID', instruction: 'Test' }],
           criticRoles: []
         }]
       };
 
       vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenMigratedData as any);
-      
       localStorage.setItem('gemini3-settings', JSON.stringify({ old: 'data' }));
-      
+
       const { result } = renderHook(() => useAppSettings());
 
       expect(result.current.settingsLoaded).toBe(true);
-      // Should fallback because we mocked migrateSettings to return data that fails validation
       expect(result.current.settings).toEqual(DEFAULT_SETTINGS);
     });
 
@@ -74,9 +69,8 @@ describe('useAppSettings', () => {
       };
 
       vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenMigratedData as any);
-      
       localStorage.setItem('gemini3-settings', JSON.stringify({ old: 'data' }));
-      
+
       const { result } = renderHook(() => useAppSettings());
 
       expect(result.current.settingsLoaded).toBe(true);
@@ -90,9 +84,8 @@ describe('useAppSettings', () => {
       };
 
       vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenMigratedData as any);
-      
       localStorage.setItem('gemini3-settings', JSON.stringify({ old: 'data' }));
-      
+
       const { result } = renderHook(() => useAppSettings());
 
       expect(result.current.settingsLoaded).toBe(true);
@@ -111,9 +104,8 @@ describe('useAppSettings', () => {
       };
 
       vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenMigratedData as any);
-      
       localStorage.setItem('gemini3-settings', JSON.stringify({ old: 'data' }));
-      
+
       const { result } = renderHook(() => useAppSettings());
 
       expect(result.current.settingsLoaded).toBe(true);
@@ -123,24 +115,22 @@ describe('useAppSettings', () => {
 
   describe('Migration Integration (Actual behavior)', () => {
     it('should pass validation because migration fixes missing IDs', () => {
-      // Regular roles missing IDs
       const legacySettings = {
         ...DEFAULT_SETTINGS,
         roleProfiles: [{
           id: 'legacy-profile',
           name: 'Legacy',
-          roles: [{ name: 'Legacy Role', instruction: 'Test' }], // No ID
+          roles: [{ name: 'Legacy Role', instruction: 'Test' }],
           criticRoles: []
         }]
       };
 
       localStorage.setItem('gemini3-settings', JSON.stringify(legacySettings));
-      
+
       const { result } = renderHook(() => useAppSettings());
 
       expect(result.current.settingsLoaded).toBe(true);
-      // Validation passes because migrateSettings (the real one) added IDs
-      const profile = result.current.settings.roleProfiles?.find(p => p.id === 'legacy-profile');
+      const profile = result.current.settings.roleProfiles?.find(candidate => candidate.id === 'legacy-profile');
       expect(profile?.roles[0].id).toBeDefined();
     });
   });
@@ -148,7 +138,7 @@ describe('useAppSettings', () => {
   describe('Error Handling', () => {
     it('should fallback to defaults when localStorage contains invalid JSON', () => {
       localStorage.setItem('gemini3-settings', 'INVALID JSON {{{');
-      
+
       const { result } = renderHook(() => useAppSettings());
 
       expect(result.current.settingsLoaded).toBe(true);
@@ -178,7 +168,8 @@ describe('useAppSettings', () => {
   describe('resetSettings', () => {
     it('should reset settings to defaults and persist defaults to localStorage', () => {
       localStorage.setItem('gemini3-settings', JSON.stringify({ ...DEFAULT_SETTINGS, numAgents: 10 }));
-      
+      const removeItemSpy = vi.spyOn(localStorage, 'removeItem');
+
       const { result } = renderHook(() => useAppSettings());
 
       expect(result.current.settingsLoaded).toBe(true);
@@ -187,10 +178,9 @@ describe('useAppSettings', () => {
         result.current.resetSettings();
       });
 
-      // After reset, settings in state should be defaults
+      expect(removeItemSpy).toHaveBeenCalledWith('gemini3-settings');
       expect(result.current.settings.numAgents).toBe(DEFAULT_SETTINGS.numAgents);
-      
-      // The state update to DEFAULT_SETTINGS triggers the save effect.
+
       const saved = localStorage.getItem('gemini3-settings');
       expect(saved).not.toBeNull();
       if (saved) {
@@ -202,61 +192,60 @@ describe('useAppSettings', () => {
 
   describe('Backup and Error Reporting', () => {
     it('should save backup to gemini3-settings-backup when validation fails', () => {
-      // Mock broken data that fails ID validation
-      const brokenData = { 
-        ...DEFAULT_SETTINGS, 
-        roleProfiles: [{ 
-          id: 'broken', 
-          name: 'Broken', 
-          roles: [{ name: 'No ID' }], 
-          criticRoles: [] 
-        }] 
+      const brokenData = {
+        ...DEFAULT_SETTINGS,
+        roleProfiles: [{
+          id: 'broken',
+          name: 'Broken',
+          roles: [{ name: 'No ID' }],
+          criticRoles: []
+        }]
       };
-      
+
       vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenData as any);
-      
+
       const originalSettings = JSON.stringify({ old: 'corrupted data' });
       localStorage.setItem('gemini3-settings', originalSettings);
-      
+
       renderHook(() => useAppSettings());
-      
+
       expect(localStorage.getItem('gemini3-settings-backup')).toBe(originalSettings);
     });
 
     it('should expose loadError when fallback occurs due to validation failure', () => {
-      const brokenData = { 
-        ...DEFAULT_SETTINGS, 
-        savedRoles: [{ name: 'No ID' }] 
+      const brokenData = {
+        ...DEFAULT_SETTINGS,
+        savedRoles: [{ name: 'No ID' }]
       };
-      
+
       vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenData as any);
       localStorage.setItem('gemini3-settings', JSON.stringify({ some: 'data' }));
-      
+
       const { result } = renderHook(() => useAppSettings());
-      
+
       expect(result.current.loadError).toContain('corrupted');
       expect(result.current.settings).toEqual(DEFAULT_SETTINGS);
     });
 
     it('should expose loadError when parse fails', () => {
       localStorage.setItem('gemini3-settings', 'INVALID JSON');
-      
+
       const { result } = renderHook(() => useAppSettings());
-      
+
       expect(result.current.loadError).toContain('Failed to load');
       expect(result.current.settings).toEqual(DEFAULT_SETTINGS);
     });
 
     it('should clear loadError when clearLoadError is called', () => {
       localStorage.setItem('gemini3-settings', 'INVALID JSON');
-      
+
       const { result } = renderHook(() => useAppSettings());
       expect(result.current.loadError).not.toBeNull();
-      
+
       act(() => {
         result.current.clearLoadError();
       });
-      
+
       expect(result.current.loadError).toBeNull();
     });
   });
