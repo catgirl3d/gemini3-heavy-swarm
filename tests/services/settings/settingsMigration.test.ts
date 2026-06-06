@@ -1,30 +1,52 @@
 import { describe, it, expect } from 'vitest';
 import { migrateSettings } from '@/services/settings/settingsMigration';
-import { PROMPT_TYPES, type RoleProfile, ProviderType } from '@/types';
+import { PROMPT_TYPES, type AppSettings, type RoleProfile, ProviderType } from '@/types';
 import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
 import { createMockSettings } from '@test/settingsMocks';
-import { DEFAULT_PROFILES, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
+import { DEFAULT_PROFILES, DEFAULT_SETTINGS, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
+import { hasValidRoleId } from '@/utils/validation/roleGuards';
+
+const createSettingsFromDefaults = (overrides: Partial<AppSettings> = {}): AppSettings => ({
+  ...structuredClone(DEFAULT_SETTINGS),
+  ...overrides,
+});
 
 describe('settingsMigration', () => {
   describe('Migration 16: providerModels and Role IDs', () => {
-    it('should preserve settings when providerModels exists and all roles have IDs', () => {
-      const settings = createMockSettings({
-        providerModels: { stepModels: {}, roleModels: {} },
-        roleProfiles: [{
-          id: 'test-profile',
-          name: 'Test',
-          roles: [
-            { id: 'role-1', name: 'Role 1', instruction: 'Test' }
-          ],
-          criticRoles: []
-        }]
+    it('should preserve a current-shape settings payload when providerModels and role IDs are already valid', () => {
+      const settings = createSettingsFromDefaults({
+        providerModels: {
+          stepModels: {
+            [ProviderType.Gemini]: {
+              initial: '',
+              refinement: '',
+              synthesis: '',
+            },
+          },
+          roleModels: {},
+        },
       });
+      const original = structuredClone(settings);
 
       const result = migrateSettings(settings);
 
-      // We check if it's basically the same (migrateSettings might add default fields)
-      expect(result.providerModels).toBeDefined();
-      expect(result.roleProfiles![0].roles[0].id).toBe('role-1');
+      expect(result).toEqual(original);
+    });
+
+    it('should migrate legacy model into geminiModel and remove the legacy model field', () => {
+      const legacySettings = {
+        ...createSettingsFromDefaults({
+          provider: undefined as never,
+          geminiModel: undefined as never,
+        }),
+        model: 'legacy-gemini-model',
+      };
+
+      const result = migrateSettings(legacySettings as any);
+
+      expect(result.provider).toBe(ProviderType.Gemini);
+      expect(result.geminiModel).toBe('legacy-gemini-model');
+      expect('model' in result).toBe(false);
     });
 
     it('should migrate step models to providerModels when missing', () => {
@@ -272,9 +294,9 @@ describe('settingsMigration', () => {
       expect(result.profiles.find((profile) => profile.id === 'custom-migrated')).toBeUndefined();
     });
 
-    it('creates migrated prompt and role profiles from legacy settings without mutating the input', () => {
+    it('creates migrated prompt and role profiles from legacy settings without mutating the input and keeps migrated roles runtime-valid', () => {
       const legacySettings = {
-        ...createMockSettings({
+        ...createSettingsFromDefaults({
           profiles: undefined as any,
           roleProfiles: undefined as any,
           savedInstructions: undefined as any,
@@ -295,18 +317,22 @@ describe('settingsMigration', () => {
           simulateRefinementErrorAttempts: undefined as any,
           simulateSynthesisErrorAttempts: undefined as any,
           maxOutputTokens: undefined as any,
+          geminiModel: undefined as any,
           numAgents: 8,
         }),
         initialInstruction: 'Legacy initial',
         refinementInstruction: 'Legacy refinement',
         synthesizerInstruction: 'Legacy synthesis',
+        model: 'legacy-model-migrated',
         agentRoles: [
-          { name: 'Legacy Role', instruction: 'Legacy role instruction' } as any,
+          { name: 'Legacy Role', instruction: 'Legacy role instruction', model: 'legacy-role-model' } as any,
         ],
       } as any;
       const original = structuredClone(legacySettings);
 
       const result = migrateSettings(legacySettings);
+      const migratedRoleProfile = result.roleProfiles.find((profile) => profile.id === 'custom-roles-migrated');
+      const migratedRole = migratedRoleProfile?.roles[0];
 
       expect(legacySettings).toEqual(original);
       expect(result.activeProfileId).toBe('custom-migrated');
@@ -317,13 +343,17 @@ describe('settingsMigration', () => {
         synthesizerInstruction: 'Legacy synthesis',
       });
       expect(result.activeRoleProfileId).toBe('custom-roles-migrated');
-      expect(result.roleProfiles.find((profile) => profile.id === 'custom-roles-migrated')).toMatchObject({
-        roles: [{ name: 'Legacy Role', instruction: 'Legacy role instruction' }],
+      expect(migratedRoleProfile).toMatchObject({
+        roles: [{ name: 'Legacy Role', instruction: 'Legacy role instruction', model: 'legacy-role-model' }],
         criticRoles: [],
       });
+      expect(migratedRole).toBeDefined();
+      expect(hasValidRoleId(migratedRole!)).toBe(true);
+      expect(result.providerModels?.roleModels?.['custom-roles-migrated']?.[ProviderType.Gemini]?.roles?.[migratedRole!.id]).toBe('legacy-role-model');
       expect(result.savedInstructions).toEqual([]);
       expect(result.savedRoles).toEqual([]);
       expect(result.provider).toBe(ProviderType.Gemini);
+      expect(result.geminiModel).toBe('legacy-model-migrated');
       expect(result.openRouterApiKey).toBe('');
       expect(result.openRouterModel).toBe('');
       expect(result.initialModel).toBe('');
@@ -510,8 +540,8 @@ describe('settingsMigration', () => {
       expect(result.providerModels?.roleModels?.['profile-openrouter']?.[ProviderType.Gemini]?.roles?.['role-1']).toBe('gemini-role-1');
     });
 
-    it('leaves already-migrated current-provider models untouched when no backfill is needed', () => {
-      const settings = createMockSettings({
+    it('leaves an already-migrated current-provider payload untouched when no backfill is needed', () => {
+      const settings = createSettingsFromDefaults({
         provider: ProviderType.OpenRouter,
         openRouterApiKey: 'openrouter-key',
         openRouterModel: 'openrouter/global-model',

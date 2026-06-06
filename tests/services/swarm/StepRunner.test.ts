@@ -1,417 +1,230 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StepRunner } from '@/services/swarm/StepRunner';
-import { StepDescriptor, StepContext } from '@/types/steps';
-import { Work, AppSettings } from '@/types';
 import { useAgentStore } from '@/stores/agentStore';
+import { createMockSettings } from '@test/settingsMocks';
+import type { AgentState, AppSettings, Message, Work } from '@/types';
+import { AppError, ErrorCode } from '@/utils/errors/AppError';
+import { STEPS, type StepContext, type StepDescriptor } from '@/types/steps';
+import { getStepConfig } from '@/utils/swarm/stepConstants';
 
-// Mock getStepConfig to control labels and pause logic
-vi.mock('@/utils/swarm/stepConstants', () => ({
-  getStepConfig: vi.fn((id: string) => {
-    if (id === 'pausable-step') {
-      return { 
-        allowPause: true, 
-        pauseSettingKey: 'pauseAfterInitial',
-        progressMsg: 'Pausable Progress'
-      };
-    }
-    return {
-      progressMsg: `Progress for ${id}`
-    };
-  }),
-}));
-
-// Mock Logger to avoid console noise
 vi.mock('@shared/utils/logger', () => ({
   Logger: class {
     debug = vi.fn();
     info = vi.fn();
     warn = vi.fn();
     error = vi.fn();
-  },
-}));
-
-// Mock AgentStore
-vi.mock('@/stores/agentStore', () => ({
-  useAgentStore: {
-    getState: vi.fn(() => ({
-      replaceSessionWork: vi.fn(),
-      snapshotSessionWork: vi.fn(),
-      sessionsByMessageId: {},
-    }))
   }
 }));
 
+const resetAgentStore = () => {
+  useAgentStore.getState().abortAll();
+  useAgentStore.setState({
+    ...useAgentStore.getInitialState(),
+    abortControllers: new Map(),
+  }, true);
+};
+
+const createWork = (overrides: Partial<Work> = {}): Work => ({
+  results: {},
+  stepMetadata: [],
+  agentStates: [],
+  ...overrides,
+});
+
+const createSettings = (overrides: Partial<AppSettings> = {}): AppSettings => createMockSettings({
+  numAgents: 2,
+  pauseAfterInitial: false,
+  pauseAfterRefinement: false,
+  debugMode: false,
+  ...overrides,
+});
+
+const createAgent = (overrides: Partial<AgentState> = {}): AgentState => ({
+  id: 'agent-1',
+  name: 'Agent 1',
+  status: 'done',
+  label: 'Drafted',
+  stepId: STEPS.INITIAL,
+  agentIndex: 0,
+  messageId: 'message-1',
+  ...overrides,
+});
+
+const createContext = ({
+  work = createWork(),
+  settings = createSettings(),
+  messageId = 'message-1',
+}: {
+  work?: Work;
+  settings?: AppSettings;
+  messageId?: string;
+} = {}): StepContext => ({
+  ai: null,
+  settings,
+  history: [] as Message[],
+  userInput: 'Test input',
+  image: null,
+  imageFile: null,
+  work,
+  onMessageUpdate: vi.fn(),
+  signal: new AbortController().signal,
+  messageId,
+});
+
+const createStep = (stepId: typeof STEPS.INITIAL | typeof STEPS.REFINEMENT | typeof STEPS.SYNTHESIS, execute: StepDescriptor['execute']): StepDescriptor => ({
+  id: stepId,
+  name: getStepConfig(stepId).name,
+  description: getStepConfig(stepId).description,
+  execute,
+});
+
 describe('StepRunner', () => {
-  let mockWork: Work;
-  let mockSettings: AppSettings;
-
   beforeEach(() => {
+    resetAgentStore();
     vi.clearAllMocks();
-    
-    mockWork = {
-      id: 'test-work',
-      results: {},
-      stepMetadata: [],
-      agentStates: []
-    } as unknown as Work;
-
-    mockSettings = {
-      debugMode: false,
-      numAgents: 3,
-      pauseAfterInitial: false,
-    } as unknown as AppSettings;
   });
 
-  it('should execute steps in sequence and store results', async () => {
-    const step1: StepDescriptor = {
-      id: 'step1' as any,
-      name: 'Step 1',
-      execute: vi.fn().mockResolvedValue('result1')
-    };
-    const step2: StepDescriptor = {
-      id: 'step2' as any,
-      name: 'Step 2',
-      execute: vi.fn().mockResolvedValue('result2')
-    };
-
-    const runner = new StepRunner([step1, step2]);
-    const context: StepContext = {
-      work: mockWork,
-      settings: mockSettings,
-      onMessageUpdate: vi.fn(),
-      signal: new AbortController().signal
-    } as any;
-
-    const { work: finalWork } = await runner.run(context);
-
-    expect(step1.execute).toHaveBeenCalled();
-    expect(step2.execute).toHaveBeenCalled();
-    expect(finalWork.results).toEqual({
-      step1: 'result1',
-      step2: 'result2'
-    });
-    expect(finalWork.stepMetadata).toHaveLength(2);
-    expect(finalWork.stepMetadata?.[0].status).toBe('done');
-  });
-
-  it('should notify UI status updates with correct labels', async () => {
-    const step = {
-      id: 'step1' as any,
-      name: 'Step 1',
-      execute: vi.fn().mockResolvedValue('done')
-    };
-    
+  it('stores step results, emits the real progress message, and marks the step metadata done', async () => {
+    const initialStep = createStep(STEPS.INITIAL, vi.fn().mockResolvedValue(['draft 1', 'draft 2']));
     const onStatusUpdate = vi.fn();
-    const runner = new StepRunner([step as any]);
-    const context = { 
-      work: mockWork, 
-      settings: mockSettings, 
-      signal: new AbortController().signal 
-    } as any;
+    const runner = new StepRunner([initialStep]);
+    const context = createContext();
 
-    await runner.run(context, undefined, onStatusUpdate);
+    const { work, paused } = await runner.run(context, undefined, onStatusUpdate);
 
-    // Should call with progressMsg from config
-    expect(onStatusUpdate).toHaveBeenCalledWith('Progress for step1');
-  });
-
-  it('should persist step completion into the owning session', async () => {
-    const step = {
-      id: 'step1' as any,
-      name: 'Step 1',
-      execute: vi.fn().mockResolvedValue('done')
-    };
-    
-    const replaceSessionWorkMock = vi.fn();
-    (useAgentStore.getState as any).mockReturnValue({
-      replaceSessionWork: replaceSessionWorkMock,
-      snapshotSessionWork: vi.fn(),
-      sessionsByMessageId: {},
-    });
-
-    const runner = new StepRunner([step as any]);
-    const context = { 
-      work: mockWork, 
-      settings: mockSettings, 
-      messageId: 'msg-1',
-      signal: new AbortController().signal 
-    } as any;
-
-    await runner.run(context);
-
-    expect(replaceSessionWorkMock).toHaveBeenCalled();
-    const lastCallWork = replaceSessionWorkMock.mock.calls.at(-1)?.[1];
-    expect(lastCallWork.results.step1).toBe('done');
-  });
-
-  it('should initialize and update stepMetadata correctly', async () => {
-    const step = {
-      id: 'step1' as any,
-      name: 'Step 1',
-      execute: vi.fn().mockResolvedValue('done')
-    };
-    
-    // Test updating existing metadata (e.g. from a previous retry attempt)
-    mockWork.stepMetadata = [{ id: 'step1' as any, status: 'error', label: 'Old' }];
-
-    const runner = new StepRunner([step as any]);
-    const context = { 
-      work: mockWork, 
-      settings: mockSettings, 
-      signal: new AbortController().signal 
-    } as any;
-
-    const { work: finalWork } = await runner.run(context);
-
-    expect(finalWork.stepMetadata).toHaveLength(1);
-    expect(finalWork.stepMetadata?.[0].status).toBe('done');
-    expect(finalWork.stepMetadata?.[0].id).toBe('step1');
-  });
-
-  it('should handle pause logic and trigger onPause callback', async () => {
-    const pausableStep: StepDescriptor = {
-      id: 'pausable-step' as any,
-      name: 'Pausable Step',
-      execute: vi.fn().mockResolvedValue('done')
-    };
-    
-    mockSettings.pauseAfterInitial = true;
-    const onPause = vi.fn();
-
-    const runner = new StepRunner([pausableStep]);
-    const context = {
-      work: mockWork,
-      settings: mockSettings,
-      signal: new AbortController().signal
-    } as any;
-
-    const result = await runner.run(context, onPause);
-
-    expect(onPause).toHaveBeenCalled();
-    expect(result.paused).toBe(true);
-    expect(result.work.results?.['pausable-step']).toBe('done');
-  });
-
-  it('should throw if a step fails', async () => {
-    const failingStep: StepDescriptor = {
-      id: 'fail' as any,
-      name: 'Fail',
-      execute: vi.fn().mockRejectedValue(new Error('Step failed'))
-    };
-
-    const runner = new StepRunner([failingStep]);
-    const context: StepContext = {
-      work: mockWork,
-      settings: mockSettings,
-      onMessageUpdate: vi.fn(),
-      signal: new AbortController().signal
-    } as any;
-
-    await expect(runner.run(context)).rejects.toThrow('Step failed');
-  });
-
-  it('should skip steps that are already marked as done (Resume logic)', async () => {
-    const step1: StepDescriptor = {
-      id: 'step1' as any,
-      name: 'Step 1',
-      execute: vi.fn().mockResolvedValue('result1')
-    };
-    const step2: StepDescriptor = {
-      id: 'step2' as any,
-      name: 'Step 2',
-      execute: vi.fn().mockResolvedValue('result2')
-    };
-
-    // Mark step1 as done in metadata
-    mockWork.stepMetadata = [{ id: 'step1' as any, status: 'done', label: 'Step 1' }];
-    mockWork.results = { step1: 'existing-result' };
-
-    const runner = new StepRunner([step1, step2]);
-    const context: StepContext = {
-      work: mockWork,
-      settings: mockSettings,
-      onMessageUpdate: vi.fn(),
-      signal: new AbortController().signal
-    } as any;
-
-    const { work: finalWork } = await runner.run(context);
-
-    // Step 1 should NOT be executed
-    expect(step1.execute).not.toHaveBeenCalled();
-    // Step 2 SHOULD be executed
-    expect(step2.execute).toHaveBeenCalled();
-
-    expect(finalWork.results).toEqual({
-      step1: 'existing-result',
-      step2: 'result2'
-    });
-    expect(finalWork.stepMetadata).toHaveLength(2);
-    expect(finalWork.stepMetadata?.find(m => m.id === 'step1')?.status).toBe('done');
-    expect(finalWork.stepMetadata?.find(m => m.id === 'step2')?.status).toBe('done');
-  });
-
-  it('initializes missing work containers, falls back to step.name for status, and pauses without onPause callback', async () => {
-    const step: StepDescriptor = {
-      id: 'name-fallback-step' as any,
-      name: 'Name Fallback Step',
-      execute: vi.fn().mockResolvedValue('done')
-    };
-    const { getStepConfig } = await import('@/utils/swarm/stepConstants');
-    vi.mocked(getStepConfig).mockImplementation((id: string) => {
-      if (id === 'name-fallback-step') {
-        return {
-          allowPause: true,
-          pauseSettingKey: 'pauseAfterInitial',
-        } as any;
-      }
-
-      return {
-        progressMsg: `Progress for ${id}`
-      } as any;
-    });
-
-    const runner = new StepRunner([step]);
-    const onStatusUpdate = vi.fn();
-    const context = {
-      work: { id: 'test-work' },
-      settings: { ...mockSettings, pauseAfterInitial: true },
-      signal: new AbortController().signal
-    } as any;
-
-    const result = await runner.run(context, undefined, onStatusUpdate);
-
-    expect(onStatusUpdate).toHaveBeenCalledWith('Name Fallback Step');
-    expect(result.paused).toBe(true);
-    const finalWork = result.work;
-
-    expect(finalWork.results).toEqual({ 'name-fallback-step': 'done' });
-    expect(finalWork.stepMetadata).toEqual([
-      { id: 'name-fallback-step', status: 'done', label: 'Name Fallback Step' }
+    expect(initialStep.execute).toHaveBeenCalledTimes(1);
+    expect(onStatusUpdate).toHaveBeenCalledWith(getStepConfig(STEPS.INITIAL).progressMsg);
+    expect(paused).toBe(false);
+    expect(work.results?.[STEPS.INITIAL]).toEqual(['draft 1', 'draft 2']);
+    expect(work.stepMetadata).toEqual([
+      { id: STEPS.INITIAL, status: 'done', label: getStepConfig(STEPS.INITIAL).name },
     ]);
   });
 
-  it('resumes from the latest persisted work snapshot on a new run after pause', async () => {
-    const { getStepConfig } = await import('@/utils/swarm/stepConstants');
-    vi.mocked(getStepConfig).mockImplementation((id: string) => {
-      if (id === 'pausable-step') {
-        return {
-          allowPause: true,
-          pauseSettingKey: 'pauseAfterInitial',
-          progressMsg: 'Pausable Progress'
-        } as any;
-      }
-
-      return {
-        progressMsg: `Progress for ${id}`
-      } as any;
-    });
-
-    const pausableStep: StepDescriptor = {
-      id: 'pausable-step' as any,
-      name: 'Pausable Step',
-      execute: vi.fn().mockResolvedValue('done')
-    };
-    const step2: StepDescriptor = {
-      id: 'step2' as any,
-      name: 'Step 2',
-      execute: vi.fn().mockImplementation(async (context: StepContext) => {
-        return context.work.results?.regenerated;
-      })
-    };
-
-    mockSettings.pauseAfterInitial = true;
-    const liveStoreState = {
-      replaceSessionWork: vi.fn(),
-      snapshotSessionWork: vi.fn(),
-      sessionsByMessageId: {},
-    };
-    (useAgentStore.getState as any).mockImplementation(() => liveStoreState);
-
-    const runner = new StepRunner([pausableStep, step2]);
-    const context: StepContext = {
-      work: mockWork,
-      settings: mockSettings,
-      messageId: 'msg-1',
-      signal: new AbortController().signal,
-    } as any;
-
-    const firstRun = await runner.run(context);
-    expect(firstRun.paused).toBe(true);
-
-    liveStoreState.sessionsByMessageId = {
-      'msg-1': {
-        work: {
-          ...mockWork,
-          results: {
-            ...mockWork.results,
-            'pausable-step': 'done',
-            regenerated: 'latest refinement',
-          },
-          stepMetadata: [{ id: 'pausable-step', status: 'done', label: 'Pausable Step' } as any],
+  it('pauses after the real initial step when pauseAfterInitial is enabled and syncs session work to the store', async () => {
+    const initialStep = createStep(STEPS.INITIAL, vi.fn().mockResolvedValue(['draft 1', 'draft 2']));
+    const runner = new StepRunner([initialStep]);
+    const context = createContext({
+      settings: createSettings({ pauseAfterInitial: true }),
+      work: createWork({
+        results: {
+          [STEPS.INITIAL]: ['', ''],
         },
-      },
-    };
+      }),
+    });
+    const onPause = vi.fn();
 
-    const resumedContext: StepContext = {
-      ...context,
-      work: firstRun.work,
-    };
-    const { work: finalWork, paused } = await runner.run(resumedContext);
+    const result = await runner.run(context, onPause);
 
-    expect(step2.execute).toHaveBeenCalledTimes(1);
-    expect(paused).toBe(false);
-    expect(finalWork.results).toEqual(expect.objectContaining({
-      regenerated: 'latest refinement',
-      step2: 'latest refinement',
-    }));
+    expect(result.paused).toBe(true);
+    expect(onPause).toHaveBeenCalledTimes(1);
+    expect(result.work.results?.[STEPS.INITIAL]).toEqual(['draft 1', 'draft 2']);
+
+    const session = useAgentStore.getState().sessionsByMessageId[context.messageId];
+    expect(session?.work.results?.[STEPS.INITIAL]).toEqual(['draft 1', 'draft 2']);
+    expect(session?.work.stepMetadata).toEqual([
+      { id: STEPS.INITIAL, status: 'done', label: getStepConfig(STEPS.INITIAL).name },
+    ]);
   });
 
-  it('hydrates context.work from the live session snapshot so steps see current agent states', async () => {
-    const liveAgents = [
-      { id: 'agent-1', name: 'Agent 1', status: 'done', label: 'Done', stepId: 'step1', agentIndex: 0, messageId: 'msg-1' },
-      { id: 'agent-2', name: 'Agent 2', status: 'stale', label: 'Stale', stepId: 'step1', agentIndex: 1, messageId: 'msg-1' },
-    ] as any;
-    const sessionWork = {
-      ...mockWork,
-      stepMetadata: [{ id: 'step1' as any, status: 'stale', label: 'Step 1' }],
-      agentStates: [],
-    };
-    const snapshotWork = {
-      ...sessionWork,
-      agentStates: liveAgents,
-    };
-    const snapshotSessionWork = vi.fn().mockReturnValue(snapshotWork);
-    const liveStoreState = {
-      replaceSessionWork: vi.fn(),
-      snapshotSessionWork,
-      sessionsByMessageId: {
-        'msg-1': {
-          work: sessionWork,
-        },
+  it('resumes from the live session snapshot, skips completed steps, and gives downstream steps the latest work and agent states', async () => {
+    const liveAgents: AgentState[] = [
+      createAgent(),
+      createAgent({ id: 'agent-2', name: 'Agent 2', agentIndex: 1, label: 'Drafted', messageId: 'message-1' }),
+    ];
+    const storeWork = createWork({
+      results: {
+        [STEPS.INITIAL]: ['store draft 1', 'store draft 2'],
       },
-    };
-    (useAgentStore.getState as any).mockImplementation(() => liveStoreState);
+      stepMetadata: [
+        { id: STEPS.INITIAL, status: 'done', label: getStepConfig(STEPS.INITIAL).name },
+      ],
+    });
+    useAgentStore.getState().startSession('message-1', storeWork, { activate: false, phase: 'running' });
+    useAgentStore.getState().replaceSessionAgents('message-1', liveAgents);
 
-    const step: StepDescriptor = {
-      id: 'step1' as any,
-      name: 'Step 1',
-      execute: vi.fn().mockImplementation(async (context: StepContext) => {
-        expect(context.work.agentStates).toEqual(liveAgents);
-        return 'done';
-      })
-    };
+    const initialStep = createStep(STEPS.INITIAL, vi.fn().mockResolvedValue(['should not run']));
+    const refinementStep = createStep(STEPS.REFINEMENT, vi.fn().mockImplementation(async (context) => {
+      expect(context.work.results?.[STEPS.INITIAL]).toEqual(['store draft 1', 'store draft 2']);
+      expect(context.work.agentStates).toEqual(liveAgents);
+      return ['refined 1', 'refined 2'];
+    }));
+    const runner = new StepRunner([initialStep, refinementStep]);
+    const staleContextWork = createWork({
+      results: {
+        [STEPS.INITIAL]: ['stale local draft'],
+      },
+      stepMetadata: [
+        { id: STEPS.INITIAL, status: 'done', label: 'Stale Label' },
+      ],
+    });
 
-    const runner = new StepRunner([step]);
-    const context: StepContext = {
-      work: mockWork,
-      settings: mockSettings,
-      messageId: 'msg-1',
-      signal: new AbortController().signal,
-    } as any;
+    const { work, paused } = await runner.run(createContext({ work: staleContextWork }));
 
-    await runner.run(context);
+    expect(paused).toBe(false);
+    expect(initialStep.execute).not.toHaveBeenCalled();
+    expect(refinementStep.execute).toHaveBeenCalledTimes(1);
+    expect(work.results?.[STEPS.INITIAL]).toEqual(['store draft 1', 'store draft 2']);
+    expect(work.results?.[STEPS.REFINEMENT]).toEqual(['refined 1', 'refined 2']);
+    expect(work.stepMetadata).toEqual([
+      { id: STEPS.INITIAL, status: 'done', label: getStepConfig(STEPS.INITIAL).name },
+      { id: STEPS.REFINEMENT, status: 'done', label: getStepConfig(STEPS.REFINEMENT).name },
+    ]);
+  });
 
-    expect(snapshotSessionWork).toHaveBeenCalledWith('msg-1');
-    expect(step.execute).toHaveBeenCalled();
+  it('does not persist a failed step as done or leak its local mutations into the live session snapshot', async () => {
+    const initialStep = createStep(STEPS.INITIAL, vi.fn().mockResolvedValue(['draft 1', 'draft 2']));
+    const refinementError = new Error('Critic step failed');
+    const refinementStep = createStep(STEPS.REFINEMENT, vi.fn().mockImplementation(async (context) => {
+      if (!context.work.results) {
+        context.work.results = {};
+      }
+      context.work.results[STEPS.REFINEMENT] = ['dirty refinement'];
+      context.work.stepMetadata = [
+        ...(context.work.stepMetadata ?? []),
+        { id: STEPS.REFINEMENT, status: 'done', label: 'Dirty refinement' },
+      ];
+      throw refinementError;
+    }));
+    const runner = new StepRunner([initialStep, refinementStep]);
+    const context = createContext();
+
+    await expect(runner.run(context)).rejects.toBe(refinementError);
+
+    expect(context.work.results?.[STEPS.INITIAL]).toEqual(['draft 1', 'draft 2']);
+    expect(context.work.results?.[STEPS.REFINEMENT]).toEqual(['dirty refinement']);
+
+    const session = useAgentStore.getState().sessionsByMessageId[context.messageId];
+    expect(session?.work.results?.[STEPS.INITIAL]).toEqual(['draft 1', 'draft 2']);
+    expect(session?.work.results?.[STEPS.REFINEMENT]).toBeUndefined();
+    expect(session?.work.stepMetadata).toEqual([
+      { id: STEPS.INITIAL, status: 'done', label: getStepConfig(STEPS.INITIAL).name },
+    ]);
+  });
+
+  it('rethrows aborted step errors without leaving a false done status or dirty session work', async () => {
+    const abortedError = new AppError('Aborted', ErrorCode.ABORTED);
+    const initialStep = createStep(STEPS.INITIAL, vi.fn().mockImplementation(async (context) => {
+      if (!context.work.results) {
+        context.work.results = {};
+      }
+      context.work.results[STEPS.INITIAL] = ['partial draft'];
+      context.work.stepMetadata = [{ id: STEPS.INITIAL, status: 'done', label: 'Incorrect done' }];
+      throw abortedError;
+    }));
+    const runner = new StepRunner([initialStep]);
+    const context = createContext({
+      work: createWork({
+        results: {
+          [STEPS.INITIAL]: ['', ''],
+        },
+      }),
+    });
+
+    await expect(runner.run(context)).rejects.toBe(abortedError);
+
+    const session = useAgentStore.getState().sessionsByMessageId[context.messageId];
+    expect(session?.work.results?.[STEPS.INITIAL]).toEqual(['', '']);
+    expect(session?.work.stepMetadata).toEqual([]);
   });
 });

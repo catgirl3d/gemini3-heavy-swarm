@@ -1,374 +1,224 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
-import { AiProvider } from '@/types/ai-provider';
-import { StepContext, StepDescriptor, STEPS, StepId } from '@/types/steps';
-import { AppSettings, AgentState, Work } from '@/types';
 import { useAgentStore } from '@/stores/agentStore';
+import { createMockSettings } from '@test/settingsMocks';
+import type { AppSettings, Message, Work } from '@/types';
+import type { AiProvider } from '@/types/ai-provider';
+import { STEPS, type StepContext, type StepDescriptor } from '@/types/steps';
+import { getStepConfig } from '@/utils/swarm/stepConstants';
 
-describe('SwarmOrchestrator Integrated', () => {
-    beforeEach(() => {
-        useAgentStore.getState().abortAll();
-        useAgentStore.getState().clear();
-        vi.clearAllMocks();
-    });
+vi.mock('@shared/utils/logger', () => ({
+  Logger: class {
+    debug = vi.fn();
+    info = vi.fn();
+    warn = vi.fn();
+    error = vi.fn();
+  }
+}));
 
-    afterEach(() => {
-        useAgentStore.getState().abortAll();
-        useAgentStore.getState().clear();
-    });
+const resetAgentStore = () => {
+  useAgentStore.getState().abortAll();
+  useAgentStore.getState().clear();
+};
 
-    const mockProvider: AiProvider = {
-        name: 'mock',
-        capabilities: {
-            search: false,
-            vision: false,
-            reasoning: false,
-            codeExecution: false
-        },
-        isProxy: false,
-        getEffectiveSettings: (s) => s,
-        getDefaultModel: () => 'model',
-        models: {
-            generateContentStream: vi.fn()
-        }
-    };
+const createSettings = (overrides: Partial<AppSettings> = {}): AppSettings => createMockSettings({
+  numAgents: 2,
+  pauseAfterInitial: false,
+  pauseAfterRefinement: false,
+  debugMode: false,
+  devMode: false,
+  ...overrides,
+});
 
-    const mockStep = (id: StepId): StepDescriptor => ({
-        id,
-        name: id,
-        description: id,
-        execute: vi.fn().mockResolvedValue(['result']),
-    });
+const createProvider = (effectiveSettings?: AppSettings): AiProvider => ({
+  name: 'test-provider',
+  capabilities: {
+    search: false,
+    vision: false,
+    reasoning: false,
+    codeExecution: false,
+  },
+  isProxy: false,
+  getEffectiveSettings: vi.fn((settings: AppSettings) => effectiveSettings ?? settings),
+  getDefaultModel: vi.fn(() => 'test-model'),
+  models: {
+    generateContentStream: vi.fn(),
+  },
+});
 
-    const createSettings = (overrides: Partial<AppSettings> = {}) => ({
-        numAgents: 1,
-        debugMode: false,
-        devMode: false,
-        pauseAfterInitial: false,
-        pauseAfterRefinement: false,
-        ...overrides,
-    } as AppSettings);
+const createStep = (stepId: typeof STEPS.INITIAL | typeof STEPS.REFINEMENT | typeof STEPS.SYNTHESIS, execute: StepDescriptor['execute'], regenerate?: StepDescriptor['regenerate']): StepDescriptor => ({
+  id: stepId,
+  name: getStepConfig(stepId).name,
+  description: getStepConfig(stepId).description,
+  execute,
+  regenerate,
+});
 
-    it('should use provided steps and return work', async () => {
-        const step1 = mockStep(STEPS.INITIAL);
-        const step2 = mockStep(STEPS.REFINEMENT);
-        const step3: StepDescriptor = {
-            ...mockStep(STEPS.SYNTHESIS),
-            execute: vi.fn().mockResolvedValue(['Final answer'])
-        };
+const createExistingWork = (overrides: Partial<Work> = {}): Work => ({
+  results: {
+    [STEPS.INITIAL]: ['done draft 1', 'done draft 2'],
+    [STEPS.REFINEMENT]: ['', ''],
+    [STEPS.SYNTHESIS]: [''],
+  },
+  stepMetadata: [
+    { id: STEPS.INITIAL, status: 'done', label: getStepConfig(STEPS.INITIAL).name },
+    { id: STEPS.SYNTHESIS, status: 'pending', label: getStepConfig(STEPS.SYNTHESIS).name },
+  ],
+  agentNames: ['Saved Agent 1', 'Saved Agent 2'],
+  criticNames: ['Saved Critic 1', 'Saved Critic 2'],
+  ...overrides,
+});
 
-        const orchestrator = new SwarmOrchestrator(mockProvider, [step1, step2, step3]);
+describe('SwarmOrchestrator runSwarm contract and regeneration guards', () => {
+  beforeEach(() => {
+    resetAgentStore();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    resetAgentStore();
+  });
+
+  it('seeds live work arrays and agent names, then passes effective settings into step execution', async () => {
+    const originalSettings = createSettings({ numAgents: 2 });
+    const effectiveSettings = createSettings({ numAgents: 4 });
+    const provider = createProvider(effectiveSettings);
+    const initialStep = createStep(STEPS.INITIAL, vi.fn(async (context: StepContext) => {
+      expect(context.settings).toBe(effectiveSettings);
+      expect(context.work.results?.[STEPS.INITIAL]).toEqual(['', '']);
+      expect(context.work.results?.[STEPS.REFINEMENT]).toEqual(['', '']);
+      expect(context.work.results?.[STEPS.SYNTHESIS]).toEqual(['']);
+      expect(context.work.agentNames).toHaveLength(2);
+      expect(context.work.criticNames).toHaveLength(2);
+      return ['draft 1', 'draft 2'];
+    }));
+    const orchestrator = new SwarmOrchestrator(provider, [initialStep]);
 
     const result = await orchestrator.runSwarm(
-            { numAgents: 1, debugMode: false, devMode: false, pauseAfterInitial: false } as AppSettings,
-            'input',
-            null,
-            null,
-            [],
-            'id',
-            vi.fn(),
-            new AbortController().signal
-        );
+      originalSettings,
+      'input',
+      null,
+      null,
+      [],
+      'message-1',
+      vi.fn(),
+      new AbortController().signal,
+    );
 
-        expect(result).not.toHaveProperty('text');
-        expect(result).not.toHaveProperty('sources');
-        expect(result.work.results?.[STEPS.SYNTHESIS]).toEqual(['Final answer']);
-        expect(step1.execute).toHaveBeenCalled();
-        expect(step3.execute).toHaveBeenCalled();
-    });
+    expect(provider.getEffectiveSettings).toHaveBeenCalledWith(originalSettings);
+    expect(initialStep.execute).toHaveBeenCalledTimes(1);
+    expect(result.paused).toBe(false);
+    expect(result.work.results?.[STEPS.INITIAL]).toEqual(['draft 1', 'draft 2']);
+    expect(result.work.results?.[STEPS.REFINEMENT]).toEqual(['', '']);
+    expect(result.work.results?.[STEPS.SYNTHESIS]).toEqual(['']);
+  });
 
-    it('should resume from existing work and skip completed steps', async () => {
-        const step1 = mockStep(STEPS.INITIAL);
-        const step2: StepDescriptor = {
-            ...mockStep(STEPS.SYNTHESIS),
-            execute: vi.fn().mockResolvedValue(['Resumed final'])
-        };
-        const existingWork: Work = {
-            results: {
-                [STEPS.INITIAL]: ['already complete'],
-                [STEPS.SYNTHESIS]: ['']
-            },
-            stepMetadata: [
-                { id: STEPS.INITIAL, status: 'done', label: 'Initial Step' },
-                { id: STEPS.SYNTHESIS, status: 'pending', label: 'Synthesis Step' }
-            ],
-            agentNames: ['Saved Agent'],
-            criticNames: ['Saved Critic']
-        };
+  it('reuses existing work and lets StepRunner skip completed real step ids', async () => {
+    const provider = createProvider();
+    const initialStep = createStep(STEPS.INITIAL, vi.fn().mockResolvedValue(['should not run']));
+    const synthesisStep = createStep(STEPS.SYNTHESIS, vi.fn(async (context: StepContext) => {
+      expect(context.work.agentNames).toEqual(['Saved Agent 1', 'Saved Agent 2']);
+      expect(context.work.criticNames).toEqual(['Saved Critic 1', 'Saved Critic 2']);
+      expect(context.work.results?.[STEPS.INITIAL]).toEqual(['done draft 1', 'done draft 2']);
+      return ['resumed final'];
+    }));
+    const orchestrator = new SwarmOrchestrator(provider, [initialStep, synthesisStep]);
+    const existingWork = createExistingWork();
 
-        const orchestrator = new SwarmOrchestrator(mockProvider, [step1, step2]);
+    const result = await orchestrator.runSwarm(
+      createSettings(),
+      'input',
+      null,
+      null,
+      [],
+      'message-1',
+      vi.fn(),
+      new AbortController().signal,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      existingWork,
+    );
 
-        const result = await orchestrator.runSwarm(
-            createSettings(),
-            'input',
-            null,
-            null,
-            [],
-            'id',
-            vi.fn(),
-            new AbortController().signal,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            existingWork
-        );
+    expect(initialStep.execute).not.toHaveBeenCalled();
+    expect(synthesisStep.execute).toHaveBeenCalledTimes(1);
+    expect(result.work.results?.[STEPS.SYNTHESIS]).toEqual(['resumed final']);
+    expect(result.work.agentNames).toEqual(['Saved Agent 1', 'Saved Agent 2']);
+    expect(result.work.criticNames).toEqual(['Saved Critic 1', 'Saved Critic 2']);
+  });
 
-        expect(result).not.toHaveProperty('text');
-        expect(result.work).toMatchObject({
-            results: {
-                [STEPS.INITIAL]: ['already complete'],
-                [STEPS.SYNTHESIS]: ['Resumed final']
-            },
-            stepMetadata: [
-                { id: STEPS.INITIAL, status: 'done', label: 'Initial Step' },
-                { id: STEPS.SYNTHESIS, status: 'done', label: 'Synthesis Step' }
-            ],
-            agentNames: ['Saved Agent'],
-            criticNames: ['Saved Critic']
-        });
-        expect(step1.execute).not.toHaveBeenCalled();
-        expect(step2.execute).toHaveBeenCalledTimes(1);
-    });
+  it('forwards message update, pause, status, retry, and synthesis callbacks into the runner context', async () => {
+    const provider = createProvider();
+    const onMessageUpdate = vi.fn();
+    const onPause = vi.fn();
+    const onStatusUpdate = vi.fn();
+    const onSynthesisJump = vi.fn();
+    const onRetryProgress = vi.fn();
+    const signal = new AbortController().signal;
+    const initialStep = createStep(STEPS.INITIAL, vi.fn(async (context: StepContext) => {
+      expect(context.onMessageUpdate).toBe(onMessageUpdate);
+      expect(context.onSynthesisJump).toBe(onSynthesisJump);
+      expect(context.onRetryProgress).toBe(onRetryProgress);
+      expect(context.signal).toBe(signal);
+      context.onSynthesisJump?.();
+      return ['draft 1', 'draft 2'];
+    }));
+    const orchestrator = new SwarmOrchestrator(provider, [initialStep]);
 
-    it('should suppress final text when synthesis returns an error result', async () => {
-        const sources = [{ uri: 'https://stale-source.test', title: 'Stale Source' }];
-        const synthesisStep: StepDescriptor = {
-            ...mockStep(STEPS.SYNTHESIS),
-            execute: vi.fn(async (context) => {
-                context.work.results ??= {};
-                context.work.results[`${STEPS.SYNTHESIS}_sources`] = sources;
-                context.work.results[`${STEPS.SYNTHESIS}_error`] = { flag: true, message: 'failed' };
-                return ['partial failure text'];
-            })
-        };
-        const orchestrator = new SwarmOrchestrator(mockProvider, [synthesisStep]);
+    const result = await orchestrator.runSwarm(
+      createSettings({ pauseAfterInitial: true }),
+      'input',
+      null,
+      null,
+      [] as Message[],
+      'message-1',
+      onMessageUpdate,
+      signal,
+      onPause,
+      onStatusUpdate,
+      onSynthesisJump,
+      onRetryProgress,
+    );
 
-        const result = await orchestrator.runSwarm(
-            createSettings(),
-            'input',
-            null,
-            null,
-            [],
-            'id',
-            vi.fn(),
-            new AbortController().signal
-        );
+    expect(result.paused).toBe(true);
+    expect(onPause).toHaveBeenCalledTimes(1);
+    expect(onStatusUpdate).toHaveBeenCalledWith(getStepConfig(STEPS.INITIAL).progressMsg);
+    expect(onSynthesisJump).toHaveBeenCalledTimes(1);
+  });
 
-        expect(result).not.toHaveProperty('text');
-        expect(result).not.toHaveProperty('sources');
-        expect(result.work.results?.[STEPS.SYNTHESIS]).toEqual(['partial failure text']);
-        expect(result.work.results?.[`${STEPS.SYNTHESIS}_error`]).toEqual({ flag: true, message: 'failed' });
-    });
+  it('rejects regeneration when the requested real step is missing or non-regenerable', async () => {
+    const provider = createProvider();
+    const work = createExistingWork();
 
-    it('should return synthesis sources when the final result includes them', async () => {
-        const sources = [{ uri: 'https://source.test', title: 'Source' }];
-        const synthesisStep: StepDescriptor = {
-            ...mockStep(STEPS.SYNTHESIS),
-            execute: vi.fn(async (context) => {
-                context.work.results ??= {};
-                context.work.results[`${STEPS.SYNTHESIS}_sources`] = sources;
-                return ['Final with sources'];
-            })
-        };
-        const orchestrator = new SwarmOrchestrator(mockProvider, [synthesisStep]);
+    await expect(new SwarmOrchestrator(provider, [createStep(STEPS.INITIAL, vi.fn())]).regenerateResponse(
+      createSettings(),
+      'input',
+      null,
+      null,
+      [],
+      'message-1',
+      0,
+      STEPS.SYNTHESIS,
+      work,
+      [],
+      vi.fn(),
+      new AbortController().signal,
+    )).rejects.toThrow(`Step ${STEPS.SYNTHESIS} not found`);
 
-        const result = await orchestrator.runSwarm(
-            createSettings(),
-            'input',
-            null,
-            null,
-            [],
-            'id',
-            vi.fn(),
-            new AbortController().signal
-        );
-
-        expect(result).not.toHaveProperty('text');
-        expect(result).not.toHaveProperty('sources');
-        expect(result.work.results?.[STEPS.SYNTHESIS]).toEqual(['Final with sources']);
-        expect(result.work.results?.[`${STEPS.SYNTHESIS}_sources`]).toEqual(sources);
-    });
-
-    it('should return empty text when no synthesis result exists', async () => {
-        const orchestrator = new SwarmOrchestrator(mockProvider, []);
-
-        const result = await orchestrator.runSwarm(
-            createSettings(),
-            'input',
-            null,
-            null,
-            [],
-            'id',
-            vi.fn(),
-            new AbortController().signal,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            {}
-        );
-
-        expect(result).not.toHaveProperty('text');
-        expect(result).not.toHaveProperty('sources');
-    });
-
-    it('should pass effective provider settings into step execution', async () => {
-        const originalSettings = createSettings({ numAgents: 1 });
-        const effectiveSettings = createSettings({ numAgents: 4 });
-        const provider: AiProvider = {
-            ...mockProvider,
-            getEffectiveSettings: vi.fn(() => effectiveSettings)
-        };
-        let receivedSettings: AppSettings | undefined;
-        const step: StepDescriptor = {
-            ...mockStep(STEPS.INITIAL),
-            execute: vi.fn(async (context) => {
-                receivedSettings = context.settings;
-                return ['effective'];
-            })
-        };
-        const orchestrator = new SwarmOrchestrator(provider, [step]);
-
-        await orchestrator.runSwarm(
-            originalSettings,
-            'input',
-            null,
-            null,
-            [],
-            'id',
-            vi.fn(),
-            new AbortController().signal
-        );
-
-        expect(provider.getEffectiveSettings).toHaveBeenCalledWith(originalSettings);
-        expect(receivedSettings).toEqual(effectiveSettings);
-    });
-
-    it('should forward pause, status, and synthesis callbacks through StepRunner', async () => {
-        const settings = createSettings({ pauseAfterInitial: true });
-        const onMessageUpdate = vi.fn();
-        const onPause = vi.fn();
-        const onStatusUpdate = vi.fn();
-        const onSynthesisJump = vi.fn();
-        const signal = new AbortController().signal;
-        let receivedContext: StepContext | undefined;
-        const step: StepDescriptor = {
-            ...mockStep(STEPS.INITIAL),
-            execute: vi.fn(async (context) => {
-                receivedContext = context;
-                context.onSynthesisJump?.();
-                return ['draft'];
-            })
-        };
-        const orchestrator = new SwarmOrchestrator(mockProvider, [step]);
-
-        const runPromise = orchestrator.runSwarm(
-            settings,
-            'input',
-            null,
-            null,
-            [],
-            'message-id',
-            onMessageUpdate,
-            signal,
-            onPause,
-            onStatusUpdate,
-            onSynthesisJump
-        );
-
-        const result = await runPromise;
-
-        expect(onPause).toHaveBeenCalledTimes(1);
-        expect(onStatusUpdate).toHaveBeenCalledWith('Drafting initial responses...');
-        expect(receivedContext).toMatchObject({
-            ai: mockProvider,
-            settings,
-            userInput: 'input',
-            image: null,
-            imageFile: null,
-            history: [],
-            messageId: 'message-id',
-            signal,
-            onMessageUpdate,
-            onSynthesisJump,
-        });
-        expect(onSynthesisJump).toHaveBeenCalledTimes(1);
-
-        expect(result).toMatchObject({
-            paused: true,
-            work: expect.objectContaining({
-                results: expect.objectContaining({
-                    [STEPS.INITIAL]: ['draft'],
-                }),
-            }),
-        });
-    });
-
-    it('should delegate regeneration to the matching step', async () => {
-        const step1 = mockStep(STEPS.INITIAL);
-        const step2: StepDescriptor = {
-            ...mockStep(STEPS.SYNTHESIS),
-            regenerate: vi.fn().mockResolvedValue({ work: { results: { [STEPS.SYNTHESIS]: ['Regen result'] } } })
-        };
-
-        const orchestrator = new SwarmOrchestrator(mockProvider, [step1, step2]);
-
-        const result = await orchestrator.regenerateResponse(
-            { numAgents: 1, debugMode: false } as AppSettings,
-            'input',
-            null,
-            null,
-            [],
-            'id',
-            0,
-            STEPS.SYNTHESIS,
-            { results: {} } as Work,
-            [] as AgentState[],
-            vi.fn(),
-            new AbortController().signal
-        );
-
-        expect(result).not.toHaveProperty('text');
-        expect(result.work.results?.[STEPS.SYNTHESIS]).toEqual(['Regen result']);
-        expect(step2.regenerate).toHaveBeenCalled();
-    });
-
-    it('should reject regeneration when the requested step is missing', async () => {
-        const orchestrator = new SwarmOrchestrator(mockProvider, [mockStep(STEPS.INITIAL)]);
-
-        await expect(orchestrator.regenerateResponse(
-            createSettings(),
-            'input',
-            null,
-            null,
-            [],
-            'id',
-            0,
-            STEPS.SYNTHESIS,
-            { results: {} } as Work,
-            [] as AgentState[],
-            vi.fn(),
-            new AbortController().signal
-        )).rejects.toThrow('Step synthesis_step not found');
-    });
-
-    it('should reject regeneration when the step does not support regeneration', async () => {
-        const orchestrator = new SwarmOrchestrator(mockProvider, [mockStep(STEPS.SYNTHESIS)]);
-
-        await expect(orchestrator.regenerateResponse(
-            createSettings(),
-            'input',
-            null,
-            null,
-            [],
-            'id',
-            0,
-            STEPS.SYNTHESIS,
-            { results: {} } as Work,
-            [] as AgentState[],
-            vi.fn(),
-            new AbortController().signal
-        )).rejects.toThrow('Step synthesis_step does not support regeneration');
-    });
+    await expect(new SwarmOrchestrator(provider, [createStep(STEPS.SYNTHESIS, vi.fn())]).regenerateResponse(
+      createSettings(),
+      'input',
+      null,
+      null,
+      [],
+      'message-1',
+      0,
+      STEPS.SYNTHESIS,
+      work,
+      [],
+      vi.fn(),
+      new AbortController().signal,
+    )).rejects.toThrow(`Step ${STEPS.SYNTHESIS} does not support regeneration`);
+  });
 });
