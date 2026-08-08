@@ -1,7 +1,9 @@
 export const RECOMMENDED_MODEL_IDS = [
-    'anthropic/claude-opus-4.7',
-    'openai/gpt-5.4',
-    'openai/gpt-5.5',
+    'Anthropic: Claude Fable 5',
+    'anthropic/claude-opus-4.8',
+    'qwen/qwen3.8-max',
+    'openai/gpt-5.6-sol',
+    'openai/gpt-5.6-terra',
 ];
 
 export const FILTERED_MODEL_IDS = [
