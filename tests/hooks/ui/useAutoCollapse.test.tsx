@@ -1,4 +1,4 @@
-import { RefObject } from 'react';
+import type { RefObject } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { AgentState } from '@/types';
@@ -41,7 +41,7 @@ const createProps = (overrides: Partial<AutoCollapseTestProps> = {}): AutoCollap
   ...overrides,
 });
 
-const createDetailsRef = (open: boolean): RefObject<HTMLDetailsElement> => {
+const createDetailsRef = (open: boolean): RefObject<HTMLDetailsElement | null> => {
   const details = document.createElement('details');
   details.open = open;
   return { current: details };
@@ -49,7 +49,7 @@ const createDetailsRef = (open: boolean): RefObject<HTMLDetailsElement> => {
 
 const renderAutoCollapse = (
   props: AutoCollapseTestProps,
-  detailsRef: RefObject<HTMLDetailsElement> = createDetailsRef(true)
+  detailsRef: RefObject<HTMLDetailsElement | null> = createDetailsRef(true)
 ) => renderHook(
   (currentProps: AutoCollapseTestProps) => {
     useAutoCollapse({ detailsRef, ...currentProps });
@@ -149,7 +149,7 @@ describe('useAutoCollapse', () => {
   });
 
   it('does not throw when detailsRef.current is null', () => {
-    const detailsRef = { current: null } as RefObject<HTMLDetailsElement>;
+    const detailsRef: RefObject<HTMLDetailsElement | null> = { current: null };
 
     expect(() => renderAutoCollapse(createProps(), detailsRef)).not.toThrow();
   });

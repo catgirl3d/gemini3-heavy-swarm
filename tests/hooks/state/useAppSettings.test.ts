@@ -4,6 +4,20 @@ import { DEFAULT_SETTINGS } from '@/constants';
 import { useAppSettings } from '@/hooks/state/useAppSettings';
 import * as migration from '@/services/settings/settingsMigration';
 import { hasValidRoleId } from '@/utils/validation/roleGuards';
+import type { AppSettings } from '@/types';
+
+const asMigrationResult = (value: unknown): AppSettings => {
+  if (
+    typeof value !== 'object'
+    || value === null
+    || !('numAgents' in value)
+    || !('roleProfiles' in value)
+  ) {
+    throw new Error('Invalid migration test fixture');
+  }
+
+  return value as AppSettings;
+};
 
 describe('useAppSettings', () => {
   beforeEach(() => {
@@ -54,7 +68,7 @@ describe('useAppSettings', () => {
         }]
       };
 
-      vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenMigratedData as any);
+      vi.spyOn(migration, 'migrateSettings').mockReturnValue(asMigrationResult(brokenMigratedData));
       localStorage.setItem('gemini3-settings', JSON.stringify({ old: 'data' }));
 
       const { result } = renderHook(() => useAppSettings());
@@ -69,7 +83,7 @@ describe('useAppSettings', () => {
         savedRoles: [{ name: 'No ID Preset', instruction: 'Test' }]
       };
 
-      vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenMigratedData as any);
+      vi.spyOn(migration, 'migrateSettings').mockReturnValue(asMigrationResult(brokenMigratedData));
       localStorage.setItem('gemini3-settings', JSON.stringify({ old: 'data' }));
 
       const { result } = renderHook(() => useAppSettings());
@@ -84,7 +98,7 @@ describe('useAppSettings', () => {
         savedInstructions: [{ name: 'No ID Instruction', content: 'Test' }]
       };
 
-      vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenMigratedData as any);
+      vi.spyOn(migration, 'migrateSettings').mockReturnValue(asMigrationResult(brokenMigratedData));
       localStorage.setItem('gemini3-settings', JSON.stringify({ old: 'data' }));
 
       const { result } = renderHook(() => useAppSettings());
@@ -104,7 +118,7 @@ describe('useAppSettings', () => {
         }]
       };
 
-      vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenMigratedData as any);
+      vi.spyOn(migration, 'migrateSettings').mockReturnValue(asMigrationResult(brokenMigratedData));
       localStorage.setItem('gemini3-settings', JSON.stringify({ old: 'data' }));
 
       const { result } = renderHook(() => useAppSettings());
@@ -124,7 +138,7 @@ describe('useAppSettings', () => {
         }],
       };
 
-      vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenMigratedData as any);
+      vi.spyOn(migration, 'migrateSettings').mockReturnValue(asMigrationResult(brokenMigratedData));
       localStorage.setItem('gemini3-settings', JSON.stringify({ old: 'data' }));
 
       const { result } = renderHook(() => useAppSettings());
@@ -148,7 +162,7 @@ describe('useAppSettings', () => {
         savedRoles: undefined,
       };
 
-      localStorage.setItem('gemini3-settings', JSON.stringify(legacySettings as any));
+      localStorage.setItem('gemini3-settings', JSON.stringify(legacySettings));
 
       const { result } = renderHook(() => useAppSettings());
       const profile = result.current.settings.roleProfiles?.find(candidate => candidate.id === 'custom-roles-migrated');
@@ -232,7 +246,7 @@ describe('useAppSettings', () => {
         }]
       };
 
-      vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenData as any);
+      vi.spyOn(migration, 'migrateSettings').mockReturnValue(asMigrationResult(brokenData));
 
       const originalSettings = JSON.stringify({ old: 'corrupted data' });
       localStorage.setItem('gemini3-settings', originalSettings);
@@ -248,7 +262,7 @@ describe('useAppSettings', () => {
         savedRoles: [{ name: 'No ID' }]
       };
 
-      vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenData as any);
+      vi.spyOn(migration, 'migrateSettings').mockReturnValue(asMigrationResult(brokenData));
       localStorage.setItem('gemini3-settings', JSON.stringify({ some: 'data' }));
 
       const { result } = renderHook(() => useAppSettings());
