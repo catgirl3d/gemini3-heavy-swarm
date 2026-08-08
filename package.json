@@ -24,7 +24,7 @@
     "start:server": "node server-build/server.js",
     "preview": "vite preview",
     "test": "vitest run",
-    "deploy": "npm run build && wrangler pages deploy dist",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name gemini3-heavy-swarm",
     "deploy:do": "wrangler deploy --config workers/rate-limiter/wrangler.jsonc"
   },
   "dependencies": {
@@ -46,6 +46,7 @@
     "@testing-library/react": "^16.3.1",
     "@types/express": "^5.0.6",
     "@types/node": "^22.14.0",
+    "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^5.0.0",
     "@vitest/coverage-v8": "^4.1.5",
     "concurrently": "^9.2.1",
