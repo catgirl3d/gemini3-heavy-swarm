@@ -1267,6 +1267,42 @@ describe('useSwarmRegeneration', () => {
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
   });
 
+  it('does not restore the previous active session after an external stop clears ownership before abort cleanup runs', async () => {
+    useAgentStore.getState().startSession('other-model', createBaseWork(), {
+      phase: 'awaiting-user',
+    });
+
+    let rejectAbort: ((reason: unknown) => void) | undefined;
+    const regenerateResponse = vi.fn(() => new Promise<{ work: Work }>((_resolve, reject) => {
+      rejectAbort = reject;
+    }));
+    const { result } = renderRegeneration({ regenerateResponse });
+
+    let regenerationPromise: Promise<void>;
+    act(() => {
+      regenerationPromise = result.current.regenerateAgentResponse('model-1', STEPS.INITIAL, 1);
+    });
+
+    expect(useAgentStore.getState().activeSessionMessageId).toBe('model-1');
+
+    act(() => {
+      useAgentStore.getState().setSessionPhase('model-1', 'stopped', {
+        loadingStatus: 'Stopped',
+        errorMessage: null,
+      });
+      useAgentStore.getState().setActiveSession(undefined);
+    });
+
+    await act(async () => {
+      rejectAbort?.(new DOMException('The operation was aborted.', 'AbortError'));
+      await regenerationPromise;
+    });
+
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.phase).toBe('stopped');
+    expect(useAgentStore.getState().sessionsByMessageId['other-model']?.phase).toBe('awaiting-user');
+  });
+
   it('keeps retry UI mounted and snapshots work when regeneration fails with a real error', async () => {
     const savedAgent = createAgent({ id: 'failed-agent', messageId: 'model-1', agentIndex: 1 });
     useAgentStore.getState().startSession('model-1', createBaseWork(), {

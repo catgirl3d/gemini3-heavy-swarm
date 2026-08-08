@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SETTINGS } from '@/constants';
 import { useAppSettings } from '@/hooks/state/useAppSettings';
 import * as migration from '@/services/settings/settingsMigration';
+import { hasValidRoleId } from '@/utils/validation/roleGuards';
 
 describe('useAppSettings', () => {
   beforeEach(() => {
@@ -111,27 +112,56 @@ describe('useAppSettings', () => {
       expect(result.current.settingsLoaded).toBe(true);
       expect(result.current.settings).toEqual(DEFAULT_SETTINGS);
     });
-  });
 
-  describe('Migration Integration (Actual behavior)', () => {
-    it('should pass validation because migration fixes missing IDs', () => {
-      const legacySettings = {
+    it('should fallback to defaults when criticRoles is missing ID after migration', () => {
+      const brokenMigratedData = {
         ...DEFAULT_SETTINGS,
         roleProfiles: [{
-          id: 'legacy-profile',
-          name: 'Legacy',
-          roles: [{ name: 'Legacy Role', instruction: 'Test' }],
-          criticRoles: []
-        }]
+          id: 'broken-profile',
+          name: 'Broken',
+          roles: [],
+          criticRoles: [{ name: 'Critic Without ID', instruction: 'Review this' }],
+        }],
       };
 
-      localStorage.setItem('gemini3-settings', JSON.stringify(legacySettings));
+      vi.spyOn(migration, 'migrateSettings').mockReturnValue(brokenMigratedData as any);
+      localStorage.setItem('gemini3-settings', JSON.stringify({ old: 'data' }));
 
       const { result } = renderHook(() => useAppSettings());
 
       expect(result.current.settingsLoaded).toBe(true);
-      const profile = result.current.settings.roleProfiles?.find(candidate => candidate.id === 'legacy-profile');
-      expect(profile?.roles[0].id).toBeDefined();
+      expect(result.current.settings).toEqual(DEFAULT_SETTINGS);
+    });
+  });
+
+  describe('Migration Integration (Actual behavior)', () => {
+    it('loads migrated legacy model and agentRoles without falling back to defaults', () => {
+      const legacySettings = {
+        ...DEFAULT_SETTINGS,
+        profiles: undefined,
+        roleProfiles: undefined,
+        provider: undefined,
+        geminiModel: undefined,
+        model: 'legacy-model',
+        agentRoles: [{ name: 'Legacy Role', instruction: 'Test', model: 'legacy-role-model' }],
+        savedInstructions: undefined,
+        savedRoles: undefined,
+      };
+
+      localStorage.setItem('gemini3-settings', JSON.stringify(legacySettings as any));
+
+      const { result } = renderHook(() => useAppSettings());
+      const profile = result.current.settings.roleProfiles?.find(candidate => candidate.id === 'custom-roles-migrated');
+      const migratedRole = profile?.roles[0];
+
+      expect(result.current.settingsLoaded).toBe(true);
+      expect(result.current.loadError).toBeNull();
+      expect(result.current.settings.activeRoleProfileId).toBe('custom-roles-migrated');
+      expect(result.current.settings.geminiModel).toBe('legacy-model');
+      expect(profile).toBeDefined();
+      expect(migratedRole).toBeDefined();
+      expect(hasValidRoleId(migratedRole!)).toBe(true);
+      expect(result.current.settings).not.toEqual(DEFAULT_SETTINGS);
     });
   });
 

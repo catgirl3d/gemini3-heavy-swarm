@@ -76,6 +76,7 @@ export const App: FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const imageReadVersionRef = useRef(0);
   const loggerRef = useRef(new Logger('App', settings.debugMode));
   const loggerDebugModeRef = useRef(settings.debugMode);
 
@@ -87,13 +88,21 @@ export const App: FC = () => {
   const handleImageChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      imageReadVersionRef.current += 1;
+      const readVersion = imageReadVersionRef.current;
+
       if (file.size > 4 * 1024 * 1024) {
         setToast({ message: "File size exceeds 4MB limit.", type: 'error' });
         return;
       }
+
       setImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
+        if (imageReadVersionRef.current !== readVersion) {
+          return;
+        }
+
         setImage(reader.result as string);
       };
       reader.readAsDataURL(file);
@@ -101,6 +110,7 @@ export const App: FC = () => {
   }, []);
 
   const handleRemoveImage = useCallback(() => {
+    imageReadVersionRef.current += 1;
     setImage(null);
     setImageFile(null);
     if (fileInputRef.current) {

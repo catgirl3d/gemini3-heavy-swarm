@@ -803,6 +803,47 @@ describe('useSwarmOrchestration', () => {
     }));
   });
 
+  it('keeps active session ownership cleared even if an aborted regeneration tries to restore another session during stop', () => {
+    const currentWork = createWork();
+    const mainController = new AbortController();
+    const regenController = new AbortController();
+    const mainAbortSpy = vi.spyOn(mainController, 'abort');
+    const regenAbortSpy = vi.spyOn(regenController, 'abort');
+    const initialMessages: Message[] = [
+      { id: 'user-1', role: 'user', parts: [{ text: 'hello' }] },
+      { id: 'model-1', role: 'model', parts: [{ text: 'partial' }], work: currentWork },
+    ];
+    const { result, messagesState } = renderOrchestration({ initialMessages });
+    const store = useAgentStore.getState();
+
+    store.startSession('previous-session', createWork(), {
+      phase: 'awaiting-user',
+      activate: false,
+    });
+    store.startSession('model-1', currentWork, {
+      phase: 'running',
+    });
+    regenController.signal.addEventListener('abort', () => {
+      useAgentStore.getState().setActiveSession('previous-session');
+    }, { once: true });
+    store.registerAbortController('main-model-1', mainController);
+    store.registerAbortController('regen-model-1-initial_step-0', regenController);
+
+    act(() => {
+      result.current.stopGeneration();
+    });
+
+    expect(mainAbortSpy).toHaveBeenCalledTimes(1);
+    expect(regenAbortSpy).toHaveBeenCalledTimes(1);
+    expect(useAgentStore.getState().activeSessionMessageId).toBeUndefined();
+    expect(useAgentStore.getState().sessionsByMessageId['model-1']?.phase).toBe('stopped');
+    expect(useAgentStore.getState().sessionsByMessageId['previous-session']?.phase).toBe('awaiting-user');
+    expect(messagesState.messages[1].work).toEqual(expect.objectContaining({
+      isStopped: true,
+      results: currentWork.results,
+    }));
+  });
+
   it('commits a stopped session snapshot even when the session has no completed work', () => {
     const controller = new AbortController();
     const abortSpy = vi.spyOn(controller, 'abort');
@@ -926,6 +967,35 @@ describe('useSwarmOrchestration', () => {
     expect(selectActiveSessionUi(useAgentStore.getState()).isInputLocked).toBe(false);
     expect(useAgentStore.getState().abortControllers.size).toBe(0);
     expect(mainAbort.ref.current).toBeNull();
+  });
+
+  it('commits the latest partial live work snapshot to the message when an aborted run stops mid-stream', async () => {
+    mocks.generateUUID.mockReturnValueOnce('model-aborted').mockReturnValueOnce('user-aborted');
+    const partialWork: Work = {
+      results: {
+        [STEPS.INITIAL]: ['partial draft', ''],
+        [STEPS.REFINEMENT]: ['', ''],
+        [STEPS.SYNTHESIS]: [''],
+      },
+      stepMetadata: [],
+    };
+    const runSwarm = vi.fn(async () => {
+      useAgentStore.getState().replaceSessionWork('model-aborted', partialWork);
+      throw new Error('Aborted');
+    });
+    const { result, messagesState } = renderOrchestration({ runSwarm });
+
+    await act(async () => {
+      await result.current.sendMessage('hello', null, null);
+    });
+
+    expect(useAgentStore.getState().sessionsByMessageId['model-aborted']?.phase).toBe('stopped');
+    expect(messagesState.messages[1]).toMatchObject({
+      id: 'model-aborted',
+      work: expect.objectContaining({
+        results: partialWork.results,
+      }),
+    });
   });
 
   it('stops without mutating message history when there is no current message id', () => {

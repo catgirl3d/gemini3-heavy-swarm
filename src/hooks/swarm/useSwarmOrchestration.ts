@@ -129,10 +129,7 @@ export function useSwarmOrchestration({
       flushSync(() => {
         setMessages(prev => commitSessionSnapshotToMessage(prev, currentMsgId));
       });
-    }
-
-    if (currentMsgId) {
-      clearActiveSessionIfCurrent(currentMsgId);
+      store.setActiveSession(undefined);
     }
   };
 
@@ -343,6 +340,9 @@ export function useSwarmOrchestration({
       );
       
       if (wasAborted) {
+        setMessages(prev => commitSessionSnapshotToMessage(prev, modelMessageId, {
+          fallbackWork: failureSnapshot,
+        }));
         logger.debug('Error was user abort, returning early');
         return;
       }

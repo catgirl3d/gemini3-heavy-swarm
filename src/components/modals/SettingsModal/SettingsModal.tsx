@@ -23,6 +23,33 @@ import { createErrorHandler } from '@shared/utils/errorHandler';
 
 import './SettingsModal.css';
 
+const clearActiveProviderModelPersistence = (settings: AppSettings): AppSettings => {
+    if (!settings.providerModels) {
+        return settings;
+    }
+
+    const activeProvider = settings.provider;
+    const nextStepModels = { ...(settings.providerModels.stepModels || {}) };
+    const nextRoleModels = { ...(settings.providerModels.roleModels || {}) };
+
+    delete nextStepModels[activeProvider];
+
+    Object.keys(nextRoleModels).forEach((profileId) => {
+        const profileMappings = { ...(nextRoleModels[profileId] || {}) };
+        delete profileMappings[activeProvider];
+        nextRoleModels[profileId] = profileMappings;
+    });
+
+    return {
+        ...settings,
+        providerModels: {
+            ...settings.providerModels,
+            stepModels: nextStepModels,
+            roleModels: nextRoleModels,
+        },
+    };
+};
+
 export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, onReset, serverStatus, onShowError }) => {
     const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
     const showError = createErrorHandler(onShowError);
@@ -168,6 +195,8 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose, setting
             if (finalSettings.savedRoles) {
                 finalSettings.savedRoles = finalSettings.savedRoles.map(r => ({ ...r, model: undefined }));
             }
+
+            Object.assign(finalSettings, clearActiveProviderModelPersistence(finalSettings));
         }
 
         // Validation: Ensure error simulation attempts are at least 1
