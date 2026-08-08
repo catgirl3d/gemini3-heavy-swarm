@@ -3,7 +3,7 @@ import { validateAndPrepareOpenRouterProxy, executeOpenRouterRequest } from '@sh
 
 // Mock global fetch
 const fetchMock = vi.fn();
-(global as any).fetch = fetchMock;
+vi.stubGlobal('fetch', fetchMock);
 
 describe('openrouterProxy.core', () => {
   beforeEach(() => {
@@ -152,12 +152,12 @@ describe('openrouterProxy.core', () => {
         // Simulate a slow response that responds to abort signals
         let abortSignalReceived: AbortSignal | undefined;
         
-        fetchMock.mockImplementation((_url, options) => {
-          abortSignalReceived = options?.signal;
+        fetchMock.mockImplementation((_url: string, options: RequestInit | undefined) => {
+           abortSignalReceived = options?.signal ?? undefined;
           
-          return new Promise((resolve, reject) => {
+          return new Promise<Response>((resolve, reject) => {
             // Simulate long request
-            const timer = setTimeout(() => resolve({ ok: true }), 5000);
+             const timer = setTimeout(() => resolve(new Response(null, { status: 200 })), 5000);
             
             // Listen to abort signal and reject if aborted
             if (abortSignalReceived) {

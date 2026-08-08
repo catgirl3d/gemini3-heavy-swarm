@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GeminiProvider } from '@/services/ai/providers/GeminiProvider';
 import { AppSettings, ProviderType } from '@/types';
+import type { GenerateRequest, StreamChunk } from '@/types/ai-provider';
 
 // Mock streamUtils
 vi.mock('@/services/swarm/steps/utils/streamUtils', () => ({
@@ -20,7 +21,7 @@ import {
 } from '@/services/swarm/steps/utils/streamUtils';
 
 // Mock GoogleGenAI
-const mockGenerateContentStream = vi.fn();
+const mockGenerateContentStream = vi.fn<(request: GenerateRequest) => Promise<AsyncIterable<unknown>>>();
 
 vi.mock('@google/genai', () => ({
   GoogleGenAI: class {
@@ -75,11 +76,11 @@ describe('GeminiProvider', () => {
     mockGenerateContentStream.mockResolvedValue(mockAsyncIterable);
 
 
-    (extractPartsFromChunk as any).mockReturnValue([{ text: 'hello' }]);
-    (extractUsageMetadataFromChunk as any).mockReturnValue({ totalTokenCount: 10 });
-    (extractGroundingChunksFromChunk as any).mockReturnValue([]);
-    (extractTextFromParts as any).mockReturnValue({ text: 'hello', thought: '' });
-    (extractTokenUsage as any).mockReturnValue({ totalTokens: 10, promptTokens: 5, candidatesTokens: 5 });
+    vi.mocked(extractPartsFromChunk).mockReturnValue([{ text: 'hello' }]);
+    vi.mocked(extractUsageMetadataFromChunk).mockReturnValue({ totalTokenCount: 10 });
+    vi.mocked(extractGroundingChunksFromChunk).mockReturnValue([]);
+    vi.mocked(extractTextFromParts).mockReturnValue({ text: 'hello', thought: '' });
+    vi.mocked(extractTokenUsage).mockReturnValue({ totalTokens: 10, promptTokens: 5, candidatesTokens: 5 });
 
     // Ensure the provider initializes the model correctly
     const result = await provider.models.generateContentStream({
@@ -87,7 +88,7 @@ describe('GeminiProvider', () => {
       contents: []
     });
 
-    const chunks = [];
+    const chunks: StreamChunk[] = [];
     for await (const chunk of result.stream) {
       chunks.push(chunk);
     }
@@ -132,18 +133,18 @@ describe('GeminiProvider', () => {
 
     mockGenerateContentStream.mockResolvedValue(mockAsyncIterable);
 
-    (extractPartsFromChunk as any).mockReturnValue([]);
-    (extractUsageMetadataFromChunk as any).mockReturnValue(undefined);
-    (extractGroundingChunksFromChunk as any).mockReturnValue(undefined);
-    (extractTextFromParts as any).mockReturnValue({ text: '', thought: '' });
-    (extractTokenUsage as any).mockReturnValue(null);
+    vi.mocked(extractPartsFromChunk).mockReturnValue([]);
+    vi.mocked(extractUsageMetadataFromChunk).mockReturnValue(undefined);
+    vi.mocked(extractGroundingChunksFromChunk).mockReturnValue(undefined);
+    vi.mocked(extractTextFromParts).mockReturnValue({ text: '', thought: '' });
+    vi.mocked(extractTokenUsage).mockReturnValue(null);
 
     const result = await provider.models.generateContentStream({
       model: 'gemini-pro',
       contents: []
     });
 
-    const chunks = [];
+    const chunks: StreamChunk[] = [];
     for await (const chunk of result.stream) {
       chunks.push(chunk);
     }

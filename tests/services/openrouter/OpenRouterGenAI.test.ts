@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OpenRouterGenAI } from '@/services/openrouter/OpenRouterGenAI';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
+import type { GenerateRequest } from '@/types/ai-provider';
+
+type ModelRequest = Parameters<OpenRouterGenAI['models']['generateContentStream']>[0];
+type ModelResult = Awaited<ReturnType<OpenRouterGenAI['models']['generateContentStream']>>;
+type ModelChunk = ModelResult['stream'] extends AsyncIterable<infer Chunk> ? Chunk : never;
+const invokeWithMalformedRequest = (client: OpenRouterGenAI, request: unknown): Promise<ModelResult> => (
+  client.models.generateContentStream as (value: unknown) => Promise<ModelResult>
+)(request);
 
 describe('OpenRouterGenAI', () => {
   let client: OpenRouterGenAI;
@@ -12,7 +20,7 @@ describe('OpenRouterGenAI', () => {
 
   describe('generateContentStream validation', () => {
     it('should throw error when contents is invalid', async () => {
-      const invalidRequests = [
+      const invalidRequests: unknown[] = [
         { model: 'test', contents: undefined },
         { model: 'test', contents: 'not an array' },
         { model: 'test', contents: [] },
@@ -21,7 +29,7 @@ describe('OpenRouterGenAI', () => {
 
       for (const request of invalidRequests) {
         await expect(async () => {
-          const result = await client.models.generateContentStream(request as any);
+          const result = await invokeWithMalformedRequest(client, request);
           const iterator = result.stream[Symbol.asyncIterator]();
           await iterator.next();
         }).rejects.toThrow(AppError);
@@ -47,8 +55,8 @@ describe('OpenRouterGenAI', () => {
         contents: [{ role: 'user', parts: [{ text: 'Hi' }] }]
       };
 
-      const result = await client.models.generateContentStream(request as any);
-      const chunks = [];
+      const result = await client.models.generateContentStream(request satisfies GenerateRequest);
+      const chunks: ModelChunk[] = [];
       for await (const chunk of result.stream) {
         chunks.push(chunk);
       }
@@ -59,7 +67,7 @@ describe('OpenRouterGenAI', () => {
           body: expect.stringContaining('"role":"system","content":"Be helpful"')
         })
       );
-      expect(chunks[0].text()).toBe('Hello');
+      expect(chunks[0].text?.()).toBe('Hello');
     });
 
     it('should call OpenRouter directly with auth headers and object-form system instructions', async () => {
@@ -80,9 +88,9 @@ describe('OpenRouterGenAI', () => {
         model: 'request-model',
         config: { systemInstruction: { parts: [{ text: 'Object system instruction' }] } },
         contents: [{ role: 'user', parts: [{ text: 'Hi direct' }] }]
-      } as any);
+      } satisfies ModelRequest);
 
-      const chunks = [];
+      const chunks: ModelChunk[] = [];
       for await (const chunk of result.stream) {
         chunks.push(chunk);
       }
@@ -99,7 +107,7 @@ describe('OpenRouterGenAI', () => {
         })
       );
       expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe('request-model');
-      expect(chunks[0].text()).toBe('Direct');
+      expect(chunks[0].text?.()).toBe('Direct');
     });
   });
 
@@ -118,16 +126,16 @@ describe('OpenRouterGenAI', () => {
       });
       global.fetch = fetchMock;
 
-      const result = await client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any);
-      const chunks = [];
+      const result = await client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } satisfies ModelRequest);
+      const chunks: ModelChunk[] = [];
       for await (const chunk of result.stream) {
         chunks.push(chunk);
       }
 
       // First chunk should have thought
-      expect(chunks[0].candidates[0].content.parts[0]).toEqual({ text: 'Thinking...', thought: true });
+      expect(chunks[0].candidates?.[0]?.content?.parts?.[0]).toEqual({ text: 'Thinking...', thought: true });
       // Second chunk should have content (and maybe previous thought state depending on implementation, but service yields deltas)
-      expect(chunks[1].candidates[0].content.parts.find(p => p.text === 'Answer')).toBeDefined();
+      expect(chunks[1].candidates?.[0]?.content?.parts?.find(p => p.text === 'Answer')).toBeDefined();
     });
 
     it('should use real usage data when provided by API', async () => {
@@ -143,8 +151,8 @@ describe('OpenRouterGenAI', () => {
       });
       global.fetch = fetchMock;
 
-      const result = await client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any);
-      let lastUsage;
+      const result = await client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } satisfies ModelRequest);
+      let lastUsage: ModelChunk['usageMetadata'];
       for await (const chunk of result.stream) {
         lastUsage = chunk.usageMetadata;
       }
@@ -171,15 +179,15 @@ describe('OpenRouterGenAI', () => {
       });
       global.fetch = fetchMock;
 
-      const result = await client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any);
-      let lastUsage;
+      const result = await client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } satisfies ModelRequest);
+      let lastUsage: ModelChunk['usageMetadata'];
       for await (const chunk of result.stream) {
         lastUsage = chunk.usageMetadata;
       }
 
-      expect(lastUsage.promptTokenCount).toBeGreaterThan(0);
-      expect(lastUsage.candidatesTokenCount).toBeGreaterThan(0);
-      expect(lastUsage.isEstimated).toBe(true);
+      expect(lastUsage?.promptTokenCount).toBeGreaterThan(0);
+      expect(lastUsage?.candidatesTokenCount).toBeGreaterThan(0);
+      expect(lastUsage?.isEstimated).toBe(true);
     });
 
     it('should track transition from estimated to real usage', async () => {
@@ -198,8 +206,8 @@ describe('OpenRouterGenAI', () => {
       });
       global.fetch = fetchMock;
 
-      const result = await client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any);
-      const usages: any[] = [];
+      const result = await client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } satisfies ModelRequest);
+      const usages: NonNullable<ModelChunk['usageMetadata']>[] = [];
       for await (const chunk of result.stream) {
         if (chunk.usageMetadata) {
           usages.push({ ...chunk.usageMetadata });
@@ -231,13 +239,13 @@ describe('OpenRouterGenAI', () => {
       });
       global.fetch = fetchMock;
 
-      const result = await client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any);
-      const chunks = [];
+      const result = await client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } satisfies ModelRequest);
+      const chunks: ModelChunk[] = [];
       for await (const chunk of result.stream) {
         chunks.push(chunk);
       }
 
-      expect(chunks.some(chunk => chunk.text() === 'Recovered')).toBe(true);
+      expect(chunks.some(chunk => chunk.text?.() === 'Recovered')).toBe(true);
     });
   });
 
@@ -245,7 +253,7 @@ describe('OpenRouterGenAI', () => {
     it('should wrap fetch failures and reject responses without a body', async () => {
       global.fetch = vi.fn().mockRejectedValueOnce(new Error('offline'));
 
-      await expect(client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any))
+      await expect(client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } satisfies ModelRequest))
         .rejects.toMatchObject({
           code: ErrorCode.NETWORK_ERROR,
           message: 'Network or connection error: offline'
@@ -253,7 +261,7 @@ describe('OpenRouterGenAI', () => {
 
       global.fetch = vi.fn().mockResolvedValueOnce({ ok: true, body: null });
 
-      await expect(client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any))
+      await expect(client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } satisfies ModelRequest))
         .rejects.toMatchObject({
           code: ErrorCode.PROXY_ERROR,
           message: 'No response body from OpenRouter'
@@ -267,7 +275,7 @@ describe('OpenRouterGenAI', () => {
         text: () => Promise.resolve('Unauthorized')
       });
 
-      await expect(client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any))
+      await expect(client.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } satisfies ModelRequest))
         .rejects.toThrow(/OpenRouter error \(401\)/);
     });
 
@@ -288,7 +296,7 @@ describe('OpenRouterGenAI', () => {
       // Set a very short timeout for testing
       const fastClient = new OpenRouterGenAI({ model: 'test', isProxy: true, timeout: 10 });
       
-      const result = await fastClient.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } as any);
+      const result = await fastClient.models.generateContentStream({ contents: [{ parts: [{ text: 'test' }] }] } satisfies ModelRequest);
       
       await expect(async () => {
         const iterator = result.stream[Symbol.asyncIterator]();

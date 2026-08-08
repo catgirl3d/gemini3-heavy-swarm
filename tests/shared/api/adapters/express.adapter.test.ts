@@ -1,4 +1,5 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import type { Response } from 'express';
 
 const { pipelineMock } = vi.hoisted(() => ({
   pipelineMock: vi.fn(),
@@ -24,7 +25,7 @@ import { RATE_LIMIT_PER_MINUTE } from '@shared/security/security';
 import { checkRateLimit, _rateLimits, cleanupRateLimits, streamToExpress } from '@shared/api/adapters/express.adapter';
 
 const createExpressResponse = (overrides: Record<string, unknown> = {}) => {
-  const response: any = {
+  const response = {
     setHeader: vi.fn(),
     headersSent: false,
     writableEnded: false,
@@ -34,8 +35,14 @@ const createExpressResponse = (overrides: Record<string, unknown> = {}) => {
     ...overrides,
   };
 
-  response.status = vi.fn(() => response);
-  return response;
+  type MockExpressResponse = Response & {
+    status: ReturnType<typeof vi.fn>;
+    write: ReturnType<typeof vi.fn>;
+    end: ReturnType<typeof vi.fn>;
+  };
+  const typedResponse = Object.assign(Object.create(null) as MockExpressResponse, response);
+  typedResponse.status = vi.fn(() => typedResponse);
+  return typedResponse;
 };
 
 describe('Express Rate Limiter Cleanup', () => {

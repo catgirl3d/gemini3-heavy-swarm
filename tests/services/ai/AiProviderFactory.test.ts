@@ -1,6 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AiProviderFactory } from '@/services/ai/AiProviderFactory';
 import { AppSettings, ProviderType } from '@/types';
+import type { AiProvider } from '@/types/ai-provider';
+
+type OpenRouterOptions = { apiKey?: string | null; model: string; isProxy?: boolean };
+type TestSettingsOverrides = Omit<Partial<AppSettings>, 'apiKey' | 'openRouterApiKey'> & {
+  apiKey?: string | null;
+  openRouterApiKey?: string | null;
+  agentRoles?: unknown;
+};
+
+const createMockProvider = (name: string, isProxy: boolean): AiProvider => ({
+  name,
+  isProxy,
+  capabilities: { search: false, vision: false, reasoning: false, codeExecution: false },
+  getEffectiveSettings: (settings) => settings,
+  getDefaultModel: () => 'mock-model',
+  models: {
+    generateContentStream: async () => {
+      const stream = (async function* () {})();
+      return { stream, [Symbol.asyncIterator]() { return stream[Symbol.asyncIterator](); } };
+    },
+  },
+});
 
 // Mock providers - use factory pattern to avoid hoisting issues
 vi.mock('@/services/ai/providers', () => {
@@ -34,7 +56,7 @@ vi.mock('@/constants', () => ({
 // Import mocked modules after mocks are set up
 import { GeminiProvider, ProxyProvider, OpenRouterProvider } from '@/services/ai/providers';
 
-const createMockSettings = (overrides: Partial<AppSettings> = {}): AppSettings => ({
+const createMockSettings = (overrides: TestSettingsOverrides = {}): AppSettings => ({
   provider: ProviderType.Gemini,
   numAgents: 3,
   geminiModel: 'gemini-1.5-flash',
@@ -62,7 +84,7 @@ const createMockSettings = (overrides: Partial<AppSettings> = {}): AppSettings =
   savedInstructions: [],
   savedRoles: [],
   ...overrides,
-});
+} as AppSettings);
 
 describe('AiProviderFactory', () => {
   beforeEach(() => {
@@ -74,26 +96,15 @@ describe('AiProviderFactory', () => {
     vi.mocked(ProxyProvider).mockClear();
     vi.mocked(OpenRouterProvider).mockClear();
 
-    vi.mocked(GeminiProvider).mockImplementation(function (this: any, apiKey: any) {
-      return {
-      name: ProviderType.Gemini,
-      isProxy: false,
-      apiKey,
-      } as any;
-    } as any);
-    vi.mocked(ProxyProvider).mockImplementation(function (this: any) {
-      return {
-      name: 'proxy',
-      isProxy: true,
-      } as any;
-    } as any);
-    vi.mocked(OpenRouterProvider).mockImplementation(function (this: any, config: any) {
-      return {
-      name: ProviderType.OpenRouter,
-      isProxy: config.isProxy,
-      config,
-      } as any;
-    } as any);
+     vi.mocked(GeminiProvider).mockImplementation(function (this: AiProvider, _apiKey: string) {
+       Object.assign(this, createMockProvider(ProviderType.Gemini, false));
+     });
+     vi.mocked(ProxyProvider).mockImplementation(function (this: AiProvider) {
+       Object.assign(this, createMockProvider('proxy', true));
+     });
+     vi.mocked(OpenRouterProvider).mockImplementation(function (this: AiProvider, config: OpenRouterOptions) {
+       Object.assign(this, createMockProvider(ProviderType.OpenRouter, config.isProxy ?? false));
+     });
   });
 
   describe('Provider creation', () => {
@@ -155,7 +166,7 @@ describe('AiProviderFactory', () => {
 
   describe('OpenRouter edge cases with isProxy flag', () => {
     // Parameterized test for various API key scenarios
-    it.each([
+    it.each<[string, string | null | undefined, boolean]>([
       ['undefined', undefined, true],
       ['empty string', '', true],
       ['null', null, true],
@@ -182,7 +193,7 @@ describe('AiProviderFactory', () => {
       const settings = createMockSettings({
         provider: ProviderType.OpenRouter,
         openRouterApiKey: 'key',
-        openRouterModel: undefined as any // Force undefined for test
+         openRouterModel: undefined // Force undefined for test
       });
       
       AiProviderFactory.create(settings);
@@ -197,7 +208,7 @@ describe('AiProviderFactory', () => {
   });
 
   describe('Gemini edge cases', () => {
-    it.each([
+    it.each<[string, string | null | undefined]>([
       ['undefined', undefined],
       ['empty string', ''],
       ['null', null],
@@ -362,12 +373,9 @@ describe('AiProviderFactory', () => {
     });
 
     it('throws when an OpenRouter provider reports direct mode without an API key', () => {
-      vi.mocked(OpenRouterProvider).mockImplementation(function () {
-        return {
-        name: ProviderType.OpenRouter,
-        isProxy: false,
-        } as any;
-      } as any);
+      vi.mocked(OpenRouterProvider).mockImplementation(function (this: AiProvider) {
+        Object.assign(this, createMockProvider(ProviderType.OpenRouter, false));
+      });
 
       expect(() => AiProviderFactory.create(createMockSettings({
         provider: ProviderType.OpenRouter,

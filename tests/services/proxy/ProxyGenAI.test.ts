@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
 import { ProxyGenAI } from '@/services/proxy/ProxyGenAI';
+import type { GenerateRequest } from '@/types/ai-provider';
+import type { Tool } from '@google/genai';
+import type { GeminiStreamChunk } from '@/services/swarm/steps/utils/streamUtils';
 
 const loggerWarn = vi.hoisted(() => vi.fn());
 const loggerError = vi.hoisted(() => vi.fn());
@@ -19,6 +22,9 @@ vi.mock('@shared/utils/logger', () => ({
 }));
 
 type ReaderChunk = string | { done: true };
+type ProxyTestRequest = Pick<GenerateRequest, 'contents'> & {
+  config?: { systemInstruction?: string; tools?: Tool[]; temperature?: number };
+};
 
 const createReader = (chunks: ReaderChunk[]) => {
   let index = 0;
@@ -43,23 +49,18 @@ const createResponse = ({
 } = {}) => {
   const reader = chunks ? createReader(chunks) : undefined;
 
-  return {
-    ok,
-    status,
-    text: vi.fn().mockResolvedValue(text),
-    headers: { get: vi.fn(() => 'application/json') },
-    body: chunks
-      ? {
-          pipeThrough: vi.fn(() => ({
-            getReader: () => reader,
-          })),
-        }
-      : null,
-  } as unknown as Response;
+  const response = new Response(null, { status });
+  Object.defineProperty(response, 'ok', { value: ok });
+  Object.defineProperty(response, 'text', { value: vi.fn().mockResolvedValue(text) });
+  Object.defineProperty(response, 'headers', { value: { get: vi.fn(() => 'application/json') } });
+  Object.defineProperty(response, 'body', { value: chunks
+    ? { pipeThrough: vi.fn(() => ({ getReader: () => reader })) }
+    : null });
+  return response;
 };
 
-const consumeStream = async (stream: AsyncIterable<any>) => {
-  const chunks: any[] = [];
+const consumeStream = async (stream: AsyncIterable<GeminiStreamChunk>) => {
+  const chunks: GeminiStreamChunk[] = [];
   for await (const chunk of stream) {
     chunks.push(chunk);
   }
@@ -91,7 +92,7 @@ describe('ProxyGenAI', () => {
         tools: [{ googleSearch: {} }],
         temperature: 0.4,
       },
-    } as any;
+    } satisfies ProxyTestRequest;
 
     await proxy.models.generateContentStream(request);
 
@@ -118,10 +119,10 @@ describe('ProxyGenAI', () => {
     vi.mocked(fetch).mockRejectedValueOnce(existing);
 
     const proxy = new ProxyGenAI();
-    await expect(proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] as any })).rejects.toBe(existing);
+    await expect(proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] })).rejects.toBe(existing);
 
     vi.mocked(fetch).mockRejectedValueOnce(new Error('offline'));
-    await expect(proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] as any })).rejects.toMatchObject({
+    await expect(proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] })).rejects.toMatchObject({
       code: ErrorCode.NETWORK_ERROR,
       message: 'Network or connection error: offline',
     });
@@ -131,14 +132,14 @@ describe('ProxyGenAI', () => {
     const proxy = new ProxyGenAI();
     vi.mocked(fetch).mockResolvedValueOnce(createResponse({ ok: false, status: 401, text: 'Permission denied' }));
 
-    await expect(proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] as any })).rejects.toMatchObject({
+    await expect(proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] })).rejects.toMatchObject({
       code: ErrorCode.INVALID_SETTINGS,
       status: 401,
     });
 
     vi.mocked(fetch).mockResolvedValueOnce(createResponse({ chunks: null }));
 
-    await expect(proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] as any })).rejects.toMatchObject({
+    await expect(proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] })).rejects.toMatchObject({
       code: ErrorCode.PROXY_ERROR,
       message: 'No response body from proxy',
     });
@@ -150,11 +151,11 @@ describe('ProxyGenAI', () => {
     vi.mocked(fetch).mockResolvedValue(createResponse({ chunks: [fragmentA, fragmentB] }));
 
     const proxy = new ProxyGenAI();
-    const result = await proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] as any });
+    const result = await proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] });
     const chunks = await consumeStream(result.stream);
 
     expect(chunks).toHaveLength(1);
-    expect(chunks[0].text()).toBe('Hello world');
+    expect(chunks[0].text?.()).toBe('Hello world');
     expect(chunks[0].usageMetadata).toEqual({
       totalTokenCount: 5,
       promptTokenCount: 2,
@@ -174,28 +175,24 @@ describe('ProxyGenAI', () => {
     vi.mocked(fetch).mockResolvedValue(createResponse({ chunks: [`[${first},${second}]`] }));
 
     const proxy = new ProxyGenAI();
-    const result = await proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] as any });
+    const result = await proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] });
     const chunks = await consumeStream(result.stream);
 
     expect(chunks).toHaveLength(2);
-    expect(chunks[0].text()).toBe('a {brace} "quote"');
-    expect(chunks[1].text()).toBe('second');
+    expect(chunks[0].text?.()).toBe('a {brace} "quote"');
+    expect(chunks[1].text?.()).toBe('second');
   });
 
   it('times out stalled stream reads and rejects oversized buffers', async () => {
     const pendingReader = { read: vi.fn(() => new Promise<never>(() => {})) };
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      text: vi.fn().mockResolvedValue(''),
-      headers: { get: vi.fn(() => 'application/json') },
-      body: {
-        pipeThrough: vi.fn(() => ({ getReader: () => pendingReader })),
-      },
-    } as unknown as Response);
+    const pendingResponse = new Response(null, { status: 200 });
+    Object.defineProperty(pendingResponse, 'body', {
+      value: { pipeThrough: vi.fn(() => ({ getReader: () => pendingReader })) },
+    });
+    vi.mocked(fetch).mockResolvedValueOnce(pendingResponse);
 
     const proxy = new ProxyGenAI();
-    const timedOut = await proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] as any });
+    const timedOut = await proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] });
     const nextPromise = timedOut.stream[Symbol.asyncIterator]().next();
     const timeoutAssertion = expect(nextPromise).rejects.toMatchObject({
       code: ErrorCode.NETWORK_ERROR,
@@ -208,7 +205,7 @@ describe('ProxyGenAI', () => {
     const hugeChunk = 'x'.repeat((5 * 1024 * 1024) + 1);
     vi.mocked(fetch).mockResolvedValueOnce(createResponse({ chunks: [hugeChunk] }));
 
-    const overflowed = await proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] as any });
+    const overflowed = await proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] });
     await expect(overflowed.stream[Symbol.asyncIterator]().next()).rejects.toMatchObject({
       code: ErrorCode.PROXY_ERROR,
       message: 'Response stream buffer overflow',
@@ -225,7 +222,7 @@ describe('ProxyGenAI', () => {
     }));
 
     const proxy = new ProxyGenAI();
-    const result = await proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] as any });
+    const result = await proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] });
     const iterator = result.stream[Symbol.asyncIterator]();
 
     const firstChunk = await iterator.next();
@@ -253,7 +250,7 @@ describe('ProxyGenAI', () => {
     }));
 
     const proxy = new ProxyGenAI();
-    const result = await proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] as any });
+    const result = await proxy.getGenerativeModel({ model: 'x' }).generateContentStream({ contents: [] });
     const iterator = result.stream[Symbol.asyncIterator]();
 
     const firstChunk = await iterator.next();

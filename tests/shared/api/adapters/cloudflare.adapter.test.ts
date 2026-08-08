@@ -104,12 +104,10 @@ describe('cloudflare.adapter', () => {
   describe('Cloudflare CORS helpers', () => {
     it('detects production from the request URL', () => {
       expect(isCloudflareProduction({
-        headers: {},
         url: 'https://gemini3-heavy-swarm.pages.dev/api/status',
       })).toBe(true);
 
       expect(isCloudflareProduction({
-        headers: {},
         url: 'http://localhost:3000/api/status',
       })).toBe(false);
     });

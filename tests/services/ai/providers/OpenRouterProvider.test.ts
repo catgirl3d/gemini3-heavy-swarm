@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OpenRouterProvider } from '@/services/ai/providers/OpenRouterProvider';
 import { AppSettings, ProviderType } from '@/types';
+import type { GenerateRequest, StreamChunk } from '@/types/ai-provider';
 
 // Mock OpenRouterGenAI
-const mockGenerateContentStream = vi.fn();
+const mockGenerateContentStream = vi.fn<(request: GenerateRequest) => Promise<{ stream: AsyncIterable<unknown> }>>();
 vi.mock('@/services/openrouter/OpenRouterGenAI', () => ({
   OpenRouterGenAI: class {
     models = {
@@ -65,9 +66,7 @@ describe('OpenRouterProvider', () => {
       yield mockChunk;
     })();
 
-    mockGenerateContentStream.mockResolvedValue({
-      stream: mockAsyncIterable
-    });
+    mockGenerateContentStream.mockResolvedValue({ stream: mockAsyncIterable });
 
     const result = await provider.models.generateContentStream({
       model: 'or-model',
@@ -112,12 +111,10 @@ describe('OpenRouterProvider', () => {
       }],
       usageMetadata: null
     };
-    mockGenerateContentStream.mockResolvedValue({
-      stream: (async function* () { yield mockChunk; })()
-    });
+    mockGenerateContentStream.mockResolvedValue({ stream: (async function* () { yield mockChunk; })() });
 
     const result = await provider.models.generateContentStream({ model: 'or-model', contents: [] });
-    const chunks: any[] = [];
+    const chunks: StreamChunk[] = [];
     for await (const chunk of result.stream) {
       chunks.push(chunk);
     }
@@ -138,15 +135,13 @@ describe('OpenRouterProvider', () => {
           isEstimated: false
         }
     };
-    mockGenerateContentStream.mockResolvedValue({
-      stream: (async function* () { yield mockChunk; })()
-    });
+    mockGenerateContentStream.mockResolvedValue({ stream: (async function* () { yield mockChunk; })() });
 
     const result = await provider.models.generateContentStream({ model: 'or', contents: [] });
-    const chunks: any[] = [];
+    const chunks: StreamChunk[] = [];
     for await (const chunk of result.stream) { chunks.push(chunk); }
 
-    expect(chunks[0].usage.isEstimated).toBe(false);
+    expect(chunks[0].usage?.isEstimated).toBe(false);
   });
 
   it('should handle empty stream correctly', async () => {
@@ -154,9 +149,7 @@ describe('OpenRouterProvider', () => {
       // Empty stream
     })();
 
-    mockGenerateContentStream.mockResolvedValue({
-      stream: mockAsyncIterable
-    });
+    mockGenerateContentStream.mockResolvedValue({ stream: mockAsyncIterable });
 
     const result = await provider.models.generateContentStream({
       model: 'or-model',
@@ -181,9 +174,7 @@ describe('OpenRouterProvider', () => {
       yield mockChunk;
     })();
 
-    mockGenerateContentStream.mockResolvedValue({
-      stream: mockAsyncIterable
-    });
+    mockGenerateContentStream.mockResolvedValue({ stream: mockAsyncIterable });
 
     const result = await provider.models.generateContentStream({
       model: 'or-model',

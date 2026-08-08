@@ -73,7 +73,7 @@ describe('cors.core', () => {
     it('should handle disallowed origin by excluding CORS headers', () => {
       const headers = buildAllHeaders('https://evil.com', ['http://localhost:3000'], false);
       
-      expect((headers as any)['Access-Control-Allow-Origin']).toBeUndefined();
+      expect(headers['Access-Control-Allow-Origin']).toBeUndefined();
       expect(headers['Content-Type']).toBe('application/json');
       expect(headers['X-Frame-Options']).toBe('DENY');
     });

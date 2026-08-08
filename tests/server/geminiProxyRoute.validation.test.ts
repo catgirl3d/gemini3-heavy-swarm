@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Request, Response } from 'express';
+
+type RouteHandler = (req: Pick<Request, 'body'>, res: Pick<Response, 'status' | 'json'>) => Promise<unknown>;
 
 const mocks = vi.hoisted(() => ({
   executeGeminiRequest: vi.fn(),
-  postHandlers: new Map<string, (req: any, res: any) => Promise<unknown>>(),
+  postHandlers: new Map<string, RouteHandler>(),
 }));
 
 vi.mock('express', () => {
@@ -10,7 +13,7 @@ vi.mock('express', () => {
     set: vi.fn(),
     use: vi.fn(),
     get: vi.fn(),
-    post: vi.fn((path: string, handler: (req: any, res: any) => Promise<unknown>) => {
+    post: vi.fn((path: string, handler: RouteHandler) => {
       mocks.postHandlers.set(path, handler);
     }),
     listen: vi.fn((_port: number, callback?: () => void) => {
@@ -77,7 +80,7 @@ describe('Express Gemini validation failures', () => {
     const res = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn().mockReturnThis(),
-    };
+    } satisfies Pick<Response, 'status' | 'json'>;
 
     await handler({ body: { contents: [] } }, res);
 
@@ -98,7 +101,7 @@ describe('Express Gemini validation failures', () => {
     const res = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn().mockReturnThis(),
-    };
+    } satisfies Pick<Response, 'status' | 'json'>;
 
     await handler({ body: { contents: [{ role: 'user' }] } }, res);
 
@@ -119,7 +122,7 @@ describe('Express Gemini validation failures', () => {
     const unauthorizedRes = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn().mockReturnThis(),
-    };
+    } satisfies Pick<Response, 'status' | 'json'>;
 
     await handler({
       body: {
@@ -137,7 +140,7 @@ describe('Express Gemini validation failures', () => {
     const oversizedRes = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn().mockReturnThis(),
-    };
+    } satisfies Pick<Response, 'status' | 'json'>;
 
     await handler({
       body: {
