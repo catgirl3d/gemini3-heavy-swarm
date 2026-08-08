@@ -1,9 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ComponentProps } from 'react';
 import type { AgentState, Work } from '@/types';
 import { ProviderType } from '@/types';
 import { STEPS } from '@/types/steps';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator/LoadingIndicator';
+
+type AgentAvatarProps = ComponentProps<typeof import('@/components/chat/AgentAvatar').AgentAvatar>;
 
 const mocks = vi.hoisted(() => ({
   loggerDebug: vi.fn(),
@@ -22,7 +25,7 @@ vi.mock('@shared/utils/logger', () => ({
 }));
 
 vi.mock('@/components/chat', () => ({
-  AgentAvatar: ({ type, provider, model }: any) => (
+  AgentAvatar: ({ type, provider, model }: AgentAvatarProps) => (
     <div data-testid="agent-avatar">{`${type}:${provider}:${model}`}</div>
   ),
 }));

@@ -1,10 +1,18 @@
 import React, { useState } from 'react';
+import type { ReactNode } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ProviderType } from '@/types';
 
+type BaseModalProps = { isOpen: boolean; onClose: () => void; onEscape?: () => void; onCloseDropdowns?: () => void; children: ReactNode };
+type BaseModalHeaderProps = { title: ReactNode; onClose?: () => void; children?: ReactNode };
+type ChildrenProps = { children: ReactNode };
+type Preset = { id: string; name: string; instruction: string; isCustom: boolean };
+type PresetSelectorProps = { presets: Preset[]; isOpen?: boolean; onOpenChange?: (open: boolean) => void; onSelect: (preset: Preset) => void; onDeletePreset?: (preset: Preset) => void };
+type ModelSelectorProps = { isOpen?: boolean; onOpenChange?: (open: boolean) => void; onChange: (value: string) => void; disabled?: boolean; value: string; isDemoMode?: boolean; provider?: ProviderType };
+
 vi.mock('@/components/modals/BaseModal', () => {
-  const BaseModal = ({ isOpen, onClose, onEscape, onCloseDropdowns, children }: any) => (
+  const BaseModal = ({ isOpen, onClose, onEscape, onCloseDropdowns, children }: BaseModalProps) => (
     isOpen ? (
       <div data-testid="base-modal">
         <button type="button" onClick={onClose}>Base close</button>
@@ -15,39 +23,39 @@ vi.mock('@/components/modals/BaseModal', () => {
     ) : null
   );
 
-  BaseModal.Header = ({ title, onClose, children }: any) => (
+  BaseModal.Header = ({ title, onClose, children }: BaseModalHeaderProps) => (
     <div>
       <h1>{title}</h1>
       {children}
       <button type="button" onClick={onClose}>Header close</button>
     </div>
   );
-  BaseModal.Body = ({ children }: any) => <div>{children}</div>;
-  BaseModal.Footer = ({ children }: any) => <div>{children}</div>;
+  BaseModal.Body = ({ children }: ChildrenProps) => <div>{children}</div>;
+  BaseModal.Footer = ({ children }: ChildrenProps) => <div>{children}</div>;
   BaseModal.Divider = () => <hr />;
 
   return { BaseModal };
 });
 
 vi.mock('@/components/ui', () => ({
-  PresetSelector: ({ presets, isOpen, onOpenChange, onSelect, onDeletePreset }: any) => (
+  PresetSelector: ({ presets, isOpen, onOpenChange, onSelect, onDeletePreset }: PresetSelectorProps) => (
     <div data-testid="preset-selector" data-open={String(!!isOpen)}>
       <button type="button" disabled={presets.length === 0} onClick={() => onOpenChange?.(!isOpen)}>
         {presets.length === 0 ? 'No Presets Available' : 'Select a Preset...'}
       </button>
-      {isOpen && presets.map((preset: any) => (
+      {isOpen && presets.map(preset => (
         <button key={preset.id} type="button" onClick={() => { onSelect(preset); onOpenChange?.(false); }}>
           {preset.name}
         </button>
       ))}
-      {isOpen && presets.filter((preset: any) => preset.isCustom).map((preset: any) => (
+      {isOpen && presets.filter(preset => preset.isCustom).map(preset => (
         <button key={`${preset.id}-delete`} type="button" title="Delete Preset" onClick={() => { onDeletePreset?.(preset); onOpenChange?.(false); }}>
           Delete {preset.name}
         </button>
       ))}
     </div>
   ),
-  ModelSelector: ({ isOpen, onOpenChange, onChange, disabled, value, isDemoMode, provider }: any) => (
+  ModelSelector: ({ isOpen, onOpenChange, onChange, disabled, value, isDemoMode, provider }: ModelSelectorProps) => (
     <div
       data-testid="model-selector"
       data-disabled={String(!!disabled)}

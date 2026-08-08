@@ -1,6 +1,19 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
 import { ProviderType } from '@/types';
+
+type ProviderOption = { value: ProviderType; label: string };
+type CustomSelectProps = {
+  options: ProviderOption[];
+  value: ProviderType;
+  onChange: (value: ProviderType) => void;
+  disabled?: boolean;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  renderTrigger?: (selected: ProviderOption | null) => ReactNode;
+  renderOption?: (option: ProviderOption) => ReactNode;
+};
 
 const mocks = vi.hoisted(() => ({
   getProviderLogo: vi.fn((provider: string) => `${provider}-logo.svg`),
@@ -20,14 +33,14 @@ vi.mock('@/components/ui/CustomSelect', () => ({
     onOpenChange,
     renderTrigger,
     renderOption,
-  }: any) => {
-    const selected = options.find((option: any) => option.value === value) ?? null;
+  }: CustomSelectProps) => {
+    const selected = options.find(option => option.value === value) ?? null;
 
     return (
       <div data-testid="custom-select" data-disabled={String(!!disabled)} data-open={String(!!isOpen)}>
         <div data-testid="provider-trigger">{renderTrigger?.(selected)}</div>
         <div data-testid="provider-options">
-          {options.map((option: any) => (
+          {options.map(option => (
             <div data-testid={`provider-option-${option.value}`} key={option.value}>
               {renderOption?.(option)}
             </div>

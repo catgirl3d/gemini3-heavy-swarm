@@ -1,14 +1,22 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
+import type { RefObject } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentState, Work } from '@/types';
 import { STEPS } from '@/types/steps';
 import { ShowWork } from '@/components/chat/ShowWork/ShowWork';
+import type { CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
+
+type CardProps = { cardId: string; content: string | null; title: string; work: Work; debugInfo?: unknown; onCardAction: (cardId: string, action: CardActionType) => void };
+type WorkModalProps = { title: string; content: string; onClose: () => void };
+type DebugModalProps = { title: string; onClose: () => void };
+type SessionState = { work?: Work; agentStates?: AgentState[] };
+type StoreState = { activeSessionMessageId?: string; sessionsByMessageId: Record<string, SessionState> };
 
 const mocks = vi.hoisted(() => ({
   resolvedSwarmState: vi.fn(),
   autoCollapse: vi.fn(),
-  statusAwareWorkCard: vi.fn((props: any) => (
+   statusAwareWorkCard: vi.fn((props: CardProps) => (
     <div data-testid={`card-${props.cardId}`} data-content={props.content ?? '<null>'}>
       <span>{props.title}</span>
       <button type="button" onClick={() => props.onCardAction(props.cardId, 'expand')}>
@@ -35,11 +43,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/components/chat/ShowWork/components/StatusAwareWorkCard', () => ({
-  StatusAwareWorkCard: (props: any) => mocks.statusAwareWorkCard(props),
+  StatusAwareWorkCard: (props: CardProps) => mocks.statusAwareWorkCard(props),
 }));
 
 vi.mock('@/components/chat/ShowWork/components/WorkModal', () => ({
-  WorkModal: ({ title, content, onClose }: any) => (
+  WorkModal: ({ title, content, onClose }: WorkModalProps) => (
     <div data-testid="work-modal">
       <div>{title}</div>
       <div>{content}</div>
@@ -51,7 +59,7 @@ vi.mock('@/components/chat/ShowWork/components/WorkModal', () => ({
 }));
 
 vi.mock('@/components/chat/ShowWork/components/DebugModal', () => ({
-  DebugModal: ({ title, onClose }: any) => (
+  DebugModal: ({ title, onClose }: DebugModalProps) => (
     <div data-testid="debug-modal">
       <div>{title}</div>
       <button type="button" onClick={onClose}>
@@ -62,17 +70,17 @@ vi.mock('@/components/chat/ShowWork/components/DebugModal', () => ({
 }));
 
 vi.mock('@/hooks/swarm/useResolvedSwarmState', () => ({
-  useResolvedSwarmState: (...args: any[]) => mocks.resolvedSwarmState(...args),
+  useResolvedSwarmState: (messageId: string | undefined, work: Work, preferLiveSession?: boolean) => mocks.resolvedSwarmState(messageId, work, preferLiveSession),
 }));
 
 vi.mock('@/hooks/ui/useAutoCollapse', () => ({
-  useAutoCollapse: (...args: any[]) => mocks.autoCollapse(...args),
+  useAutoCollapse: (params: { detailsRef: RefObject<HTMLDetailsElement | null>; isLive: boolean; isCurrentMessage: boolean; messageId: string | undefined; synthesizerState: AgentState | undefined; isEarlyStageWorking: boolean; synthesisText: string | null }) => mocks.autoCollapse(params),
 }));
 
 vi.mock('@/stores/agentStore', () => ({
-  useAgentStore: (selector: any) => selector(mocks.store),
-  createSessionAgentsSelector: (messageId: string | undefined) => (state: any) => messageId ? state.sessionsByMessageId[messageId]?.agentStates : undefined,
-  selectActiveSessionMessageId: (state: any) => state.activeSessionMessageId,
+  useAgentStore: <T,>(selector: (state: StoreState) => T): T => selector(mocks.store),
+  createSessionAgentsSelector: (messageId: string | undefined) => (state: StoreState) => messageId ? state.sessionsByMessageId[messageId]?.agentStates : undefined,
+  selectActiveSessionMessageId: (state: StoreState) => state.activeSessionMessageId,
 }));
 
 type ShowWorkProps = ComponentProps<typeof ShowWork>;

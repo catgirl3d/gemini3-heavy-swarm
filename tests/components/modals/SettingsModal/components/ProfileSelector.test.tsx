@@ -1,9 +1,17 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+type CustomSelectProps = {
+  options: Array<{ value: string; label: string }>;
+  value: string;
+  onChange: (value: string) => void;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+};
+
 vi.mock('@/components/ui/CustomSelect', () => ({
-  CustomSelect: ({ options, value, onChange, isOpen, onOpenChange }: any) => {
-    const activeOption = options.find((option: any) => option.value === value);
+  CustomSelect: ({ options, value, onChange, isOpen, onOpenChange }: CustomSelectProps) => {
+    const activeOption = options.find(option => option.value === value);
 
     return (
       <div data-testid="custom-select" data-open={String(!!isOpen)}>

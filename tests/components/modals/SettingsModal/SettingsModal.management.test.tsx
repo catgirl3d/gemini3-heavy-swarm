@@ -249,8 +249,8 @@ describe('SettingsModal management flows', () => {
     expect(activeRoleProfile?.roles.map((role) => ({ name: role.name, instruction: role.instruction, model: role.model }))).toEqual(
       DEFAULT_ROLE_PROFILES[0].roles.map((role) => ({ name: role.name, instruction: role.instruction, model: undefined }))
     );
-    expect(activeRoleProfile?.criticRoles.map((role) => ({ name: role.name, instruction: role.instruction, model: role.model }))).toEqual(
-      DEFAULT_ROLE_PROFILES[0].criticRoles.map((role) => ({ name: role.name, instruction: role.instruction, model: undefined }))
+    expect(activeRoleProfile?.criticRoles?.map((role) => ({ name: role.name, instruction: role.instruction, model: role.model }))).toEqual(
+      DEFAULT_ROLE_PROFILES[0].criticRoles?.map((role) => ({ name: role.name, instruction: role.instruction, model: undefined }))
     );
     expect(savedSettings.providerModels?.roleModels?.[activeRoleProfile!.id]).toBeUndefined();
   });

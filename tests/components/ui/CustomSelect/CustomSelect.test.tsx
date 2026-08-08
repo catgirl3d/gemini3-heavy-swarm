@@ -1,8 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
+
+type PortalDropdownProps = { isOpen?: boolean; children: ReactNode; width?: number };
 
 vi.mock('@/components/ui/PortalDropdown/PortalDropdown', () => ({
-  PortalDropdown: ({ isOpen, children, width }: any) => (isOpen ? <div data-testid="portal-dropdown" data-width={width ? String(width) : ''}>{children}</div> : null),
+  PortalDropdown: ({ isOpen, children, width }: PortalDropdownProps) => (isOpen ? <div data-testid="portal-dropdown" data-width={width ? String(width) : ''}>{children}</div> : null),
 }));
 
 import { CustomSelect } from '@/components/ui/CustomSelect/CustomSelect';

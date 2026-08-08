@@ -1,5 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
+import type { StepDebugInfo } from '@/types';
+
+type ModalProps = { children: ReactNode; isOpen?: boolean };
+type ModalHeaderProps = { title: ReactNode; onClose?: () => void; children?: ReactNode };
+type ModalBodyProps = { children: ReactNode };
 
 vi.mock('@/components/ui', () => ({
   MarkdownRenderer: ({ content }: { content: string }) => (
@@ -8,9 +14,9 @@ vi.mock('@/components/ui', () => ({
 }));
 
 vi.mock('@/components/modals', () => {
-  const BaseModal = ({ children, isOpen }: any) => (isOpen ? <div data-testid="base-modal">{children}</div> : null);
+  const BaseModal = ({ children, isOpen }: ModalProps) => (isOpen ? <div data-testid="base-modal">{children}</div> : null);
 
-  BaseModal.Header = ({ title, onClose, children }: any) => (
+  BaseModal.Header = ({ title, onClose, children }: ModalHeaderProps) => (
     <div>
       <h1>{title}</h1>
       {children}
@@ -20,14 +26,14 @@ vi.mock('@/components/modals', () => {
     </div>
   );
 
-  BaseModal.Body = ({ children }: any) => <div>{children}</div>;
+  BaseModal.Body = ({ children }: ModalBodyProps) => <div>{children}</div>;
 
   return { BaseModal };
 });
 
 import { DebugModal } from '@/components/chat/ShowWork/components/DebugModal';
 
-const debugInfo = {
+const debugInfo: StepDebugInfo = {
   systemInstruction: 'System line 1\nSystem line 2',
   history: [
     {
@@ -56,7 +62,7 @@ describe('DebugModal', () => {
     render(
       <DebugModal
         title="Agent Debug"
-        debugInfo={debugInfo as any}
+        debugInfo={debugInfo}
         onClose={vi.fn()}
       />
     );
@@ -71,7 +77,7 @@ describe('DebugModal', () => {
     render(
       <DebugModal
         title="Agent Debug"
-        debugInfo={debugInfo as any}
+        debugInfo={debugInfo}
         onClose={vi.fn()}
       />
     );
@@ -98,7 +104,7 @@ describe('DebugModal', () => {
     render(
       <DebugModal
         title="Agent Debug"
-        debugInfo={debugInfo as any}
+        debugInfo={debugInfo}
         onClose={vi.fn()}
       />
     );
@@ -153,7 +159,7 @@ describe('DebugModal', () => {
     render(
       <DebugModal
         title="Structured Debug"
-        debugInfo={structuredDebugInfo as any}
+        debugInfo={structuredDebugInfo as unknown as StepDebugInfo}
         onClose={vi.fn()}
       />
     );

@@ -2,17 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { downloadContent, formatDebugInfo } from '@/components/chat/ShowWork/utils';
 
 describe('ShowWork utils', () => {
-  const originalCreateObjectUrl = (URL as any).createObjectURL;
-  const originalRevokeObjectUrl = (URL as any).revokeObjectURL;
+  const originalCreateObjectUrl = URL.createObjectURL;
+  const originalRevokeObjectUrl = URL.revokeObjectURL;
 
   beforeEach(() => {
-    (URL as any).createObjectURL = vi.fn(() => 'blob:mock-url');
-    (URL as any).revokeObjectURL = vi.fn();
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-url');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
-    (URL as any).createObjectURL = originalCreateObjectUrl;
-    (URL as any).revokeObjectURL = originalRevokeObjectUrl;
+    URL.createObjectURL = originalCreateObjectUrl;
+    URL.revokeObjectURL = originalRevokeObjectUrl;
     vi.restoreAllMocks();
   });
 
@@ -65,8 +65,10 @@ describe('ShowWork utils', () => {
 
     downloadContent('debug.md', '# debug');
 
-    expect((URL as any).createObjectURL).toHaveBeenCalledTimes(1);
-    const blobArg = (URL as any).createObjectURL.mock.calls[0][0] as Blob;
+    const createObjectUrlSpy = vi.mocked(URL.createObjectURL);
+    const revokeObjectUrlSpy = vi.mocked(URL.revokeObjectURL);
+    expect(createObjectUrlSpy).toHaveBeenCalledTimes(1);
+    const blobArg = createObjectUrlSpy.mock.calls[0][0] as Blob;
     expect(blobArg).toBeInstanceOf(Blob);
     expect(blobArg.type).toBe('text/markdown');
     await expect(blobArg.text()).resolves.toBe('# debug');
@@ -76,6 +78,6 @@ describe('ShowWork utils', () => {
     expect(anchor.download).toBe('debug.md');
     expect(clickSpy).toHaveBeenCalledTimes(1);
     expect(removeSpy).toHaveBeenCalledWith(anchor);
-    expect((URL as any).revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+    expect(revokeObjectUrlSpy).toHaveBeenCalledWith('blob:mock-url');
   });
 });

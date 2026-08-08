@@ -1,5 +1,10 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TokenUsage } from '@/types';
+
+type Action = { label: string; danger?: boolean; disabled?: boolean; onClick: () => void };
+type ActionMenuProps = { actions: Action[] };
+type TokenUsageProps = { usage: TokenUsage };
 
 const mocks = vi.hoisted(() => ({
   downloadContent: vi.fn(),
@@ -10,9 +15,9 @@ vi.mock('@/components/ui', () => ({
 }));
 
 vi.mock('@/components/chat/ShowWork/components/ActionMenu', () => ({
-  ActionMenu: ({ actions }: any) => (
+  ActionMenu: ({ actions }: ActionMenuProps) => (
     <div data-testid="action-menu">
-      {actions.map((action: any) => (
+      {actions.map(action => (
         <button
           key={action.label}
           type="button"
@@ -28,7 +33,7 @@ vi.mock('@/components/chat/ShowWork/components/ActionMenu', () => ({
 }));
 
 vi.mock('@/components/chat/ShowWork/components/TokenUsage', () => ({
-  TokenUsage: ({ usage }: any) => <div data-testid="token-usage">{usage.totalTokens}</div>,
+  TokenUsage: ({ usage }: TokenUsageProps) => <div data-testid="token-usage">{usage.totalTokens}</div>,
 }));
 
 vi.mock('@/components/chat/ShowWork/utils', () => ({

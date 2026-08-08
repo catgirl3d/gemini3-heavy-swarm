@@ -1,8 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
+
+type PortalDropdownProps = { isOpen?: boolean; children: ReactNode };
 
 vi.mock('@/components/ui/PortalDropdown/PortalDropdown', () => ({
-  PortalDropdown: ({ isOpen, children }: any) => (isOpen ? <div data-testid="portal-dropdown">{children}</div> : null),
+  PortalDropdown: ({ isOpen, children }: PortalDropdownProps) => (isOpen ? <div data-testid="portal-dropdown">{children}</div> : null),
 }));
 
 import { PresetSelector } from '@/components/ui/PresetSelector/PresetSelector';

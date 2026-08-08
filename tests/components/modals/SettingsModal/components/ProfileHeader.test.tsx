@@ -1,9 +1,18 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+type Profile = { id: string; name: string };
+type ProfileSelectorProps = {
+  profiles: Profile[];
+  activeId: string;
+  onChange: (id: string) => void;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+};
+
 vi.mock('@/components/modals/SettingsModal/components/ProfileSelector', () => ({
-  ProfileSelector: ({ profiles, activeId, onChange, isOpen, onOpenChange }: any) => {
-    const activeProfile = profiles.find((profile: any) => profile.id === activeId);
+  ProfileSelector: ({ profiles, activeId, onChange, isOpen, onOpenChange }: ProfileSelectorProps) => {
+    const activeProfile = profiles.find(profile => profile.id === activeId);
 
     return (
       <div data-testid="profile-selector" data-open={String(!!isOpen)}>

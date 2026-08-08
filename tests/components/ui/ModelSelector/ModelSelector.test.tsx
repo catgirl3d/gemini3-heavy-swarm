@@ -5,6 +5,30 @@ import type { OpenRouterModel } from '@/services/openrouter/modelsService';
 import { RECOMMENDED_MODEL_IDS } from '@/services/openrouter/constants';
 import { ProviderType } from '@/types';
 
+type ModelOption = {
+  value: string;
+  label: string;
+  isHeader?: boolean;
+  price?: number;
+  priceText?: string;
+  supportsReasoning?: boolean;
+};
+type CustomSelectProps = {
+  options: ModelOption[];
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  onSearchChange?: (search: string) => void;
+  renderTrigger?: (selected: ModelOption | null, isOpen: boolean) => ReactNode;
+  renderOption?: (option: ModelOption, isSelected: boolean) => ReactNode;
+  dropdownHeader?: ReactNode;
+  dropdownFooter?: ReactNode;
+};
+
 const mocks = vi.hoisted(() => ({
   fetchOpenRouterModels: vi.fn(),
   getCachedModels: vi.fn(),
@@ -44,8 +68,8 @@ vi.mock('@/components/ui/CustomSelect', () => ({
     renderOption,
     dropdownHeader,
     dropdownFooter,
-  }: any) => {
-    const selected = options.find((option: any) => option.value === value) || null;
+  }: CustomSelectProps) => {
+    const selected = options.find(option => option.value === value) || null;
 
     return (
       <div data-testid="custom-select">
@@ -66,7 +90,7 @@ vi.mock('@/components/ui/CustomSelect', () => ({
         )}
         <div data-testid="dropdown-header">{dropdownHeader}</div>
         <div data-testid="model-options">
-          {options.map((option: any) => option.isHeader ? (
+          {options.map(option => option.isHeader ? (
             <div data-testid="model-option-header" key={option.value}>{option.label}</div>
           ) : (
             <button

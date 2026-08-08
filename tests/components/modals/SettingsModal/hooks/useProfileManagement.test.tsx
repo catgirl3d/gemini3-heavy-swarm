@@ -3,6 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useProfileManagement } from '@/components/modals/SettingsModal/hooks/useProfileManagement';
 import { type AppSettings, ProviderType } from '@/types';
 import { useState } from 'react';
+import type React from 'react';
 import { createMockSettings } from '@test/settingsMocks';
 
 describe('useProfileManagement', () => {
@@ -36,7 +37,7 @@ describe('useProfileManagement', () => {
 
       return useProfileManagement(
         initialSettings,
-        (() => { throw new Error('setter failed'); }) as any,
+        (() => { throw new Error('setter failed'); }) as React.Dispatch<React.SetStateAction<AppSettings>>,
         activeProfile,
         activeRoleProfile,
         () => {},
@@ -64,8 +65,8 @@ describe('useProfileManagement', () => {
       const { result } = setupHook(settings);
 
       act(() => {
-        result.current.hook.handleProfileChange({ target: { value: 'profile-2' } } as any);
-        result.current.hook.handleRoleProfileChange({ target: { value: 'role-2' } } as any);
+        result.current.hook.handleProfileChange({ target: { value: 'profile-2' } } as React.ChangeEvent<HTMLSelectElement>);
+        result.current.hook.handleRoleProfileChange({ target: { value: 'role-2' } } as React.ChangeEvent<HTMLSelectElement>);
       });
 
       expect(result.current.settings.activeProfileId).toBe('profile-2');

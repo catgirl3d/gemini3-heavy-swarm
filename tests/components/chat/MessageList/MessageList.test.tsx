@@ -7,6 +7,13 @@ import { STEPS } from '@/types/steps';
 import { Logger } from '@shared/utils/logger';
 import { MessageList } from '@/components/chat/MessageList/MessageList';
 
+type AgentAvatarProps = { type: 'user' | 'model'; provider?: ProviderType; model?: string };
+type EmptyStateProps = { onPromptClick: (prompt: string) => void; modelDisplayName: string; provider: ProviderType; model: string };
+type LoadingIndicatorProps = { messageId?: string; onRegenerate?: (stepId: typeof STEPS[keyof typeof STEPS], index: number) => void; onSkip?: () => void; noWrapper?: boolean };
+type ShowWorkProps = { messageId?: string; isLive?: boolean; onRegenerate?: (stepId: typeof STEPS[keyof typeof STEPS], index: number) => void; onSkip?: () => void; work?: Work };
+type SessionState = { work?: Work; agentStates?: AgentState[] };
+type StoreState = { activeSessionMessageId?: string; sessionsByMessageId: Record<string, SessionState> };
+
 const mocks = vi.hoisted(() => ({
   downloadContent: vi.fn(),
   emptyState: vi.fn(),
@@ -21,13 +28,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/components/chat/AgentAvatar', () => ({
-  AgentAvatar: ({ type, provider, model }: any) => (
+  AgentAvatar: ({ type, provider, model }: AgentAvatarProps) => (
     <div data-testid="agent-avatar">{`${type}:${provider}:${model}`}</div>
   ),
 }));
 
 vi.mock('@/components/chat/EmptyState', () => ({
-  EmptyState: (props: any) => {
+  EmptyState: (props: EmptyStateProps) => {
     mocks.emptyState(props);
 
     return (
@@ -47,7 +54,7 @@ vi.mock('@/components/ui', () => ({
     mocks.markdownRenderer(content);
     return <div data-testid="markdown-renderer">{content}</div>;
   },
-  LoadingIndicator: (props: any) => {
+  LoadingIndicator: (props: LoadingIndicatorProps) => {
     mocks.loadingIndicator(props);
     return (
       <div data-testid="loading-indicator">
@@ -58,7 +65,7 @@ vi.mock('@/components/ui', () => ({
 }));
 
 vi.mock('@/components/chat/ShowWork', () => ({
-  ShowWork: (props: any) => {
+  ShowWork: (props: ShowWorkProps) => {
     mocks.showWork(props);
     return (
       <div data-testid="show-work">
@@ -80,9 +87,9 @@ vi.mock('@/components/chat/ShowWork/utils', () => ({
 }));
 
 vi.mock('@/stores/agentStore', () => ({
-  useAgentStore: (selector: (state: any) => unknown) => selector(mocks.store),
-  selectActiveSessionMessageId: (state: any) => state.activeSessionMessageId,
-  selectActiveSession: (state: any) => state.activeSessionMessageId ? state.sessionsByMessageId[state.activeSessionMessageId] : undefined,
+  useAgentStore: <T,>(selector: (state: StoreState) => T): T => selector(mocks.store),
+  selectActiveSessionMessageId: (state: StoreState) => state.activeSessionMessageId,
+  selectActiveSession: (state: StoreState) => state.activeSessionMessageId ? state.sessionsByMessageId[state.activeSessionMessageId] : undefined,
 }));
 
 type MessageListProps = ComponentProps<typeof MessageList>;

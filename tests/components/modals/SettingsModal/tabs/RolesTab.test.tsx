@@ -1,8 +1,43 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
+import type { ChangeEvent } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProviderType, type RoleProfile } from '@/types';
 import { createMockSettings } from '@test/settingsMocks';
+
+type ProfileHeaderProps = {
+  label: string;
+  profiles: { id: string; name: string }[];
+  activeId: string;
+  isEditing: boolean;
+  activeName: string;
+  onProfileChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+  onRename: (name: string) => void;
+  onStartEditing: () => void;
+  onStopEditing: () => void;
+  onCreate: () => void;
+  onDelete: () => void;
+  canDelete: boolean;
+  isSelectorOpen?: boolean;
+  onSelectorOpenChange?: (open: boolean) => void;
+};
+type RoleItemProps = {
+  index: number;
+  role: { name: string; instruction: string; model?: string };
+  isFirst: boolean;
+  isLast: boolean;
+  canDelete: boolean;
+  provider: ProviderType;
+  onEdit: () => void;
+  onDelete: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+};
+
+const createSelectChangeEvent = (value: string): ChangeEvent<HTMLSelectElement> => ({
+  target: { value } as HTMLSelectElement,
+  currentTarget: { value } as HTMLSelectElement,
+} as ChangeEvent<HTMLSelectElement>);
 
 const mocks = vi.hoisted(() => ({
   profileHeader: vi.fn(),
@@ -10,7 +45,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/components/modals/SettingsModal/components/ProfileHeader', () => ({
-  ProfileHeader: (props: any) => {
+  ProfileHeader: (props: ProfileHeaderProps) => {
     mocks.profileHeader(props);
 
     return (
@@ -21,7 +56,7 @@ vi.mock('@/components/modals/SettingsModal/components/ProfileHeader', () => ({
       >
         <span>{props.label}</span>
         <span>{props.activeName}</span>
-        <button type="button" onClick={() => props.onProfileChange({ target: { value: 'secondary-profile' }, currentTarget: { value: 'secondary-profile' } })}>
+        <button type="button" onClick={() => props.onProfileChange(createSelectChangeEvent('secondary-profile'))}>
           Change Profile
         </button>
         <button type="button" onClick={() => props.onRename('Renamed Profile')}>
@@ -37,7 +72,7 @@ vi.mock('@/components/modals/SettingsModal/components/ProfileHeader', () => ({
 }));
 
 vi.mock('@/components/modals/SettingsModal/components/RoleItem', () => ({
-  RoleItem: (props: any) => {
+  RoleItem: (props: RoleItemProps) => {
     mocks.roleItem(props);
 
     return (

@@ -1,13 +1,26 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactElement, ReactNode } from 'react';
 import type { AgentState, Work } from '@/types';
 import { STEPS } from '@/types/steps';
 import { useAgentStore } from '@/stores/agentStore';
 import { StatusAwareWorkCard } from '@/components/chat/ShowWork/components/StatusAwareWorkCard';
+import type { CardActionType } from '@/components/chat/ShowWork/components/WorkCard';
+
+type WorkCardProps = {
+  status: 'working' | 'done' | 'error' | 'waiting' | 'stale';
+  statusLabel: string;
+  title: string;
+  icon?: string | ReactElement<{ children?: ReactNode }>;
+  downloadFilename: string;
+  allowRegenerate?: boolean;
+  content: string | null;
+  onCardAction?: (cardId: string, action: CardActionType) => void;
+};
 
 const mocks = vi.hoisted(() => ({
   useResolvedAgentState: vi.fn(),
-  workCard: vi.fn((props: any) => (
+   workCard: vi.fn((props: WorkCardProps) => (
     <div data-testid="work-card" data-status={props.status} data-label={props.statusLabel} data-title={props.title}>
       <span data-testid="work-card-icon">{typeof props.icon === 'string' ? props.icon : props.icon?.props?.children ?? ''}</span>
       <span data-testid="work-card-download">{props.downloadFilename}</span>
@@ -33,7 +46,7 @@ vi.mock('@/hooks/swarm/useResolvedSwarmState', () => ({
 }));
 
 vi.mock('@/components/chat/ShowWork/components/WorkCard', () => ({
-  WorkCard: (props: any) => mocks.workCard(props),
+  WorkCard: (props: WorkCardProps) => mocks.workCard(props),
 }));
 
 const createWork = (overrides: Partial<Work> = {}): Work => ({

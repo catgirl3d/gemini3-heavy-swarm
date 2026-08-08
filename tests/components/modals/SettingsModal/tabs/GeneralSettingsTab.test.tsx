@@ -1,10 +1,23 @@
 import React, { useState } from 'react';
+import type { ChangeEvent } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_OUTPUT_TOKENS_LIMIT, MIN_OUTPUT_TOKENS_FOR_THINKING } from '@/constants';
 import type { AppSettings, ServerStatus } from '@/types';
 import { ProviderType } from '@/types';
 import { createMockSettings } from '@test/settingsMocks';
+
+type StepperControlProps = { value: number; min: number; max: number; onValueChange: (value: number) => void };
+type TemperatureBannerProps = { isActive: boolean; onToggle: () => void };
+type SelectorProps = {
+  value?: string | ProviderType;
+  provider?: ProviderType;
+  disabled?: boolean;
+  isOpen?: boolean;
+  isDemoMode?: boolean;
+  onChange: (value: string | ProviderType) => void;
+  onOpenChange?: (open: boolean) => void;
+};
 
 const mocks = vi.hoisted(() => ({
   isThinkingModel: vi.fn(),
@@ -23,7 +36,7 @@ vi.mock('@/services/openrouter/modelsCache', () => ({
 }));
 
 vi.mock('@/components/modals/SettingsModal/components/StepperControl', () => ({
-  StepperControl: ({ value, min, max, onValueChange }: any) => (
+  StepperControl: ({ value, min, max, onValueChange }: StepperControlProps) => (
     <div data-testid="stepper-control" data-value={String(value)} data-min={String(min)} data-max={String(max)}>
       <button type="button" onClick={() => onValueChange(0)}>Set Zero</button>
       <button type="button" onClick={() => onValueChange(5)}>Set Five</button>
@@ -34,7 +47,7 @@ vi.mock('@/components/modals/SettingsModal/components/StepperControl', () => ({
 }));
 
 vi.mock('@/components/modals/SettingsModal/components/TemperatureBanner', () => ({
-  TemperatureBanner: ({ isActive, onToggle }: any) => (
+  TemperatureBanner: ({ isActive, onToggle }: TemperatureBannerProps) => (
     <button type="button" data-testid="temperature-banner" onClick={onToggle}>
       {isActive ? 'Disable unsafe temperature' : 'Enable unsafe temperature'}
     </button>
@@ -42,7 +55,7 @@ vi.mock('@/components/modals/SettingsModal/components/TemperatureBanner', () => 
 }));
 
 vi.mock('@/components/ui', () => ({
-  ProviderSelector: (props: any) => {
+  ProviderSelector: (props: SelectorProps) => {
     mocks.providerSelector(props);
     return (
       <div data-testid="provider-selector" data-open={String(!!props.isOpen)}>
@@ -52,7 +65,7 @@ vi.mock('@/components/ui', () => ({
       </div>
     );
   },
-  ModelSelector: (props: any) => {
+  ModelSelector: (props: SelectorProps) => {
     mocks.modelSelector(props);
     return (
       <div
@@ -72,7 +85,7 @@ vi.mock('@/components/ui', () => ({
       </div>
     );
   },
-  CustomSelect: (props: any) => {
+  CustomSelect: (props: SelectorProps) => {
     mocks.customSelect(props);
     return (
       <div data-testid="custom-select" data-value={props.value} data-open={String(!!props.isOpen)}>
@@ -120,8 +133,9 @@ const GeneralSettingsHarness = ({
   const [localSettings, setLocalSettings] = useState(initialSettings);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
-  const handleChange = (e: any) => {
-    const { name, value, type, checked } = e.target;
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    const checked = e.target instanceof HTMLInputElement ? e.target.checked : false;
 
     setLocalSettings(prev => ({
       ...prev,

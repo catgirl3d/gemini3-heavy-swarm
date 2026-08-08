@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useState } from 'react';
 import { usePresetManagement } from '@/components/modals/SettingsModal/hooks/usePresetManagement';
-import { type AppSettings, PROMPT_TYPES, ProviderType } from '@/types';
+import { type AppSettings, type SavedInstruction, PROMPT_TYPES, ProviderType } from '@/types';
 import { createMockSettings } from '@test/settingsMocks';
 
 describe('usePresetManagement', () => {
@@ -149,7 +149,7 @@ describe('usePresetManagement', () => {
         savedInstructions: [
           { id: 'saved-initial', name: 'Saved Initial', type: PROMPT_TYPES.INITIAL, content: 'Saved initial', model: 'saved-model' },
           { id: 'saved-refine', name: 'Saved Refine', type: PROMPT_TYPES.REFINEMENT, content: 'Saved refine', model: 'refine-model' },
-        ] as any,
+        ] satisfies SavedInstruction[],
       }));
 
       const presets = result.current.hook.getInstructionPresets(PROMPT_TYPES.INITIAL);
@@ -224,9 +224,9 @@ describe('usePresetManagement', () => {
       });
 
       act(() => {
-        result.current.hook.handleSaveRolePreset(null, 'drafter', activeRoleProfile as any, 'Ignored');
-        result.current.hook.handleSaveRolePreset(4, 'drafter', activeRoleProfile as any, 'Ignored');
-        result.current.hook.handleSaveRolePreset(0, 'drafter', activeRoleProfile as any, '   ');
+         result.current.hook.handleSaveRolePreset(null, 'drafter', activeRoleProfile, 'Ignored');
+         result.current.hook.handleSaveRolePreset(4, 'drafter', activeRoleProfile, 'Ignored');
+         result.current.hook.handleSaveRolePreset(0, 'drafter', activeRoleProfile, '   ');
       });
 
       expect(result.current.settings.savedRoles).toEqual([]);
@@ -251,7 +251,7 @@ describe('usePresetManagement', () => {
       });
 
       act(() => {
-        result.current.hook.handleSaveRolePreset(0, 'critic', activeRoleProfile as any, '  Saved Critic  ');
+         result.current.hook.handleSaveRolePreset(0, 'critic', activeRoleProfile, '  Saved Critic  ');
       });
 
       expect(result.current.settings.savedRoles).toEqual([

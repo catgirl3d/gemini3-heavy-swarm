@@ -293,7 +293,7 @@ describe('useRoleManagement', () => {
         roleProfiles: [{
           id: 'test-profile',
           name: 'Test',
-          roles: [{ id: '   ', name: 'Broken Role', instruction: '' } as any],
+           roles: [{ id: '   ', name: 'Broken Role', instruction: '' }],
           criticRoles: []
         }]
       });
@@ -469,7 +469,7 @@ describe('useRoleManagement', () => {
         roleProfiles: [{
           id: 'test-profile',
           name: 'Test',
-          roles: [{ id: '   ', name: 'Broken Role', instruction: 'Broken instruction' } as any],
+           roles: [{ id: '   ', name: 'Broken Role', instruction: 'Broken instruction' }],
           criticRoles: []
         }]
       });
