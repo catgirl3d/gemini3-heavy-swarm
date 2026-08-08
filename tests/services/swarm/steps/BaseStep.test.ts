@@ -1020,10 +1020,13 @@ describe('BaseStep', () => {
     it('should throw when a stale partial rerun fails to refresh any targeted slot', async () => {
       step.id = STEPS.REFINEMENT;
       const refreshFailure = new Error('critic refresh failed');
+      const failedStream: AsyncIterable<never> = {
+        [Symbol.asyncIterator]: () => ({
+          next: () => Promise.reject(refreshFailure),
+        }),
+      };
       const generateContentStream = vi.fn().mockResolvedValue({
-        stream: (async function* () {
-          throw refreshFailure;
-        })()
+        stream: failedStream,
       });
       const context = {
         ai: {

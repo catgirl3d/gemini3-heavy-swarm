@@ -6,7 +6,7 @@ import { ShowWork } from '@/components/chat/ShowWork';
 import { DownloadIcon, CopyIcon, CheckIcon } from '@/components/chat/ShowWork/icons';
 import { downloadContent } from '@/components/chat/ShowWork/utils';
 import { Sources } from '@/components/chat/Sources';
-import { type Message, type Work, type ProviderType, type SwarmSessionPhase } from '@/types';
+import { type Message, type ProviderType, type SwarmSessionPhase } from '@/types';
 import { type StepId, STEPS } from '@/types/steps';
 import { selectActiveSession, selectActiveSessionMessageId, useAgentStore } from '@/stores/agentStore';
 import { getStepResults } from '@/utils/swarm/workHelpers';

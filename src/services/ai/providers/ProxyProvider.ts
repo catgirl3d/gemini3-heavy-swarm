@@ -22,31 +22,32 @@ export class ProxyProvider extends BaseProvider {
   }
 
   get models() {
-    const self = this;
     return {
-      async generateContentStream(request: GenerateRequest): Promise<ProviderStreamResult> {
-        const stream = await self.client.models.generateContentStream({
+      generateContentStream: async (request: GenerateRequest): Promise<ProviderStreamResult> => {
+        const stream = await this.client.models.generateContentStream({
           model: request.model,
           contents: request.contents,
           config: request.config,
         });
 
-        const normalizedStream = (async function* () {
-          for await (const chunk of stream.stream) {
-            yield self.normalizeChunk(chunk);
-          }
-        })();
+        const normalizedStream = this.normalizeStream(stream.stream);
 
         return {
           stream: normalizedStream,
           [Symbol.asyncIterator]() { return normalizedStream[Symbol.asyncIterator](); }
         };
-      }
+      },
     };
   }
 
   getDefaultModel(settings: AppSettings): string {
     return settings.geminiModel;
+  }
+
+  private async *normalizeStream(stream: AsyncIterable<unknown>): AsyncIterable<StreamChunk> {
+    for await (const chunk of stream) {
+      yield this.normalizeChunk(chunk);
+    }
   }
 
   private normalizeChunk(rawChunk: unknown): StreamChunk {

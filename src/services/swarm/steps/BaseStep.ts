@@ -687,7 +687,7 @@ export abstract class BaseStep implements StepDescriptor {
     const outcomes = await Promise.allSettled(agentPromises);
     
     // Standardized failure processing
-    const { updatedStates, failures } = this.processSettledOutcomes(context, outcomes, results, currentAgentStates, agentIndicesToRun);
+    const { failures } = this.processSettledOutcomes(context, outcomes, results, currentAgentStates, agentIndicesToRun);
     
     return this.finalizeStep(context, results, failures);
   }

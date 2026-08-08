@@ -22,28 +22,22 @@ export class GeminiProvider extends BaseProvider {
   }
 
   get models() {
-    const self = this;
     return {
-      async generateContentStream(request: GenerateRequest): Promise<ProviderStreamResult> {
+      generateContentStream: async (request: GenerateRequest): Promise<ProviderStreamResult> => {
         // GoogleGenAI SDK returns AsyncGenerator directly, not wrapped
-        const stream = await self.client.models.generateContentStream({
+        const stream = await this.client.models.generateContentStream({
           model: request.model,
           contents: request.contents,
           config: request.config,
         });
 
-        const normalizedStream = (async function* () {
-          // stream is already an AsyncGenerator, iterate directly
-          for await (const chunk of stream) {
-            yield self.normalizeChunk(chunk);
-          }
-        })();
+        const normalizedStream = this.normalizeStream(stream);
 
         return {
           stream: normalizedStream,
           [Symbol.asyncIterator]() { return normalizedStream[Symbol.asyncIterator](); }
         };
-      }
+      },
     };
   }
 
@@ -51,6 +45,12 @@ export class GeminiProvider extends BaseProvider {
 
   getDefaultModel(settings: AppSettings): string {
     return settings.geminiModel;
+  }
+
+  private async *normalizeStream(stream: AsyncIterable<unknown>): AsyncIterable<StreamChunk> {
+    for await (const chunk of stream) {
+      yield this.normalizeChunk(chunk);
+    }
   }
 
   private normalizeChunk(rawChunk: unknown): StreamChunk {

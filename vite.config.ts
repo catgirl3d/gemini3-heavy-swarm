@@ -1,4 +1,3 @@
-/// <reference types="vitest/config" />
 import path from 'path';
 import { defineConfig } from 'vitest/config';
 import { loadEnv } from 'vite';

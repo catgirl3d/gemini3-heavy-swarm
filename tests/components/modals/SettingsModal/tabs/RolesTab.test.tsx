@@ -59,7 +59,8 @@ vi.mock('@/components/modals/SettingsModal/components/RoleItem', () => ({
   },
 }));
 
-import { RolesTab, getRoleCyclingNotice } from '@/components/modals/SettingsModal/tabs/RolesTab';
+import { RolesTab } from '@/components/modals/SettingsModal/tabs/RolesTab';
+import { getRoleCyclingNotice } from '@/components/modals/SettingsModal/roleCycling';
 
 const createRoleProfile = (overrides: Partial<RoleProfile> = {}): RoleProfile => ({
   id: 'primary-profile',

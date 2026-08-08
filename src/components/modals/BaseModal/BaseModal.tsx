@@ -10,9 +10,16 @@ import {
 } from './types';
 import './BaseModal.css';
 
-const NOOP = () => {};
+const noop = () => {};
 
-const BaseModalMain: FC<BaseModalProps> = ({
+interface CompoundBaseModal extends FC<BaseModalProps> {
+    Header: FC<BaseModalHeaderProps>;
+    Body: FC<BaseModalBodyProps>;
+    Footer: FC<BaseModalFooterProps>;
+    Divider: FC;
+}
+
+export const BaseModal: CompoundBaseModal = ({
     isOpen,
     onClose,
     children,
@@ -21,7 +28,7 @@ const BaseModalMain: FC<BaseModalProps> = ({
     overlayClassName = '',
     closeOnOverlayClick = true,
     hasActiveDropdown = false,
-    onCloseDropdowns = NOOP,
+    onCloseDropdowns = noop,
     onEscape
 }) => {
     const [shouldRender, setShouldRender] = React.useState(isOpen);
@@ -126,9 +133,7 @@ const Footer: FC<BaseModalFooterProps> = ({ children, className = '' }) => (
 
 const Divider: FC = () => <div className="modal-divider"></div>;
 
-export const BaseModal = Object.assign(BaseModalMain, {
-    Header,
-    Body,
-    Footer,
-    Divider
-});
+BaseModal.Header = Header;
+BaseModal.Body = Body;
+BaseModal.Footer = Footer;
+BaseModal.Divider = Divider;

@@ -89,7 +89,7 @@ function useThrottledContent(content: string | null, status: string, throttleMs:
       // CRITICAL: We should only clear timer on unmount OR when status changes
       // In a throttler, we DON'T want to clear the timer on every dependency change 
     };
-  }, [content, status, throttleMs]);
+  }, [content, status, throttleMs, throttledContent]);
 
   // Separate effect specifically for cleanup on unmount or status change
   useEffect(() => {
