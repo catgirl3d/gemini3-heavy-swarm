@@ -7,8 +7,13 @@
     "moduleResolution": "bundler",
     "isolatedModules": true,
     "moduleDetection": "force",
-    "allowJs": true,
-    "skipLibCheck": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "allowJs": false,
+    "skipLibCheck": false,
     "noEmit": true,
     "paths": {
       "@shared/*": ["./shared/*"]
