@@ -41,7 +41,7 @@ describe('modelUtils', () => {
     });
 
     it('should return false for unknown providers or empty models', () => {
-      expect(isThinkingModel('unknown' as any, 'some-model')).toBe(false);
+      expect(Reflect.apply(isThinkingModel, null, ['unknown', 'some-model'])).toBe(false);
       expect(isThinkingModel(ProviderType.OpenRouter, '')).toBe(false);
     });
   });
@@ -54,7 +54,7 @@ describe('modelUtils', () => {
     it('should return empty string for empty input', () => {
       expect(getModelDisplayName('')).toBe('');
       expect(getModelDisplayName('   ')).toBe('');
-      expect(getModelDisplayName(null as any)).toBe('');
+      expect(Reflect.apply(getModelDisplayName, null, [null])).toBe('');
     });
 
     it('should return display name from MODEL_DISPLAY_NAMES if exists', () => {

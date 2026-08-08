@@ -18,7 +18,7 @@ describe('roleGuards', () => {
       const role = {
         name: 'Test Role',
         instruction: 'Test instruction'
-      } as any;
+      } satisfies Partial<AgentRole>;
       
       expect(hasValidRoleId(role)).toBe(false);
     });
@@ -69,7 +69,7 @@ describe('roleGuards', () => {
       const role = {
         name: 'Test Role',
         instruction: 'Test instruction'
-      } as any;
+      } satisfies Partial<AgentRole>;
       
       expect(() => assertRoleHasId(role)).toThrow('Role is missing required ID');
       expect(() => assertRoleHasId(role)).toThrow('Test Role');
@@ -100,7 +100,7 @@ describe('roleGuards', () => {
       const role = {
         name: 'Test Role',
         instruction: 'Test instruction'
-      } as any;
+      } satisfies Partial<AgentRole>;
       
       expect(() => assertRoleHasId(role, 'profile=test, index=5')).toThrow('(profile=test, index=5)');
     });
@@ -109,7 +109,7 @@ describe('roleGuards', () => {
       const role = {
         name: 'Critical Role',
         instruction: 'Test instruction'
-      } as any;
+      } satisfies Partial<AgentRole>;
       
       expect(() => assertRoleHasId(role)).toThrow('Role name: "Critical Role"');
     });
@@ -143,7 +143,7 @@ describe('roleGuards', () => {
     it('should handle role with undefined name gracefully', () => {
       const role = {
         instruction: 'Test instruction'
-      } as any;
+      } satisfies Partial<AgentRole>;
       
       expect(() => assertRoleHasId(role)).toThrow();
       expect(hasValidRoleId(role)).toBe(false);

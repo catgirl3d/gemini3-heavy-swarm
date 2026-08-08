@@ -32,8 +32,10 @@ async function testRetry() {
       throw new Error('403 Invalid API Key');
     }, { initialDelayMs: 100 });
     logger.error('Test 2 Failed: Should have thrown a fatal error.');
-  } catch (e: any) {
-    logger.info(`Test 2 Passed: Caught fatal error correctly: ${e.code} (${e.message})`);
+  } catch (e: unknown) {
+    const error = e instanceof Error ? e : new Error(String(e));
+    const code = typeof e === 'object' && e !== null && 'code' in e && typeof e.code === 'string' ? e.code : 'UNKNOWN';
+    logger.info(`Test 2 Passed: Caught fatal error correctly: ${code} (${error.message})`);
   }
 
   logger.info('\n--- Starting Max Retries Exceeded Test ---');
@@ -44,8 +46,9 @@ async function testRetry() {
       throw new Error('429 Rate Limit');
     }, { initialDelayMs: 50, maxRetries: 2 });
     logger.error('Test 3 Failed: Should have exceeded max retries.');
-  } catch (e: any) {
-    logger.info(`Test 3 Passed: Exceeded max retries as expected: ${e.code}. Total attempts: ${attempts}`);
+  } catch (e: unknown) {
+    const code = typeof e === 'object' && e !== null && 'code' in e && typeof e.code === 'string' ? e.code : 'UNKNOWN';
+    logger.info(`Test 3 Passed: Exceeded max retries as expected: ${code}. Total attempts: ${attempts}`);
   }
 }
 

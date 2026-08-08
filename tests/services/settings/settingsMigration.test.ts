@@ -1,10 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { migrateSettings } from '@/services/settings/settingsMigration';
-import { PROMPT_TYPES, type AppSettings, type RoleProfile, ProviderType } from '@/types';
+import { PROMPT_TYPES, type AgentRole, type AppSettings, type ProviderModels, type RoleProfile, type SavedInstruction, type SavedRole, ProviderType } from '@/types';
 import { DEFAULT_ROLE_PROFILES } from '@/constants/roles';
 import { createMockSettings } from '@test/settingsMocks';
 import { DEFAULT_PROFILES, DEFAULT_SETTINGS, MAX_OUTPUT_TOKENS_LIMIT } from '@/constants';
 import { hasValidRoleId } from '@/utils/validation/roleGuards';
+import type { LegacyAppSettings } from '@/services/settings/settingsMigration';
+
+const asMalformedRoleProfile = (value: unknown): RoleProfile => {
+  if (typeof value !== 'object' || value === null) throw new Error('Expected role profile object');
+  return value as RoleProfile;
+};
+
+const asLegacyInstruction = (value: unknown): SavedInstruction => {
+  if (typeof value !== 'object' || value === null) throw new Error('Expected instruction object');
+  return value as SavedInstruction;
+};
 
 const createSettingsFromDefaults = (overrides: Partial<AppSettings> = {}): AppSettings => ({
   ...structuredClone(DEFAULT_SETTINGS),
@@ -42,7 +53,7 @@ describe('settingsMigration', () => {
         model: 'legacy-gemini-model',
       };
 
-      const result = migrateSettings(legacySettings as any);
+       const result = migrateSettings(legacySettings as LegacyAppSettings);
 
       expect(result.provider).toBe(ProviderType.Gemini);
       expect(result.geminiModel).toBe('legacy-gemini-model');
@@ -105,7 +116,7 @@ describe('settingsMigration', () => {
           name: 'Test',
           roles: [
             { id: 'role-1', name: 'Role 1', instruction: 'Test', model: 'gpt-4' },
-            { name: 'Role 2', instruction: 'Test', model: 'claude-3' } as any // Missing ID
+             { name: 'Role 2', instruction: 'Test', model: 'claude-3' } as AgentRole // Missing ID
           ],
           criticRoles: []
         }]
@@ -153,10 +164,10 @@ describe('settingsMigration', () => {
   describe('Global Constant Integrity', () => {
     it('should not mutate DEFAULT_ROLE_PROFILES when adding custom profiles', () => {
       const defaultProfilesBeforeMigration = structuredClone(DEFAULT_ROLE_PROFILES);
-      const settings = createMockSettings({
-        roleProfiles: undefined, // Force default loaded
-        agentRoles: [{ name: 'Legacy Role', instruction: 'Legacy' }] // Trigger custom profile creation
-      } as any);
+       const settings = {
+         ...createMockSettings({ roleProfiles: undefined }),
+         agentRoles: [{ name: 'Legacy Role', instruction: 'Legacy' }],
+       } as LegacyAppSettings;
 
       migrateSettings(settings);
 
@@ -171,7 +182,7 @@ describe('settingsMigration', () => {
     it('should ensure savedRoles have IDs', () => {
       const settings = createMockSettings({
         savedRoles: [
-            { name: 'Role 1', instruction: 'Inst 1', model: 'gpt-4' } as any, // Missing ID
+             { name: 'Role 1', instruction: 'Inst 1', model: 'gpt-4' } as SavedRole, // Missing ID
             { id: 'existing-id', name: 'Role 2', instruction: 'Inst 2' }
         ]
       });
@@ -187,7 +198,7 @@ describe('settingsMigration', () => {
     it('should replace whitespace-only savedRole IDs', () => {
       const settings = createMockSettings({
         savedRoles: [
-          { id: '   ', name: 'Whitespace Role', instruction: 'Inst' } as any
+           { id: '   ', name: 'Whitespace Role', instruction: 'Inst' } as SavedRole
         ]
       });
 
@@ -203,7 +214,7 @@ describe('settingsMigration', () => {
     it('should ensure savedInstructions have IDs', () => {
       const settings = createMockSettings({
         savedInstructions: [
-          { name: 'Inst 1', type: 'initial_prompt', content: 'Test' } as any, // Missing ID
+           { name: 'Inst 1', type: 'initial_prompt', content: 'Test' } as SavedInstruction, // Missing ID
           { id: 'existing-inst-id', name: 'Inst 2', type: 'refinement_prompt', content: 'Test 2' }
         ]
       });
@@ -219,7 +230,7 @@ describe('settingsMigration', () => {
     it('should replace whitespace-only savedInstruction IDs', () => {
       const settings = createMockSettings({
         savedInstructions: [
-          { id: '   ', name: 'Whitespace Inst', type: 'initial_prompt', content: 'Test' } as any
+           { id: '   ', name: 'Whitespace Inst', type: 'initial_prompt', content: 'Test' } as SavedInstruction
         ]
       });
 
@@ -233,24 +244,22 @@ describe('settingsMigration', () => {
 
   describe('Migration 2: Custom Role Profile Initialization', () => {
     it('loads only default role profiles when legacy roleProfiles are missing but no agentRoles exist', () => {
-      const result = migrateSettings({
-        ...createMockSettings({
-          roleProfiles: undefined as any,
-        }),
-        agentRoles: undefined,
-      } as any);
+       const result = migrateSettings({
+         ...createMockSettings({
+            roleProfiles: undefined,
+         }),
+         agentRoles: undefined,
+       } as LegacyAppSettings);
 
       expect(result.activeRoleProfileId).toBe('default-roles');
       expect(result.roleProfiles.find((profile) => profile.id === 'custom-roles-migrated')).toBeUndefined();
     });
 
     it('should initialize criticRoles for custom-roles-migrated profile', () => {
-      const settings = createMockSettings({
-        roleProfiles: undefined,
-        agentRoles: [
-          { id: 'legacy-role-1', name: 'Legacy Role', instruction: 'Test' }
-        ]
-      } as any);
+       const settings = {
+         ...createMockSettings({ roleProfiles: undefined }),
+         agentRoles: [{ id: 'legacy-role-1', name: 'Legacy Role', instruction: 'Test' }],
+       } as LegacyAppSettings;
 
       const result = migrateSettings(settings);
 
@@ -264,12 +273,12 @@ describe('settingsMigration', () => {
     it('falls back to default prompt instructions when migrated legacy fields are empty or undefined', () => {
       const result = migrateSettings({
         ...createMockSettings({
-          profiles: undefined as any,
+           profiles: undefined,
         }),
         initialInstruction: '',
         refinementInstruction: 'Custom refinement',
         synthesizerInstruction: undefined,
-      } as any);
+       } as AppSettings);
 
       const customProfile = result.profiles.find((profile) => profile.id === 'custom-migrated');
       expect(customProfile).toMatchObject({
@@ -282,12 +291,12 @@ describe('settingsMigration', () => {
     it('keeps the default prompt profile active when legacy instructions already match defaults', () => {
       const result = migrateSettings({
         ...createMockSettings({
-          profiles: undefined as any,
+           profiles: undefined,
         }),
         initialInstruction: DEFAULT_PROFILES[0].initialInstruction,
         refinementInstruction: DEFAULT_PROFILES[0].refinementInstruction,
         synthesizerInstruction: DEFAULT_PROFILES[0].synthesizerInstruction,
-      } as any);
+       } as AppSettings);
 
       expect(result.activeProfileId).toBe('default');
       expect(result.profiles).toEqual([DEFAULT_PROFILES[0]]);
@@ -297,27 +306,27 @@ describe('settingsMigration', () => {
     it('creates migrated prompt and role profiles from legacy settings without mutating the input and keeps migrated roles runtime-valid', () => {
       const legacySettings = {
         ...createSettingsFromDefaults({
-          profiles: undefined as any,
-          roleProfiles: undefined as any,
-          savedInstructions: undefined as any,
-          savedRoles: undefined as any,
-          providerModels: undefined as any,
-          provider: undefined as any,
-          openRouterApiKey: undefined as any,
-          openRouterModel: undefined as any,
-          initialModel: undefined as any,
-          refinementModel: undefined as any,
-          synthesisModel: undefined as any,
-          useSearchInInitial: undefined as any,
-          useSearchInRefinement: undefined as any,
-          useSearchInSynthesis: undefined as any,
-          pauseAfterRefinement: undefined as any,
-          dynamicAgentRoles: undefined as any,
-          simulateInitialErrorAttempts: undefined as any,
-          simulateRefinementErrorAttempts: undefined as any,
-          simulateSynthesisErrorAttempts: undefined as any,
-          maxOutputTokens: undefined as any,
-          geminiModel: undefined as any,
+           profiles: undefined,
+           roleProfiles: undefined,
+           savedInstructions: undefined,
+           savedRoles: undefined,
+           providerModels: undefined,
+           provider: undefined,
+           openRouterApiKey: undefined,
+           openRouterModel: undefined,
+           initialModel: undefined,
+           refinementModel: undefined,
+           synthesisModel: undefined,
+           useSearchInInitial: undefined,
+           useSearchInRefinement: undefined,
+           useSearchInSynthesis: undefined,
+           pauseAfterRefinement: undefined,
+           dynamicAgentRoles: undefined,
+           simulateInitialErrorAttempts: undefined,
+           simulateRefinementErrorAttempts: undefined,
+           simulateSynthesisErrorAttempts: undefined,
+           maxOutputTokens: undefined,
+           geminiModel: undefined,
           numAgents: 8,
         }),
         initialInstruction: 'Legacy initial',
@@ -325,9 +334,9 @@ describe('settingsMigration', () => {
         synthesizerInstruction: 'Legacy synthesis',
         model: 'legacy-model-migrated',
         agentRoles: [
-          { name: 'Legacy Role', instruction: 'Legacy role instruction', model: 'legacy-role-model' } as any,
+           { name: 'Legacy Role', instruction: 'Legacy role instruction', model: 'legacy-role-model' } as AgentRole,
         ],
-      } as any;
+       } as LegacyAppSettings;
       const original = structuredClone(legacySettings);
 
       const result = migrateSettings(legacySettings);
@@ -399,7 +408,7 @@ describe('settingsMigration', () => {
         roleProfiles: [
           {
             ...softwareTeam,
-            criticRoles: undefined as any,
+             criticRoles: undefined,
           },
         ],
       });
@@ -416,7 +425,7 @@ describe('settingsMigration', () => {
           id: 'custom-no-default',
           name: 'Custom No Default',
           roles: [{ id: 'role-1', name: 'Role 1', instruction: 'Test' }],
-          criticRoles: undefined as any,
+           criticRoles: undefined,
         }],
       }));
 
@@ -426,9 +435,9 @@ describe('settingsMigration', () => {
     it('migrates legacy saved instruction types to prompt type identifiers', () => {
       const result = migrateSettings(createMockSettings({
         savedInstructions: [
-          { id: 'one', name: 'Initial', type: 'initial', content: 'A' } as any,
-          { id: 'two', name: 'Refine', type: 'refinement', content: 'B' } as any,
-          { id: 'three', name: 'Synth', type: 'synthesizer', content: 'C' } as any,
+           asLegacyInstruction({ id: 'one', name: 'Initial', type: 'initial', content: 'A' }),
+           asLegacyInstruction({ id: 'two', name: 'Refine', type: 'refinement', content: 'B' }),
+           asLegacyInstruction({ id: 'three', name: 'Synth', type: 'synthesizer', content: 'C' }),
         ],
       }));
 
@@ -448,7 +457,7 @@ describe('settingsMigration', () => {
           stepModels: {
             [ProviderType.Gemini]: {
               initial: 'existing-initial',
-            } as any,
+             } as NonNullable<ProviderModels['stepModels']>[ProviderType.Gemini],
           },
           roleModels: {
             'profile-a': {
@@ -503,7 +512,7 @@ describe('settingsMigration', () => {
             },
             [ProviderType.OpenRouter]: {
               initial: 'preserved-openrouter-initial',
-            } as any,
+             } as NonNullable<ProviderModels['stepModels']>[ProviderType.OpenRouter],
           },
           roleModels: {
             'profile-openrouter': {
@@ -579,12 +588,12 @@ describe('settingsMigration', () => {
           },
           roleModels: {},
         },
-        roleProfiles: [{
-          id: 'missing-roles-shape',
-          name: 'Missing Roles Shape',
-          roles: undefined as any,
-          criticRoles: undefined as any,
-        }],
+         roleProfiles: [asMalformedRoleProfile({
+           id: 'missing-roles-shape',
+           name: 'Missing Roles Shape',
+           roles: undefined,
+           criticRoles: undefined,
+         })],
       }));
 
       expect(result.roleProfiles[0].roles).toEqual([]);
@@ -594,7 +603,7 @@ describe('settingsMigration', () => {
 
     it('allows duplicate role IDs across different profiles during providerModels migration', () => {
       const settings = createMockSettings({
-        providerModels: undefined as any,
+         providerModels: undefined,
         roleProfiles: [
           {
             id: 'profile-a',
@@ -624,8 +633,8 @@ describe('settingsMigration', () => {
         roleProfiles: [{
           id: 'cleanup-models',
           name: 'Cleanup Models',
-          roles: [{ id: 'role-1', name: 'Role 1', instruction: 'Test', model: '' } as any],
-          criticRoles: [{ id: 'critic-1', name: 'Critic 1', instruction: 'Test', model: '' } as any],
+           roles: [{ id: 'role-1', name: 'Role 1', instruction: 'Test', model: '' } as AgentRole],
+           criticRoles: [{ id: 'critic-1', name: 'Critic 1', instruction: 'Test', model: '' } as AgentRole],
         }],
       }));
 
@@ -642,7 +651,7 @@ describe('settingsMigration', () => {
           name: 'Dev',
           roles: [],
           criticRoles: [
-            { name: 'Critic without ID', instruction: 'Critique' } as any
+             { name: 'Critic without ID', instruction: 'Critique' } as AgentRole
           ]
         }]
       });
@@ -651,8 +660,8 @@ describe('settingsMigration', () => {
       const profile = result.roleProfiles![0];
       
       expect(profile.criticRoles).toHaveLength(1);
-      expect(profile.criticRoles[0].id).toBeDefined();
-      expect(profile.criticRoles[0].id).not.toBe('');
+       expect(profile.criticRoles?.[0]?.id).toBeDefined();
+       expect(profile.criticRoles?.[0]?.id).not.toBe('');
     });
 
     it('should handle roles with missing names and IDs gracefully', () => {
@@ -661,7 +670,7 @@ describe('settingsMigration', () => {
           id: 'malformed-profile',
           name: 'Malformed',
           roles: [
-            { instruction: 'Just instruction' } as any
+             { instruction: 'Just instruction' } as AgentRole
           ],
           criticRoles: []
         }]
@@ -681,8 +690,8 @@ describe('settingsMigration', () => {
             id: 'multi-missing',
             name: 'Multi Missing',
             roles: [
-              { name: 'R1', instruction: 'I1' } as any,
-              { name: 'R2', instruction: 'I2' } as any
+               { name: 'R1', instruction: 'I1' } as AgentRole,
+               { name: 'R2', instruction: 'I2' } as AgentRole
             ],
             criticRoles: []
           }]
@@ -703,7 +712,7 @@ describe('settingsMigration', () => {
           id: 'whitespace-id',
           name: 'Whitespace',
           roles: [
-            { id: '   ', name: 'R1', instruction: 'I1' } as any
+             { id: '   ', name: 'R1', instruction: 'I1' } as AgentRole
           ],
           criticRoles: []
         }]
