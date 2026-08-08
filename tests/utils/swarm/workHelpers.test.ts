@@ -17,6 +17,12 @@ import {
 } from '@/utils/swarm/workHelpers';
 
 describe('workHelpers', () => {
+    const createMalformedWork = (results: Record<string, unknown>): Work => {
+        const work: Work = { results: {} };
+        Object.assign(work.results ??= {}, results);
+        return work;
+    };
+
     const usage: TokenUsage = {
         promptTokens: 1,
         candidatesTokens: 2,
@@ -41,13 +47,11 @@ describe('workHelpers', () => {
         });
 
         it('returns empty arrays for missing or non-array step data', () => {
-            const work: Work = {
-                results: {
-                    [STEPS.SYNTHESIS]: { text: 'final' } as any,
-                    [`${STEPS.INITIAL}_thoughts`]: 'not an array' as any,
-                    [`${STEPS.SYNTHESIS}_usage`]: usage
-                }
-            };
+            const work = createMalformedWork({
+                [STEPS.SYNTHESIS]: { text: 'final' },
+                [`${STEPS.INITIAL}_thoughts`]: 'not an array',
+                [`${STEPS.SYNTHESIS}_usage`]: usage
+            });
 
             expect(getStepResults(work, STEPS.SYNTHESIS)).toEqual([]);
             expect(getStepContent(work, STEPS.INITIAL, 0)).toBeNull();
@@ -77,14 +81,14 @@ describe('workHelpers', () => {
         });
 
         it('handles malformed synthesis data safely', () => {
-            expect(getStepContent({ results: { [STEPS.SYNTHESIS]: { error: true } as any } }, STEPS.SYNTHESIS, 0)).toBeNull();
-            expect(getStepResults({ results: { [STEPS.SYNTHESIS]: { sources: [] } as any } }, STEPS.SYNTHESIS)).toEqual([]);
-            expect(getStepContent({ results: { [STEPS.SYNTHESIS]: ['bad'] as any } }, STEPS.SYNTHESIS, 0)).toBe('bad');
-            expect(getStepThoughts({ results: { [`${STEPS.SYNTHESIS}_thoughts`]: { text: 'bad' } as any } }, STEPS.SYNTHESIS)).toEqual([]);
-            expect(getStepUsage({ results: { [`${STEPS.SYNTHESIS}_usage`]: { promptTokens: 1 } as any } }, STEPS.SYNTHESIS)).toEqual([]);
-            expect(getSynthesisSources({ results: { [`${STEPS.SYNTHESIS}_sources`]: { uri: 'bad' } as any } })).toBeUndefined();
-            expect(getSynthesisErrorState({ results: { [`${STEPS.SYNTHESIS}_error`]: { message: 'missing flag' } as any } })).toBeNull();
-            expect(getSynthesisErrorState({ results: { [`${STEPS.SYNTHESIS}_error`]: { flag: true, message: 123 } as any } })).toBeNull();
+            expect(getStepContent(createMalformedWork({ [STEPS.SYNTHESIS]: { error: true } }), STEPS.SYNTHESIS, 0)).toBeNull();
+            expect(getStepResults(createMalformedWork({ [STEPS.SYNTHESIS]: { sources: [] } }), STEPS.SYNTHESIS)).toEqual([]);
+            expect(getStepContent(createMalformedWork({ [STEPS.SYNTHESIS]: ['bad'] }), STEPS.SYNTHESIS, 0)).toBe('bad');
+            expect(getStepThoughts(createMalformedWork({ [`${STEPS.SYNTHESIS}_thoughts`]: { text: 'bad' } }), STEPS.SYNTHESIS)).toEqual([]);
+            expect(getStepUsage(createMalformedWork({ [`${STEPS.SYNTHESIS}_usage`]: { promptTokens: 1 } }), STEPS.SYNTHESIS)).toEqual([]);
+            expect(getSynthesisSources(createMalformedWork({ [`${STEPS.SYNTHESIS}_sources`]: { uri: 'bad' } }))).toBeUndefined();
+            expect(getSynthesisErrorState(createMalformedWork({ [`${STEPS.SYNTHESIS}_error`]: { message: 'missing flag' } }))).toBeNull();
+            expect(getSynthesisErrorState(createMalformedWork({ [`${STEPS.SYNTHESIS}_error`]: { flag: true, message: 123 } }))).toBeNull();
         });
     });
 
@@ -149,11 +153,9 @@ describe('workHelpers', () => {
         });
 
         it('should ignore malformed legacy non-array multi-agent data', () => {
-            const originalWork: Work = {
-                results: {
-                    [STEPS.INITIAL]: 'bad legacy data' as any
-                }
-            };
+            const originalWork = createMalformedWork({
+                [STEPS.INITIAL]: 'bad legacy data'
+            });
 
             const updated = updateStepResult(originalWork, STEPS.INITIAL, 1, 'new value');
             const expectedResults = Array<string>(2);
@@ -279,7 +281,7 @@ describe('workHelpers', () => {
         it('should create an isolated clone of the Work object', () => {
             const original: Work = {
                 results: { [STEPS.INITIAL]: ['a'] },
-                agentStates: [{ id: '1' } as any],
+                agentStates: [{ id: '1', name: 'Agent', status: 'done', label: 'Done' }],
                 agentNames: ['Name']
             };
 
@@ -301,7 +303,7 @@ describe('workHelpers', () => {
         it('should clone metadata arrays, debugInfo, and result entries', () => {
             const original: Work = {
                 results: { [STEPS.INITIAL]: ['a'] },
-                debugInfo: { custom: { systemInstruction: 'system', history: [], userTurn: { parts: [] } } } as any,
+                debugInfo: { custom: { systemInstruction: 'system', history: [], userTurn: { parts: [] } } },
                 stepMetadata: [{ id: STEPS.SYNTHESIS, status: 'done' }],
                 criticNames: ['Critic']
             };

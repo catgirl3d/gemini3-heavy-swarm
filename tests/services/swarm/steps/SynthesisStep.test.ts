@@ -1,10 +1,36 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SynthesisStep } from '@/services/swarm/steps/SynthesisStep';
-import { STEPS, StepContext, StreamConfig } from '@/types/steps';
+import { STEPS, StepContext, StreamConfig, AgentInstruction, StreamCallbacks, StreamResult, type StepId } from '@/types/steps';
 import { useAgentStore } from '@/stores/agentStore';
 import { prepareGeminiContent } from '@/services/swarm/contentUtils';
-import { AppSettings, ProviderType, Work } from '@/types';
+import { AgentState, AppSettings, ProviderType, TokenUsage, Work, WorkResultUpdates } from '@/types';
 import { AiProvider } from '@/types/ai-provider';
+import type { Content, Tool } from '@google/genai';
+import { AppError, ErrorCode } from '@/utils/errors/AppError';
+
+type SynthesisPreparation = {
+  systemInstruction: string;
+  synthesizerTurn: Content;
+  mainChatHistory: Content[];
+};
+
+type SynthesisPrivateApi = {
+  prepareSynthesis: (context: StepContext, drafts: (string | null)[]) => SynthesisPreparation;
+  handleStreamChunk: (context: StepContext, index: number, text: string, thought: string, usage: TokenUsage | null, options: { isFirstChunk?: boolean; agentStates?: AgentState[]; statusMsg?: string; streamToMessage?: boolean }) => void;
+  runSynthesisRegeneration: (context: StepContext, instruction: AgentInstruction, agentStates: AgentState[], tools?: Tool[]) => Promise<{ work: Work }>;
+  runModelStream: (config: StreamConfig, callbacks: StreamCallbacks) => Promise<StreamResult>;
+  extractSources: (chunks: unknown[]) => { uri: string; title: string }[] | undefined;
+};
+
+const getPrivateStep = (step: SynthesisStep): SynthesisPrivateApi => step as unknown as SynthesisPrivateApi;
+
+const getTextPart = (parts: Content['parts'], index: number): string => {
+  const part = parts?.[index];
+  if (!part || typeof part.text !== 'string') {
+    throw new Error(`Expected text part at index ${index}`);
+  }
+  return part.text;
+};
 
 // Mock dependencies
 vi.mock('@/stores/agentStore', () => ({
@@ -27,7 +53,7 @@ vi.mock('@/services/swarm/contentUtils', () => ({
 
 vi.mock('@/utils/swarm/stepConstants', () => ({
   getStepConfig: vi.fn((id: string) => {
-    const configs: any = {
+    const configs: Record<string, unknown> = {
       initial_step: {
         name: 'Initial',
         namePrefix: 'Agent',
@@ -88,10 +114,11 @@ describe('SynthesisStep', () => {
   };
 
   let mockContext: TestContext;
-let updateAgentMock: any;
-let updateWorkResultMock: any;
-let setCurrentWorkMock: any;
-let updateSessionRuntimeMock: any;
+  type StoreState = ReturnType<typeof useAgentStore.getState>;
+  let updateAgentMock: StoreState['updateSessionAgent'] & ReturnType<typeof vi.fn>;
+  let updateWorkResultMock: StoreState['updateSessionWorkResult'] & ReturnType<typeof vi.fn>;
+  let setCurrentWorkMock: StoreState['replaceSessionWork'] & ReturnType<typeof vi.fn>;
+  let updateSessionRuntimeMock: StoreState['updateSessionRuntime'] & ReturnType<typeof vi.fn>;
 
   const createSettings = (overrides: Partial<AppSettings> = {}): AppSettings => ({
     provider: ProviderType.Gemini,
@@ -139,7 +166,7 @@ let updateSessionRuntimeMock: any;
     ...overrides,
   } as AppSettings);
 
-  const createWork = (results: Record<string, any> = {}): TestWork => ({
+  const createWork = (results: Record<string, unknown> = {}): TestWork => ({
     results: {
       [STEPS.INITIAL]: ['initial 1', 'initial 2'],
       [STEPS.REFINEMENT]: ['refined 1', 'refined 2'],
@@ -163,7 +190,12 @@ let updateSessionRuntimeMock: any;
     },
   });
 
-  const createContext = (overrides: Record<string, any> = {}): TestContext => {
+  type ContextOverrides = {
+    settings?: Partial<AppSettings>;
+    work?: TestWork;
+  } & Partial<Omit<TestContext, 'settings' | 'work'>>;
+
+  const createContext = (overrides: ContextOverrides = {}): TestContext => {
     const settings = createSettings(overrides.settings);
     const work = overrides.work ?? createWork();
     const { settings: _settingsOverride, work: _workOverride, ...restOverrides } = overrides;
@@ -185,30 +217,29 @@ let updateSessionRuntimeMock: any;
     } as TestContext;
   };
 
-  const getInternalContext = (instruction: any) => {
+  const getInternalContext = (instruction: Pick<SynthesisPreparation, 'synthesizerTurn'>) => {
     const parts = instruction.synthesizerTurn.parts;
-    return parts[parts.length - 1].text;
+    return getTextPart(parts, (parts?.length ?? 1) - 1);
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (prepareGeminiContent as any).mockReturnValue({
+    vi.mocked(prepareGeminiContent).mockReturnValue({
       history: [{ role: 'model', parts: [{ text: 'previous answer' }] }],
       baseApiParts: [{ text: 'user input' }]
     });
     
-    updateAgentMock = vi.fn();
-    updateWorkResultMock = vi.fn();
-    setCurrentWorkMock = vi.fn();
-    updateSessionRuntimeMock = vi.fn();
-    (useAgentStore.getState as any).mockReturnValue({
-      updateSessionAgent: updateAgentMock,
-      updateSessionWorkResult: updateWorkResultMock,
-      replaceSessionWork: setCurrentWorkMock,
-      updateSessionRuntime: updateSessionRuntimeMock,
-      agents: [],
-      sessionsByMessageId: {}
-    });
+    updateAgentMock = vi.fn((_stepId: StepId, _agentIndex: number, _status: AgentState['status'], _label: string, _messageId: string, _name?: string) => undefined);
+    updateWorkResultMock = vi.fn((_messageId: string, _stepId: StepId, _agentIndex: number, _updates: WorkResultUpdates) => undefined);
+    setCurrentWorkMock = vi.fn((_messageId: string, _work: Work) => undefined);
+    updateSessionRuntimeMock = vi.fn<ReturnType<typeof useAgentStore.getState>['updateSessionRuntime']>();
+    const store = useAgentStore.getState();
+    store.updateSessionAgent = updateAgentMock;
+    store.updateSessionWorkResult = updateWorkResultMock;
+    store.replaceSessionWork = setCurrentWorkMock;
+    store.updateSessionRuntime = updateSessionRuntimeMock;
+    store.sessionsByMessageId = {};
+    vi.mocked(useAgentStore.getState).mockReturnValue(store);
 
     step = new SynthesisStep();
     mockContext = createContext();
@@ -220,8 +251,8 @@ let updateSessionRuntimeMock: any;
       'refined 2'
     ];
 
-    const instruction = (step as any).prepareSynthesis(mockContext, refinedWithFailure);
-    const internalContext = instruction.synthesizerTurn.parts[instruction.synthesizerTurn.parts.length - 1].text;
+    const instruction = getPrivateStep(step).prepareSynthesis(mockContext, refinedWithFailure);
+    const internalContext = getTextPart(instruction.synthesizerTurn.parts, (instruction.synthesizerTurn.parts?.length ?? 1) - 1);
     
     expect(internalContext).toContain('<draft id="agent_1">\n      initial 1\n    </draft>');
     expect(internalContext).toContain('<draft id="agent_2">\n      refined 2\n    </draft>');
@@ -229,7 +260,7 @@ let updateSessionRuntimeMock: any;
 
   it('should trigger Synthesis Jump behavior on the first text chunk', async () => {
     // Calling handleStreamChunk directly as it would be from inside runModelStream
-    (step as any).handleStreamChunk(mockContext, 0, 'First chunk', '', null, {
+    getPrivateStep(step).handleStreamChunk(mockContext, 0, 'First chunk', '', null, {
       isFirstChunk: true,
       agentStates: [],
       statusMsg: 'Synthesis Progress'
@@ -249,17 +280,17 @@ let updateSessionRuntimeMock: any;
   it('should include the original query in the synthesizer context', () => {
     mockContext.userInput = 'Summarize climate change';
     const refined = ['refined 1', 'refined 2'];
-    const instruction = (step as any).prepareSynthesis(mockContext, refined);
-    const internalContext = instruction.synthesizerTurn.parts[instruction.synthesizerTurn.parts.length - 1].text;
+    const instruction = getPrivateStep(step).prepareSynthesis(mockContext, refined);
+    const internalContext = getTextPart(instruction.synthesizerTurn.parts, (instruction.synthesizerTurn.parts?.length ?? 1) - 1);
 
     expect(internalContext).toContain('<original_query>\n    Summarize climate change\n  </original_query>');
   });
 
   it('should call runSynthesisRegeneration during regeneration', async () => {
-    const runRegenSpy = vi.spyOn(step as any, 'runSynthesisRegeneration').mockResolvedValue({ 
+    const runRegenSpy = vi.spyOn(getPrivateStep(step), 'runSynthesisRegeneration').mockResolvedValue({
       work: mockContext.work,
     });
-    const agentStates: any[] = [];
+    const agentStates: AgentState[] = [];
     
     const result = await step.regenerate(mockContext, 0, agentStates);
     
@@ -269,7 +300,7 @@ let updateSessionRuntimeMock: any;
   });
 
   it('should pass search tools during regeneration when synthesis search is enabled', async () => {
-    const runRegenSpy = vi.spyOn(step as any, 'runSynthesisRegeneration').mockResolvedValue({
+    const runRegenSpy = vi.spyOn(getPrivateStep(step), 'runSynthesisRegeneration').mockResolvedValue({
       work: mockContext.work,
     });
     const context = createContext({
@@ -294,7 +325,7 @@ let updateSessionRuntimeMock: any;
 
     ((context.ai.models.generateContentStream as unknown) as ReturnType<typeof vi.fn>).mockResolvedValue({ stream });
 
-    const result = await (step as any).runSynthesisRegeneration(
+    const result = await getPrivateStep(step).runSynthesisRegeneration(
       context,
       {
         systemInstruction: 'system',
@@ -319,15 +350,16 @@ let updateSessionRuntimeMock: any;
       { web: { uri: 'http://test2.com', title: 'Title 2' } }
     ];
 
-    const sources = (step as any).extractSources(groundingChunks);
+    const sources = getPrivateStep(step).extractSources(groundingChunks);
 
     expect(sources).toHaveLength(2);
-    expect(sources[0].uri).toBe('http://test1.com');
-    expect(sources[1].uri).toBe('http://test2.com');
+    const [firstSource, secondSource] = sources ?? [];
+    expect(firstSource?.uri).toBe('http://test1.com');
+    expect(secondSource?.uri).toBe('http://test2.com');
   });
 
   it('should reject execute when there are no refined drafts', async () => {
-    const runModelStreamSpy = vi.spyOn(step as any, 'runModelStream').mockResolvedValue({
+    const runModelStreamSpy = vi.spyOn(getPrivateStep(step), 'runModelStream').mockResolvedValue({
       text: 'unused',
       thought: '',
       usage: null,
@@ -346,7 +378,7 @@ let updateSessionRuntimeMock: any;
 
   it('should execute synthesis and persist final text with deduplicated sources', async () => {
     const mainChatHistory = [{ role: 'model', parts: [{ text: 'previous answer' }] }];
-    (prepareGeminiContent as any).mockReturnValue({
+    vi.mocked(prepareGeminiContent).mockReturnValue({
       history: mainChatHistory,
       baseApiParts: [{ text: 'base user part' }]
     });
@@ -358,7 +390,7 @@ let updateSessionRuntimeMock: any;
       { web: { uri: 'https://a.test', title: 'Duplicate A' } },
       { web: { uri: 'https://b.test', title: 'B' } }
     ];
-    const runModelStreamSpy = vi.spyOn(step as any, 'runModelStream').mockResolvedValue({
+    const runModelStreamSpy = vi.spyOn(getPrivateStep(step), 'runModelStream').mockResolvedValue({
       text: 'final answer',
       thought: '',
       usage: null,
@@ -389,7 +421,7 @@ let updateSessionRuntimeMock: any;
     expect(streamConfig.tools).toBeUndefined();
     expect(streamConfig.contents).toHaveLength(2);
     expect(streamConfig.contents[0]).toBe(mainChatHistory[0]);
-    expect(streamConfig.contents[1].parts[0]).toEqual({ text: 'base user part' });
+    expect(streamConfig.contents[1]?.parts?.[0]).toEqual({ text: 'base user part' });
     expect(getInternalContext({ synthesizerTurn: streamConfig.contents[1] })).toContain('refined 1');
     expect(result).toEqual(['final answer']);
     expect(context.work.results[STEPS.SYNTHESIS]).toEqual(['final answer']);
@@ -411,7 +443,7 @@ let updateSessionRuntimeMock: any;
     const context = createContext({
       settings: { useSearchInSynthesis: true }
     });
-    const runModelStreamSpy = vi.spyOn(step as any, 'runModelStream').mockResolvedValue({
+    const runModelStreamSpy = vi.spyOn(getPrivateStep(step), 'runModelStream').mockResolvedValue({
       text: 'final answer',
       thought: '',
       usage: null,
@@ -427,7 +459,7 @@ let updateSessionRuntimeMock: any;
   });
 
   it('should execute debug-mode synthesis with mixed draft states and non-text content parts', async () => {
-    (prepareGeminiContent as any).mockReturnValue({
+    vi.mocked(prepareGeminiContent).mockReturnValue({
       history: [{ role: 'model', parts: [{ text: 'previous answer' }] }],
       baseApiParts: [
         { inlineData: { mimeType: 'image/png', data: 'abc' } },
@@ -443,7 +475,7 @@ let updateSessionRuntimeMock: any;
         [`${STEPS.SYNTHESIS}_error_counts`]: [0]
       })
     });
-    const runModelStreamSpy = vi.spyOn(step as any, 'runModelStream').mockResolvedValue({
+    const runModelStreamSpy = vi.spyOn(getPrivateStep(step), 'runModelStream').mockResolvedValue({
       text: 'final debug answer',
       thought: '',
       usage: null,
@@ -454,8 +486,10 @@ let updateSessionRuntimeMock: any;
 
     const streamConfig = runModelStreamSpy.mock.calls[0][0] as StreamConfig;
     expect(result).toEqual(['final debug answer']);
-    expect(streamConfig.contents[1].parts[0]).toEqual({ inlineData: { mimeType: 'image/png', data: 'abc' } });
-    expect(streamConfig.contents[1].parts[1]).toEqual({ text: 'base user part' });
+    const debugTurn = streamConfig.contents[1];
+    if (!debugTurn) throw new Error('Expected synthesis content');
+    expect(debugTurn.parts?.[0]).toEqual({ inlineData: { mimeType: 'image/png', data: 'abc' } });
+    expect(debugTurn.parts?.[1]).toEqual({ text: 'base user part' });
     expect(getInternalContext({ synthesizerTurn: streamConfig.contents[1] })).toContain('initial 1');
     expect(getInternalContext({ synthesizerTurn: streamConfig.contents[1] })).toContain('refined 3');
     expect(updateAgentMock).toHaveBeenCalledWith(
@@ -485,7 +519,7 @@ let updateSessionRuntimeMock: any;
         [`${STEPS.SYNTHESIS}_sources`]: [{ uri: 'https://stale.test', title: 'Stale Source' }],
       }),
     });
-    vi.spyOn(step as any, 'runModelStream').mockImplementation(async (_config: any, callbacks: any) => {
+    vi.spyOn(getPrivateStep(step), 'runModelStream').mockImplementation(async (_config: StreamConfig, callbacks: StreamCallbacks) => {
       callbacks.onChunk('partial text', 'partial thought', usage);
       throw streamError;
     });
@@ -517,7 +551,7 @@ let updateSessionRuntimeMock: any;
 
   it('should preserve an empty synthesis shell when execute fails with a non-Error value', async () => {
     const context = createContext();
-    vi.spyOn(step as any, 'runModelStream').mockImplementation(async () => {
+    vi.spyOn(getPrivateStep(step), 'runModelStream').mockImplementation(async () => {
       throw 'stream exploded';
     });
 
@@ -550,7 +584,7 @@ let updateSessionRuntimeMock: any;
         }
       })
     });
-    vi.spyOn(step as any, 'runModelStream').mockResolvedValue({
+    vi.spyOn(getPrivateStep(step), 'runModelStream').mockResolvedValue({
       text: 'recovered answer',
       thought: '',
       usage: null,
@@ -579,7 +613,7 @@ let updateSessionRuntimeMock: any;
         [`${STEPS.SYNTHESIS}_error_counts`]: [1]
       })
     });
-    vi.spyOn(step as any, 'runModelStream').mockResolvedValue({
+    vi.spyOn(getPrivateStep(step), 'runModelStream').mockResolvedValue({
       text: 'eventual answer',
       thought: '',
       usage: null,
@@ -610,10 +644,10 @@ let updateSessionRuntimeMock: any;
     });
     const callOrder: string[] = [];
     const usage = { promptTokens: 1, candidatesTokens: 2, totalTokens: 3 };
-    let capturedCallbacks: any;
-    let resolveStream!: (value: any) => void;
+    let capturedCallbacks: StreamCallbacks | undefined;
+    let resolveStream!: (value: StreamResult) => void;
 
-    updateWorkResultMock.mockImplementation((_messageId: string, _stepId: string, _agentIndex: number, updates: any) => {
+    updateWorkResultMock.mockImplementation((_messageId: string, _stepId: string, _agentIndex: number, updates: WorkResultUpdates) => {
       if (updates.text === 'First visible text') {
         callOrder.push('updateWorkResult');
       }
@@ -621,7 +655,7 @@ let updateSessionRuntimeMock: any;
     context.onSynthesisJump.mockImplementation(() => {
       callOrder.push('onSynthesisJump');
     });
-    vi.spyOn(step as any, 'runModelStream').mockImplementation((_config: any, callbacks: any) => {
+    vi.spyOn(getPrivateStep(step), 'runModelStream').mockImplementation((_config: StreamConfig, callbacks: StreamCallbacks) => {
       capturedCallbacks = callbacks;
       return new Promise(resolve => {
         resolveStream = resolve;
@@ -632,6 +666,8 @@ let updateSessionRuntimeMock: any;
     await Promise.resolve();
 
     expect(capturedCallbacks).toBeDefined();
+    const callbacks = capturedCallbacks;
+    if (!callbacks) throw new Error('Expected stream callbacks');
     expect(updateAgentMock).toHaveBeenCalledWith(
       STEPS.SYNTHESIS,
       0,
@@ -641,11 +677,11 @@ let updateSessionRuntimeMock: any;
       'Synthesizer Agent'
     );
 
-    capturedCallbacks.onChunk('', 'thought only', usage);
+    callbacks.onChunk('', 'thought only', usage);
     expect(context.onSynthesisJump).not.toHaveBeenCalled();
     expect(context.work.results[`${STEPS.SYNTHESIS}_thoughts`]).toEqual(['thought only']);
 
-    capturedCallbacks.onChunk('First visible text', 'thought only', usage);
+    callbacks.onChunk('First visible text', 'thought only', usage);
     expect(callOrder).toEqual(['updateWorkResult', 'onSynthesisJump']);
     expect(context.onSynthesisJump).toHaveBeenCalledTimes(1);
     expect(context.work.results[STEPS.SYNTHESIS]).toEqual(['First visible text']);
@@ -658,7 +694,7 @@ let updateSessionRuntimeMock: any;
       undefined
     );
 
-    capturedCallbacks.onChunk('Second visible text', '', null);
+    callbacks.onChunk('Second visible text', '', null);
     expect(context.onSynthesisJump).toHaveBeenCalledTimes(1);
 
     resolveStream({
@@ -672,10 +708,10 @@ let updateSessionRuntimeMock: any;
 
   it('should re-arm the first-text jump after a retry callback', async () => {
     const context = createContext();
-    let capturedCallbacks: any;
-    let resolveStream!: (value: any) => void;
+    let capturedCallbacks: StreamCallbacks | undefined;
+    let resolveStream!: (value: StreamResult) => void;
 
-    vi.spyOn(step as any, 'runModelStream').mockImplementation((_config: any, callbacks: any) => {
+    vi.spyOn(getPrivateStep(step), 'runModelStream').mockImplementation((_config: StreamConfig, callbacks: StreamCallbacks) => {
       capturedCallbacks = callbacks;
       return new Promise(resolve => {
         resolveStream = resolve;
@@ -684,11 +720,13 @@ let updateSessionRuntimeMock: any;
 
     const executePromise = step.execute(context);
     await Promise.resolve();
+    const callbacks = capturedCallbacks;
+    if (!callbacks) throw new Error('Expected stream callbacks');
 
-    capturedCallbacks.onChunk('First attempt text', '', null);
+    callbacks.onChunk('First attempt text', '', null);
     expect(context.onSynthesisJump).toHaveBeenCalledTimes(1);
 
-    capturedCallbacks.onRetry(2);
+    callbacks.onRetry?.(2, new AppError('retry', ErrorCode.NETWORK_ERROR));
     expect(context.onRetryProgress).toHaveBeenCalledTimes(1);
     expect(updateAgentMock).toHaveBeenCalledWith(
       STEPS.SYNTHESIS,
@@ -699,7 +737,7 @@ let updateSessionRuntimeMock: any;
       undefined
     );
 
-    capturedCallbacks.onChunk('Retried text', '', null);
+    callbacks.onChunk('Retried text', '', null);
     expect(context.onSynthesisJump).toHaveBeenCalledTimes(2);
 
     resolveStream({
@@ -714,7 +752,7 @@ let updateSessionRuntimeMock: any;
 
   it('should capture synthesis debug info with system instruction, history, and user turn', () => {
     const mainChatHistory = [{ role: 'model', parts: [{ text: 'history from helper' }] }];
-    (prepareGeminiContent as any).mockReturnValue({
+    vi.mocked(prepareGeminiContent).mockReturnValue({
       history: mainChatHistory,
       baseApiParts: [{ text: 'base helper part' }]
     });
@@ -722,9 +760,9 @@ let updateSessionRuntimeMock: any;
       settings: { debugMode: true }
     });
 
-    const instruction = (step as any).prepareSynthesis(context, ['refined 1', 'refined 2']);
+    const instruction = getPrivateStep(step).prepareSynthesis(context, ['refined 1', 'refined 2']);
 
-    expect(context.work.debugInfo[STEPS.SYNTHESIS]).toEqual({
+    expect(context.work.debugInfo?.[STEPS.SYNTHESIS]).toEqual({
       systemInstruction: instruction.systemInstruction,
       history: mainChatHistory,
       userTurn: instruction.synthesizerTurn
@@ -735,14 +773,14 @@ let updateSessionRuntimeMock: any;
     const expertContext = createContext({
       settings: { activeProfileId: 'expert' }
     });
-    const expertInstruction = (step as any).prepareSynthesis(expertContext, ['refined 1']);
+    const expertInstruction = getPrivateStep(step).prepareSynthesis(expertContext, ['refined 1']);
 
     expect(expertInstruction.systemInstruction).toContain('Expert synthesis instruction');
 
     const fallbackContext = createContext({
       settings: { activeProfileId: 'missing-profile' }
     });
-    const fallbackInstruction = (step as any).prepareSynthesis(fallbackContext, ['refined 1']);
+    const fallbackInstruction = getPrivateStep(step).prepareSynthesis(fallbackContext, ['refined 1']);
 
     expect(fallbackInstruction.systemInstruction).toContain('Synthesize default answer');
   });
@@ -750,7 +788,7 @@ let updateSessionRuntimeMock: any;
   it('should use attached-content fallback text when user input is empty', () => {
     const context = createContext({ userInput: '' });
 
-    const instruction = (step as any).prepareSynthesis(context, ['refined 1']);
+    const instruction = getPrivateStep(step).prepareSynthesis(context, ['refined 1']);
 
     expect(getInternalContext(instruction)).toContain('<original_query>\n    (See attached image/content)\n  </original_query>');
   });
@@ -763,7 +801,7 @@ let updateSessionRuntimeMock: any;
       })
     });
 
-    const instruction = (step as any).prepareSynthesis(context, ['', '']);
+    const instruction = getPrivateStep(step).prepareSynthesis(context, ['', '']);
     const internalContext = getInternalContext(instruction);
 
     expect(internalContext).toContain('<agent_drafts>');

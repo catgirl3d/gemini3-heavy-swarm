@@ -17,12 +17,15 @@ vi.mock('@shared/utils/logger', () => ({
 }));
 
 import { BaseStep } from '@/services/swarm/steps/BaseStep';
-import { StepId, STEPS, Work, AgentState, TokenUsage, Source } from '@/types';
+import { StepId, STEPS, Work, AgentState, TokenUsage, Source, WorkStepMetadata } from '@/types';
 import { AppSettings } from '@/types';
-import { type StepContext, type StreamCallbacks, type StreamConfig, type StreamResult } from '@/types/steps';
-import { GroundingChunk } from '@google/genai';
+import { type AgentInstruction, type MultiAgentConfig, type StepContext, type StreamCallbacks, type StreamConfig, type StreamResult } from '@/types/steps';
+import { type GroundingChunk, type Tool } from '@google/genai';
+import type { AiProvider, StreamChunk } from '@/types/ai-provider';
 import { useAgentStore } from '@/stores/agentStore';
 import { AppError, ErrorCode } from '@/utils/errors/AppError';
+import type { SimulateError } from '@/types';
+import { DEFAULT_SETTINGS } from '@/constants';
 
 // Mock dependencies
 vi.mock('@/stores/agentStore', () => {
@@ -32,8 +35,7 @@ vi.mock('@/stores/agentStore', () => {
     replaceSessionWork: vi.fn(),
     sessionsByMessageId: {},
   };
-  const useAgentStore = vi.fn(() => mockState);
-  (useAgentStore as any).getState = vi.fn(() => mockState);
+  const useAgentStore = Object.assign(vi.fn(() => mockState), { getState: vi.fn(() => mockState) });
   return { useAgentStore };
 });
 
@@ -78,8 +80,8 @@ vi.mock('@/services/swarm/steps/utils/agentStateUtils', () => ({
     }
     return newStates;
   }),
-  updateAgentStateById: vi.fn((states, id, updates) => {
-    return states.map((s: any) => s.id === id ? { ...s, ...updates } : s);
+  updateAgentStateById: vi.fn((states: AgentState[], id: string, updates: Partial<AgentState>) => {
+    return states.map((s) => s.id === id ? { ...s, ...updates } : s);
   })
 }));
 
@@ -141,7 +143,7 @@ class TestStep extends BaseStep {
     return this.extractSources(groundingChunks);
   }
 
-  public testCreateAgentStates(numAgents: number, settings: AppSettings, config: any): AgentState[] {
+  public testCreateAgentStates(numAgents: number, settings: AppSettings, config: { stepId: StepId; status: AgentState['status']; statusLabel: string; messageId?: string }): AgentState[] {
     return this.createAgentStates(numAgents, settings, config);
   }
 
@@ -170,19 +172,19 @@ class TestStep extends BaseStep {
     return this.finalizeStep(context, results, failures);
   }
 
-  public testExecuteMultiAgent(context: StepContext, config: any): Promise<string[]> {
+  public testExecuteMultiAgent(context: StepContext, config: MultiAgentConfig): Promise<string[]> {
     return this.executeMultiAgent(context, config);
   }
 
   public testRunAgentRegeneration(
     context: StepContext,
     agentIndex: number,
-    instruction: any,
+    instruction: AgentInstruction,
     agentStates: AgentState[],
     roleType?: 'roles' | 'criticRoles',
-    tools?: any[],
+    tools?: Tool[],
     onFirstTextChunk?: () => void,
-    simulateError?: any,
+    simulateError?: SimulateError,
     simulateErrorAttempts?: number
   ): Promise<{ text: string; work: Work; groundingChunks?: GroundingChunk[] }> {
     return this.runAgentRegeneration(
@@ -279,7 +281,7 @@ describe('BaseStep', () => {
         } as AppSettings,
         ai: {
           getDefaultModel: (settings: AppSettings) => settings.geminiModel
-        } as any
+         } as unknown as AiProvider
       } as StepContext;
 
       const result = step.testGetRoleModel(context, 0, 'roles');
@@ -290,11 +292,20 @@ describe('BaseStep', () => {
     it('should return step model when no role profiles exist', () => {
       const context = {
         settings: {
+          ...DEFAULT_SETTINGS,
           geminiModel: 'global-model',
           initialModel: 'step-model',
           roleProfiles: []
-        } as AppSettings,
-        ai: null
+        },
+        ai: null,
+        history: [],
+        userInput: '',
+        image: null,
+        imageFile: null,
+        work: { results: {} },
+        onMessageUpdate: vi.fn(),
+        signal: new AbortController().signal,
+        messageId: 'msg-1',
       } as StepContext;
 
       const result = step.testGetRoleModel(context, 0, 'roles');
@@ -423,7 +434,7 @@ describe('BaseStep', () => {
         } as AppSettings,
         ai: {
           getDefaultModel: (settings: AppSettings) => settings.geminiModel
-        } as any
+         } as unknown as AiProvider
       } as StepContext;
 
       const result = step.testGetStepModel(context);
@@ -434,7 +445,7 @@ describe('BaseStep', () => {
 
   describe('handleStreamChunk', () => {
     it('should update results for multi-agent scenario', () => {
-      const work: Work = {
+      const work: Work & { results: NonNullable<Work['results']> } = {
         results: {}
       };
 
@@ -443,7 +454,7 @@ describe('BaseStep', () => {
         settings: { numAgents: 3 } as AppSettings,
         messageId: 'msg-1',
         onMessageUpdate: vi.fn()
-      } as any;
+       } as unknown as StepContext;
 
       const localResults = ['', '', ''];
 
@@ -453,12 +464,13 @@ describe('BaseStep', () => {
         streamToMessage: false
       });
 
+      step.testEnsureResults(work);
       expect(localResults[1]).toBe('Agent 2 text');
       expect(work.results[STEPS.INITIAL]).toEqual(['', 'Agent 2 text', '']);
     });
 
     it('should update thoughts correctly', () => {
-      const work: Work = {
+      const work: Work & { results: NonNullable<Work['results']> } = {
         results: {}
       };
 
@@ -467,18 +479,19 @@ describe('BaseStep', () => {
         settings: { numAgents: 2 } as AppSettings,
         messageId: 'msg-1',
         onMessageUpdate: vi.fn()
-      } as any;
+       } as unknown as StepContext;
 
       step.testHandleStreamChunk(context, 0, 'text', 'thinking...', null, {
         isFirstChunk: false,
         streamToMessage: false
       });
 
+      step.testEnsureResults(work);
       expect(work.results[`${STEPS.INITIAL}_thoughts`]).toEqual(['thinking...', '']);
     });
 
     it('should update token usage correctly', () => {
-      const work: Work = {
+      const work: Work & { results: NonNullable<Work['results']> } = {
         results: {}
       };
 
@@ -487,7 +500,7 @@ describe('BaseStep', () => {
         settings: { numAgents: 2 } as AppSettings,
         messageId: 'msg-1',
         onMessageUpdate: vi.fn()
-      } as any;
+       } as unknown as StepContext;
 
       const usage = {
         totalTokens: 100,
@@ -500,13 +513,14 @@ describe('BaseStep', () => {
         streamToMessage: false
       });
 
+      step.testEnsureResults(work);
       expect(work.results[`${STEPS.INITIAL}_usage`]).toBeDefined();
-      expect((work.results[`${STEPS.INITIAL}_usage`] as any[])[0]).toEqual(usage);
+       expect((work.results[`${STEPS.INITIAL}_usage`] as TokenUsage[])[0]).toEqual(usage);
     });
 
     it('should handle synthesis (single agent) scenario', () => {
       step.id = STEPS.SYNTHESIS;
-      const work: Work = {
+      const work: Work & { results: NonNullable<Work['results']> } = {
         results: {}
       };
 
@@ -515,18 +529,19 @@ describe('BaseStep', () => {
         settings: { numAgents: 1 } as AppSettings,
         messageId: 'msg-1',
         onMessageUpdate: vi.fn()
-      } as any;
+       } as unknown as StepContext;
 
       step.testHandleStreamChunk(context, 0, 'synthesis text', '', null, {
         isFirstChunk: false,
         streamToMessage: false
       });
 
+      step.testEnsureResults(work);
       expect(work.results[STEPS.SYNTHESIS]).toEqual(['synthesis text']);
     });
 
     it('should call onMessageUpdate when streamToMessage is true', () => {
-      const work: Work = {
+      const work: Work & { results: NonNullable<Work['results']> } = {
         results: {}
       };
 
@@ -537,7 +552,7 @@ describe('BaseStep', () => {
         settings: { numAgents: 1 } as AppSettings,
         messageId: 'msg-1',
         onMessageUpdate
-      } as any;
+       } as unknown as StepContext;
 
       const usage = { totalTokens: 10, promptTokens: 5, candidatesTokens: 5 };
 
@@ -552,7 +567,7 @@ describe('BaseStep', () => {
     it('should call onMessageUpdate for thought or usage chunks even when text is empty', () => {
       vi.useFakeTimers();
 
-      const work: Work = {
+      const work: Work & { results: NonNullable<Work['results']> } = {
         results: {}
       };
       const usage = { totalTokens: 7, promptTokens: 3, candidatesTokens: 4 };
@@ -563,13 +578,14 @@ describe('BaseStep', () => {
         settings: { numAgents: 2 } as AppSettings,
         messageId: 'msg-1',
         onMessageUpdate
-      } as any;
+       } as unknown as StepContext;
 
       step.testHandleStreamChunk(context, 0, '', 'reasoning first', usage, {
         isFirstChunk: false,
         streamToMessage: true
       });
 
+      step.testEnsureResults(work);
       expect(work.results[STEPS.INITIAL]).toEqual(['', '']);
       expect(work.results[`${STEPS.INITIAL}_thoughts`]).toEqual(['reasoning first', '']);
       expect(work.results[`${STEPS.INITIAL}_usage`]).toEqual([usage, null]);
@@ -589,7 +605,7 @@ describe('BaseStep', () => {
     it('should flush buffered reasoning immediately when the first text chunk arrives', () => {
       vi.useFakeTimers();
 
-      const work: Work = {
+      const work: Work & { results: NonNullable<Work['results']> } = {
         results: {}
       };
       const usage = { totalTokens: 7, promptTokens: 3, candidatesTokens: 4 };
@@ -599,7 +615,7 @@ describe('BaseStep', () => {
         settings: { numAgents: 2 } as AppSettings,
         messageId: 'msg-1',
         onMessageUpdate: vi.fn()
-      } as any;
+       } as unknown as StepContext;
 
       step.testHandleStreamChunk(context, 0, '', 'reasoning first', usage, {
         isFirstChunk: false,
@@ -634,7 +650,7 @@ describe('BaseStep', () => {
         settings: { numAgents: 1 } as AppSettings,
         messageId: 'msg-1',
         onMessageUpdate: vi.fn()
-      } as any;
+       } as unknown as StepContext;
 
       step.testHandleStreamChunk(context, 0, 'first chunk', '', null, {
         isFirstChunk: false,
@@ -1063,7 +1079,7 @@ describe('BaseStep', () => {
         code: ErrorCode.NETWORK_ERROR,
       });
 
-      expect(context.work.stepMetadata?.find((meta: any) => meta.id === STEPS.REFINEMENT)).toMatchObject({
+       expect(context.work.stepMetadata?.find((meta: WorkStepMetadata) => meta.id === STEPS.REFINEMENT)).toMatchObject({
         status: 'stale',
         staleFromStepId: STEPS.INITIAL,
       });
@@ -1132,7 +1148,7 @@ describe('BaseStep', () => {
         onChunk: vi.fn()
       };
 
-      const result = await step.testRunModelStream(context as any, callbacks);
+      const result = await step.testRunModelStream(context as unknown as StreamConfig, callbacks);
 
       expect(result.text).toBe('Hello World');
       expect(callbacks.onChunk).toHaveBeenCalledTimes(2);
@@ -1167,7 +1183,7 @@ describe('BaseStep', () => {
         contents: [],
         signal: new AbortController().signal,
         work: { results: {} }
-      } as any, callbacks);
+       } as unknown as StreamConfig, callbacks);
 
       expect(result).toEqual({
         text: 'Answer',
@@ -1199,7 +1215,7 @@ describe('BaseStep', () => {
         contents: [],
         signal: new AbortController().signal,
         work: { results: {} }
-      } as any, { onChunk: vi.fn() });
+       } as unknown as StreamConfig, { onChunk: vi.fn() });
 
       expect(loggerSpies.debug).toHaveBeenCalledWith('Stream complete', expect.objectContaining({
         chunkCount: 2,
@@ -1217,7 +1233,7 @@ describe('BaseStep', () => {
     });
 
     it('should reinitialize malformed per-agent simulated error counts and persist the failed attempt', async () => {
-      const work: Work = {
+      const work: Work & { results: NonNullable<Work['results']> } = {
         results: {
           [`${STEPS.INITIAL}_error_counts`]: 2
         }
@@ -1234,7 +1250,7 @@ describe('BaseStep', () => {
         simulateErrorAttempts: 1,
         messageId: 'msg-1',
         work
-      } as any, { onChunk: vi.fn() })).rejects.toMatchObject({
+       } as unknown as StreamConfig, { onChunk: vi.fn() })).rejects.toMatchObject({
         code: ErrorCode.SERVICE_OVERLOADED,
         status: 503
       } satisfies Partial<AppError>);
@@ -1263,7 +1279,7 @@ describe('BaseStep', () => {
           updatedAt: 1,
         },
       };
-      const work: Work = {
+      const work: Work & { results: NonNullable<Work['results']> } = {
         results: {
           [STEPS.INITIAL]: ['stale agent 0', 'stale agent 1'],
         },
@@ -1280,7 +1296,7 @@ describe('BaseStep', () => {
         simulateErrorAttempts: 1,
         messageId: 'msg-1',
         work
-      } as any, { onChunk: vi.fn() })).rejects.toMatchObject({
+       } as unknown as StreamConfig, { onChunk: vi.fn() })).rejects.toMatchObject({
         code: ErrorCode.SERVICE_OVERLOADED,
         status: 503
       } satisfies Partial<AppError>);
@@ -1321,7 +1337,7 @@ describe('BaseStep', () => {
         simulateError: '429',
         simulateErrorAttempts: 1,
         work
-      } as any, callbacks);
+       } as unknown as StreamConfig, callbacks);
 
       expect(result.text).toBe('Recovered');
       expect(work.results?.[`${STEPS.INITIAL}_error_counts`]).toEqual([1]);
@@ -1337,7 +1353,7 @@ describe('BaseStep', () => {
         contents: [],
         signal: new AbortController().signal,
         work: { results: {} }
-      } as any, { onChunk: vi.fn() })).rejects.toMatchObject({
+       } as unknown as StreamConfig, { onChunk: vi.fn() })).rejects.toMatchObject({
         code: ErrorCode.INVALID_SETTINGS
       });
     });
@@ -1360,7 +1376,7 @@ describe('BaseStep', () => {
         simulateError,
         simulateErrorAttempts: 1,
         work
-      } as any, { onChunk: vi.fn() })).rejects;
+       } as unknown as StreamConfig, { onChunk: vi.fn() })).rejects;
 
       if (code) {
         await expectation.toMatchObject({
@@ -1413,7 +1429,7 @@ describe('BaseStep', () => {
         onChunk: vi.fn()
       };
 
-      await expect(step.testRunModelStream(context as any, callbacks)).rejects.toThrow('Aborted');
+       await expect(step.testRunModelStream(context as unknown as StreamConfig, callbacks)).rejects.toThrow('Aborted');
       
       // Verify first chunk was processed
       expect(callbacks.onChunk).toHaveBeenCalledWith('Start', '', null);
@@ -1447,7 +1463,7 @@ describe('BaseStep', () => {
       const callbacks = { onChunk: vi.fn() };
 
       await expect(
-        step.testRunModelStream(context as any, callbacks)
+         step.testRunModelStream(context as unknown as StreamConfig, callbacks)
       ).rejects.toThrow('Stream interrupted');
 
       // Verify that onChunk was called for successful chunks before error
@@ -1486,7 +1502,7 @@ describe('BaseStep', () => {
       };
 
       await expect(
-        step.testRunModelStream(context as any, callbacks)
+         step.testRunModelStream(context as unknown as StreamConfig, callbacks)
       ).rejects.toThrow('Network error during streaming');
 
       // Both chunks should have been processed before the error
@@ -1503,9 +1519,11 @@ describe('BaseStep', () => {
       mainChatHistory: []
     });
 
-    const createProvider = (stream: AsyncGenerator<any>) => ({
+    const createProvider = (stream: AsyncGenerator<StreamChunk>): AiProvider => ({
       name: 'mock',
       isProxy: false,
+      capabilities: { search: false, vision: false, reasoning: false, codeExecution: false },
+      getEffectiveSettings: (settings) => settings,
       getDefaultModel: vi.fn(() => 'mock-model'),
       models: {
         generateContentStream: vi.fn().mockResolvedValue({ stream })
@@ -1531,7 +1549,7 @@ describe('BaseStep', () => {
         signal: new AbortController().signal,
         messageId: 'msg-1',
         onMessageUpdate: vi.fn()
-      } as any;
+       } as unknown as StepContext;
 
       const result = await step.testRunAgentRegeneration(
         context,
@@ -1571,7 +1589,7 @@ describe('BaseStep', () => {
         yield { text: 'first chunk', thought: '', usage: firstUsage };
         yield { text: ' and final chunk', thought: '', usage: finalUsage };
       })());
-      const work: Work = {
+      const work: Work & { results: NonNullable<Work['results']> } = {
         results: {
           [STEPS.INITIAL]: ['old agent 0', 'old agent 1'],
           [`${STEPS.INITIAL}_usage`]: [null, null]
@@ -1587,7 +1605,7 @@ describe('BaseStep', () => {
           signal: new AbortController().signal,
           messageId: 'msg-1',
           onMessageUpdate: vi.fn()
-        } as any,
+         } as unknown as StepContext,
         1,
         createInstruction(),
         [
@@ -1623,7 +1641,7 @@ describe('BaseStep', () => {
       const provider = createProvider((async function* () {
         yield { text: 'new critic text', thought: '', usage: null };
       })());
-      const work: Work = {
+      const work: Work & { results: NonNullable<Work['results']> } = {
         results: {
           [STEPS.INITIAL]: ['old agent 0', 'old agent 1', 'old agent 2'],
           [STEPS.REFINEMENT]: ['old critic 0', 'old critic 1', 'old critic 2'],
@@ -1642,7 +1660,7 @@ describe('BaseStep', () => {
         signal: new AbortController().signal,
         messageId: 'msg-1',
         onMessageUpdate: vi.fn()
-      } as any;
+       } as unknown as StepContext;
 
       const result = await refinementStep.testRunAgentRegeneration(
         context,
@@ -1658,7 +1676,7 @@ describe('BaseStep', () => {
       );
 
       expect(result.text).toBe('new critic text');
-      expect(context.work.stepMetadata?.find((meta: any) => meta.id === STEPS.REFINEMENT)).toMatchObject({
+       expect(context.work.stepMetadata?.find((meta: WorkStepMetadata) => meta.id === STEPS.REFINEMENT)).toMatchObject({
         status: 'stale',
         staleFromStepId: STEPS.INITIAL,
       });
@@ -1682,7 +1700,7 @@ describe('BaseStep', () => {
         signal: new AbortController().signal,
         messageId: 'msg-1',
         onMessageUpdate: vi.fn()
-      } as any;
+       } as unknown as StepContext;
 
       const result = await refinementStep.testRunAgentRegeneration(
         context,
@@ -1697,7 +1715,7 @@ describe('BaseStep', () => {
       );
 
       expect(result.text).toBe('new critic text');
-      expect(context.work.stepMetadata?.find((meta: any) => meta.id === STEPS.REFINEMENT)).toMatchObject({
+       expect(context.work.stepMetadata?.find((meta: WorkStepMetadata) => meta.id === STEPS.REFINEMENT)).toMatchObject({
         status: 'done',
       });
     });
@@ -1712,7 +1730,7 @@ describe('BaseStep', () => {
           work,
           signal: new AbortController().signal,
           messageId: 'msg-1'
-        } as any,
+         } as unknown as StepContext,
         0,
         createInstruction(),
         []
@@ -1734,7 +1752,7 @@ describe('BaseStep', () => {
         signal: new AbortController().signal,
         messageId: 'msg-1',
         onMessageUpdate: vi.fn()
-      } as any;
+       } as unknown as StepContext;
 
       await expect(step.testRunAgentRegeneration(
         context,
@@ -1767,7 +1785,7 @@ describe('BaseStep', () => {
           messageId: 'msg-1',
           onMessageUpdate: vi.fn(),
           onRetryProgress,
-        } as any,
+         } as unknown as StepContext,
         0,
         createInstruction(),
         [{ id: 'a0', name: 'Agent 1', status: 'error', label: 'Failed', messageId: 'msg-1' }]

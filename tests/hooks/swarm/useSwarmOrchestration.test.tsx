@@ -1,11 +1,18 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SetStateAction } from 'react';
+import type { RefObject, SetStateAction } from 'react';
 import type { AbortControllerHook } from '@/hooks/network/useAbortController';
 import type { AgentState, Message, Source, TokenUsage, Work } from '@/types';
 import { createMockSettings } from '@test/settingsMocks';
 import { STEPS } from '@/types/steps';
 import { selectActiveSessionUi, useAgentStore } from '@/stores/agentStore';
+import { SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
+
+type RunSwarm = SwarmOrchestrator['runSwarm'];
+type RunSwarmArgs = Parameters<RunSwarm>;
+type MockRunSwarmResult = { work: Work; paused?: boolean; text?: string; sources?: Source[] };
+type RunSwarmMock = ReturnType<typeof vi.fn>;
+type TestAbortHook = AbortControllerHook & { createdSignals: AbortSignal[] };
 
 const mocks = vi.hoisted(() => ({
   generateUUID: vi.fn(),
@@ -72,11 +79,13 @@ const spyOnActiveSessionClear = (assertSnapshotCommitted: () => void) => {
   });
 };
 
-const createAbortHook = (): AbortControllerHook => {
+const createAbortHook = (): TestAbortHook => {
+  const createdSignals: AbortSignal[] = [];
   const hook: AbortControllerHook = {
     ref: { current: null },
     create: vi.fn(() => {
       const controller = new AbortController();
+      createdSignals.push(controller.signal);
       hook.ref.current = controller;
       return controller;
     }),
@@ -87,7 +96,28 @@ const createAbortHook = (): AbortControllerHook => {
     signal: undefined,
   };
 
-  return hook;
+  return { ...hook, createdSignals };
+};
+
+const createOrchestrator = (runSwarm: RunSwarmMock): SwarmOrchestrator => Object.assign(
+  Object.create(SwarmOrchestrator.prototype),
+  {
+    runSwarm: async (...args: RunSwarmArgs) => {
+      const value: unknown = await Reflect.apply(runSwarm, undefined, args);
+      if (typeof value !== 'object' || value === null || !('work' in value) || typeof value.work !== 'object' || value.work === null) {
+        throw new Error('Invalid runSwarm mock result');
+      }
+
+      const result = value as MockRunSwarmResult;
+      return { work: result.work, paused: result.paused ?? false };
+    },
+  },
+) as SwarmOrchestrator;
+
+const createUnavailableOrchestratorRef = (): RefObject<SwarmOrchestrator> => {
+  const ref = { current: createOrchestrator(vi.fn()) } as RefObject<SwarmOrchestrator>;
+  Object.defineProperty(ref, 'current', { value: null, writable: true });
+  return ref;
 };
 
 const createAgent = (overrides: Partial<AgentState> = {}): AgentState => ({
@@ -114,7 +144,6 @@ const createWork = (overrides: Partial<Work> = {}): Work => ({
   ],
   ...overrides,
 });
-
 const createResumeMessages = (messageId: string, work: Work): Message[] => ([
   { id: `user-${messageId}`, role: 'user', parts: [{ text: 'hello' }] },
   { id: messageId, role: 'model', parts: [{ text: '' }], work },
@@ -124,13 +153,13 @@ const renderOrchestration = ({
   initialMessages = [],
   runSwarm = vi.fn(),
   mainAbort = createAbortHook(),
-  orchestratorRef = { current: { runSwarm } },
+  orchestratorRef = { current: createOrchestrator(runSwarm) },
   settings = createMockSettings({ numAgents: 2 }),
 }: {
   initialMessages?: Message[];
-  runSwarm?: ReturnType<typeof vi.fn>;
-  mainAbort?: AbortControllerHook;
-  orchestratorRef?: { current: { runSwarm: ReturnType<typeof vi.fn> } | null };
+   runSwarm?: RunSwarmMock;
+   mainAbort?: TestAbortHook;
+   orchestratorRef?: RefObject<SwarmOrchestrator>;
   settings?: ReturnType<typeof createMockSettings>;
 } = {}) => {
   const messagesState = createMessagesState(initialMessages);
@@ -140,7 +169,7 @@ const renderOrchestration = ({
     messagesRef: messagesState.messagesRef,
     setMessages: messagesState.setMessages,
     mainAbort,
-    orchestratorRef: orchestratorRef as any,
+    orchestratorRef,
   }));
 
   return {
@@ -152,7 +181,7 @@ const renderOrchestration = ({
   };
 };
 
-const toRunSwarmCall = (args: any[]) => {
+const toRunSwarmCall = (args: RunSwarmArgs) => {
   const [
     settings,
     userInput,
@@ -178,15 +207,26 @@ const toRunSwarmCall = (args: any[]) => {
     messageId,
     onMessageUpdate: onMessageUpdate as (text: string, isFirstChunk: boolean, thought?: string, usage?: TokenUsage | null) => void,
     signal,
-    onPause,
-    onStatusUpdate,
-    onSynthesisJump,
-    onRetryProgress,
+     onPause: onPause ?? (() => undefined),
+     onStatusUpdate: onStatusUpdate ?? (() => undefined),
+     onSynthesisJump: onSynthesisJump ?? (() => undefined),
+     onRetryProgress: onRetryProgress ?? (() => undefined),
     existingWork,
   };
 };
 
-const getRunSwarmCall = (runSwarm: ReturnType<typeof vi.fn>) => toRunSwarmCall(runSwarm.mock.calls[0]);
+const isRunSwarmArgs = (value: unknown): value is RunSwarmArgs => Array.isArray(value) && value.length >= 8;
+
+const getRunSwarmCall = (runSwarm: RunSwarmMock, index = 0) => {
+  const args: unknown = runSwarm.mock.calls[index];
+  if (!isRunSwarmArgs(args)) {
+    throw new Error('runSwarm call was not captured');
+  }
+
+  return toRunSwarmCall(args);
+};
+
+const getCreatedAbortSignal = (mainAbort: TestAbortHook): AbortSignal | undefined => mainAbort.createdSignals[0];
 
 describe('useSwarmOrchestration', () => {
   beforeEach(() => {
@@ -217,7 +257,7 @@ describe('useSwarmOrchestration', () => {
     const mainAbort = createAbortHook();
     const { result, runSwarm, messagesState } = renderOrchestration({
       mainAbort,
-      orchestratorRef: { current: null },
+      orchestratorRef: createUnavailableOrchestratorRef(),
     });
 
     await act(async () => {
@@ -247,7 +287,7 @@ describe('useSwarmOrchestration', () => {
         [`${STEPS.SYNTHESIS}_sources`]: sources,
       },
     });
-    const runSwarm = vi.fn(async (...args: any[]) => {
+    const runSwarm = vi.fn(async (...args: RunSwarmArgs) => {
       const { messageId, onMessageUpdate } = toRunSwarmCall(args);
 
       expect(useAgentStore.getState().abortControllers.has(`main-${messageId}`)).toBe(true);
@@ -292,7 +332,7 @@ describe('useSwarmOrchestration', () => {
     expect(runSwarmCall.imageFile).toBe(imageFile);
     expect(runSwarmCall.history).toEqual([messagesState.messages[0]]);
     expect(runSwarmCall.messageId).toBe('model-1');
-    expect(runSwarmCall.signal).toBe((mainAbort.create as any).mock.results[0].value.signal);
+    expect(runSwarmCall.signal).toBe(getCreatedAbortSignal(mainAbort));
     expect(runSwarmCall.existingWork).toBeUndefined();
 
     expect(result.current.lastInput).toEqual({
@@ -324,7 +364,7 @@ describe('useSwarmOrchestration', () => {
       createAgent({ id: 'final-agent-1', messageId: 'model-1', status: 'done', label: 'Done' }),
       createAgent({ id: 'final-agent-2', messageId: 'model-1', agentIndex: 1, name: 'Agent 2', status: 'done', label: 'Done' }),
     ];
-    const runSwarm = vi.fn(async (...args: any[]) => {
+    const runSwarm = vi.fn(async (...args: RunSwarmArgs) => {
       const { messageId } = toRunSwarmCall(args);
       useAgentStore.getState().replaceSessionAgents(messageId, finalAgents);
 
@@ -367,7 +407,7 @@ describe('useSwarmOrchestration', () => {
       ],
     });
     const finalWork = createWork();
-    const runSwarm = vi.fn(async (...args: any[]) => {
+    const runSwarm = vi.fn(async (...args: RunSwarmArgs) => {
       const { messageId } = toRunSwarmCall(args);
 
       if (runSwarm.mock.calls.length === 1) {
@@ -402,7 +442,7 @@ describe('useSwarmOrchestration', () => {
     });
 
     expect(runSwarm).toHaveBeenCalledTimes(2);
-    const resumeCall = toRunSwarmCall(runSwarm.mock.calls[1]);
+    const resumeCall = getRunSwarmCall(runSwarm, 1);
     expect(resumeCall.messageId).toBe('model-1');
     expect(resumeCall.existingWork).toMatchObject(pausedWork);
     expect(resumeCall.existingWork?.agentStates).toEqual(pausedAgents);
@@ -500,7 +540,7 @@ describe('useSwarmOrchestration', () => {
         [STEPS.SYNTHESIS]: ['retried answer'],
       },
     });
-    const runSwarm = vi.fn(async (...args: any[]) => {
+    const runSwarm = vi.fn(async (...args: RunSwarmArgs) => {
       const { messageId, onMessageUpdate } = toRunSwarmCall(args);
       onMessageUpdate(`stream-${runSwarm.mock.calls.length}`, true);
 
@@ -534,7 +574,7 @@ describe('useSwarmOrchestration', () => {
     });
 
     expect(runSwarm).toHaveBeenCalledTimes(2);
-    const retryCall = toRunSwarmCall(runSwarm.mock.calls[1]);
+    const retryCall = getRunSwarmCall(runSwarm, 1);
     expect(retryCall.userInput).toBe('hello');
     expect(retryCall.image).toBeNull();
     expect(retryCall.imageFile).toBeNull();
@@ -574,7 +614,7 @@ describe('useSwarmOrchestration', () => {
       { id: 'resume-model', role: 'model', parts: [{ text: '' }], work: existingWork },
     ];
     const resumedWork = createWork();
-    const runSwarm = vi.fn(async (...args: any[]) => {
+    const runSwarm = vi.fn(async (...args: RunSwarmArgs) => {
       const { onMessageUpdate } = toRunSwarmCall(args);
       onMessageUpdate('resumed stream', false);
       return { text: 'resumed final', sources: [], work: resumedWork };
@@ -632,7 +672,7 @@ describe('useSwarmOrchestration', () => {
       { id: 'resume-user', role: 'user', parts: [{ text: 'resume' }] },
       { id: 'resume-model', role: 'model', parts: [{ text: 'partial answer' }], work: existingWork },
     ];
-    const runSwarm = vi.fn(async (...args: any[]) => {
+    const runSwarm = vi.fn(async (...args: RunSwarmArgs) => {
       const { messageId, onMessageUpdate } = toRunSwarmCall(args);
       onMessageUpdate('resumed stream', false);
       useAgentStore.getState().replaceSessionAgents(messageId, liveAgents);
@@ -672,7 +712,7 @@ describe('useSwarmOrchestration', () => {
       { id: 'user-1', role: 'user', parts: [{ text: 'continue' }] },
       { id: 'model-1', role: 'model', parts: [{ text: '' }], work: existingWork },
     ];
-    const runSwarm = vi.fn(async (...args: any[]) => {
+    const runSwarm = vi.fn(async (...args: RunSwarmArgs) => {
       const { onMessageUpdate } = toRunSwarmCall(args);
       onMessageUpdate('', false, 'thinking');
       return { text: 'final answer', sources: [], work: createWork() };
@@ -716,14 +756,14 @@ describe('useSwarmOrchestration', () => {
     });
 
     expect(runSwarm).toHaveBeenCalledTimes(2);
-    expect(toRunSwarmCall(runSwarm.mock.calls[1]).imageFile).toBe(imageFile);
+    expect(getRunSwarmCall(runSwarm, 1).imageFile).toBe(imageFile);
   });
 
   it('does nothing when continueGeneration falls back to an empty message list', async () => {
     const { result, runSwarm, messagesState } = renderOrchestration({
       initialMessages: [{ id: 'user-1', role: 'user', parts: [{ text: 'hello' }] }],
     });
-    messagesState.messagesRef.current = null as any;
+    Object.defineProperty(messagesState.messagesRef, 'current', { value: null, writable: true });
 
     await act(async () => {
       await result.current.continueGeneration();
@@ -767,7 +807,7 @@ describe('useSwarmOrchestration', () => {
     });
 
     expect(runSwarm).toHaveBeenCalledTimes(2);
-    expect(toRunSwarmCall(runSwarm.mock.calls[1]).imageFile).toBeNull();
+    expect(getRunSwarmCall(runSwarm, 1).imageFile).toBeNull();
   });
 
   it('stops the current generation through the centralized abort registry and marks message work as stopped', () => {
@@ -897,7 +937,7 @@ describe('useSwarmOrchestration', () => {
     const initialMessages: Message[] = [
       { id: 'user-1', role: 'user', parts: [{ text: 'hello' }] },
     ];
-    const runSwarm = vi.fn(async (...args: any[]) => {
+    const runSwarm = vi.fn(async (...args: RunSwarmArgs) => {
       const { onMessageUpdate } = toRunSwarmCall(args);
       onMessageUpdate('streamed after missing resume id', true);
       return { text: 'final', sources: [], work: createWork() };
@@ -942,7 +982,7 @@ describe('useSwarmOrchestration', () => {
       await Promise.resolve();
     });
 
-    const retryCall = toRunSwarmCall(runSwarm.mock.calls[1]);
+    const retryCall = getRunSwarmCall(runSwarm, 1);
     expect(retryCall.history).toEqual(messagesState.messages.slice(0, -1));
     expect(retryCall.existingWork).toBeUndefined();
     expect(messagesState.messages[messagesState.messages.length - 1]).toMatchObject({ id: 'model-2', role: 'model' });
@@ -950,7 +990,7 @@ describe('useSwarmOrchestration', () => {
 
   it('handles aborted swarm runs as user cancellation and returns early from catch cleanup', async () => {
     mocks.generateUUID.mockReturnValueOnce('model-aborted').mockReturnValueOnce('user-aborted');
-    const runSwarm = vi.fn(async (...args: any[]) => {
+    const runSwarm = vi.fn(async (...args: RunSwarmArgs) => {
       const { onPause, onSynthesisJump } = toRunSwarmCall(args);
       onPause();
       onSynthesisJump();
@@ -1183,7 +1223,7 @@ describe('useSwarmOrchestration', () => {
         [STEPS.SYNTHESIS]: ['retried answer'],
       },
     });
-    const runSwarm = vi.fn(async (...args: any[]) => {
+    const runSwarm = vi.fn(async (...args: RunSwarmArgs) => {
       const { messageId } = toRunSwarmCall(args);
 
       if (runSwarm.mock.calls.length === 1) {
@@ -1212,7 +1252,7 @@ describe('useSwarmOrchestration', () => {
       await Promise.resolve();
     });
 
-    const retryCall = toRunSwarmCall(runSwarm.mock.calls[1]);
+    const retryCall = getRunSwarmCall(runSwarm, 1);
     expect(retryCall.messageId).toBe('model-total-retry');
     expect(retryCall.existingWork).toMatchObject({
       results: failedWork.results,
@@ -1264,7 +1304,7 @@ describe('useSwarmOrchestration', () => {
     expect(runSwarm).toHaveBeenCalledTimes(1);
 
     // Verify sanitized values inside store/resumed Work
-    const resumeCall = toRunSwarmCall(runSwarm.mock.calls[0]);
+    const resumeCall = getRunSwarmCall(runSwarm);
     expect(resumeCall.existingWork?.results?.[STEPS.INITIAL]?.[0]).toBe('');
     expect(resumeCall.existingWork?.results?.[`${STEPS.INITIAL}_thoughts`]?.[0]).toBe('');
     expect(resumeCall.existingWork?.results?.[`${STEPS.INITIAL}_usage`]?.[0]).toBeNull();
@@ -1325,7 +1365,7 @@ describe('useSwarmOrchestration', () => {
 
     expect(runSwarm).toHaveBeenCalledTimes(1);
 
-    const resumeCall = toRunSwarmCall(runSwarm.mock.calls[0]);
+    const resumeCall = getRunSwarmCall(runSwarm);
     expect(resumeCall.existingWork?.results?.[STEPS.REFINEMENT]?.[0]).toBe('');
     expect(resumeCall.existingWork?.results?.[`${STEPS.REFINEMENT}_thoughts`]?.[0]).toBe('');
     expect(resumeCall.existingWork?.results?.[`${STEPS.REFINEMENT}_usage`]?.[0]).toBeNull();
@@ -1380,7 +1420,7 @@ describe('useSwarmOrchestration', () => {
 
     expect(runSwarm).toHaveBeenCalledTimes(1);
 
-    const resumeCall = toRunSwarmCall(runSwarm.mock.calls[0]);
+    const resumeCall = getRunSwarmCall(runSwarm);
     expect(resumeCall.existingWork?.results?.[STEPS.INITIAL]).toEqual(['', '', 'successful draft 3']);
     expect(resumeCall.existingWork?.results?.[`${STEPS.INITIAL}_thoughts`]).toEqual(['', '', 'successful thought 3']);
     expect(resumeCall.existingWork?.results?.[`${STEPS.INITIAL}_usage`]).toEqual([

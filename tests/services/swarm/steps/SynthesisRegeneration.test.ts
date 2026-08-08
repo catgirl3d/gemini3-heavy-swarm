@@ -1,7 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SynthesisStep } from '@/services/swarm/steps/SynthesisStep';
-import { STEPS } from '@/types/steps';
+import { STEPS, type StepId } from '@/types/steps';
 import { useAgentStore } from '@/stores/agentStore';
+import type { AgentState, TokenUsage, Work } from '@/types';
+import type { StepContext, StreamCallbacks, StreamConfig, StreamResult } from '@/types/steps';
+import type { Content } from '@google/genai';
+
+type SynthesisRegenerationPrivateApi = {
+  createAgentStates: (...args: unknown[]) => AgentState[];
+  updateAgentStateById: (states: AgentState[], id: string, updates: Partial<AgentState>) => AgentState[];
+  prepareSynthesis: (...args: unknown[]) => { systemInstruction: string; synthesizerTurn: Content; mainChatHistory: Content[] };
+  extractSources: (...args: unknown[]) => unknown[];
+  getStepModel: (...args: unknown[]) => string;
+  ensureResults: (work: Work) => void;
+  ensureStepUsage: (work: Work, stepId: StepId, numAgents: number) => (TokenUsage | null)[];
+  runModelStream: (config: StreamConfig, callbacks: StreamCallbacks) => Promise<StreamResult>;
+};
+
+const getPrivateStep = (step: SynthesisStep): SynthesisRegenerationPrivateApi => step as unknown as SynthesisRegenerationPrivateApi;
 
 // Mock dependencies
 vi.mock('@/stores/agentStore', () => ({
@@ -18,7 +34,7 @@ vi.mock('@/stores/agentStore', () => ({
 
 vi.mock('@/utils/swarm/stepConstants', () => ({
   getStepConfig: vi.fn((id: string) => {
-    const configs: any = {
+    const configs: Record<string, unknown> = {
       synthesis_step: { 
           name: 'Synthesis',
           labels: { waiting: 'Waiting...', working: 'Synthesizing...', done: 'Done', error: 'Error' }, 
@@ -59,47 +75,53 @@ vi.mock('@/utils/swarm/statusHelpers', () => ({
  */
 describe('Synthesis Regeneration - Integration Tests', () => {
   let step: SynthesisStep;
-  let mockContext: any;
-  let updateWorkResultSpy: any;
+  type TestWork = Work & { results: NonNullable<Work['results']> };
+  type TestContext = StepContext & { work: TestWork };
+  let mockContext: TestContext;
+  type StoreState = ReturnType<typeof useAgentStore.getState>;
+  let updateWorkResultSpy: StoreState['updateSessionWorkResult'] & ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     
-    updateWorkResultSpy = vi.fn();
-    (useAgentStore.getState as any).mockReturnValue({
-      updateSessionAgent: vi.fn(),
-      updateSessionWorkResult: updateWorkResultSpy,
-      replaceSessionWork: vi.fn(),
-      updateSessionRuntime: vi.fn(),
-      agents: []
-    });
+    updateWorkResultSpy = vi.fn((
+      _messageId: string,
+      _stepId: StepId,
+      _agentIndex: number,
+      _updates: { text?: string; thought?: string; usage?: TokenUsage | null },
+    ) => undefined);
+    const store = useAgentStore.getState();
+    store.updateSessionWorkResult = updateWorkResultSpy;
+    vi.mocked(useAgentStore.getState).mockReturnValue(store);
 
     step = new SynthesisStep();
     
     // DON'T mock handleStreamChunk - we want real implementation
     // Only mock high-level dependencies
-    (step as any).createAgentStates = vi.fn(() => []);
-    (step as any).updateAgentStateById = vi.fn((states) => states);
-    (step as any).prepareSynthesis = vi.fn(() => ({
+    const privateStep = getPrivateStep(step);
+    privateStep.createAgentStates = vi.fn(() => []);
+    privateStep.updateAgentStateById = vi.fn((states: AgentState[]) => states);
+    privateStep.prepareSynthesis = vi.fn(() => ({
         systemInstruction: 'Test instruction',
         synthesizerTurn: { parts: [{ text: 'synthesize this' }] },
         mainChatHistory: []
     }));
-    (step as any).extractSources = vi.fn(() => []);
-    (step as any).getStepModel = vi.fn(() => 'test-model');
+    privateStep.extractSources = vi.fn(() => []);
+    privateStep.getStepModel = vi.fn(() => 'test-model');
 
     // Mock ensureResults to actually initialize the results object
-    (step as any).ensureResults = vi.fn((work) => {
+    privateStep.ensureResults = vi.fn((work: Work) => {
       if (!work.results) work.results = {};
     });
 
     // Mock ensureStepUsage to initialize usage array
-    (step as any).ensureStepUsage = vi.fn((work, stepId, numAgents) => {
+    privateStep.ensureStepUsage = vi.fn((work: Work, stepId: StepId, numAgents: number): (TokenUsage | null)[] => {
+      if (!work.results) work.results = {};
       const key = `${stepId}_usage`;
       if (!work.results[key]) {
         work.results[key] = Array(numAgents).fill(null);
       }
-      return work.results[key];
+      return work.results[key] as (TokenUsage | null)[];
     });
 
     mockContext = {
@@ -113,19 +135,19 @@ describe('Synthesis Regeneration - Integration Tests', () => {
         model: 'gemini-pro',
         roleProfiles: [{ id: 'default', roles: [], criticRoles: [] }]
       },
-      work: {
-        results: {
+       work: {
+         results: {
           initial_step: ['initial 1', 'initial 2'],
           refinement_step: ['refined 1', 'refined 2'],
           synthesis_step: ['Old synthesis text that should be cleared'],
           synthesis_step_sources: [{ uri: 'http://example.com', title: 'Example' }]
-        }
+         }
       },
       messageId: 'msg-integration-test',
       onMessageUpdate: vi.fn(),
       onSynthesisJump: vi.fn(),
       signal: new AbortController().signal
-    };
+    } as unknown as TestContext;
   });
 
   afterEach(() => {
@@ -135,19 +157,19 @@ describe('Synthesis Regeneration - Integration Tests', () => {
   it('should clear old synthesis text before regeneration and use slot 0', async () => {
     vi.useFakeTimers();
 
-    let capturedOnChunk: any;
-    let resolveStream: ((value: any) => void) | undefined;
-    const finalUsage = { totalTokens: 100 };
+    let capturedOnChunk: StreamCallbacks['onChunk'] | undefined;
+    let resolveStream: ((value: StreamResult) => void) | undefined;
+    const finalUsage: TokenUsage = { promptTokens: 0, candidatesTokens: 0, totalTokens: 100 };
     
     // Mock runModelStream to capture onChunk and simulate streaming
-    (step as any).runModelStream = vi.fn().mockImplementation((config: any, callbacks: any) => {
+    getPrivateStep(step).runModelStream = vi.fn().mockImplementation((_config: StreamConfig, callbacks: StreamCallbacks) => {
       capturedOnChunk = callbacks.onChunk;
       return new Promise(resolve => {
         resolveStream = resolve;
       });
     });
 
-    const agentStates: any[] = [];
+    const agentStates: AgentState[] = [];
     const regenPromise = step.regenerate(mockContext, 0, agentStates);
     
     // Wait for async setup
@@ -170,9 +192,11 @@ describe('Synthesis Regeneration - Integration Tests', () => {
 
     // Now simulate streaming chunks
     expect(capturedOnChunk).toBeDefined();
+    const onChunk = capturedOnChunk;
+    if (!onChunk) throw new Error('Expected stream chunk callback');
     
     // First chunk: thought only (no text yet)
-    capturedOnChunk('', 'Thinking about regeneration...', null);
+    onChunk('', 'Thinking about regeneration...', null);
 
     expect(updateWorkResultSpy).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(75);
@@ -186,7 +210,7 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     );
 
     // Second chunk: text arrives
-    capturedOnChunk('New regenerated text', '', { totalTokens: 50 });
+    onChunk('New regenerated text', '', { promptTokens: 0, candidatesTokens: 0, totalTokens: 50 });
     
     // Verify final updateWorkResult uses synthesis slot 0
     expect(updateWorkResultSpy).toHaveBeenCalledWith(
@@ -201,8 +225,9 @@ describe('Synthesis Regeneration - Integration Tests', () => {
 
     resolveStream?.({
       text: 'New regenerated text',
+      thought: '',
       groundingChunks: [],
-      usage: finalUsage,
+       usage: finalUsage,
     });
 
     await regenPromise;
@@ -228,9 +253,9 @@ describe('Synthesis Regeneration - Integration Tests', () => {
       message: 'Service unavailable'
     };
 
-    let capturedOnChunk: any;
-    let resolveStream: ((value: any) => void) | undefined;
-    (step as any).runModelStream = vi.fn().mockImplementation((config: any, callbacks: any) => {
+    let capturedOnChunk: StreamCallbacks['onChunk'] | undefined;
+    let resolveStream: ((value: StreamResult) => void) | undefined;
+    getPrivateStep(step).runModelStream = vi.fn().mockImplementation((_config: StreamConfig, callbacks: StreamCallbacks) => {
       capturedOnChunk = callbacks.onChunk;
       return new Promise(resolve => {
         resolveStream = resolve;
@@ -239,6 +264,8 @@ describe('Synthesis Regeneration - Integration Tests', () => {
 
     const regenPromise = step.regenerate(mockContext, 0, []);
     await new Promise(resolve => setTimeout(resolve, 0));
+    const onChunk = capturedOnChunk;
+    if (!onChunk) throw new Error('Expected stream chunk callback');
 
     // Old text should be cleared, error sidecar preserved temporarily
     expect(mockContext.work.results.synthesis_step).toEqual(['']);
@@ -248,7 +275,7 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     });
 
     // Simulate successful regeneration
-    capturedOnChunk('Recovered text', '', null);
+    onChunk('Recovered text', '', null);
 
     // Verify store update uses synthesis slot 0
     const lastCall = updateWorkResultSpy.mock.calls[updateWorkResultSpy.mock.calls.length - 1];
@@ -259,7 +286,9 @@ describe('Synthesis Regeneration - Integration Tests', () => {
 
     resolveStream?.({
       text: 'Recovered text',
-      groundingChunks: []
+      thought: '',
+      groundingChunks: [],
+      usage: null
     });
     await regenPromise;
   });
@@ -271,11 +300,11 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     mockContext.work.results.synthesis_step = ['Old text that triggers hasContent=true'];
     mockContext.work.results.synthesis_step_sources = [];
 
-    (step as any).runModelStream = vi.fn().mockImplementation(() => {
+    getPrivateStep(step).runModelStream = vi.fn().mockImplementation(() => {
       // Simulate delay before first chunk (representing network/model processing)
       return new Promise(resolve => {
         setTimeout(() => {
-          resolve({ text: 'New text', groundingChunks: [] });
+          resolve({ text: 'New text', thought: '', usage: null, groundingChunks: [] });
         }, 10);
       });
     });
@@ -306,7 +335,7 @@ describe('Synthesis Regeneration - Integration Tests', () => {
     mockContext.work.results.synthesis_step = ['Partial regenerated text'];
     mockContext.work.results.synthesis_step_sources = [{ uri: 'http://stale.test', title: 'Stale Source' }];
 
-    (step as any).runModelStream = vi.fn().mockImplementation(async (_config: any, callbacks: any) => {
+    getPrivateStep(step).runModelStream = vi.fn().mockImplementation(async (_config: StreamConfig, callbacks: StreamCallbacks) => {
       callbacks.onChunk('Partial regenerated text', '', null);
       throw streamError;
     });

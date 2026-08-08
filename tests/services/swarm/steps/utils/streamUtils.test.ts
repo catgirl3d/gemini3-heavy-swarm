@@ -11,6 +11,10 @@ import {
   isValidStreamChunk
 } from '@/services/swarm/steps/utils/streamUtils';
 
+type TextExtractionInput = Parameters<typeof extractTextFromParts>[0] | null | unknown;
+const extractTextFromUnknown = extractTextFromParts as (input: TextExtractionInput) => { text: string; thought: string };
+const extractUsageFromUnknown = extractTokenUsage as (input: GeminiUsageMetadata | null | unknown) => ReturnType<typeof extractTokenUsage>;
+
 describe('streamUtils', () => {
   const parts: GeminiPart[] = [
     { text: 'reason', thought: true },
@@ -128,15 +132,15 @@ describe('streamUtils', () => {
       const parts = [
         { text: 'Regular ', thought: false },
         { text: 'omitted ' },
-        { text: 'string flag', thought: 'true' as any },
+        { text: 'string flag', thought: 'true' as unknown },
         { text: '', thought: true }
       ];
 
-      expect(extractTextFromParts(parts)).toEqual({ text: 'Regular omitted string flag', thought: '' });
+      expect(extractTextFromUnknown(parts)).toEqual({ text: 'Regular omitted string flag', thought: '' });
     });
 
     it('should return empty strings for non-array runtime input', () => {
-      expect(extractTextFromParts({ text: 'not an array' } as any)).toEqual({ text: '', thought: '' });
+      expect(extractTextFromUnknown({ text: 'not an array' })).toEqual({ text: '', thought: '' });
     });
   });
 
@@ -167,7 +171,7 @@ describe('streamUtils', () => {
         totalTokenCount: 10,
         isEstimated: true
       };
-      expect(extractTokenUsage(metadata as any).isEstimated).toBe(true);
+      expect(extractUsageFromUnknown(metadata)?.isEstimated).toBe(true);
     });
 
     it('should default missing values to 0', () => {

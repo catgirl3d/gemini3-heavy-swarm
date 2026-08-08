@@ -1,10 +1,16 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SetStateAction } from 'react';
+import type { RefObject, SetStateAction } from 'react';
 import type { AgentState, AppSettings, Message, Source, StepId, TokenUsage, Work } from '@/types';
 import { createMockSettings } from '@test/settingsMocks';
 import { STEPS } from '@/types/steps';
 import { selectActiveSessionUi, useAgentStore } from '@/stores/agentStore';
+import { SwarmOrchestrator } from '@/services/swarm/SwarmOrchestrator';
+
+type RegenerateResponse = SwarmOrchestrator['regenerateResponse'];
+type RegenerateResponseArgs = Parameters<RegenerateResponse>;
+type MockRegenerateResponseResult = { work: Work; text?: string; sources?: Source[] };
+type RegenerateResponseMock = ReturnType<typeof vi.fn>;
 
 const mocks = vi.hoisted(() => ({
   getFriendlyErrorMessage: vi.fn(() => 'Friendly failure'),
@@ -31,6 +37,26 @@ const resetAgentStore = () => {
     ...useAgentStore.getInitialState(),
     abortControllers: new Map(),
   }, true);
+};
+
+const createOrchestrator = (regenerateResponse: RegenerateResponseMock): SwarmOrchestrator => Object.assign(
+  Object.create(SwarmOrchestrator.prototype),
+  {
+    regenerateResponse: async (...args: RegenerateResponseArgs) => {
+      const value: unknown = await Reflect.apply(regenerateResponse, undefined, args);
+      if (typeof value !== 'object' || value === null || !('work' in value) || typeof value.work !== 'object' || value.work === null) {
+        throw new Error('Invalid regenerateResponse mock result');
+      }
+
+      return { work: (value as MockRegenerateResponseResult).work };
+    },
+  },
+) as SwarmOrchestrator;
+
+const createUnavailableOrchestratorRef = (): RefObject<SwarmOrchestrator> => {
+  const ref = { current: createOrchestrator(vi.fn()) } as RefObject<SwarmOrchestrator>;
+  Object.defineProperty(ref, 'current', { value: null, writable: true });
+  return ref;
 };
 
 const createUsage = (totalTokens: number): TokenUsage => ({
@@ -171,12 +197,12 @@ const spyOnActiveSessionClear = (assertSnapshotCommitted: () => void) => {
 
 const renderRegeneration = ({
   initialMessages = createConversation(),
-  regenerateResponse = vi.fn(async () => ({
+   regenerateResponse = vi.fn(async () => ({
     text: 'new agent 1',
     sources: [],
     work: createRegeneratedWork(),
   })),
-  orchestratorRef = { current: { regenerateResponse } },
+   orchestratorRef = { current: createOrchestrator(regenerateResponse) },
   settings = createMockSettings({ numAgents: 2 }),
   lastInput = {
     text: 'Original prompt',
@@ -185,8 +211,8 @@ const renderRegeneration = ({
   },
 }: {
   initialMessages?: Message[];
-  regenerateResponse?: ReturnType<typeof vi.fn>;
-  orchestratorRef?: { current: { regenerateResponse: ReturnType<typeof vi.fn> } | null };
+   regenerateResponse?: RegenerateResponseMock;
+   orchestratorRef?: RefObject<SwarmOrchestrator>;
   settings?: AppSettings;
   lastInput?: { text: string; image: string | null; imageFile: File | null } | null;
 } = {}) => {
@@ -197,7 +223,7 @@ const renderRegeneration = ({
     messages: messagesState.messages,
     messagesRef: messagesState.messagesRef,
     setMessages: messagesState.setMessages,
-    orchestratorRef: orchestratorRef as any,
+    orchestratorRef,
     lastInput,
   }));
 
@@ -209,7 +235,7 @@ const renderRegeneration = ({
   };
 };
 
-const toRegenerateResponseCall = (args: any[]) => {
+const toRegenerateResponseCall = (args: RegenerateResponseArgs) => {
   const [
     settings,
     userInput,
@@ -245,7 +271,16 @@ const toRegenerateResponseCall = (args: any[]) => {
   };
 };
 
-const getRegenerateResponseCall = (regenerateResponse: ReturnType<typeof vi.fn>) => toRegenerateResponseCall(regenerateResponse.mock.calls[0]);
+const isRegenerateResponseArgs = (value: unknown): value is RegenerateResponseArgs => Array.isArray(value) && value.length >= 12;
+
+const getRegenerateResponseCall = (regenerateResponse: RegenerateResponseMock, index = 0) => {
+  const args: unknown = regenerateResponse.mock.calls[index];
+  if (!isRegenerateResponseArgs(args)) {
+    throw new Error('regenerateResponse call was not captured');
+  }
+
+  return toRegenerateResponseCall(args);
+};
 
 describe('useSwarmRegeneration', () => {
   beforeEach(() => {
@@ -263,7 +298,7 @@ describe('useSwarmRegeneration', () => {
   it('aborts an in-flight regeneration for the same agent before starting the replacement', async () => {
     vi.useFakeTimers();
     let firstSignal: AbortSignal | undefined;
-    const regenerateResponse = vi.fn((...args: any[]) => {
+    const regenerateResponse = vi.fn((...args: RegenerateResponseArgs) => {
       const { signal } = toRegenerateResponseCall(args);
       if (regenerateResponse.mock.calls.length === 1) {
         firstSignal = signal;
@@ -324,7 +359,7 @@ describe('useSwarmRegeneration', () => {
 
   it('falls back to the hook messages when messagesRef.current is unavailable', async () => {
     const { result, regenerateResponse, messagesState } = renderRegeneration();
-    messagesState.messagesRef.current = null as any;
+    Object.defineProperty(messagesState.messagesRef, 'current', { value: null, writable: true });
 
     await act(async () => {
       await result.current.regenerateAgentResponse('model-1', STEPS.INITIAL, 1);
@@ -478,11 +513,11 @@ describe('useSwarmRegeneration', () => {
       onSynthesisJump: () => void;
       resolve: (value: { text: string; sources: Source[]; work: Work }) => void;
     } | undefined;
-    const regenerateResponse = vi.fn((...args: any[]) => {
+    const regenerateResponse = vi.fn((...args: RegenerateResponseArgs) => {
       const regenerateCall = toRegenerateResponseCall(args);
       return new Promise<{ text: string; sources: Source[]; work: Work }>(resolve => {
         captured = {
-          onSynthesisJump: regenerateCall.onSynthesisJump,
+          onSynthesisJump: regenerateCall.onSynthesisJump ?? (() => undefined),
           resolve,
         };
       });
@@ -529,7 +564,7 @@ describe('useSwarmRegeneration', () => {
       phase: 'awaiting-user',
     });
     useAgentStore.getState().replaceSessionAgents('model-1', snapshotAgents);
-    const regenerateResponse = vi.fn(async (...args: any[]) => {
+    const regenerateResponse = vi.fn(async (...args: RegenerateResponseArgs) => {
       const { onUpdate } = toRegenerateResponseCall(args);
       onUpdate('streamed agent 1', true, 'stream thought 1', createUsage(77));
 
@@ -585,7 +620,7 @@ describe('useSwarmRegeneration', () => {
       thought: 'new thought 1',
       usage: createUsage(123),
     });
-    const regenerateResponse = vi.fn((...args: any[]) => {
+    const regenerateResponse = vi.fn((...args: RegenerateResponseArgs) => {
       const { onUpdate } = toRegenerateResponseCall(args);
       onUpdate('streamed agent 1', true, 'stream thought 1', createUsage(77));
 
@@ -688,7 +723,7 @@ describe('useSwarmRegeneration', () => {
   });
 
   it('uses the live session work for downstream regeneration even if the message snapshot is reverted', async () => {
-    const regenerateResponse = vi.fn(async (...args: any[]) => {
+    const regenerateResponse = vi.fn(async (...args: RegenerateResponseArgs) => {
       const { stepId } = toRegenerateResponseCall(args);
 
       if (stepId === STEPS.REFINEMENT) {
@@ -738,7 +773,7 @@ describe('useSwarmRegeneration', () => {
       await result.current.regenerateAgentResponse('model-1', STEPS.SYNTHESIS, 0);
     });
 
-    const secondCall = toRegenerateResponseCall(regenerateResponse.mock.calls[1]);
+    const secondCall = getRegenerateResponseCall(regenerateResponse, 1);
     expect(secondCall.workContext.results?.[STEPS.REFINEMENT]).toEqual(['old critic 0', 'new critic 1']);
     expect(messagesState.messages[1].work?.results?.[STEPS.REFINEMENT]).toEqual(['old critic 0', 'new critic 1']);
     expect(messagesState.messages[1].work?.results?.[STEPS.SYNTHESIS]).toEqual(['new final answer']);
@@ -814,7 +849,7 @@ describe('useSwarmRegeneration', () => {
 
     let resolveAgent0: ((value: { work: Work }) => void) | undefined;
     let resolveAgent1: ((value: { work: Work }) => void) | undefined;
-    const regenerateResponse = vi.fn((...args: any[]) => {
+    const regenerateResponse = vi.fn((...args: RegenerateResponseArgs) => {
       const { agentIndex, stepId } = toRegenerateResponseCall(args);
 
       return new Promise<{ work: Work }>(resolve => {
@@ -911,7 +946,7 @@ describe('useSwarmRegeneration', () => {
 
     let resolveAgent0: (() => void) | undefined;
     let rejectAgent1: ((reason: unknown) => void) | undefined;
-    const regenerateResponse = vi.fn((...args: any[]) => {
+    const regenerateResponse = vi.fn((...args: RegenerateResponseArgs) => {
       const { agentIndex, stepId } = toRegenerateResponseCall(args);
 
       if (agentIndex === 0) {
@@ -993,7 +1028,7 @@ describe('useSwarmRegeneration', () => {
 
     let resolveAgent0: (() => void) | undefined;
     let abortAgent1: ((reason: unknown) => void) | undefined;
-    const regenerateResponse = vi.fn((...args: any[]) => {
+    const regenerateResponse = vi.fn((...args: RegenerateResponseArgs) => {
       const { agentIndex, stepId } = toRegenerateResponseCall(args);
 
       if (agentIndex === 0) {
@@ -1144,7 +1179,7 @@ describe('useSwarmRegeneration', () => {
       return {
         text: 'new agent 1',
         work: createRegeneratedWork(),
-      } as any;
+      };
     });
     const { result, messagesState } = renderRegeneration({ regenerateResponse });
 
@@ -1160,7 +1195,7 @@ describe('useSwarmRegeneration', () => {
 
   it('surfaces a friendly error when the orchestrator is unavailable', async () => {
     const { result, messagesState } = renderRegeneration({
-      orchestratorRef: { current: null },
+      orchestratorRef: createUnavailableOrchestratorRef(),
     });
 
     await act(async () => {
@@ -1227,7 +1262,7 @@ describe('useSwarmRegeneration', () => {
 
   it('restores session work without mutating the message snapshot after an aborted synthesis regeneration', async () => {
     const originalConversation = createConversation();
-    const regenerateResponse = vi.fn(async (...args: any[]) => {
+    const regenerateResponse = vi.fn(async (...args: RegenerateResponseArgs) => {
       const { onUpdate, workContext } = toRegenerateResponseCall(args);
       workContext.results ??= {};
       workContext.results[STEPS.SYNTHESIS] = ['mutated aborted answer'];
@@ -1334,7 +1369,7 @@ describe('useSwarmRegeneration', () => {
 
   it('clears stale work-owned synthesis sources when synthesis regeneration fails', async () => {
     const failure = new Error('network failed');
-    const regenerateResponse = vi.fn(async (...args: any[]) => {
+    const regenerateResponse = vi.fn(async (...args: RegenerateResponseArgs) => {
       const { workContext } = toRegenerateResponseCall(args);
       workContext.results ??= {};
       delete workContext.results[`${STEPS.SYNTHESIS}_sources`];
