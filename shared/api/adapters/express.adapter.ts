@@ -59,6 +59,7 @@ export function cleanupRateLimits() {
   
   for (const [k] of rateLimits) {
     const minuteStr = k.split('|')[1];
+    if (minuteStr === undefined) continue;
     const minute = parseInt(minuteStr);
     if (minute < minuteAgo) {
       rateLimits.delete(k);

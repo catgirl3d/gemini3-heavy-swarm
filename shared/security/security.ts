@@ -53,7 +53,7 @@ export const DEFAULT_ALLOWED_ORIGINS = [...PRODUCTION_ORIGINS, ...DEVELOPMENT_OR
  * @param request - Optional request object (for Cloudflare Workers)
  * @returns boolean
  */
-export function isProductionEnvironment(request?: GenericRequest): boolean {
+export function isProductionEnvironment(request?: Pick<GenericRequest, 'url'>): boolean {
   // Node.js: check NODE_ENV
   if (isProductionByNodeEnv()) {
     return true;

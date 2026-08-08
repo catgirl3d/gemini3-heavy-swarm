@@ -15,7 +15,7 @@ import { Logger } from "../../shared/utils/logger";
 
 const logger = new Logger('OpenRouterCloudflareFunction');
 
-export const onRequestPost = (async (context) => {
+export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
   const isProduction = isCloudflareProduction(request);
@@ -114,4 +114,4 @@ export const onRequestPost = (async (context) => {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: errorMessage }), { status: 500, headers });
   }
-}) as unknown as PagesFunction<Env>;
+};

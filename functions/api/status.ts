@@ -11,7 +11,7 @@ import {
 } from "../../shared/api/adapters/cloudflare.adapter";
 import { getProxyMode } from '../../shared/api/security.core';
 
-export const onRequestGet = (async (context) => {
+export const onRequestGet: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   
   const isProduction = isCloudflareProduction(request);
@@ -33,4 +33,4 @@ export const onRequestGet = (async (context) => {
   }), {
     headers
   });
-}) as unknown as PagesFunction<Env>;
+};

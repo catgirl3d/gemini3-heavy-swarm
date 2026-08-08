@@ -67,7 +67,7 @@ export async function checkRateLimit(ip: string, rateLimiter: DurableObjectNames
  * @param request - Cloudflare Request object
  * @returns boolean
  */
-export function isCloudflareProduction(request: GenericRequest): boolean {
+export function isCloudflareProduction(request: Pick<GenericRequest, 'url'>): boolean {
   return isProductionEnvironment(request);
 }
 
