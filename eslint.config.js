@@ -69,7 +69,7 @@ export default tseslint.config(
         },
       ],
       '@typescript-eslint/ban-ts-comment': 'warn',
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-misused-promises': 'warn',
       '@typescript-eslint/no-this-alias': 'warn',
@@ -112,7 +112,7 @@ export default tseslint.config(
         },
       ],
       '@typescript-eslint/ban-ts-comment': 'warn',
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-misused-promises': 'warn',
       '@typescript-eslint/no-this-alias': 'warn',
@@ -140,7 +140,7 @@ export default tseslint.config(
     rules: {
       'no-sparse-arrays': 'warn',
       '@typescript-eslint/ban-ts-comment': 'warn',
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-floating-promises': 'off',
       '@typescript-eslint/no-misused-promises': 'off',
       '@typescript-eslint/no-unused-vars': [
