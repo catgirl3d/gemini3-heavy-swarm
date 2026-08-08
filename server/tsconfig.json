@@ -8,5 +8,5 @@
       "@shared/*": ["../shared/*"]
     }
   },
-  "include": ["./**/*.js", "../shared/**/*"]
+  "include": ["./**/*.ts"]
 }

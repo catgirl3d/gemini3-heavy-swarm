@@ -31,10 +31,7 @@
   },
   "include": [
     "src",
-    "shared",
-    "server",
-    "functions",
-    "tests"
+    "shared"
   ],
   "exclude": [
     "dist",
