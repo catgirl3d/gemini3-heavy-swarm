@@ -301,7 +301,7 @@ export class SynthesisStep extends BaseStep {
     return { work: result.work };
   }
 
-  private prepareSynthesis(context: StepContext, refinedDrafts: string[]) {
+  private prepareSynthesis(context: StepContext, refinedDrafts: (string | null)[]) {
     const { settings, history, userInput, image, imageFile, work } = context;
     const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
     const systemInstruction = formatSystemInstruction(activeProfile.synthesizerInstruction);
@@ -330,7 +330,7 @@ export class SynthesisStep extends BaseStep {
     }
 
     // Prepare drafts for synthesis (fallback to initial if refined is empty)
-    const draftsForSynthesis = refinedDrafts.map((refinedText: string, i: number) => {
+    const draftsForSynthesis = refinedDrafts.map((refinedText: string | null, i: number) => {
       const useFallback = !refinedText || refinedText.length === 0;
       const result = useFallback ? (initialDrafts[i] || '') : refinedText;
       
@@ -340,7 +340,7 @@ export class SynthesisStep extends BaseStep {
           logger.debug(`Agent ${i}: Using FALLBACK (refined is empty), source: ${initialDrafts[i] ? 'INITIAL' : 'EMPTY'}`, {
             preview: result ? result.substring(0, 100) : 'empty'
           });
-        } else {
+        } else if (refinedText) {
           logger.debug(`Agent ${i}: Using REFINED draft`, {
             length: refinedText.length,
             preview: refinedText.substring(0, 100)
@@ -376,7 +376,10 @@ export class SynthesisStep extends BaseStep {
       useSearch: settings.useSearchInSynthesis
     });
 
-    const synthesizerTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}`}] };
+    const synthesizerTurn = {
+      role: 'user' as const,
+      parts: [...baseApiParts, { text: `\n\n---INTERNAL CONTEXT---\n${synthesizerContext}` }]
+    } satisfies Content;
 
     // LOG: What we're saving to debug info
     if (settings.debugMode) {
@@ -390,11 +393,13 @@ export class SynthesisStep extends BaseStep {
 
     // Capture debug info
     this.ensureDebugInfo(work, STEPS.SYNTHESIS, false);
-    work.debugInfo[STEPS.SYNTHESIS] = {
+    if (work.debugInfo) {
+      work.debugInfo[STEPS.SYNTHESIS] = {
         systemInstruction,
         history: mainChatHistory,
         userTurn: synthesizerTurn
-    };
+      };
+    }
 
     return { systemInstruction, synthesizerTurn, mainChatHistory };
   }

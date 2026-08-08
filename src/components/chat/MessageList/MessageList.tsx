@@ -80,7 +80,7 @@ interface MessageListProps {
   modelDisplayName: string;
   provider: ProviderType;
   model: string;
-  messageListRef: RefObject<HTMLDivElement>;
+  messageListRef: RefObject<HTMLDivElement | null>;
   onPromptClick: (prompt: string) => void;
   onContinue: () => void;
   onSkip?: () => void;

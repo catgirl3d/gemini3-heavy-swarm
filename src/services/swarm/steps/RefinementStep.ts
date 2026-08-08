@@ -77,7 +77,10 @@ export class RefinementStep extends BaseStep {
       useSearch: settings.useSearchInRefinement
     });
     
-    const userTurn: Content = { role: 'user', parts: [...baseApiParts, {text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}`}] };
+    const userTurn = {
+      role: 'user' as const,
+      parts: [...baseApiParts, { text: `\n\n---INTERNAL CONTEXT---\n${refinementContext}` }]
+    } satisfies Content;
     
     const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
     
@@ -92,10 +95,10 @@ export class RefinementStep extends BaseStep {
 
     // Add role reminder to user turn (similar to InitialStep)
     const roleReminder = getRoleReminder(role.name);
-    const userTurnWithReminder: Content = {
+    const userTurnWithReminder = {
       role: 'user',
       parts: [...userTurn.parts, { text: roleReminder }]
-    };
+    } satisfies Content;
 
     return { systemInstruction, userTurn: userTurnWithReminder, mainChatHistory };
   }

@@ -202,7 +202,7 @@ export abstract class BaseStep implements StepDescriptor {
     index: number,
     text: string,
     thought: string,
-    usage: TokenUsage | null,
+    usage: TokenUsage | null | undefined,
     options: {
       statusMsg?: string;
       agentStates?: AgentState[];
@@ -524,6 +524,7 @@ export abstract class BaseStep implements StepDescriptor {
     failures: unknown[],
   ): string[] {
     const { work } = context;
+    this.ensureResults(work);
 
     // Fail-fast on any agent's failure during the step execution
     const shouldAbort = failures.length > 0;
@@ -585,8 +586,10 @@ export abstract class BaseStep implements StepDescriptor {
    * Ensures debugInfo structure is initialized for a step.
    * Returns the initialized debugInfo array (or object).
    */
+  protected ensureDebugInfo(work: StepContext['work'], stepId: StepId, isArray?: true): StepDebugInfo[];
+  protected ensureDebugInfo(work: StepContext['work'], stepId: StepId, isArray: false): StepDebugInfo;
   protected ensureDebugInfo(
-    work: StepContext['work'], 
+    work: StepContext['work'],
     stepId: StepId,
     isArray = true
   ): StepDebugInfo[] | StepDebugInfo {
@@ -639,8 +642,8 @@ export abstract class BaseStep implements StepDescriptor {
       const { systemInstruction, userTurn, mainChatHistory } = config.prepareAgent(i);
 
       // Capture debug info
-      this.ensureDebugInfo(work, stepId);
-      work.debugInfo[stepId][i] = { systemInstruction, history: mainChatHistory, userTurn };
+      const debugInfo = this.ensureDebugInfo(work, stepId);
+      debugInfo[i] = { systemInstruction, history: mainChatHistory, userTurn };
 
       // Determine model for this specific agent based on role
       const agentModel = this.getRoleModel(context, i, stepId === STEPS.INITIAL ? 'roles' : 'criticRoles');
@@ -955,8 +958,8 @@ export abstract class BaseStep implements StepDescriptor {
     const stepWasStale = work.stepMetadata?.find(meta => meta.id === this.id)?.status === 'stale';
 
     // Capture debug info for regeneration
-    this.ensureDebugInfo(work, this.id);
-    (work.debugInfo[this.id] as StepDebugInfo[])[agentIndex] = {
+    const debugInfo = this.ensureDebugInfo(work, this.id);
+    debugInfo[agentIndex] = {
       systemInstruction,
       history: mainChatHistory,
       userTurn

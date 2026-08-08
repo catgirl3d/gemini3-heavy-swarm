@@ -11,8 +11,8 @@ interface InputAreaProps {
   onRemoveImage: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onStop: () => void;
-  fileInputRef: RefObject<HTMLInputElement>;
-  inputRef: RefObject<HTMLInputElement>;
+  fileInputRef: RefObject<HTMLInputElement | null>;
+  inputRef: RefObject<HTMLInputElement | null>;
 }
 
 export const InputArea: FC<InputAreaProps> = ({

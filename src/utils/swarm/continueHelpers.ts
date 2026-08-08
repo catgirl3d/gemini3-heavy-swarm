@@ -102,7 +102,9 @@ export function handleContinueClick(
   // This is more reliable than full workflow resume ('onContinue') for step-specific failures
   if (erroredAgents.length > 0 && onRegenerate) {
     erroredAgents.forEach(agent => {
-      onRegenerate(agent.stepId, agent.agentIndex);
+      if (agent.stepId !== undefined && agent.agentIndex !== undefined) {
+        onRegenerate(agent.stepId, agent.agentIndex);
+      }
     });
   } else if (onContinue) {
     // For generic pauses or states without specific agent errors, use Resume logic

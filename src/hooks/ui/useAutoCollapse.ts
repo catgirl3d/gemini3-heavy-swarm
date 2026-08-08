@@ -5,10 +5,10 @@ import { Logger } from '@shared/utils/logger';
 const logger = new Logger('useAutoCollapse');
 
 interface AutoCollapseParams {
-  detailsRef: RefObject<HTMLDetailsElement>;
+  detailsRef: RefObject<HTMLDetailsElement | null>;
   isLive: boolean;
   isCurrentMessage: boolean;
-  messageId: string;
+  messageId: string | undefined;
   synthesizerState: AgentState | undefined;
   isEarlyStageWorking: boolean;
   synthesisText: string | null;

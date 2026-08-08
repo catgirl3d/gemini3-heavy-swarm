@@ -47,7 +47,7 @@ export class InitialStep extends BaseStep {
   private prepareInstruction(context: StepContext, index: number) {
     const { settings, history, userInput, image, imageFile } = context;
     const { history: mainChatHistory, baseApiParts } = prepareGeminiContent(history, userInput, image, imageFile);
-    const currentUserTurn: Content = { role: 'user', parts: baseApiParts };
+    const currentUserTurn = { role: 'user' as const, parts: baseApiParts };
 
     const activeProfile = settings.profiles.find(p => p.id === settings.activeProfileId) || settings.profiles[0];
     

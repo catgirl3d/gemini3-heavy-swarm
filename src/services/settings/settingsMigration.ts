@@ -380,13 +380,13 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
           // Migration logic: move role.model to providerModels
           // If role has a model, we should migrate it if it's not already in providerModels
           if (role.model) {
-            roleModels[profile.id] = { ...(roleModels[profile.id] || {}) };
-            roleModels[profile.id][currentProvider] = {
-              ...(roleModels[profile.id][currentProvider] || {})
+            const profileModels = { ...(roleModels[profile.id] || {}) };
+            const providerModels = {
+              ...(profileModels[currentProvider] || {})
             };
             
             const currentTypeModels = {
-              ...(roleModels[profile.id][currentProvider][typeKey] || {})
+              ...(providerModels[typeKey] || {})
             };
 
             // Only overwrite if not already present (preserve newer settings if re-migrating)
@@ -394,9 +394,12 @@ export function migrateSettings(parsed: LegacyAppSettings): AppSettings {
                 hasChanges = true; 
                 currentTypeModels[id] = role.model;
                 
-                roleModels[profile.id][currentProvider] = {
-                  ...roleModels[profile.id][currentProvider],
+                roleModels[profile.id] = {
+                  ...profileModels,
+                  [currentProvider]: {
+                    ...providerModels,
                   [typeKey]: currentTypeModels
+                  }
                 };
             }
           }

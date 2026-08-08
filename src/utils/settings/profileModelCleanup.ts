@@ -3,6 +3,10 @@ import { Logger } from '@shared/utils/logger';
 
 const logger = new Logger('ProfileModelCleanup');
 
+type RoleModelsByProfile = NonNullable<ProviderModels['roleModels']>;
+type RoleModelsForProfile = RoleModelsByProfile[string];
+type RoleModelsForProvider = NonNullable<RoleModelsForProfile[ProviderType]>;
+
 /**
  * Removes all saved model configurations for a specific role ID across all providers
  * within a given profile. This prevents "orphaned" data from accumulating in
@@ -21,13 +25,13 @@ export function cleanupRoleModels(
     if (!settings.providerModels?.roleModels?.[profileId]) return settings;
 
     const roleModels = { ...settings.providerModels.roleModels };
-    const profileRoleModels = { ...roleModels[profileId] };
+    const profileRoleModels: RoleModelsForProfile = { ...roleModels[profileId] };
     let modified = false;
 
     // Iterate through all providers saved for this profile
     Object.keys(profileRoleModels).forEach(providerKey => {
         const provider = providerKey as ProviderType;
-        const providerData = { ...profileRoleModels[provider] };
+        const providerData: RoleModelsForProvider = { ...(profileRoleModels[provider] || {}) };
         let providerModified = false;
         
         // Check and clean drafter roles
@@ -162,32 +166,37 @@ export function cloneProfileModels(
     if (!settings.providerModels?.roleModels?.[sourceProfileId]) return settings;
 
     const roleModels = { ...settings.providerModels.roleModels };
-    const sourceData = roleModels[sourceProfileId];
-    const targetData: NonNullable<ProviderModels['roleModels']>[string] = {};
+    const sourceData: RoleModelsForProfile = roleModels[sourceProfileId];
+    const targetData: RoleModelsForProfile = {};
 
     // Iterate through all providers in the source profile
-    Object.entries(sourceData).forEach(([provider, providerData]) => {
-        targetData[provider] = {};
+    Object.entries(sourceData).forEach(([providerKey, providerData]) => {
+        const provider = providerKey as ProviderType;
+        const targetProviderData: RoleModelsForProvider = {};
         
         if (providerData.roles) {
-            targetData[provider].roles = {};
+            const clonedRoles: Record<string, string> = {};
             Object.entries(providerData.roles).forEach(([oldId, model]) => {
                 const newId = roleIdMap[oldId];
                 if (newId) {
-                    targetData[provider].roles[newId] = model;
+                    clonedRoles[newId] = model;
                 }
             });
+            targetProviderData.roles = clonedRoles;
         }
         
         if (providerData.criticRoles) {
-            targetData[provider].criticRoles = {};
+            const clonedCriticRoles: Record<string, string> = {};
             Object.entries(providerData.criticRoles).forEach(([oldId, model]) => {
                 const newId = roleIdMap[oldId];
                 if (newId) {
-                    targetData[provider].criticRoles[newId] = model;
+                    clonedCriticRoles[newId] = model;
                 }
             });
+            targetProviderData.criticRoles = clonedCriticRoles;
         }
+
+        targetData[provider] = targetProviderData;
     });
 
     roleModels[targetProfileId] = targetData;

@@ -26,7 +26,7 @@ export interface StreamConfig {
 }
 
 export interface StreamCallbacks {
-  onChunk: (text: string, thought: string, usage: TokenUsage | null) => void;
+  onChunk: (text: string, thought: string, usage?: TokenUsage | null) => void;
   onRetry?: (attempt: number, error: AppError) => void;
 }
 
